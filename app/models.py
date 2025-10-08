@@ -8,7 +8,7 @@ systemets grundlæggende datastrukturer.
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class FileStatus(str, Enum):
@@ -93,15 +93,9 @@ class TrackedFile(BaseModel):
         description="Sti til destination filen (med evt. navnekonflikt suffix)"
     )
 
-    class Config:
-        """Pydantic konfiguration."""
-        # Tillad serialisering af datetime objekter
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-        
+    model_config = ConfigDict(
         # Eksempel data til dokumentation
-        schema_extra = {
+        json_schema_extra={
             "example": {
                 "file_path": "/source/video_clip_001.mxv",
                 "status": "Copying",
@@ -116,6 +110,7 @@ class TrackedFile(BaseModel):
                 "destination_path": "/destination/video_clip_001.mxv"
             }
         }
+    )
 
 
 class FileStateUpdate(BaseModel):
@@ -131,8 +126,4 @@ class FileStateUpdate(BaseModel):
     tracked_file: TrackedFile
     timestamp: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        """Pydantic konfiguration."""
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict()
