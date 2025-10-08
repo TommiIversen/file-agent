@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import uvicorn
 from .routers import api, views
 
 # Create FastAPI application
@@ -9,5 +10,9 @@ app = FastAPI(
 )
 
 # Include routers
-app.include_router(views.router)  # Views på root level
-app.include_router(api.router, prefix="/api", tags=["api"])  # API endpoints under /api
+app.include_router(views.router)
+app.include_router(api.router, prefix="/api", tags=["api"])
+
+
+if __name__ == "__main__":
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False, log_level="debug")
