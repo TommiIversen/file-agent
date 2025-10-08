@@ -1,0 +1,243 @@
+"""
+WebSocket Manager for File Transfer Agent.
+
+WebSocketManager håndterer real-time updates til web UI via WebSockets.
+Implementerer pub/sub pattern for at broadcaste StateManager changes
+til alle forbundne klienter i real-time.
+
+Følger roadmap Fase 6 specifikation.
+"""
+
+import json
+import logging
+from typing import List, Dict, Any
+from fastapi import WebSocket, WebSocketDisconnect
+
+from app.models import FileStateUpdate
+from app.services.state_manager import StateManager
+
+
+class WebSocketManager:
+    """
+    WebSocket connection manager for real-time UI updates.
+    
+    Ansvar:
+    1. Connection Management: Håndter aktive WebSocket forbindelser
+    2. State Broadcasting: Send real-time updates til alle klienter
+    3. Event Subscription: Lyt på StateManager changes via pub/sub
+    4. Message Formatting: Format data til JSON for frontend
+    """
+    
+    def __init__(self, state_manager: StateManager):
+        """
+        Initialize WebSocketManager.
+        
+        Args:
+            state_manager: Central state manager to subscribe to
+        """
+        self.state_manager = state_manager
+        self._connections: List[WebSocket] = []
+        self._logger = logging.getLogger("app.websocket_manager")
+        
+        # Subscribe to StateManager events
+        self.state_manager.subscribe(self._handle_state_change)
+        
+        self._logger.info("WebSocketManager initialiseret")
+        self._logger.info("Subscribed til StateManager events for real-time updates")
+    
+    async def connect(self, websocket: WebSocket) -> None:
+        """
+        Accept new WebSocket connection og send initial data.
+        
+        Args:
+            websocket: WebSocket connection to accept
+        """
+        await websocket.accept()
+        self._connections.append(websocket)
+        
+        # Send initial state dump
+        await self._send_initial_state(websocket)
+        
+        self._logger.info(f"WebSocket client connected. Total connections: {len(self._connections)}")
+    
+    def disconnect(self, websocket: WebSocket) -> None:
+        """
+        Remove WebSocket connection from active list.
+        
+        Args:
+            websocket: WebSocket connection to remove
+        """
+        if websocket in self._connections:
+            self._connections.remove(websocket)
+            
+        self._logger.info(f"WebSocket client disconnected. Total connections: {len(self._connections)}")
+    
+    async def _send_initial_state(self, websocket: WebSocket) -> None:
+        """
+        Send complete current state to newly connected client.
+        
+        Args:
+            websocket: WebSocket to send initial state to
+        """
+        try:
+            # Get current system state
+            all_files = await self.state_manager.get_all_files()
+            statistics = await self.state_manager.get_statistics()
+            
+            initial_data = {
+                "type": "initial_state",
+                "data": {
+                    "files": [self._serialize_tracked_file(f) for f in all_files],
+                    "statistics": statistics,
+                    "timestamp": self._get_timestamp()
+                }
+            }
+            
+            await websocket.send_text(json.dumps(initial_data))
+            self._logger.debug(f"Sent initial state to client: {len(all_files)} files")
+            
+        except Exception as e:
+            self._logger.error(f"Fejl ved sending af initial state: {e}")
+    
+    async def _handle_state_change(self, update: FileStateUpdate) -> None:
+        """
+        Handle StateManager events og broadcast til alle klienter.
+        
+        Args:
+            update: FileStateUpdate event fra StateManager
+        """
+        if not self._connections:
+            return  # Ingen forbundne klienter
+        
+        try:
+            # Format update til WebSocket message
+            message_data = {
+                "type": "file_update",
+                "data": {
+                    "file_path": update.file_path,
+                    "old_status": update.old_status.value if update.old_status else None,
+                    "new_status": update.new_status.value,
+                    "file": self._serialize_tracked_file(update.tracked_file),
+                    "timestamp": update.timestamp.isoformat()
+                }
+            }
+            
+            # Broadcast til alle klienter
+            await self._broadcast_message(message_data)
+            
+            self._logger.debug(f"Broadcasted state change: {update.file_path} -> {update.new_status}")
+            
+        except Exception as e:
+            self._logger.error(f"Fejl ved broadcasting af state change: {e}")
+    
+    async def _broadcast_message(self, message_data: Dict[str, Any]) -> None:
+        """
+        Broadcast message til alle aktive WebSocket forbindelser.
+        
+        Args:
+            message_data: Data dictionary to send as JSON
+        """
+        if not self._connections:
+            return
+        
+        message_json = json.dumps(message_data)
+        disconnected_clients = []
+        
+        # Send til alle klienter
+        for websocket in self._connections:
+            try:
+                await websocket.send_text(message_json)
+                
+            except WebSocketDisconnect:
+                disconnected_clients.append(websocket)
+                self._logger.debug("Client disconnected during broadcast")
+                
+            except Exception as e:
+                disconnected_clients.append(websocket)
+                self._logger.warning(f"Fejl ved sending til client: {e}")
+        
+        # Fjern disconnected klienter
+        for websocket in disconnected_clients:
+            self.disconnect(websocket)
+    
+    def _serialize_tracked_file(self, tracked_file) -> Dict[str, Any]:
+        """
+        Serialize TrackedFile til dictionary for JSON.
+        
+        Args:
+            tracked_file: TrackedFile objekt
+            
+        Returns:
+            Dictionary representation af filen
+        """
+        return {
+            "file_path": tracked_file.file_path,
+            "status": tracked_file.status.value,
+            "file_size": tracked_file.file_size,
+            "file_size_mb": round(tracked_file.file_size / (1024 * 1024), 2),
+            "last_write_time": tracked_file.last_write_time.isoformat() if tracked_file.last_write_time else None,
+            "copy_progress": tracked_file.copy_progress,
+            "error_message": tracked_file.error_message,
+            "retry_count": tracked_file.retry_count,
+            "discovered_at": tracked_file.discovered_at.isoformat(),
+            "started_copying_at": tracked_file.started_copying_at.isoformat() if tracked_file.started_copying_at else None,
+            "completed_at": tracked_file.completed_at.isoformat() if tracked_file.completed_at else None,
+            "destination_path": tracked_file.destination_path
+        }
+    
+    def _get_timestamp(self) -> str:
+        """
+        Get current timestamp as ISO string.
+        
+        Returns:
+            Current timestamp in ISO format
+        """
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
+    async def send_system_statistics(self) -> None:
+        """
+        Send system statistics update til alle klienter.
+        
+        Bruges til periodiske system status updates.
+        """
+        if not self._connections:
+            return
+        
+        try:
+            statistics = await self.state_manager.get_statistics()
+            
+            message_data = {
+                "type": "statistics_update",
+                "data": {
+                    "statistics": statistics,
+                    "timestamp": self._get_timestamp()
+                }
+            }
+            
+            await self._broadcast_message(message_data)
+            
+        except Exception as e:
+            self._logger.error(f"Fejl ved sending af statistics: {e}")
+    
+    def get_connection_count(self) -> int:
+        """
+        Get antal aktive WebSocket forbindelser.
+        
+        Returns:
+            Antal forbundne klienter
+        """
+        return len(self._connections)
+    
+    def get_manager_status(self) -> Dict[str, Any]:
+        """
+        Get WebSocketManager status information.
+        
+        Returns:
+            Dictionary med manager status
+        """
+        return {
+            "active_connections": len(self._connections),
+            "subscribed_to_state_manager": True,
+            "is_ready": True
+        }

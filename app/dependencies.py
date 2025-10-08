@@ -14,6 +14,7 @@ from .services.state_manager import StateManager
 from .services.file_scanner import FileScannerService
 from .services.job_queue import JobQueueService
 from .services.file_copier import FileCopyService
+from .services.websocket_manager import WebSocketManager
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -83,6 +84,20 @@ def get_file_copier() -> FileCopyService:
         _singletons["file_copier"] = FileCopyService(settings, state_manager, job_queue_service)
     
     return _singletons["file_copier"]
+
+
+def get_websocket_manager() -> WebSocketManager:
+    """
+    Hent WebSocketManager singleton instance.
+    
+    Returns:
+        WebSocketManager instance (oprettes kun én gang)
+    """
+    if "websocket_manager" not in _singletons:
+        state_manager = get_state_manager()
+        _singletons["websocket_manager"] = WebSocketManager(state_manager)
+    
+    return _singletons["websocket_manager"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:

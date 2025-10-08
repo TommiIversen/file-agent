@@ -17,8 +17,9 @@ from contextlib import asynccontextmanager
 
 from .config import Settings
 from .logging_config import setup_logging, get_app_logger
-from .api import state
-from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier
+from .api import state, websockets
+from .routers import views
+from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier, get_websocket_manager
 
 # Load settings
 settings = Settings()
@@ -54,6 +55,10 @@ async def lifespan(app: FastAPI):
     copier_task = asyncio.create_task(file_copier.start_consumer())
     _background_tasks.append(copier_task)
     logger.info("FileCopyService consumer startet som background task")
+    
+    # Initialize WebSocketManager (subscription happens automatically)
+    get_websocket_manager()  # Initialize singleton
+    logger.info("WebSocketManager initialiseret og subscribed til StateManager")
     
     yield
     
@@ -116,6 +121,8 @@ async def log_requests(request: Request, call_next):
 
 # Include routers
 app.include_router(state.router)
+app.include_router(websockets.router)
+app.include_router(views.router)
 
 @app.get("/")
 async def root():

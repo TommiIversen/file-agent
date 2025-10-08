@@ -3,10 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Transfer Agent</title>
-   
+    <title>File Transfer Agent - Real-time Monitor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        /* Main background gradient */
+        .gradientHolder {
+            background: radial-gradient(ellipse at center, rgb(222, 67, 202) 0%, rgba(20, 25, 44, 0.96) 0%, rgba(10, 14, 24, 0.96) 100%);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .progress-animation {
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8, #3b82f6);
+            background-size: 200% 100%;
+            animation: progress-shine 2s infinite;
+        }
+        
+        @keyframes progress-shine {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
 </head>
 <body>
-    <h1>File Transfer Agent</h1>
+<body class="gradientHolder min-h-screen" 
+      x-data="fileTransferMonitor()" 
+      x-init="connect()">
+    
+    <div class="container mx-auto p-4 max-w-7xl">
+        <!-- Header with Status -->
+        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 mb-4 text-white">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">File Transfer Agent</h1>
+                
+                <div class="flex items-center space-x-6">
+                    <!-- Connection Status -->
+                    <div class="flex items-center">
+                        <div class="status-indicator rounded-full mr-2"
+                             :class="{
+                                 'bg-green-500': connectionStatus === 'connected',
+                                 'bg-red-500': connectionStatus === 'disconnected', 
+                                 'bg-yellow-500': connectionStatus === 'connecting'
+                             }"></div>
+                        <span x-text="connectionText" class="text-sm"></span>
+                    </div>
+                    
+                    <!-- Statistics -->
+                    <div class="flex space-x-4 text-sm">
+                        <span class="text-blue-300">Total: <strong x-text="statistics.totalFiles">0</strong></span>
+                        <span class="text-yellow-300">Aktive: <strong x-text="statistics.activeFiles">0</strong></span>
+                        <span class="text-green-300">Færdige: <strong x-text="statistics.completedFiles">0</strong></span>
+                        <span class="text-red-300">Fejlede: <strong x-text="statistics.failedFiles">0</strong></span>
+                    </div>
+                    
+                    <div class="text-xs text-gray-300" x-text="lastUpdate"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Files List -->
+        <div class="space-y-2">
+            <template x-for="file in allFiles" :key="file.file_path">
+                <!-- File Card Component -->
+                <div class="grid p-2 items-center shadow-lg rounded-lg overflow-hidden md:grid-cols-6 sm:grid-cols-2 gap-x-1 hover:bg-gray-900 bg-gray-800 text-gray-400 text-sm font-medium">
+                    
+                    <!-- File Name (spans 2 columns) -->
+                    <div class="md:col-span-2 col-span-2 truncate">
+                        <div class="capitalize md:text-sm text-xl font-extrabold truncate text-white"
+                             x-text="file.file_path.split(/[/\\]/).pop()">
+                        </div>
+                    </div>
+
+                    <!-- File Size -->
+                    <div class="truncate md:order-none order-2">
+                        Størrelse: <span class="text-white" x-text="`${file.file_size_mb} MB`"></span>
+                    </div>
+
+                    <!-- Last Updated -->
+                    <div class="md:order-none order-3">
+                        <div class="truncate">
+                            Opdateret: <span class="text-white" x-text="formatTime(file.last_updated)"></span>
+                        </div>
+                    </div>
+
+                    <!-- Retry Count -->
+                    <div class="md:block hidden">
+                        <span class="text-gray-300">Retry: </span>
+                        <span class="text-white font-bold" x-text="file.retry_count"></span>
+                    </div>
+
+                    <!-- Progress Bar (spans 2 columns) -->
+                    <div class="md:col-span-2 col-span-1 md:order-none order-4" x-show="file.status === 'Copying'">
+                        <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500 ease-out"
+                                 :class="file.copy_progress > 0 ? 'progress-animation' : 'bg-blue-500'"
+                                 :style="`width: ${file.copy_progress || 0}%`"></div>
+                        </div>
+                        <div class="text-center text-xs text-white mt-1" 
+                             x-text="`${(file.copy_progress || 0).toFixed(1)}%`"></div>
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="md:order-none order-5">
+                        <div class="text-center">
+                            <div class="inline-block py-1 px-3 rounded-full text-xs font-bold"
+                                 :class="{
+                                     'bg-blue-600 text-blue-100': file.status === 'Discovered',
+                                     'bg-green-600 text-green-100': file.status === 'Ready',
+                                     'bg-yellow-600 text-yellow-100': file.status === 'InQueue',
+                                     'bg-blue-700 text-blue-100': file.status === 'Copying',
+                                     'bg-green-700 text-green-100': file.status === 'Completed',
+                                     'bg-red-600 text-red-100': file.status === 'Failed'
+                                 }"
+                                 x-text="file.status">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Message (full width if present) -->
+                    <div x-show="file.error_message" class="md:col-span-6 col-span-2 mt-2 p-2 bg-red-900 bg-opacity-50 rounded border border-red-600">
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="text-red-200 text-xs" x-text="file.error_message"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            
+            <!-- Empty State -->
+            <div x-show="allFiles.length === 0" class="text-center py-12">
+                <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
+                    <div class="text-4xl mb-4">📁</div>
+                    Ingen filer fundet
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function fileTransferMonitor() {
+            return {
+                // Data
+                socket: null,
+                files: new Map(),
+                reconnectAttempts: 0,
+                maxReconnectAttempts: 5,
+                reconnectDelay: 1000,
+                connectionStatus: 'connecting',
+                connectionText: 'Forbinder til server...',
+                lastUpdate: 'Indlæser...',
+                statistics: {
+                    totalFiles: 0,
+                    activeFiles: 0,
+                    completedFiles: 0,
+                    failedFiles: 0
+                },
+
+                // Computed - Show all files sorted by most recent first
+                get allFiles() {
+                    return Array.from(this.files.values())
+                        .sort((a, b) => {
+                            // Sort by last_updated if available, otherwise by file_path
+                            const aTime = a.last_updated ? new Date(a.last_updated) : new Date(0);
+                            const bTime = b.last_updated ? new Date(b.last_updated) : new Date(0);
+                            return bTime - aTime;
+                        });
+                },
+
+                // Methods
+                connect() {
+                    try {
+                        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                        const wsUrl = `${protocol}//${window.location.host}/api/ws/live`;
+                        
+                        this.socket = new WebSocket(wsUrl);
+                        this.setupSocketHandlers();
+                        
+                    } catch (error) {
+                        console.error('WebSocket connection error:', error);
+                        this.handleDisconnection();
+                    }
+                },
+
+                setupSocketHandlers() {
+                    this.socket.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.updateConnectionStatus('connected', 'Forbundet til server');
+                        this.reconnectAttempts = 0;
+                    };
+                    
+                    this.socket.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            this.handleMessage(message);
+                        } catch (error) {
+                            console.error('Error parsing WebSocket message:', error);
+                        }
+                    };
+                    
+                    this.socket.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.handleDisconnection();
+                    };
+                    
+                    this.socket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.handleDisconnection();
+                    };
+                },
+
+                handleMessage(message) {
+                    this.updateLastUpdate();
+                    
+                    switch (message.type) {
+                        case 'initial_state':
+                            this.handleInitialState(message.data);
+                            break;
+                        case 'file_update':
+                            this.handleFileUpdate(message.data);
+                            break;
+                        case 'statistics_update':
+                            this.updateStatistics(message.data.statistics);
+                            break;
+                    }
+                },
+
+                handleInitialState(data) {
+                    console.log('Received initial state:', data);
+                    
+                    // Update files
+                    this.files.clear();
+                    data.files.forEach(file => {
+                        this.files.set(file.file_path, file);
+                    });
+                    
+                    // Update statistics
+                    this.updateStatistics(data.statistics);
+                },
+
+                handleFileUpdate(data) {
+                    console.log('File update:', data);
+                    
+                    // Update or add file
+                    this.files.set(data.file_path, data.file);
+                    
+                    // Update statistics from files
+                    this.updateStatisticsFromFiles();
+                },
+
+                updateStatistics(stats) {
+                    if (stats) {
+                        this.statistics.totalFiles = stats.total_files || 0;
+                        this.statistics.activeFiles = stats.active_files || 0;
+                        this.statistics.completedFiles = stats.completed_files || 0;
+                        this.statistics.failedFiles = stats.failed_files || 0;
+                    }
+                },
+
+                updateStatisticsFromFiles() {
+                    const stats = {
+                        total: this.files.size,
+                        active: 0,
+                        completed: 0,
+                        failed: 0
+                    };
+                    
+                    this.files.forEach(file => {
+                        switch (file.status) {
+                            case 'Completed':
+                                stats.completed++;
+                                break;
+                            case 'Failed':
+                                stats.failed++;
+                                break;
+                            default:
+                                stats.active++;
+                        }
+                    });
+                    
+                    this.statistics.totalFiles = stats.total;
+                    this.statistics.activeFiles = stats.active;
+                    this.statistics.completedFiles = stats.completed;
+                    this.statistics.failedFiles = stats.failed;
+                },
+
+                updateConnectionStatus(status, text) {
+                    this.connectionStatus = status;
+                    this.connectionText = text;
+                },
+
+                updateLastUpdate() {
+                    const now = new Date().toLocaleTimeString('da-DK');
+                    this.lastUpdate = `Sidst opdateret: ${now}`;
+                },
+
+                handleDisconnection() {
+                    this.updateConnectionStatus('disconnected', 'Forbindelse afbrudt');
+                    
+                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.reconnectAttempts++;
+                        this.updateConnectionStatus('connecting', `Prøver at forbinde igen... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                        
+                        setTimeout(() => {
+                            this.connect();
+                        }, this.reconnectDelay * this.reconnectAttempts);
+                    } else {
+                        this.updateConnectionStatus('disconnected', 'Kunne ikke forbinde - genindlæs siden');
+                    }
+                },
+
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    return new Date(timestamp).toLocaleTimeString('da-DK');
+                }
+            }
+        }
+    </script>
 </body>
 </html>
