@@ -13,6 +13,7 @@ from .config import Settings
 from .services.state_manager import StateManager
 from .services.file_scanner import FileScannerService
 from .services.job_queue import JobQueueService
+from .services.file_copier import FileCopyService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -66,6 +67,22 @@ def get_job_queue_service() -> JobQueueService:
         _singletons["job_queue_service"] = JobQueueService(settings, state_manager)
     
     return _singletons["job_queue_service"]
+
+
+def get_file_copier() -> FileCopyService:
+    """
+    Hent FileCopyService singleton instance.
+    
+    Returns:
+        FileCopyService instance (oprettes kun én gang)
+    """
+    if "file_copier" not in _singletons:
+        settings = get_settings()
+        state_manager = get_state_manager()
+        job_queue_service = get_job_queue_service()
+        _singletons["file_copier"] = FileCopyService(settings, state_manager, job_queue_service)
+    
+    return _singletons["file_copier"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:

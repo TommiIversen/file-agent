@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from .config import Settings
 from .logging_config import setup_logging, get_app_logger
 from .api import state
-from .dependencies import get_file_scanner, get_job_queue_service
+from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier
 
 # Load settings
 settings = Settings()
@@ -49,6 +49,12 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(queue_task)
     logger.info("JobQueueService producer startet som background task")
     
+    # Start FileCopyService consumer som background task
+    file_copier = get_file_copier()
+    copier_task = asyncio.create_task(file_copier.start_consumer())
+    _background_tasks.append(copier_task)
+    logger.info("FileCopyService consumer startet som background task")
+    
     yield
     
     # Shutdown
@@ -57,6 +63,7 @@ async def lifespan(app: FastAPI):
     # Stop alle background tasks gracefully
     file_scanner.stop_scanning()
     job_queue_service.stop_producer()
+    file_copier.stop_consumer()
     
     # Cancel alle background tasks
     for task in _background_tasks:

@@ -13,7 +13,8 @@ from app.models import TrackedFile, FileStatus
 from app.services.state_manager import StateManager
 from app.services.file_scanner import FileScannerService
 from app.services.job_queue import JobQueueService
-from app.dependencies import get_state_manager, get_file_scanner, get_job_queue_service
+from app.services.file_copier import FileCopyService
+from app.dependencies import get_state_manager, get_file_scanner, get_job_queue_service, get_file_copier
 
 router = APIRouter(prefix="/api/state", tags=["state"])
 
@@ -227,3 +228,37 @@ async def clear_failed_jobs(
     """
     count = await job_queue_service.clear_failed_jobs()
     return {"cleared_count": count, "message": f"Cleared {count} failed jobs"}
+
+
+@router.get("/copier/statistics")
+async def get_copier_statistics(
+    file_copier: FileCopyService = Depends(get_file_copier)
+) -> dict:
+    """
+    Hent statistikker om FileCopyService aktivitet.
+    
+    Returns:
+        Dictionary med copier statistikker
+    """
+    return await file_copier.get_copy_statistics()
+
+
+@router.get("/copier/status")
+async def get_copier_status(
+    file_copier: FileCopyService = Depends(get_file_copier)
+) -> dict:
+    """
+    Hent status for FileCopyService.
+    
+    Returns:
+        Dictionary med copier status
+    """
+    stats = await file_copier.get_copy_statistics()
+    consumer_status = file_copier.get_consumer_status()
+    return {
+        "is_running": consumer_status["is_running"],
+        "destination_available": consumer_status["destination_available"],
+        "total_files_copied": stats["total_files_copied"],
+        "total_files_failed": stats["total_files_failed"],
+        "total_gb_copied": stats["total_gb_copied"]
+    }
