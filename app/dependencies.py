@@ -7,11 +7,12 @@ Sikrer singleton pattern og proper dependency management.
 
 import asyncio
 from functools import lru_cache
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from .config import Settings
 from .services.state_manager import StateManager
 from .services.file_scanner import FileScannerService
+from .services.job_queue import JobQueueService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -51,17 +52,32 @@ def get_file_scanner() -> FileScannerService:
     return _singletons["file_scanner"]
 
 
-async def get_job_queue() -> asyncio.Queue:
+def get_job_queue_service() -> JobQueueService:
+    """
+    Hent JobQueueService singleton instance.
+    
+    Returns:
+        JobQueueService instance (oprettes kun én gang)
+    """
+    if "job_queue_service" not in _singletons:
+        settings = get_settings()
+        state_manager = get_state_manager()
+        # JobQueueService will create its own queue internally
+        _singletons["job_queue_service"] = JobQueueService(settings, state_manager)
+    
+    return _singletons["job_queue_service"]
+
+
+async def get_job_queue() -> Optional[asyncio.Queue]:
     """
     Hent job queue singleton instance.
     
     Returns:
-        asyncio.Queue instance for file job processing
+        asyncio.Queue instance for file job processing eller None hvis ikke oprettet
     """
-    if "job_queue" not in _singletons:
-        _singletons["job_queue"] = asyncio.Queue()
-    
-    return _singletons["job_queue"]
+    # Get queue from JobQueueService to ensure single instance
+    job_queue_service = get_job_queue_service()
+    return job_queue_service.job_queue
 
 
 def reset_singletons() -> None:

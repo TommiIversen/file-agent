@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from .config import Settings
 from .logging_config import setup_logging, get_app_logger
 from .api import state
-from .dependencies import get_file_scanner
+from .dependencies import get_file_scanner, get_job_queue_service
 
 # Load settings
 settings = Settings()
@@ -43,6 +43,12 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(scanner_task)
     logger.info("FileScannerService startet som background task")
     
+    # Start JobQueueService producer som background task
+    job_queue_service = get_job_queue_service()
+    queue_task = asyncio.create_task(job_queue_service.start_producer())
+    _background_tasks.append(queue_task)
+    logger.info("JobQueueService producer startet som background task")
+    
     yield
     
     # Shutdown
@@ -50,6 +56,7 @@ async def lifespan(app: FastAPI):
     
     # Stop alle background tasks gracefully
     file_scanner.stop_scanning()
+    job_queue_service.stop_producer()
     
     # Cancel alle background tasks
     for task in _background_tasks:

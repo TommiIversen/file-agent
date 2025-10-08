@@ -62,16 +62,16 @@ class StateManager:
             self._files[file_path] = tracked_file
             
             self._logger.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
-            
-            # Notify subscribers
-            await self._notify(FileStateUpdate(
-                file_path=file_path,
-                old_status=None,
-                new_status=FileStatus.DISCOVERED,
-                tracked_file=tracked_file
-            ))
-            
-            return tracked_file
+        
+        # Notify subscribers EFTER lock er frigivet for at undgå deadlock
+        await self._notify(FileStateUpdate(
+            file_path=file_path,
+            old_status=None,
+            new_status=FileStatus.DISCOVERED,
+            tracked_file=tracked_file
+        ))
+        
+        return tracked_file
     
     async def update_file_status(
         self, 
@@ -115,16 +115,16 @@ class StateManager:
                 tracked_file.completed_at = datetime.now()
             
             self._logger.info(f"Status opdateret: {file_path} {old_status} -> {status}")
-            
-            # Notify subscribers
-            await self._notify(FileStateUpdate(
-                file_path=file_path,
-                old_status=old_status,
-                new_status=status,
-                tracked_file=tracked_file
-            ))
-            
-            return tracked_file
+        
+        # Notify subscribers EFTER lock er frigivet for at undgå deadlock
+        await self._notify(FileStateUpdate(
+            file_path=file_path,
+            old_status=old_status,
+            new_status=status,
+            tracked_file=tracked_file
+        ))
+        
+        return tracked_file
     
     async def remove_file(self, file_path: str) -> bool:
         """
