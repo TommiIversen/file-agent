@@ -1,0 +1,261 @@
+Kravspecifikation: Project File Transfer Agent
+1. Formål og Overordnet Beskrivelse
+Mål: At udvikle en automatiseret service, der pålideligt flytter færdigoptagede videofiler (MXF) 
+fra en lokal mappe på en macOS-maskine til en centraliseret netværkslager (NAS).
+Systemet skal være robust over for netværksfejl og genstart. Det skal fungere som en "fireand-forget" baggrundsservice med minimal administration. Arkitekturen skal følge moderne 
+C# praksis med fokus på Clean Code og SOLID.
+Teknologi-stack:
+• Sprog: C# 13
+• Framework: .NET 8+
+• UI/API Host: Blazor Server
+• Hosting: Som en baggrundsservice på macOS.
+2. Udviklingspraksis og Konfiguration
+• Versionskontrol: Projektet udvikles på GitHub. Der skal committes i logiske bidder.
+• Commit Messages: Vi følger Conventional Commits standarden 
+(f.eks. feat:, fix:, chore:, docs:).
+• Best Practices: Generelle C# Best Practices for navngivning, struktur og performance 
+skal overholdes.
+• Konfiguration: Applikationen skal have en konfigurationsfil (f.eks. appsettings.json) til 
+at styre:
+o Kildemappe (SourcePath)
+o Destinationsmappe (DestinationPath)
+o Ventetid for fil-stabilitet i sekunder (FileStableTimeSeconds, f.eks. 120)
+o Polling interval i sekunder (PollingIntervalSeconds, f.eks. 10)
+o Brug af midlertidig .tmp fil ved kopi (UseTemporaryFile, true/false)
+2.1 Unit Tests (Kvalitetssikring)
+• Krav: Der skal skrives unit tests (xunit) for kritisk og kompleks forretningslogik. UI'et 
+behøver ikke testes.
+• Eksempler på god test-dækning:
+o Logikken til at håndtere navnekonflikter (at video.mxf korrekt bliver 
+til video_1.mxf).
+o Logikken der afgør, om en fil er "stabil" baseret på LastWriteTime.
+2.2 Udviklingsværktøj: "File Growth Simulator"
+For at lette udvikling og test skal der laves et simpelt konsol-program, der kan simulere den 
+måde, optagesoftwaren skriver filer på.
+• Formål: At skabe filer i en specificeret mappe, som langsomt vokser i størrelse over 
+tid. Dette gør det muligt at teste FileScannerService's logik for at identificere "stabile" 
+filer.
+• Type: En simpel C# Console App.
+• Funktionalitet:
+o Konfiguration: Værktøjet skal kunne styres via kommandolinje-argumenter:
+▪ --output-folder: Mappen, hvor filerne skal oprettes (skal matche AutoArchiver's kildemappe).
+▪ --file-count: Antallet af samtidige filer, der skal simuleres (f.eks. 8).
+▪ --file-size-mb: Den endelige størrelse i megabytes for hver fil.
+▪ --write-interval-ms: Pausen i millisekunder mellem hver skrivning (f.eks. 
+500 for at skrive to gange i sekundet).
+o Logik:
+1. Ved start oprettes file-count antal filer med et midlertidigt navn (f.eks. 
+simulated_file_1.mxf.tmp).
+2. Programmet går i et loop, hvor det for hver fil:
+▪ Tilføjer en lille bid (chunk) af tilfældige bytes.
+▪ Venter i det specificerede write-interval-ms.
+▪ Logger den nuværende status til konsollen (f.eks. "Filer er nu 125 / 
+1024 MB").
+3. Når en fil når sin endelige file-size-mb, omdøbes den ved at fjerne .tmpendelsen for at signalere, at "optagelsen" er færdig.
+4. Når alle filer er færdige, afslutter programmet.
+• Eksempel på brug i terminalen:
+Bash
+dotnet run --project FileGrowthSimulator -- --output-folder "C:\temp\sdi_recordings" --filecount 8 --file-size-mb 1024
+Denne kommando ville starte simuleringen af 8 filer, der hver især vokser til 1 GB i mappen 
+C:\temp\sdi_recordings.
+Ved at bygge dette lille værktøj først, kan udvikleren bygge og teste hele Auto-Archiverservicen på sin egen maskine med en forudsigelig og kontrollerbar datakilde.
+Tier 1: Kernefunktionalitet - Pålidelig Filflytning
+Dette er MVP (Minimum Viable Product). Målet er at bygge en robust, tilstandsbevidst og 
+pålidelig fil-flytningsmekanisme. Arkitekturen er bygget op omkring en central service, der 
+holder styr på alle filers tilstand.
+3.0 Logging (Kritisk for en baggrundsservice)
+Uden god logging er det umuligt at fejlsøge en service som denne.
+• Output: Log-events skal skrives til både konsollen (under udvikling) og til en rullende 
+log-fil i produktionsmiljøet.
+• Log Niveauer:
+o Information: Til almindelige hændelser ("Applikation startet", "Fil 'X' fundet", "Fil 
+'Y' succesfuldt kopieret").
+o Warning: Til forventede, men problematiske hændelser ("Navnekonflikt fundet 
+for 'Y', omdøber til 'Y_1'").
+o Error: Til reelle fejl ("Fejl under kopiering af 'X': Netværksstien blev ikke fundet"). 
+Inkludér altid fuld exception-detalje.
+3.1 Fundament: Central State Management
+Det første skridt er at etablere et centralt sted, der holder styr på alle kendte filer og deres 
+status. Dette sikrer en ren arkitektur, hvor alle dele af systemet arbejder ud fra den samme 
+sandhed.
+• Opgave: At skabe en "single source of truth" for hele applikationens tilstand.
+• Nødvendige klasser:
+o FileStatus (enum): Definerer de mulige tilstande en fil kan 
+have: Discovered, Ready, InQueue, Copying, Completed, Failed.
+o TrackedFile (klasse): Et dataobjekt, der repræsenterer en enkelt fil og dens 
+metadata, 
+f.eks. FilePath, Status, FileSize, LastWriteTime, CopyProgressPercentage.
+o IFileStateService / FileStateService (Singleton Service): En central, trådsikker 
+service, der indeholder en liste af TrackedFile-objekter. Den skal have metoder 
+til at tilføje, opdatere og fjerne filer, samt et C# event, som UI'et kan bruge til 
+realtidsopdateringer.
+3.2 Fil-detektering ("File Scanner Service")
+En baggrundsservice, der overvåger filsystemet og opdaterer den centrale state service.
+• Opgave: At holde IFileStateService synkroniseret med filsystemet og identificere filer, 
+der er klar til at blive kopieret.
+• Implementering: En IHostedService, der poller kildemappen i et konfigurerbart 
+interval. Den skal:
+1. Først rydde op i IFileStateService ved at fjerne TrackedFile-objekter for filer, der 
+ikke længere eksisterer fysisk på disken (fordi de er blevet flyttet).
+2. Dernæst tilføje nye filer, den finder på disken, til IFileStateService med 
+status Discovered.
+3. Til sidst gennemgå alle filer med status Discovered og vurdere, om de er 
+"færdige".
+• Identifikation af "færdig" fil: En fil anses for klar, når dens LastWriteTime har været 
+uændret i et konfigurerbart tidsrum, og man eventuelt kan opnå en kortvarig, eksklusiv 
+lås på filen.
+• Output: Når en fil er bekræftet som "færdig", opdateres dens status 
+i IFileStateService til Ready, og dens filsti sendes til Job-Køen.
+• Nødvendig klasse: FileScannerService.
+3.3 Job-Kø (Producer/Consumer)
+En asynkron kø, der fungerer som en afkoblet "postkasse" mellem scanner- og 
+kopieringsprocessen.
+• Opgave: At fungere som et midlertidigt lager for stier til filer, der er bekræftet klar til at 
+blive kopieret.
+• Arkitektur og Implementering: I stedet for at bygge en custom kø-klasse, benyttes den 
+indbyggede og højt optimerede System.Threading.Channels.Channel<string>. Denne 
+registreres som en singleton i applikationens dependency injection (DI) container, så 
+der kun findes én delt instans.
+o FileScannerService fungerer som "Producer" og får adgang til køens Writer for at 
+tilføje filstier.
+o FileCopyService fungerer som "Consumer" og får adgang til køens Reader for at 
+hente filstier.
+• Adskillelse af Ansvarsområder: Det er afgørende, at job-køen holdes adskilt 
+fra IFileStateService, da de har forskellige formål:
+o Job-køen fungerer som en midlertidig 'indbakke' med arbejdsopgaver. Når en 
+opgave tages, er den væk fra køen.
+o IFileStateService fungerer som en permanent 'opslagstavle' , der viser den 
+overordnede status for alle kendte filer, indtil de er helt færdigbehandlet.
+3.4 Fil-kopiering ("File Copier Service")
+En baggrundsservice, der udfører det tunge arbejde med at flytte filerne.
+• Opgave: At tage et job fra køen, sikkert kopiere filen til destinationen og løbende 
+rapportere status tilbage til IFileStateService.
+• Implementering: En IHostedService, der lytter på Job-Køen. Når et job modtages:
+1. Opdateres filens status i IFileStateService til Copying.
+2. Den relative mappestruktur genskabes på destinationen.
+3. Navnekonflikter håndteres ved at tilføje _1, _2 osv. til filnavnet.
+4. Selve kopieringen udføres, 
+og CopyProgressPercentage i IFileStateService opdateres løbende.
+• Nødvendig klasse: FileCopyService.
+Fejlhåndtering og Robusthed
+Systemet skal kunne håndtere fejl intelligent ved at skelne mellem problemer med 
+destinationen (globale fejl) og problemer med en specifik kildefil (lokale fejl).
+• Midlertidig fil: Det anbefales at kopiere til en .tmp-fil, som først omdøbes efter 
+succesfuld og verificeret kopiering for at forhindre brug af halvfærdige filer.
+• Scenarie A: Utilgængelig Destination (Global Fejl)
+o Definition: Dette dækker fejl, hvor hele destinationen er utilgængelig, f.eks. hvis 
+NAS'en er offline, netværksdrevet er afmonteret, eller der er generelle 
+netværksproblemer.
+o Håndtering: Ved denne type fejl skal FileCopyService pause behandlingen af 
+hele køen og blive ved med at forsøge for evigt. Den skal logge en Warning og 
+vente i et længere, konfigurerbart interval (f.eks. 60 sekunder) før den forsøger at 
+kopiere den samme fil igen. Hele systemet venter på, at destinationen kommer 
+online igen.
+• Scenarie B: Problematisk Kildefil (Lokal Fejl)
+o Definition: Dette dækker fejl, der er specifikke for den enkelte kildefil, f.eks. at 
+filen er låst af en anden proces, filrettigheder er forkerte, eller filen er korrupt og 
+kan ikke læses.
+o Håndtering: Ved denne type fejl skal systemet forsøge et begrænset antal 
+gange (f.eks. 3 forsøg) med en kort pause imellem (f.eks. 10 sekunder)
+o Permanent Fejl: Hvis alle forsøg fejler, opdateres filens status 
+i IFileStateService til Failed, og en Error logges tydeligt med filnavnet. Servicen 
+kasserer herefter dette job og går videre til det næste i køen, så én dårlig fil ikke 
+blokerer hele systemet. (evt læg filen tilbage bagerst i køen)
+• Note om Failed-status: En fil med status Failed vil forblive på kildedisken. Ved en 
+eventuel genstart af applikationen vil FileScannerService genopdage filen og give den 
+en ny chance i systemet.
+Verifikation og Oprydning
+• Integritets-tjek: Efter en succesfuld kopiering skal systemet verificere, at filstørrelsen i 
+bytes på kilde og destination er identisk.
+• Oprydning: Kun efter en fuldt verificeret kopi må den originale fil slettes fra kildedisken. Herefter opdateres dens status til Completed i IFileStateService.
+3.5 Genstart og Tilstand
+Applikationens tilstand er primært i hukommelsen, men sandheden er altid filsystemet.
+• Princip: Selvom FileStateService holder styr på tilstanden under kørsel, skal denne 
+tilstand kunne genopbygges fra bunden ved hver genstart.
+• Ved opstart: FileScannerService kører sin første scanning og opbygger en frisk 
+tilstandsliste i IFileStateService baseret på de filer, der rent faktisk ligger i 
+kildemappen. Dette sikrer, at systemet altid kan komme sig efter en genstart.
+Tier 2: Overvågning og API
+Disse endpoints skal eksponeres via Blazor Server-applikationens indbyggede webserver.
+4.1. API Endpoint: Diskplads Overvågning
+• Endpoint: GET /api/monitor/storage
+• Funktionalitet: En baggrundstjeneste tjekker hvert minut den ledige plads på både 
+kilde- og destinationsstien. Dette tjek vil naturligt fejle, hvis NAS-drevet (destinationen) 
+ikke er tilgængeligt/mounted, hvilket skal rapporteres.
+• Output (JSON):
+o HTTP 200 OK: Hvis alt er i orden.
+JSON
+{ "sourceFreeGB": 512, "destinationFreeGB": 2048, "status": "OK" }
+o HTTP 507 Insufficient Storage: Hvis pladsen er lav.
+JSON
+{ "sourceFreeGB": 512, "destinationFreeGB": 80, "status": "WARNING", "message": 
+"Destination storage is running low." }
+o HTTP 503 Service Unavailable: Hvis destinationen ikke er tilgængelig.
+JSON
+{ "sourceFreeGB": 512, "destinationFreeGB": -1, "status": "ERROR", "message": "Destination 
+path is not accessible." }
+4.2. API Endpoint: Nagios Health Check
+• Endpoint: GET /api/health
+• Output: text/plain streng: OK (HTTP 200) eller ERROR (HTTP 503).
+4.3. API Endpoint: Fil-status
+• Endpoint: GET /api/status
+• Output (JSON): Giver et realtids-snapshot af job-køen og den aktive kopi-proces.
+JSON
+{
+ "pendingFilesCount": 2,
+ "pendingFiles": [ "clip1.mxf", "clip2.mxf" ],
+ "inProgress": { "file": "active_clip.mxf", "progressPercentage": 67, ... },
+ ...
+}
+Tier 3: Simpelt Web UI
+Formål: At give et hurtigt realtids overblik over systemets status. UI'et skal opdatere sig 
+selv øjeblikkeligt, når der sker ændringer i baggrundsprocesserne (f.eks. en ny fil i køen, eller 
+fremdrift i en kopiering).
+Implementering: I stedet for at UI'et kalder et API med jævne mellemrum, skal der 
+implementeres en central singleton service (en "state container").
+1. Baggrundstjenesterne (File Scanner, File Copier) opdaterer status direkte i denne 
+service.
+2. Servicen udsender et C# event (f.eks. OnChange), når data ændres.
+3. Blazor-dashboardet abonnerer på dette event og kalder StateHasChanged() for at 
+tvinge en re-rendering af de relevante komponenter.
+Komponenter:
+• I gang: Viser den fil, der aktivt bliver kopieret, med en progress bar, der opdaterer i 
+realtid.
+• Venter i kø: En liste over filnavne, der venter på at blive kopieret.
+• Senest fuldført: En liste over de sidste 10-20 succesfuldt overførte filer.
+• Systemstatus: Viser status fra diskplads-overvågningen.
+Oversigt over Tidsestimat
+Det er vigtigt at understrege, at dette er et estimat. Den reelle tid kan variere meget.
+Fase 0: Opsætning og Fundament (ca. 8 - 12 timer)
+• Oprettelse af projektet (Blazor Server), Git repository.
+• Implementering af konfigurations-indlæsning (appsettings.json).
+• Opsætning af en solid logging-mekanisme (f.eks. Serilog), hvilket er kritisk for en 
+baggrundsservice.
+• Forståelse for Dependency Injection til at binde de forskellige services sammen.
+Tier 1: Kernefunktionalitet (ca. 40 - 60 timer)
+Dette er den absolut største og mest komplekse del, hvor den meste læring vil foregå.
+• File Scanner: Forskning i og implementering af IHostedService. Logikken til at spore 
+filer og deres LastWriteTime for at bestemme, hvornår de er "stabile", er ikke-triviel. (15-
+20 timer)
+• Job Kø: Forståelse og implementering af producer/consumer-mønsteret 
+med Channels. (5-8 timer)
+• File Copier: Implementering af endnu en IHostedService. Håndtering af selve 
+filkopieringen, .tmp-strategien, navnekonflikter (_1, _2), og filstørrelses-verifikation. 
+Fejlhåndtering (netværksfejl, disk fuld) er også en del af dette. (20-30 timer)
+Tier 2: Overvågning og API (ca. 15 - 25 timer)
+• API Basics: Lære at oprette simple API endpoints i .NET.
+• Diskplads-endpoint: Logik til at tjekke diskplads på både kilde og destination, samt 
+håndtering af fejl, hvis NAS'en er utilgængelig. (6-10 timer)
+• Status-endpoint: Dette er det mest komplekse endpoint, da det skal have adgang til 
+den interne tilstand af køen og den aktive kopi-proces for at vise fremgang. (8-12 timer)
+• Health-endpoint: Dette er ret simpelt. (1-3 timer)
+Tier 3: Simpelt Web UI (ca. 15 - 25 timer)
+• Blazor Basics & State Management: Lære de grundlæggende koncepter i Blazor Server 
+og implementere den centrale "state service".
+• Event-drevet UI: Forstå og bruge C# events til at trigge UI-opdateringer fra 
+baggrundsservicen.
+• UI Komponenter: Opbygning af de simple lister og statusvisninger.
+• Data-binding: Binde komponenterne direkte til den centrale state service.
+Samlet
+• Minimum estimat: 8 + 40 + 15 + 15 = 78 timer (ca. 2 fulde arbejdsuger)
+• Realistisk/Maximum estimat: 12 + 60 + 25 + 25 = 122 timer (ca. 3,5 fulde arbejdsuger)
