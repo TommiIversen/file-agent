@@ -465,7 +465,7 @@ async def test_end_to_end_workflow():
 ## Fase 6: Real-tids UI (Live-skærmen 📺)
 
 ### Mål
-At skabe en simpel web-grænseflade, der viser systemets tilstand i realtid via WebSockets.
+At skabe en simpel web-grænseflade, der viser systemets tilstand i realtid via WebSockets. 
 
 ### Moduler/Filer
 * `app/services/websocket_manager.py`:
@@ -473,13 +473,14 @@ At skabe en simpel web-grænseflade, der viser systemets tilstand i realtid via 
 * `app/api/websockets.py`:
     * Definerer `GET /ws` WebSocket endpointet.
 * `static/index.html` & `static/app.js`:
-    * Simpel HTML-side og JavaScript til at håndtere WebSocket-forbindelsen og opdatere DOM.
+    * Simpel HTML-side og JavaScript til at håndtere WebSocket-forbindelsen og opdatere DOM. OG så simplet vi ikke bruger nogle styles, and end til at lave grid hvis der er brug for dette - til en start totalt barebone.
+    Init data kunne overføres via view context, da det vil oplaves hurtigere end at skulle vente på websockets forbindelse
 
 ### Implementerings-steps
 1.  Implementer `WebSocketManager`. Den skal abonnere på `StateManager`'s `StateChanged`-event.
-2.  Implementer `GET /ws` endpointet. Ved ny forbindelse skal den sende et komplet "dump" af den nuværende tilstand og derefter lytte.
+2.  Implementer `GET /ws`.
 3.  `WebSocketManager`'s event-handler skal broadcaste små, specifikke opdateringer til alle klienter.
-4.  Lav en simpel `index.html` og den nødvendige JavaScript til at vise dataen.
+4.  Lav en simpel `index.html` og den nødvendige JavaScript til at vise dataen. (ingen stylening - men der skal være websockets reconnect)
 5.  Registrer `WebSocketManager` som en singleton i `dependencies.py`.
 
 ### Testkrav (pytest)

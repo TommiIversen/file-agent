@@ -10,6 +10,6 @@ templates = Jinja2Templates(directory="app/templates")
 async def hello_page(request: Request):
     """Simple hello world view with template"""
     return templates.TemplateResponse(
-        "hello.html", 
+        "index.html", 
         {"request": request, "message": "Hello World from Template!"}
     )
