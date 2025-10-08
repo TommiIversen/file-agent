@@ -4,4 +4,4 @@ class Settings(BaseSettings):
     source_directory: str
     destination_directory: str
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file="settings.env")
