@@ -40,6 +40,6 @@ The application is built using Python with FastAPI for the API/UI layer and `asy
 
 - **Dependency Injection**: Reusable logic, like database sessions or authentication wirering up classes ang background services), is placed in `app/dependencies.py` and injected into path operations using `Depends()`.
 
-- **SOLID Principles**: Adhere to SOLID principles where its matters (but we dont defalut uses interfaces it not nessesary):
+- **SOLID Principles**: Adhere to SOLID principles where it matters (but we don't default to using interfaces unless necessary).
 
 - **Type Hints**: Always use Python type hints for function parameters, return values, and Pydantic models to ensure data validation and code clarity.
