@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional, Dict
 
 from app.config import Settings
-from app.models import FileStatus
+from app.models import FileStatus, SpaceCheckResult
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
 
@@ -35,18 +35,23 @@ class FileCopyService:
     5. Progress Tracking: Real-time opdateringer til StateManager
     """
     
-    def __init__(self, settings: Settings, state_manager: StateManager, job_queue: JobQueueService):
+    def __init__(self, settings: Settings, state_manager: StateManager, 
+                 job_queue: JobQueueService, space_checker=None, space_retry_manager=None):
         """
-        Initialize FileCopyService.
+        Initialize FileCopyService with dependencies.
         
         Args:
             settings: Application settings
             state_manager: Central state manager
             job_queue: Job queue service
+            space_checker: Space checking utility (optional)
+            space_retry_manager: Space retry manager (optional)
         """
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue = job_queue
+        self.space_checker = space_checker
+        self.space_retry_manager = space_retry_manager
         self._logger = logging.getLogger("app.file_copier")
         
         # Copy statistics
@@ -169,7 +174,13 @@ class FileCopyService:
     
     async def _process_job(self, job: Dict) -> None:
         """
-        Process single job med lokal fejlhåndtering og retry logic.
+        Process single job med space checking og lokal fejlhåndtering.
+        
+        Flow:
+        1. Pre-flight space check (if enabled)
+        2. Handle space shortage with retry logic
+        3. Proceed with copy if space available
+        4. Handle copy errors with retry logic
         
         Args:
             job: Job dictionary fra queue
@@ -177,16 +188,23 @@ class FileCopyService:
         file_path = job["file_path"]
         
         try:
-            self._logger.info(f"Starter kopiering af: {file_path}")
+            self._logger.info(f"Processing job: {file_path}")
             
-            # Opdater status til Copying
+            # Step 1: Pre-flight space check (if enabled and available)
+            if self._should_check_space():
+                space_check = await self._check_space_for_job(job)
+                if not space_check.has_space:
+                    await self._handle_space_shortage(job, space_check)
+                    return  # Job will be retried later by SpaceRetryManager
+            
+            # Step 2: Opdater status til Copying
             await self.state_manager.update_file_status(
                 file_path, 
                 FileStatus.COPYING,
                 copy_progress=0.0
             )
             
-            # Forsøg kopiering med retry logic
+            # Step 3: Forsøg kopiering med retry logic
             success = await self._copy_file_with_retry(job)
             
             if success:
@@ -494,3 +512,69 @@ class FileCopyService:
             "task_created": self._consumer_task is not None,
             "destination_available": self._destination_available
         }
+    
+    # Space management methods (SOLID - separated concerns)
+    
+    def _should_check_space(self) -> bool:
+        """Check if space checking should be performed"""
+        return (
+            self.settings.enable_pre_copy_space_check and 
+            self.space_checker is not None
+        )
+    
+    async def _check_space_for_job(self, job: Dict) -> SpaceCheckResult:
+        """
+        Perform space check for a job.
+        
+        Args:
+            job: Job dictionary containing file info
+            
+        Returns:
+            SpaceCheckResult with space availability
+        """
+        # Get file size from job or tracked file
+        file_size = job.get("file_size", 0)
+        
+        if file_size == 0:
+            # Fallback: get from tracked file
+            tracked_file = await self.state_manager.get_file(job["file_path"])
+            if tracked_file:
+                file_size = tracked_file.file_size
+        
+        return self.space_checker.check_space_for_file(file_size)
+    
+    async def _handle_space_shortage(self, job: Dict, space_check: SpaceCheckResult) -> None:
+        """
+        Handle insufficient disk space by scheduling retry.
+        
+        Args:
+            job: Job that couldn't be processed due to space
+            space_check: Result of space check
+        """
+        file_path = job["file_path"]
+        
+        self._logger.warning(
+            f"Insufficient space for {file_path}: {space_check.reason}",
+            extra={
+                "operation": "space_shortage",
+                "file_path": file_path,
+                "available_gb": space_check.get_available_gb(),
+                "required_gb": space_check.get_required_gb(),
+                "shortage_gb": space_check.get_shortage_gb()
+            }
+        )
+        
+        # Use SpaceRetryManager if available, otherwise mark as failed
+        if self.space_retry_manager:
+            await self.space_retry_manager.schedule_space_retry(file_path, space_check)
+        else:
+            # Fallback: mark as failed if no retry manager
+            await self.state_manager.update_file_status(
+                file_path,
+                FileStatus.FAILED,
+                error_message=f"Insufficient space: {space_check.reason}"
+            )
+            await self.job_queue.mark_job_failed(job, "Insufficient disk space")
+        
+        # Mark job as handled (don't process further)
+        await self.job_queue.mark_job_completed(job)

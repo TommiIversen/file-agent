@@ -17,13 +17,18 @@ class FileStatus(str, Enum):
     
     Workflow: Discovered -> Ready -> InQueue -> Copying -> Completed
     Alternative: -> Failed (ved fejl)
+    Space Management: -> WaitingForSpace -> (retry) eller SpaceError (permanent)
     """
-    DISCOVERED = "Discovered"    # Fil fundet, men ikke stabil endnu
-    READY = "Ready"             # Fil er stabil og klar til kopiering
-    IN_QUEUE = "InQueue"        # Fil er tilføjet til job queue
-    COPYING = "Copying"         # Fil er ved at blive kopieret
-    COMPLETED = "Completed"     # Fil er succesfuldt kopieret og slettet
-    FAILED = "Failed"           # Fil kunne ikke kopieres (permanent fejl)
+    DISCOVERED = "Discovered"        # Fil fundet, men ikke stabil endnu
+    READY = "Ready"                 # Fil er stabil og klar til kopiering
+    IN_QUEUE = "InQueue"            # Fil er tilføjet til job queue
+    COPYING = "Copying"             # Fil er ved at blive kopieret
+    COMPLETED = "Completed"         # Fil er succesfuldt kopieret og slettet
+    FAILED = "Failed"               # Fil kunne ikke kopieres (permanent fejl)
+    
+    # Space management states
+    WAITING_FOR_SPACE = "WaitingForSpace"   # Midlertidig plads mangel, venter på retry
+    SPACE_ERROR = "SpaceError"              # Permanent plads problem, kræver indgriben
 
 
 class StorageStatus(str, Enum):
@@ -253,5 +258,90 @@ class FileStateUpdate(BaseModel):
     new_status: FileStatus
     tracked_file: TrackedFile
     timestamp: datetime = Field(default_factory=datetime.now)
+
+    model_config = ConfigDict()
+
+
+class SpaceCheckResult(BaseModel):
+    """
+    Result of disk space pre-flight check before file copying.
+    
+    Used by FileCopyService to determine if destination has sufficient space
+    for a file before attempting to copy it. Includes logic for determining
+    if space shortage might be temporary.
+    """
+    
+    has_space: bool = Field(
+        ..., 
+        description="Whether destination has enough space for the file"
+    )
+    
+    available_bytes: int = Field(
+        ..., 
+        description="Available space on destination in bytes"
+    )
+    
+    required_bytes: int = Field(
+        ..., 
+        description="Required space including file size and safety margin"
+    )
+    
+    file_size_bytes: int = Field(
+        ..., 
+        description="Actual file size in bytes"
+    )
+    
+    safety_margin_bytes: int = Field(
+        ..., 
+        description="Safety margin in bytes to prevent disk full"
+    )
+    
+    reason: str = Field(
+        ..., 
+        description="Human-readable explanation of the space check result"
+    )
+    
+    timestamp: datetime = Field(
+        default_factory=datetime.now,
+        description="When the space check was performed"
+    )
+    
+    def is_temporary_shortage(self) -> bool:
+        """
+        Determine if space shortage might be temporary and worth retrying.
+        
+        Logic: If we're within 20% of required space, it might be temporary
+        due to other operations completing, temp files being cleaned, etc.
+        
+        Returns:
+            True if shortage might be temporary and worth retrying later
+        """
+        if self.has_space:
+            return False
+            
+        shortage = self.required_bytes - self.available_bytes
+        shortage_percentage = shortage / self.required_bytes
+        
+        # Consider temporary if shortage is less than 20% of required space
+        return shortage_percentage < 0.2
+    
+    def get_shortage_gb(self) -> float:
+        """
+        Get space shortage amount in GB for display purposes.
+        
+        Returns:
+            Shortage in GB, or 0.0 if there's sufficient space
+        """
+        if self.has_space:
+            return 0.0
+        return (self.required_bytes - self.available_bytes) / (1024**3)
+    
+    def get_available_gb(self) -> float:
+        """Get available space in GB for display"""
+        return self.available_bytes / (1024**3)
+    
+    def get_required_gb(self) -> float:
+        """Get required space in GB for display"""
+        return self.required_bytes / (1024**3)
 
     model_config = ConfigDict()

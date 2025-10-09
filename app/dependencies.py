@@ -17,6 +17,8 @@ from .services.file_copier import FileCopyService
 from .services.websocket_manager import WebSocketManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
+from .services.space_checker import SpaceChecker
+from .services.space_retry_manager import SpaceRetryManager
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -74,18 +76,67 @@ def get_job_queue_service() -> JobQueueService:
 
 def get_file_copier() -> FileCopyService:
     """
-    Hent FileCopyService singleton instance.
+    Hent FileCopyService singleton instance med space checking.
     
     Returns:
-        FileCopyService instance (oprettes kun én gang)
+        FileCopyService instance med alle dependencies
     """
     if "file_copier" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
         job_queue_service = get_job_queue_service()
-        _singletons["file_copier"] = FileCopyService(settings, state_manager, job_queue_service)
+        
+        # Space management dependencies (optional for backward compatibility)
+        space_checker = get_space_checker() if settings.enable_pre_copy_space_check else None
+        space_retry_manager = get_space_retry_manager() if space_checker else None
+        
+        _singletons["file_copier"] = FileCopyService(
+            settings=settings,
+            state_manager=state_manager, 
+            job_queue=job_queue_service,
+            space_checker=space_checker,
+            space_retry_manager=space_retry_manager
+        )
     
     return _singletons["file_copier"]
+
+
+def get_space_checker() -> SpaceChecker:
+    """
+    Hent SpaceChecker singleton instance.
+    
+    Returns:
+        SpaceChecker instance for pre-flight space checking
+    """
+    if "space_checker" not in _singletons:
+        settings = get_settings()
+        storage_monitor = get_storage_monitor()
+        
+        _singletons["space_checker"] = SpaceChecker(
+            settings=settings,
+            storage_monitor=storage_monitor
+        )
+    
+    return _singletons["space_checker"]
+
+
+def get_space_retry_manager() -> SpaceRetryManager:
+    """
+    Hent SpaceRetryManager singleton instance.
+    
+    Returns:
+        SpaceRetryManager instance for space retry logic
+    """
+    if "space_retry_manager" not in _singletons:
+        settings = get_settings()
+        state_manager = get_state_manager()
+        
+        _singletons["space_retry_manager"] = SpaceRetryManager(
+            settings=settings,
+            state_manager=state_manager
+        )
+    
+    return _singletons["space_retry_manager"]
 
 
 def get_websocket_manager() -> WebSocketManager:

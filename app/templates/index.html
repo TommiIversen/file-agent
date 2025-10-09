@@ -280,7 +280,9 @@
                                      'bg-yellow-600': file.status === 'InQueue',
                                      'bg-blue-700': file.status === 'Copying',
                                      'bg-green-700': file.status === 'Completed',
-                                     'bg-red-600': file.status === 'Failed'
+                                     'bg-red-600': file.status === 'Failed',
+                                     'bg-orange-600': file.status === 'WaitingForSpace',
+                                     'bg-purple-600': file.status === 'SpaceError'
                                  }"
                                  x-text="file.status">
                             </div>
@@ -620,12 +622,14 @@
                         case 'Discovered':
                         case 'Ready':
                         case 'InQueue':
+                        case 'WaitingForSpace':
                             return 'bg-gray-600';
                         case 'Copying':
                             return 'bg-blue-600';
                         case 'Completed':
                             return 'bg-green-600';
                         case 'Failed':
+                        case 'SpaceError':
                             return 'bg-red-600';
                         default:
                             return 'bg-gray-600';
@@ -637,12 +641,14 @@
                         case 'Discovered':
                         case 'Ready':
                         case 'InQueue':
+                        case 'WaitingForSpace':
                             return '0%';
                         case 'Copying':
                             return `${(file.copy_progress || 0).toFixed(1)}%`;
                         case 'Completed':
                             return '100%';
                         case 'Failed':
+                        case 'SpaceError':
                             return '0%';
                         default:
                             return '0%';

@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     destination_critical_threshold_gb: float = 20.0
     storage_test_file_prefix: str = ".file_agent_test_"
     
+    # Space management for file copying
+    enable_pre_copy_space_check: bool = True
+    copy_safety_margin_gb: float = 1.0          # Safety margin to prevent disk full
+    space_retry_delay_seconds: int = 300        # 5 minutes between space retries  
+    max_space_retries: int = 6                  # Max 30 minutes waiting for space
+    minimum_free_space_after_copy_gb: float = 2.0  # Minimum space to leave after copy
+    
     model_config = SettingsConfigDict(env_file="settings.env")
     
     @property
