@@ -349,7 +349,7 @@ class FileScannerService:
         """
         Check if file should be ignored by scanner.
         
-        Filters out test files created by StorageMonitorService.
+        Filters out test files created by StorageMonitorService and macOS system files.
         
         Args:
             file_path: Absolute path to file to check
@@ -362,6 +362,16 @@ class FileScannerService:
         # Ignore storage test files
         if filename.startswith(self.settings.storage_test_file_prefix):
             self._logger.debug(f"Ignoring storage test file: {filename}")
+            return True
+        
+        # Ignore macOS system files
+        if filename == ".DS_Store":
+            self._logger.debug(f"Ignoring macOS system file: {filename}")
+            return True
+            
+        # Ignore other hidden system files
+        if filename.startswith("._"):  # macOS AppleDouble files
+            self._logger.debug(f"Ignoring macOS AppleDouble file: {filename}")
             return True
             
         # Add other ignore patterns here if needed
