@@ -38,9 +38,9 @@
     
     <div class="container mx-auto p-4 max-w-7xl">
         <!-- Header with Status -->
-        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 mb-4 text-white">
-            <div class="flex justify-between items-center">
-                <h1 class="text-2xl font-bold">File Transfer Agent</h1>
+        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-6 mb-4 text-white">
+            <div class="flex justify-between items-start mb-4">
+                <h1 class="text-3xl font-bold">File Transfer Agent</h1>
                 
                 <div class="flex items-center space-x-6">
                     <!-- Connection Status -->
@@ -54,15 +54,158 @@
                         <span x-text="connectionText" class="text-sm"></span>
                     </div>
                     
-                    <!-- Statistics -->
-                    <div class="flex space-x-4 text-sm">
-                        <span class="text-blue-300">Total: <strong x-text="statistics.totalFiles">0</strong></span>
-                        <span class="text-yellow-300">Aktive: <strong x-text="statistics.activeFiles">0</strong></span>
-                        <span class="text-green-300">Færdige: <strong x-text="statistics.completedFiles">0</strong></span>
-                        <span class="text-red-300">Fejlede: <strong x-text="statistics.failedFiles">0</strong></span>
+                    <div class="text-xs text-gray-300" x-text="lastUpdate"></div>
+                </div>
+            </div>
+            
+            <!-- Storage Status Panel -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+                <!-- Source Storage -->
+                <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold flex items-center">
+                            📁 Source Storage
+                        </h3>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2"
+                                 :class="{
+                                     'bg-green-500': storageInfo.source?.status === 'OK',
+                                     'bg-yellow-500': storageInfo.source?.status === 'WARNING',
+                                     'bg-red-500': storageInfo.source?.status === 'ERROR' || storageInfo.source?.status === 'CRITICAL',
+                                     'bg-gray-500': !storageInfo.source
+                                 }"></div>
+                            <span class="text-sm font-medium"
+                                  :class="{
+                                      'text-green-400': storageInfo.source?.status === 'OK',
+                                      'text-yellow-400': storageInfo.source?.status === 'WARNING', 
+                                      'text-red-400': storageInfo.source?.status === 'ERROR' || storageInfo.source?.status === 'CRITICAL',
+                                      'text-gray-400': !storageInfo.source
+                                  }"
+                                  x-text="storageInfo.source?.status || 'Unknown'"></span>
+                        </div>
                     </div>
                     
-                    <div class="text-xs text-gray-300" x-text="lastUpdate"></div>
+                    <template x-if="storageInfo.source">
+                        <div class="space-y-2">
+                            <!-- Storage Bar -->
+                            <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :style="`width: ${((storageInfo.source.total_space_gb - storageInfo.source.free_space_gb) / storageInfo.source.total_space_gb * 100)}%`"
+                                     :class="{
+                                         'bg-green-500': storageInfo.source.status === 'OK',
+                                         'bg-yellow-500': storageInfo.source.status === 'WARNING',
+                                         'bg-red-500': storageInfo.source.status === 'ERROR' || storageInfo.source.status === 'CRITICAL'
+                                     }"></div>
+                            </div>
+                            
+                            <!-- Storage Details -->
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${storageInfo.source.free_space_gb.toFixed(1)} GB`"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${storageInfo.source.total_space_gb.toFixed(1)} GB`"></strong></span>
+                            </div>
+                            
+                            <!-- Access Status -->
+                            <div class="flex space-x-4 text-xs">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full mr-1"
+                                         :class="storageInfo.source.is_accessible ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="storageInfo.source.is_accessible ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="storageInfo.source.is_accessible ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                    </span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full mr-1"
+                                         :class="storageInfo.source.has_write_access ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="storageInfo.source.has_write_access ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="storageInfo.source.has_write_access ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="!storageInfo.source">
+                        <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+                    </template>
+                </div>
+                
+                <!-- Destination Storage -->
+                <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold flex items-center">
+                            🎯 Destination Storage
+                        </h3>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2"
+                                 :class="{
+                                     'bg-green-500': storageInfo.destination?.status === 'OK',
+                                     'bg-yellow-500': storageInfo.destination?.status === 'WARNING',
+                                     'bg-red-500': storageInfo.destination?.status === 'ERROR' || storageInfo.destination?.status === 'CRITICAL',
+                                     'bg-gray-500': !storageInfo.destination
+                                 }"></div>
+                            <span class="text-sm font-medium"
+                                  :class="{
+                                      'text-green-400': storageInfo.destination?.status === 'OK',
+                                      'text-yellow-400': storageInfo.destination?.status === 'WARNING',
+                                      'text-red-400': storageInfo.destination?.status === 'ERROR' || storageInfo.destination?.status === 'CRITICAL',
+                                      'text-gray-400': !storageInfo.destination
+                                  }"
+                                  x-text="storageInfo.destination?.status || 'Unknown'"></span>
+                        </div>
+                    </div>
+                    
+                    <template x-if="storageInfo.destination">
+                        <div class="space-y-2">
+                            <!-- Storage Bar -->
+                            <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :style="`width: ${((storageInfo.destination.total_space_gb - storageInfo.destination.free_space_gb) / storageInfo.destination.total_space_gb * 100)}%`"
+                                     :class="{
+                                         'bg-green-500': storageInfo.destination.status === 'OK',
+                                         'bg-yellow-500': storageInfo.destination.status === 'WARNING',
+                                         'bg-red-500': storageInfo.destination.status === 'ERROR' || storageInfo.destination.status === 'CRITICAL'
+                                     }"></div>
+                            </div>
+                            
+                            <!-- Storage Details -->
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${storageInfo.destination.free_space_gb.toFixed(1)} GB`"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${storageInfo.destination.total_space_gb.toFixed(1)} GB`"></strong></span>
+                            </div>
+                            
+                            <!-- Access Status -->
+                            <div class="flex space-x-4 text-xs">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full mr-1"
+                                         :class="storageInfo.destination.is_accessible ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="storageInfo.destination.is_accessible ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="storageInfo.destination.is_accessible ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                    </span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full mr-1"
+                                         :class="storageInfo.destination.has_write_access ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="storageInfo.destination.has_write_access ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="storageInfo.destination.has_write_access ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="!storageInfo.destination">
+                        <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+                    </template>
+                </div>
+            </div>
+            
+            <!-- File Statistics -->
+            <div class="flex justify-center">
+                <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
+                    <span class="text-blue-300">Total: <strong x-text="statistics.totalFiles">0</strong></span>
+                    <span class="text-yellow-300">Aktive: <strong x-text="statistics.activeFiles">0</strong></span>
+                    <span class="text-green-300">Færdige: <strong x-text="statistics.completedFiles">0</strong></span>
+                    <span class="text-red-300">Fejlede: <strong x-text="statistics.failedFiles">0</strong></span>
                 </div>
             </div>
         </div>
@@ -199,6 +342,11 @@
                     completedFiles: 0,
                     failedFiles: 0
                 },
+                storageInfo: {
+                    source: null,
+                    destination: null,
+                    overall_status: 'Unknown'
+                },
 
                 // Computed - Show all files sorted by selected method
                 get allFiles() {
@@ -264,6 +412,9 @@
                         console.log('WebSocket connected');
                         this.updateConnectionStatus('connected', 'Forbundet til server');
                         this.reconnectAttempts = 0;
+                        
+                        // Load initial storage data when connected
+                        this.loadStorageData();
                     };
                     
                     this.socket.onmessage = (event) => {
@@ -298,6 +449,9 @@
                             break;
                         case 'statistics_update':
                             this.updateStatistics(message.data.statistics);
+                            break;
+                        case 'storage_update':
+                            this.handleStorageUpdate(message.data);
                             break;
                     }
                 },
@@ -359,6 +513,59 @@
                     this.statistics.activeFiles = stats.active;
                     this.statistics.completedFiles = stats.completed;
                     this.statistics.failedFiles = stats.failed;
+                },
+
+                handleStorageUpdate(data) {
+                    console.log('Storage update:', data);
+                    
+                    // Update storage info based on storage type
+                    if (data.storage_type === 'source') {
+                        this.storageInfo.source = data.storage_info;
+                    } else if (data.storage_type === 'destination') {
+                        this.storageInfo.destination = data.storage_info;
+                    }
+                    
+                    // Update overall status
+                    this.updateOverallStorageStatus();
+                },
+
+                async loadStorageData() {
+                    try {
+                        const response = await fetch('/api/storage');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.storageInfo.source = data.source;
+                            this.storageInfo.destination = data.destination;
+                            this.storageInfo.overall_status = data.overall_status;
+                            console.log('Loaded initial storage data:', data);
+                        } else {
+                            console.error('Failed to load storage data:', response.statusText);
+                        }
+                    } catch (error) {
+                        console.error('Error loading storage data:', error);
+                    }
+                },
+
+                updateOverallStorageStatus() {
+                    const sourceStatus = this.storageInfo.source?.status;
+                    const destStatus = this.storageInfo.destination?.status;
+                    
+                    // Priority: CRITICAL > ERROR > WARNING > OK
+                    const priorities = {
+                        'CRITICAL': 4,
+                        'ERROR': 3,
+                        'WARNING': 2,
+                        'OK': 1
+                    };
+                    
+                    const sourcePriority = priorities[sourceStatus] || 0;
+                    const destPriority = priorities[destStatus] || 0;
+                    
+                    if (sourcePriority >= destPriority) {
+                        this.storageInfo.overall_status = sourceStatus || 'Unknown';
+                    } else {
+                        this.storageInfo.overall_status = destStatus || 'Unknown';
+                    }
                 },
 
                 updateConnectionStatus(status, text) {
