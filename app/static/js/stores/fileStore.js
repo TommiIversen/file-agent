@@ -35,7 +35,7 @@ document.addEventListener('alpine:init', () => {
             } else {
                 // File doesn't exist yet - add it automatically
                 console.log(`Auto-adding unknown file during update: ${filePath}`);
-                this.addFile(filePath, file);
+                this.addFile(file);  // Send only the file object, not filePath
             }
         },
         

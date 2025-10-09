@@ -182,7 +182,13 @@ class WebSocketManager:
             "discovered_at": tracked_file.discovered_at.isoformat(),
             "started_copying_at": tracked_file.started_copying_at.isoformat() if tracked_file.started_copying_at else None,
             "completed_at": tracked_file.completed_at.isoformat() if tracked_file.completed_at else None,
-            "destination_path": tracked_file.destination_path
+            "destination_path": tracked_file.destination_path,
+            # Growing file data
+            "is_growing_file": tracked_file.is_growing_file,
+            "growth_rate_mbps": tracked_file.growth_rate_mbps,
+            "bytes_copied": tracked_file.bytes_copied,
+            "copy_speed_mbps": tracked_file.copy_speed_mbps,
+            "last_growth_check": tracked_file.last_growth_check.isoformat() if tracked_file.last_growth_check else None
         }
     
     def _get_timestamp(self) -> str:
