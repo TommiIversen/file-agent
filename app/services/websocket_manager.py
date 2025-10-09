@@ -13,7 +13,7 @@ import logging
 from typing import List, Dict, Any
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.models import FileStateUpdate
+from app.models import FileStateUpdate, StorageUpdate
 from app.services.state_manager import StateManager
 
 
@@ -219,6 +219,61 @@ class WebSocketManager:
             
         except Exception as e:
             self._logger.error(f"Fejl ved sending af statistics: {e}")
+    
+    async def broadcast_storage_update(self, update: StorageUpdate) -> None:
+        """
+        Broadcast storage status update til alle klienter.
+        
+        Args:
+            update: StorageUpdate event fra StorageMonitorService
+        """
+        if not self._connections:
+            return
+        
+        try:
+            message_data = {
+                "type": "storage_update", 
+                "data": {
+                    "storage_type": update.storage_type,
+                    "old_status": update.old_status.value if update.old_status else None,
+                    "new_status": update.new_status.value,
+                    "storage_info": self._serialize_storage_info(update.storage_info),
+                    "timestamp": self._get_timestamp()
+                }
+            }
+            
+            await self._broadcast_message(message_data)
+            
+            self._logger.debug(
+                f"Broadcasted storage update: {update.storage_type} -> {update.new_status.value}"
+            )
+            
+        except Exception as e:
+            self._logger.error(f"Error broadcasting storage update: {e}")
+    
+    def _serialize_storage_info(self, storage_info) -> dict:
+        """
+        Serialize StorageInfo til dictionary for JSON.
+        
+        Args:
+            storage_info: StorageInfo objekt
+            
+        Returns:
+            Dictionary representation af storage info
+        """
+        return {
+            "path": storage_info.path,
+            "is_accessible": storage_info.is_accessible,
+            "has_write_access": storage_info.has_write_access,
+            "free_space_gb": round(storage_info.free_space_gb, 2),
+            "total_space_gb": round(storage_info.total_space_gb, 2),
+            "used_space_gb": round(storage_info.used_space_gb, 2),
+            "status": storage_info.status.value,
+            "warning_threshold_gb": storage_info.warning_threshold_gb,
+            "critical_threshold_gb": storage_info.critical_threshold_gb,
+            "last_checked": storage_info.last_checked.isoformat(),
+            "error_message": storage_info.error_message
+        }
     
     def get_connection_count(self) -> int:
         """

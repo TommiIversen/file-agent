@@ -153,7 +153,11 @@ class FileScannerService:
                 for file in files:
                     if file.lower().endswith('.mxf'):
                         file_path = os.path.join(root, file)
-                        discovered_files.add(os.path.abspath(file_path))
+                        abs_file_path = os.path.abspath(file_path)
+                        
+                        # Filter out test files created by StorageMonitorService
+                        if not self._should_ignore_file(abs_file_path):
+                            discovered_files.add(abs_file_path)
             
             self._logger.debug(f"Opdagede {len(discovered_files)} MXF filer")
             
@@ -340,3 +344,27 @@ class FileScannerService:
             "polling_interval_seconds": self.settings.polling_interval_seconds,
             "file_stable_time_seconds": self.settings.file_stable_time_seconds
         }
+    
+    def _should_ignore_file(self, file_path: str) -> bool:
+        """
+        Check if file should be ignored by scanner.
+        
+        Filters out test files created by StorageMonitorService.
+        
+        Args:
+            file_path: Absolute path to file to check
+            
+        Returns:
+            True if file should be ignored
+        """
+        filename = os.path.basename(file_path)
+        
+        # Ignore storage test files
+        if filename.startswith(self.settings.storage_test_file_prefix):
+            self._logger.debug(f"Ignoring storage test file: {filename}")
+            return True
+            
+        # Add other ignore patterns here if needed
+        # For example: temporary files, hidden files, etc.
+        
+        return False

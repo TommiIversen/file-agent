@@ -15,6 +15,8 @@ from .services.file_scanner import FileScannerService
 from .services.job_queue import JobQueueService
 from .services.file_copier import FileCopyService
 from .services.websocket_manager import WebSocketManager
+from .services.storage_checker import StorageChecker
+from .services.storage_monitor import StorageMonitorService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -98,6 +100,43 @@ def get_websocket_manager() -> WebSocketManager:
         _singletons["websocket_manager"] = WebSocketManager(state_manager)
     
     return _singletons["websocket_manager"]
+
+
+def get_storage_checker() -> StorageChecker:
+    """
+    Hent StorageChecker singleton instance.
+    
+    Returns:
+        StorageChecker instance (oprettes kun én gang)
+    """
+    if "storage_checker" not in _singletons:
+        settings = get_settings()
+        _singletons["storage_checker"] = StorageChecker(
+            test_file_prefix=settings.storage_test_file_prefix
+        )
+    
+    return _singletons["storage_checker"]
+
+
+def get_storage_monitor() -> StorageMonitorService:
+    """
+    Hent StorageMonitorService singleton instance.
+    
+    Returns:
+        StorageMonitorService instance (oprettes kun én gang)
+    """
+    if "storage_monitor" not in _singletons:
+        settings = get_settings()
+        storage_checker = get_storage_checker()
+        websocket_manager = get_websocket_manager()
+        
+        _singletons["storage_monitor"] = StorageMonitorService(
+            settings=settings,
+            storage_checker=storage_checker,
+            websocket_manager=websocket_manager
+        )
+    
+    return _singletons["storage_monitor"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:

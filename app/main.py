@@ -17,9 +17,9 @@ from contextlib import asynccontextmanager
 
 from .config import Settings
 from .logging_config import setup_logging, get_app_logger
-from .api import state, websockets
+from .api import state, websockets, storage
 from .routers import views
-from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier, get_websocket_manager
+from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier, get_websocket_manager, get_storage_monitor
 
 # Load settings
 settings = Settings()
@@ -60,6 +60,12 @@ async def lifespan(app: FastAPI):
     get_websocket_manager()  # Initialize singleton
     logger.info("WebSocketManager initialiseret og subscribed til StateManager")
     
+    # Start StorageMonitorService som background task
+    storage_monitor = get_storage_monitor()
+    storage_task = asyncio.create_task(storage_monitor.start_monitoring())
+    _background_tasks.append(storage_task)
+    logger.info("StorageMonitorService startet som background task")
+    
     yield
     
     # Shutdown
@@ -69,6 +75,7 @@ async def lifespan(app: FastAPI):
     file_scanner.stop_scanning()
     job_queue_service.stop_producer()
     file_copier.stop_consumer()
+    await storage_monitor.stop_monitoring()
     
     # Cancel alle background tasks
     for task in _background_tasks:
@@ -122,6 +129,7 @@ async def log_requests(request: Request, call_next):
 # Include routers
 app.include_router(state.router)
 app.include_router(websockets.router)
+app.include_router(storage.router)
 app.include_router(views.router)
 
 @app.get("/")

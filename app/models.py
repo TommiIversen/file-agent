@@ -26,6 +26,14 @@ class FileStatus(str, Enum):
     FAILED = "Failed"           # Fil kunne ikke kopieres (permanent fejl)
 
 
+class StorageStatus(str, Enum):
+    """Storage status levels for monitoring disk space and accessibility"""
+    OK = "OK"                   # Normal operation
+    WARNING = "WARNING"         # Low space warning
+    ERROR = "ERROR"             # Unmounted/inaccessible
+    CRITICAL = "CRITICAL"       # Very low space / read-only
+
+
 class TrackedFile(BaseModel):
     """
     Central datastruktur der repræsenterer en fil gennem hele kopieringsprocessen.
@@ -111,6 +119,126 @@ class TrackedFile(BaseModel):
             }
         }
     )
+
+
+class StorageInfo(BaseModel):
+    """
+    Storage information for a single path (source or destination).
+    
+    Contains disk space, accessibility status, and configuration thresholds.
+    """
+    
+    path: str = Field(
+        ...,
+        description="Absolut sti til storage location"
+    )
+    
+    is_accessible: bool = Field(
+        ...,
+        description="Om stien er tilgængelig (mounted/exists)"
+    )
+    
+    has_write_access: bool = Field(
+        ..., 
+        description="Om vi kan skrive til stien"
+    )
+    
+    free_space_gb: float = Field(
+        ...,
+        ge=0.0,
+        description="Ledig plads i GB"
+    )
+    
+    total_space_gb: float = Field(
+        ...,
+        ge=0.0, 
+        description="Total plads i GB"
+    )
+    
+    used_space_gb: float = Field(
+        ...,
+        ge=0.0,
+        description="Brugt plads i GB"
+    )
+    
+    status: StorageStatus = Field(
+        ...,
+        description="Current storage status"
+    )
+    
+    warning_threshold_gb: float = Field(
+        ...,
+        ge=0.0,
+        description="Warning threshold i GB"
+    )
+    
+    critical_threshold_gb: float = Field(
+        ...,
+        ge=0.0,
+        description="Critical threshold i GB"
+    )
+    
+    last_checked: datetime = Field(
+        ...,
+        description="Tidspunkt for sidste check"
+    )
+    
+    error_message: Optional[str] = Field(
+        default=None,
+        description="Fejlbesked hvis der er problemer"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "path": "/mnt/nas/destination",
+                "is_accessible": True,
+                "has_write_access": True,
+                "free_space_gb": 45.2,
+                "total_space_gb": 2048.0,
+                "used_space_gb": 2002.8,
+                "status": "WARNING",
+                "warning_threshold_gb": 50.0,
+                "critical_threshold_gb": 20.0,
+                "last_checked": "2025-10-09T10:30:00Z"
+            }
+        }
+    )
+
+
+class StorageUpdate(BaseModel):
+    """
+    Event data structure for storage change notifications.
+    
+    Used by StorageMonitorService to notify WebSocketManager of changes.
+    """
+    
+    storage_type: str = Field(
+        ...,
+        description="Type of storage: 'source' or 'destination'"
+    )
+    
+    old_status: Optional[StorageStatus] = Field(
+        default=None,
+        description="Previous storage status"
+    )
+    
+    new_status: StorageStatus = Field(
+        ...,
+        description="New storage status"
+    )
+    
+    storage_info: StorageInfo = Field(
+        ...,
+        description="Complete storage information"
+    )
+    
+    timestamp: datetime = Field(
+        default_factory=datetime.now,
+        description="Tidspunkt for opdateringen"
+    )
+
+    model_config = ConfigDict()
 
 
 class FileStateUpdate(BaseModel):
