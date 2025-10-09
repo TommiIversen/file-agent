@@ -282,6 +282,20 @@ class FileScannerService:
                     # Fil er stadig ved at blive skrevet til
                     self._file_last_write_times[file_path] = current_write_time
                     self._file_last_seen[file_path] = datetime.now()
+                    
+                    # Opdater file size mens filen vokser
+                    current_file_size, _ = current_stats
+                    if current_file_size != tracked_file.file_size:
+                        await self.state_manager.update_file_status(
+                            file_path=file_path,
+                            status=FileStatus.DISCOVERED,  # Keep same status
+                            file_size=current_file_size
+                        )
+                        self._logger.debug(
+                            f"Fil størrelse opdateret: {os.path.basename(file_path)} "
+                            f"({tracked_file.file_size} -> {current_file_size} bytes)"
+                        )
+                    
                     self._logger.debug(f"Fil stadig aktiv: {os.path.basename(file_path)}")
                     continue
                 
