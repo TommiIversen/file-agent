@@ -11,9 +11,11 @@ Central entry point der samler alle komponenter:
 """
 
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from .config import Settings
 from .logging_config import setup_logging, get_app_logger
@@ -94,6 +96,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+# Mount static files
+static_path = Path(__file__).parent / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+    logger = get_app_logger()
+    logger.info(f"Static files mounted at /static from {static_path}")
 
 # Request logging middleware
 @app.middleware("http")

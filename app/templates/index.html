@@ -6,7 +6,21 @@
     <title>File Transfer Agent - Real-time Monitor</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js CDN -->
+    
+    <!-- File Transfer Agent - Modular Architecture (Load BEFORE Alpine.js) -->
+    <!-- Stores -->
+    <script src="/static/js/stores/connectionStore.js"></script>
+    <script src="/static/js/stores/fileStore.js"></script>
+    <script src="/static/js/stores/storageStore.js"></script>
+    
+    <!-- Services -->
+    <script src="/static/js/services/messageHandler.js"></script>
+    <script src="/static/js/services/uiHelpers.js"></script>
+    
+    <!-- Main Application -->
+    <script src="/static/js/app.js"></script>
+    
+    <!-- Alpine.js CDN (Load LAST) -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         /* Main background gradient */
@@ -33,8 +47,8 @@
 </head>
 <body>
 <body class="gradientHolder min-h-screen" 
-      x-data="fileTransferMonitor()" 
-      x-init="connect()">
+      x-data="{}" 
+      x-init="() => { /* Application will auto-initialize via app.js */ }">
     
     <div class="container mx-auto p-4 max-w-7xl">
         <!-- Header with Status -->
@@ -46,15 +60,11 @@
                     <!-- Connection Status -->
                     <div class="flex items-center">
                         <div class="status-indicator rounded-full mr-2"
-                             :class="{
-                                 'bg-green-500': connectionStatus === 'connected',
-                                 'bg-red-500': connectionStatus === 'disconnected', 
-                                 'bg-yellow-500': connectionStatus === 'connecting'
-                             }"></div>
-                        <span x-text="connectionText" class="text-sm"></span>
+                             :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
+                        <span x-text="$store.connection?.text || 'Indlæser...'" class="text-sm"></span>
                     </div>
                     
-                    <div class="text-xs text-gray-300" x-text="lastUpdate"></div>
+                    <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
                 </div>
             </div>
             
@@ -68,63 +78,49 @@
                         </h3>
                         <div class="flex items-center">
                             <div class="w-3 h-3 rounded-full mr-2"
-                                 :class="{
-                                     'bg-green-500': storageInfo.source?.status === 'OK',
-                                     'bg-yellow-500': storageInfo.source?.status === 'WARNING',
-                                     'bg-red-500': storageInfo.source?.status === 'ERROR' || storageInfo.source?.status === 'CRITICAL',
-                                     'bg-gray-500': !storageInfo.source
-                                 }"></div>
+                                 :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
                             <span class="text-sm font-medium"
-                                  :class="{
-                                      'text-green-400': storageInfo.source?.status === 'OK',
-                                      'text-yellow-400': storageInfo.source?.status === 'WARNING', 
-                                      'text-red-400': storageInfo.source?.status === 'ERROR' || storageInfo.source?.status === 'CRITICAL',
-                                      'text-gray-400': !storageInfo.source
-                                  }"
-                                  x-text="storageInfo.source?.status || 'Unknown'"></span>
+                                  :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
+                                  x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
                         </div>
                     </div>
                     
-                    <template x-if="storageInfo.source">
+                    <template x-if="$store.storage?.source">
                         <div class="space-y-2">
                             <!-- Storage Bar -->
                             <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
                                 <div class="h-full transition-all duration-500"
-                                     :style="`width: ${((storageInfo.source.total_space_gb - storageInfo.source.free_space_gb) / storageInfo.source.total_space_gb * 100)}%`"
-                                     :class="{
-                                         'bg-green-500': storageInfo.source.status === 'OK',
-                                         'bg-yellow-500': storageInfo.source.status === 'WARNING',
-                                         'bg-red-500': storageInfo.source.status === 'ERROR' || storageInfo.source.status === 'CRITICAL'
-                                     }"></div>
+                                     :style="`width: ${$store.storage?.sourceUsagePercentage || 0}%`"
+                                     :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
                             </div>
                             
                             <!-- Storage Details -->
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${storageInfo.source.free_space_gb.toFixed(1)} GB`"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${storageInfo.source.total_space_gb.toFixed(1)} GB`"></strong></span>
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${$store.storage?.sourceFreeSpaceGB || '0.0'} GB`"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${$store.storage?.sourceTotalSpaceGB || '0.0'} GB`"></strong></span>
                             </div>
                             
                             <!-- Access Status -->
                             <div class="flex space-x-4 text-xs">
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="storageInfo.source.is_accessible ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="storageInfo.source.is_accessible ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="storageInfo.source.is_accessible ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                         :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
                                     </span>
                                 </div>
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="storageInfo.source.has_write_access ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="storageInfo.source.has_write_access ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="storageInfo.source.has_write_access ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                         :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
                                     </span>
                                 </div>
                             </div>
                         </div>
                     </template>
                     
-                    <template x-if="!storageInfo.source">
+                    <template x-if="!$store.storage?.source">
                         <div class="text-gray-400 text-sm">Indlæser storage information...</div>
                     </template>
                 </div>
@@ -137,63 +133,49 @@
                         </h3>
                         <div class="flex items-center">
                             <div class="w-3 h-3 rounded-full mr-2"
-                                 :class="{
-                                     'bg-green-500': storageInfo.destination?.status === 'OK',
-                                     'bg-yellow-500': storageInfo.destination?.status === 'WARNING',
-                                     'bg-red-500': storageInfo.destination?.status === 'ERROR' || storageInfo.destination?.status === 'CRITICAL',
-                                     'bg-gray-500': !storageInfo.destination
-                                 }"></div>
+                                 :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
                             <span class="text-sm font-medium"
-                                  :class="{
-                                      'text-green-400': storageInfo.destination?.status === 'OK',
-                                      'text-yellow-400': storageInfo.destination?.status === 'WARNING',
-                                      'text-red-400': storageInfo.destination?.status === 'ERROR' || storageInfo.destination?.status === 'CRITICAL',
-                                      'text-gray-400': !storageInfo.destination
-                                  }"
-                                  x-text="storageInfo.destination?.status || 'Unknown'"></span>
+                                  :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
+                                  x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
                         </div>
                     </div>
                     
-                    <template x-if="storageInfo.destination">
+                    <template x-if="$store.storage?.destination">
                         <div class="space-y-2">
                             <!-- Storage Bar -->
                             <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
                                 <div class="h-full transition-all duration-500"
-                                     :style="`width: ${((storageInfo.destination.total_space_gb - storageInfo.destination.free_space_gb) / storageInfo.destination.total_space_gb * 100)}%`"
-                                     :class="{
-                                         'bg-green-500': storageInfo.destination.status === 'OK',
-                                         'bg-yellow-500': storageInfo.destination.status === 'WARNING',
-                                         'bg-red-500': storageInfo.destination.status === 'ERROR' || storageInfo.destination.status === 'CRITICAL'
-                                     }"></div>
+                                     :style="`width: ${$store.storage?.destinationUsagePercentage || 0}%`"
+                                     :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
                             </div>
                             
                             <!-- Storage Details -->
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${storageInfo.destination.free_space_gb.toFixed(1)} GB`"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${storageInfo.destination.total_space_gb.toFixed(1)} GB`"></strong></span>
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${$store.storage?.destinationFreeSpaceGB || '0.0'} GB`"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${$store.storage?.destinationTotalSpaceGB || '0.0'} GB`"></strong></span>
                             </div>
                             
                             <!-- Access Status -->
                             <div class="flex space-x-4 text-xs">
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="storageInfo.destination.is_accessible ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="storageInfo.destination.is_accessible ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="storageInfo.destination.is_accessible ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                         :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
                                     </span>
                                 </div>
                                 <div class="flex items-center">
                                     <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="storageInfo.destination.has_write_access ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="storageInfo.destination.has_write_access ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="storageInfo.destination.has_write_access ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                         :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
                                     </span>
                                 </div>
                             </div>
                         </div>
                     </template>
                     
-                    <template x-if="!storageInfo.destination">
+                    <template x-if="!$store.storage?.destination">
                         <div class="text-gray-400 text-sm">Indlæser storage information...</div>
                     </template>
                 </div>
@@ -202,10 +184,10 @@
             <!-- File Statistics -->
             <div class="flex justify-center">
                 <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-                    <span class="text-blue-300">Total: <strong x-text="statistics.totalFiles">0</strong></span>
-                    <span class="text-yellow-300">Aktive: <strong x-text="statistics.activeFiles">0</strong></span>
-                    <span class="text-green-300">Færdige: <strong x-text="statistics.completedFiles">0</strong></span>
-                    <span class="text-red-300">Fejlede: <strong x-text="statistics.failedFiles">0</strong></span>
+                    <span class="text-blue-300">Total: <strong x-text="$store.files.statistics.totalFiles">0</strong></span>
+                    <span class="text-yellow-300">Aktive: <strong x-text="$store.files.statistics.activeFiles">0</strong></span>
+                    <span class="text-green-300">Færdige: <strong x-text="$store.files.statistics.completedFiles">0</strong></span>
+                    <span class="text-red-300">Fejlede: <strong x-text="$store.files.statistics.failedFiles">0</strong></span>
                 </div>
             </div>
         </div>
@@ -218,7 +200,9 @@
                     <h2 class="text-lg font-semibold text-white">📁 Filer</h2>
                     <div class="flex items-center space-x-4">
                         <span class="text-gray-300 text-sm">Sorter efter:</span>
-                        <select x-model="sortBy" class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
+                        <select x-model="$store.files.sortBy" 
+                                @change="$store.files.setSortBy($event.target.value)"
+                                class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
                             <option value="activity">Seneste aktivitet</option>
                             <option value="discovered">Opdaget tidspunkt</option>
                             <option value="started">Startet tidspunkt</option>
@@ -230,26 +214,26 @@
                 </div>
             </div>
             
-            <template x-for="file in allFiles" :key="file.file_path">
+            <template x-for="file in $store.files.allFiles" :key="file.file_path">
                 <!-- File Card Component -->
                 <div class="grid p-2 m-2 items-center shadow-lg md:m-1 rounded-lg overflow-hidden md:grid-cols-6 sm:grid-cols-2 gap-x-1 hover:bg-gray-900 bg-gray-800 text-gray-400 text-sm font-medium">
                     
                     <!-- File Name (spans 2 columns) -->
                     <div class="md:col-span-2 truncate col-span-2">
                         <div class="capitalize md:text-sm text-xl font-extrabold truncate text-white"
-                             x-text="file.file_path.split(/[/\\]/).pop()">
+                             x-text="UIHelpers.getFileName(file.file_path)">
                         </div>
                     </div>
 
                     <!-- File Size -->
                     <div class="truncate md:order-none order-2">
-                        Størrelse: <span class="text-white" x-text="`${file.file_size_mb} MB`"></span>
+                        Størrelse: <span class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></span>
                     </div>
 
                     <!-- Discovered Time -->
                     <div class="md:order-none order-3">
                         <div class="truncate">
-                            Opdaget: <span class="text-white" x-text="formatTime(file.discovered_at)"></span>
+                            Opdaget: <span class="text-white" x-text="UIHelpers.formatTime(file.discovered_at)"></span>
                         </div>
                     </div>
 
@@ -263,9 +247,9 @@
                     <div class="md:col-span-2 col-span-1 md:order-none order-4">
                         <div class="w-full bg-gray-700 rounded overflow-hidden">
                             <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
-                                 :style="getProgressWidth(file)"
-                                 :class="getProgressColor(file)"
-                                 x-text="getProgressText(file)">
+                                 :style="UIHelpers.getProgressWidth(file)"
+                                 :class="UIHelpers.getProgressColor(file)"
+                                 x-text="UIHelpers.getProgressText(file)">
                             </div>
                         </div>
                     </div>
@@ -274,16 +258,7 @@
                     <div class="md:order-none order-7">
                         <div class="w-4/6">
                             <div class="text-green-100 truncate text-center py-1 px-3 rounded-full text-xs font-bold"
-                                 :class="{
-                                     'bg-blue-600': file.status === 'Discovered',
-                                     'bg-green-600': file.status === 'Ready',
-                                     'bg-yellow-600': file.status === 'InQueue',
-                                     'bg-blue-700': file.status === 'Copying',
-                                     'bg-green-700': file.status === 'Completed',
-                                     'bg-red-600': file.status === 'Failed',
-                                     'bg-orange-600': file.status === 'WaitingForSpace',
-                                     'bg-purple-600': file.status === 'SpaceError'
-                                 }"
+                                 :class="UIHelpers.getStatusBadgeColor(file.status)"
                                  x-text="file.status">
                             </div>
                         </div>
@@ -292,14 +267,14 @@
                     <!-- Started Time -->
                     <div class="md:order-none order-3">
                         <div class="truncate">
-                            Startet: <span class="text-green-300" x-text="file.started_copying_at ? formatTime(file.started_copying_at) : '-'"></span>
+                            Startet: <span class="text-green-300" x-text="UIHelpers.formatTime(file.started_copying_at)"></span>
                         </div>
                     </div>
 
                     <!-- Completed Time -->
                     <div class="md:order-none order-5">
                         <div class="truncate">
-                            Færdig: <span class="text-blue-300" x-text="file.completed_at ? formatTime(file.completed_at) : '-'"></span>
+                            Færdig: <span class="text-blue-300" x-text="UIHelpers.formatTime(file.completed_at)"></span>
                         </div>
                     </div>
 
@@ -316,7 +291,7 @@
             </template>
             
             <!-- Empty State -->
-            <div x-show="allFiles.length === 0" class="text-center py-12">
+            <div x-show="$store.files.allFiles.length === 0" class="text-center py-12">
                 <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
                     <div class="text-4xl mb-4">📁</div>
                     Ingen filer fundet
@@ -325,337 +300,8 @@
         </div>
     </div>
 
-    <script>
-        function fileTransferMonitor() {
-            return {
-                // Data
-                socket: null,
-                files: new Map(),
-                reconnectAttempts: 0,
-                maxReconnectAttempts: 5,
-                reconnectDelay: 1000,
-                connectionStatus: 'connecting',
-                connectionText: 'Forbinder til server...',
-                lastUpdate: 'Indlæser...',
-                sortBy: 'discovered', // Default sort method - newest discovered files first
-                statistics: {
-                    totalFiles: 0,
-                    activeFiles: 0,
-                    completedFiles: 0,
-                    failedFiles: 0
-                },
-                storageInfo: {
-                    source: null,
-                    destination: null,
-                    overall_status: 'Unknown'
-                },
+    <!-- Error Container for initialization failures -->
+    <div id="error-container" style="display: none;" class="fixed top-4 right-4 max-w-md z-50"></div>
 
-                // Computed - Show all files sorted by selected method
-                get allFiles() {
-                    const files = Array.from(this.files.values());
-                    
-                    return files.sort((a, b) => {
-                        switch (this.sortBy) {
-                            case 'activity':
-                                // Prioriter efter mest relevante tidspunkt baseret på status
-                                const getRelevantTime = (file) => {
-                                    if (file.completed_at) return new Date(file.completed_at);
-                                    if (file.started_copying_at) return new Date(file.started_copying_at);
-                                    return new Date(file.discovered_at || 0);
-                                };
-                                return getRelevantTime(b) - getRelevantTime(a);
-                                
-                            case 'discovered':
-                                const aDiscovered = new Date(a.discovered_at || 0);
-                                const bDiscovered = new Date(b.discovered_at || 0);
-                                return bDiscovered - aDiscovered;
-                                
-                            case 'started':
-                                const aStarted = a.started_copying_at ? new Date(a.started_copying_at) : new Date(0);
-                                const bStarted = b.started_copying_at ? new Date(b.started_copying_at) : new Date(0);
-                                return bStarted - aStarted;
-                                
-                            case 'completed':
-                                const aCompleted = a.completed_at ? new Date(a.completed_at) : new Date(0);
-                                const bCompleted = b.completed_at ? new Date(b.completed_at) : new Date(0);
-                                return bCompleted - aCompleted;
-                                
-                            case 'filename':
-                                const aName = a.file_path.split(/[/\\]/).pop().toLowerCase();
-                                const bName = b.file_path.split(/[/\\]/).pop().toLowerCase();
-                                return aName.localeCompare(bName);
-                                
-                            case 'size':
-                                return (b.file_size || 0) - (a.file_size || 0);
-                                
-                            default:
-                                return 0;
-                        }
-                    });
-                },
-
-                // Methods
-                connect() {
-                    try {
-                        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                        const wsUrl = `${protocol}//${window.location.host}/api/ws/live`;
-                        
-                        this.socket = new WebSocket(wsUrl);
-                        this.setupSocketHandlers();
-                        
-                    } catch (error) {
-                        console.error('WebSocket connection error:', error);
-                        this.handleDisconnection();
-                    }
-                },
-
-                setupSocketHandlers() {
-                    this.socket.onopen = () => {
-                        console.log('WebSocket connected');
-                        this.updateConnectionStatus('connected', 'Forbundet til server');
-                        this.reconnectAttempts = 0;
-                        
-                        // Load initial storage data when connected
-                        this.loadStorageData();
-                    };
-                    
-                    this.socket.onmessage = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-                            this.handleMessage(message);
-                        } catch (error) {
-                            console.error('Error parsing WebSocket message:', error);
-                        }
-                    };
-                    
-                    this.socket.onclose = () => {
-                        console.log('WebSocket disconnected');
-                        this.handleDisconnection();
-                    };
-                    
-                    this.socket.onerror = (error) => {
-                        console.error('WebSocket error:', error);
-                        this.handleDisconnection();
-                    };
-                },
-
-                handleMessage(message) {
-                    this.updateLastUpdate();
-                    
-                    switch (message.type) {
-                        case 'initial_state':
-                            this.handleInitialState(message.data);
-                            break;
-                        case 'file_update':
-                            this.handleFileUpdate(message.data);
-                            break;
-                        case 'statistics_update':
-                            this.updateStatistics(message.data.statistics);
-                            break;
-                        case 'storage_update':
-                            this.handleStorageUpdate(message.data);
-                            break;
-                    }
-                },
-
-                handleInitialState(data) {
-                    console.log('Received initial state:', data);
-                    
-                    // Update files
-                    this.files.clear();
-                    data.files.forEach(file => {
-                        this.files.set(file.file_path, file);
-                    });
-                    
-                    // Update statistics
-                    this.updateStatistics(data.statistics);
-                },
-
-                handleFileUpdate(data) {
-                    console.log('File update:', data);
-                    
-                    // Update or add file
-                    this.files.set(data.file_path, data.file);
-                    
-                    // Update statistics from files
-                    this.updateStatisticsFromFiles();
-                },
-
-                updateStatistics(stats) {
-                    if (stats) {
-                        this.statistics.totalFiles = stats.total_files || 0;
-                        this.statistics.activeFiles = stats.active_files || 0;
-                        this.statistics.completedFiles = stats.completed_files || 0;
-                        this.statistics.failedFiles = stats.failed_files || 0;
-                    }
-                },
-
-                updateStatisticsFromFiles() {
-                    const stats = {
-                        total: this.files.size,
-                        active: 0,
-                        completed: 0,
-                        failed: 0
-                    };
-                    
-                    this.files.forEach(file => {
-                        switch (file.status) {
-                            case 'Completed':
-                                stats.completed++;
-                                break;
-                            case 'Failed':
-                                stats.failed++;
-                                break;
-                            default:
-                                stats.active++;
-                        }
-                    });
-                    
-                    this.statistics.totalFiles = stats.total;
-                    this.statistics.activeFiles = stats.active;
-                    this.statistics.completedFiles = stats.completed;
-                    this.statistics.failedFiles = stats.failed;
-                },
-
-                handleStorageUpdate(data) {
-                    console.log('Storage update:', data);
-                    
-                    // Update storage info based on storage type
-                    if (data.storage_type === 'source') {
-                        this.storageInfo.source = data.storage_info;
-                    } else if (data.storage_type === 'destination') {
-                        this.storageInfo.destination = data.storage_info;
-                    }
-                    
-                    // Update overall status
-                    this.updateOverallStorageStatus();
-                },
-
-                async loadStorageData() {
-                    try {
-                        const response = await fetch('/api/storage');
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.storageInfo.source = data.source;
-                            this.storageInfo.destination = data.destination;
-                            this.storageInfo.overall_status = data.overall_status;
-                            console.log('Loaded initial storage data:', data);
-                        } else {
-                            console.error('Failed to load storage data:', response.statusText);
-                        }
-                    } catch (error) {
-                        console.error('Error loading storage data:', error);
-                    }
-                },
-
-                updateOverallStorageStatus() {
-                    const sourceStatus = this.storageInfo.source?.status;
-                    const destStatus = this.storageInfo.destination?.status;
-                    
-                    // Priority: CRITICAL > ERROR > WARNING > OK
-                    const priorities = {
-                        'CRITICAL': 4,
-                        'ERROR': 3,
-                        'WARNING': 2,
-                        'OK': 1
-                    };
-                    
-                    const sourcePriority = priorities[sourceStatus] || 0;
-                    const destPriority = priorities[destStatus] || 0;
-                    
-                    if (sourcePriority >= destPriority) {
-                        this.storageInfo.overall_status = sourceStatus || 'Unknown';
-                    } else {
-                        this.storageInfo.overall_status = destStatus || 'Unknown';
-                    }
-                },
-
-                updateConnectionStatus(status, text) {
-                    this.connectionStatus = status;
-                    this.connectionText = text;
-                },
-
-                updateLastUpdate() {
-                    const now = new Date().toLocaleTimeString('da-DK');
-                    this.lastUpdate = `Sidst opdateret: ${now}`;
-                },
-
-                handleDisconnection() {
-                    this.updateConnectionStatus('disconnected', 'Forbindelse afbrudt');
-                    
-                    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                        this.reconnectAttempts++;
-                        this.updateConnectionStatus('connecting', `Prøver at forbinde igen... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-                        
-                        setTimeout(() => {
-                            this.connect();
-                        }, this.reconnectDelay * this.reconnectAttempts);
-                    } else {
-                        this.updateConnectionStatus('disconnected', 'Kunne ikke forbinde - genindlæs siden');
-                    }
-                },
-
-                formatTime(timestamp) {
-                    if (!timestamp) return '-';
-                    return new Date(timestamp).toLocaleTimeString('da-DK');
-                },
-
-                getProgressWidth(file) {
-                    switch (file.status) {
-                        case 'Discovered':
-                        case 'Ready':
-                        case 'InQueue':
-                            return 'width: 0%';
-                        case 'Copying':
-                            return `width: ${file.copy_progress || 0}%`;
-                        case 'Completed':
-                            return 'width: 100%';
-                        case 'Failed':
-                            return 'width: 100%';
-                        default:
-                            return 'width: 0%';
-                    }
-                },
-
-                getProgressColor(file) {
-                    switch (file.status) {
-                        case 'Discovered':
-                        case 'Ready':
-                        case 'InQueue':
-                        case 'WaitingForSpace':
-                            return 'bg-gray-600';
-                        case 'Copying':
-                            return 'bg-blue-600';
-                        case 'Completed':
-                            return 'bg-green-600';
-                        case 'Failed':
-                        case 'SpaceError':
-                            return 'bg-red-600';
-                        default:
-                            return 'bg-gray-600';
-                    }
-                },
-
-                getProgressText(file) {
-                    switch (file.status) {
-                        case 'Discovered':
-                        case 'Ready':
-                        case 'InQueue':
-                        case 'WaitingForSpace':
-                            return '0%';
-                        case 'Copying':
-                            return `${(file.copy_progress || 0).toFixed(1)}%`;
-                        case 'Completed':
-                            return '100%';
-                        case 'Failed':
-                        case 'SpaceError':
-                            return '0%';
-                        default:
-                            return '0%';
-                    }
-                }
-            }
-        }
-    </script>
 </body>
 </html>
