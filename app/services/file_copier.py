@@ -14,13 +14,16 @@ Implementeret efter roadmap Fase 4 specifikation.
 import asyncio
 import aiofiles
 import logging
+import time
+import uuid
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, List
 
 from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
+from app.services.copy_strategies import FileCopyStrategyFactory
 
 
 class FileCopyService:
@@ -54,6 +57,9 @@ class FileCopyService:
         self.space_retry_manager = space_retry_manager
         self._logger = logging.getLogger("app.file_copier")
         
+        # Initialize copy strategy factory
+        self.copy_strategy_factory = FileCopyStrategyFactory(settings, state_manager)
+        
         # Copy statistics
         self._total_files_copied = 0
         self._total_bytes_copied = 0
@@ -61,26 +67,81 @@ class FileCopyService:
         
         # Service state
         self._running = False
-        self._consumer_task: Optional[asyncio.Task] = None
+        self._consumer_tasks: List[asyncio.Task] = []
         self._destination_available = True
+        self._max_concurrent_copies = settings.max_concurrent_copies if hasattr(settings, 'max_concurrent_copies') else 1
+        
+        # Destination availability caching
+        self._destination_check_cache = None
+        self._destination_check_timestamp = 0
+        self._destination_check_ttl = 5.0  # 5 seconds cache
+        self._destination_check_lock = asyncio.Lock()  # Prevent concurrent checks
         
         self._logger.info("FileCopyService initialiseret")
         self._logger.info(f"Source: {self.settings.source_directory}")
         self._logger.info(f"Destination: {self.settings.destination_directory}")
+        self._logger.info(f"Growing file support: {self.settings.enable_growing_file_support}")
+        
+        # Log available strategies
+        strategies = self.copy_strategy_factory.get_available_strategies()
+        self._logger.info(f"Available copy strategies: {list(strategies.keys())}")
         self._logger.info(f"Use temporary files: {self.settings.use_temporary_file}")
     
     async def start_consumer(self) -> None:
         """
-        Start consumer task der henter jobs fra queue og kopierer filer.
+        Start multiple consumer tasks for parallel file copying.
         
-        Consumer kører indefinitely og håndterer både global og lokal fejlhåndtering.
+        Creates max_concurrent_copies number of consumers to handle files in parallel.
         """
         if self._running:
-            self._logger.warning("Consumer task er allerede startet")
+            self._logger.warning("Consumer tasks are already running")
             return
         
         self._running = True
-        self._logger.info("File Copy Consumer startet")
+        self._logger.info(f"Starting {self._max_concurrent_copies} File Copy Consumers")
+        
+        try:
+            # Start multiple consumer tasks for parallel processing
+            for i in range(self._max_concurrent_copies):
+                task = asyncio.create_task(self._consumer_worker(i))
+                self._consumer_tasks.append(task)
+                
+            # Wait for all consumer tasks to complete
+            await asyncio.gather(*self._consumer_tasks, return_exceptions=True)
+            
+        except asyncio.CancelledError:
+            self._logger.info("File Copy Consumers were cancelled")
+            # Cancel all running tasks
+            for task in self._consumer_tasks:
+                if not task.done():
+                    task.cancel()
+            raise
+        except Exception as e:
+            self._logger.error(f"Critical error in consumer tasks: {e}")
+            raise
+        finally:
+            self._running = False
+            self._consumer_tasks.clear()
+            self._logger.info("All File Copy Consumers stopped")
+    
+    def stop_consumer(self) -> None:
+        """Stop all consumer tasks gracefully."""
+        self._running = False
+        self._logger.info(f"Stopping {len(self._consumer_tasks)} File Copy Consumers")
+        
+        # Cancel all running tasks
+        for task in self._consumer_tasks:
+            if not task.done():
+                task.cancel()
+    
+    async def _consumer_worker(self, worker_id: int) -> None:
+        """
+        Individual consumer worker that processes jobs from the queue.
+        
+        Args:
+            worker_id: Unique identifier for this worker
+        """
+        self._logger.info(f"Consumer Worker {worker_id} started")
         
         try:
             while self._running:
@@ -98,26 +159,54 @@ class FileCopyService:
                     continue
                 
                 # Process job
+                self._logger.debug(f"Worker {worker_id} processing: {job.get('file_path', 'unknown')}")
                 await self._process_job(job)
                 
         except asyncio.CancelledError:
-            self._logger.info("File Copy Consumer blev cancelled")
+            self._logger.info(f"Consumer Worker {worker_id} was cancelled")
             raise
         except Exception as e:
-            self._logger.error(f"Kritisk fejl i consumer task: {e}")
+            self._logger.error(f"Error in Consumer Worker {worker_id}: {e}")
             raise
         finally:
-            self._running = False
-            self._logger.info("File Copy Consumer stoppet")
-    
-    def stop_consumer(self) -> None:
-        """Stop consumer task gracefully."""
-        self._running = False
-        self._logger.info("File Copy Consumer stop request")
+            self._logger.info(f"Consumer Worker {worker_id} stopped")
     
     async def _check_destination_availability(self) -> bool:
         """
-        Check om destination directory er tilgængelig.
+        Check om destination directory er tilgængelig med caching.
+        
+        Uses a 5-second cache to avoid redundant I/O operations when
+        multiple workers check destination simultaneously.
+        
+        Returns:
+            True hvis destination er tilgængelig
+        """
+        current_time = time.time()
+        
+        # Check if we have a valid cached result
+        if (self._destination_check_cache is not None and 
+            current_time - self._destination_check_timestamp < self._destination_check_ttl):
+            return self._destination_check_cache
+        
+        # Use lock to prevent multiple workers from doing the check simultaneously
+        async with self._destination_check_lock:
+            # Double-check pattern: another worker might have updated cache while we waited
+            if (self._destination_check_cache is not None and 
+                time.time() - self._destination_check_timestamp < self._destination_check_ttl):
+                return self._destination_check_cache
+            
+            # Perform actual destination check
+            result = await self._perform_destination_check()
+            
+            # Update cache
+            self._destination_check_cache = result
+            self._destination_check_timestamp = time.time()
+            
+            return result
+    
+    async def _perform_destination_check(self) -> bool:
+        """
+        Perform the actual destination availability check.
         
         Returns:
             True hvis destination er tilgængelig
@@ -134,12 +223,18 @@ class FileCopyService:
                 self._logger.warning(f"Destination er ikke en directory: {dest_path}")
                 return False
             
-            # Test write access med temporary fil
-            test_file = dest_path / ".file_agent_test"
+            # Test write access with unique test file to avoid worker conflicts
+            test_file = dest_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
+            
             try:
                 async with aiofiles.open(test_file, 'w') as f:
                     await f.write("test")
-                test_file.unlink()  # Slet test fil
+                
+                # Prøv at slette test fil - ignore hvis det fejler
+                try:
+                    test_file.unlink()
+                except Exception as cleanup_error:
+                    self._logger.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
                 
                 if not self._destination_available:
                     self._logger.info("Destination er igen tilgængelig")
@@ -197,11 +292,26 @@ class FileCopyService:
                     await self._handle_space_shortage(job, space_check)
                     return  # Job will be retried later by SpaceRetryManager
             
-            # Step 2: Opdater status til Copying
+            # Step 2: Get strategy and set appropriate initial status
+            tracked_file = await self.state_manager.get_file(file_path)
+            if not tracked_file:
+                self._logger.error(f"File not found in state manager: {file_path}")
+                return
+            
+            strategy = self.copy_strategy_factory.get_strategy(tracked_file)
+            
+            # Set initial copying status based on strategy
+            if strategy.__class__.__name__ == "GrowingFileCopyStrategy":
+                initial_status = FileStatus.GROWING_COPY
+            else:
+                initial_status = FileStatus.COPYING
+            
+            from datetime import datetime
             await self.state_manager.update_file_status(
                 file_path, 
-                FileStatus.COPYING,
-                copy_progress=0.0
+                initial_status,
+                copy_progress=0.0,
+                started_copying_at=datetime.now()
             )
             
             # Step 3: Forsøg kopiering med retry logic
@@ -252,19 +362,36 @@ class FileCopyService:
         
         for attempt in range(1, max_attempts + 1):
             try:
+                # Check if file was already completed before attempting copy
+                tracked_file = await self.state_manager.get_file(file_path)
+                if not tracked_file:
+                    self._logger.warning(f"File not found in state manager, skipping: {file_path}")
+                    return False
+                
+                if tracked_file.status == FileStatus.COMPLETED:
+                    self._logger.info(f"File already completed, skipping retry: {file_path}")
+                    return True
+                
                 await self._copy_single_file(file_path, attempt, max_attempts)
                 return True  # Success!
                 
             except Exception as e:
                 self._logger.warning(f"Kopiering fejlede (forsøg {attempt}/{max_attempts}): {file_path} - {e}")
                 
-                # Opdater retry count i StateManager
-                await self.state_manager.update_file_status(
-                    file_path,
-                    FileStatus.COPYING,
-                    retry_count=attempt,
-                    error_message=f"Forsøg {attempt}: {str(e)}"
-                )
+                # Check again if file was completed during the error
+                tracked_file = await self.state_manager.get_file(file_path)
+                if tracked_file and tracked_file.status == FileStatus.COMPLETED:
+                    self._logger.info(f"File was completed during error handling, stopping retry: {file_path}")
+                    return True
+                
+                # Opdater retry count i StateManager only if file still exists
+                if tracked_file:
+                    await self.state_manager.update_file_status(
+                        file_path,
+                        FileStatus.COPYING,
+                        retry_count=attempt,
+                        error_message=f"Forsøg {attempt}: {str(e)}"
+                    )
                 
                 if attempt < max_attempts:
                     # Vent før næste forsøg
@@ -278,16 +405,11 @@ class FileCopyService:
     
     async def _copy_single_file(self, source_path: str, attempt: int, max_attempts: int) -> None:
         """
-        Kopier single fil med verifikation og cleanup.
+        Kopier single fil med strategy pattern approach.
         
-        Implementerer komplet copy workflow:
-        1. Beregn destination path og håndter navnekonflikter
-        2. Opret mapper hvis nødvendigt
-        3. Kopier til temporary fil (hvis konfigureret)
-        4. Verificer filstørrelse
-        5. Omdøb temporary fil til final
-        6. Slet original source fil
-        7. Opdater status til Completed
+        Uses appropriate copy strategy based on file characteristics:
+        - NormalFileCopyStrategy for stable files
+        - GrowingFileCopyStrategy for growing files
         
         Args:
             source_path: Kilde fil path
@@ -297,49 +419,40 @@ class FileCopyService:
         Raises:
             Exception: Ved enhver fejl under kopiering
         """
-        source = Path(source_path)
-        
-        # 1. Check source file exists
-        if not source.exists():
-            raise FileNotFoundError(f"Source fil eksisterer ikke: {source_path}")
-        
-        if not source.is_file():
-            raise ValueError(f"Source er ikke en fil: {source_path}")
-        
-        # 2. Beregn destination path med navnekonflikt resolution
-        dest_final = await self._resolve_destination_path(source)
-        
-        # 3. Opret destination directory hvis nødvendigt
-        dest_final.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 4. Kopier fil (med eller uden temporary fil)
-        if self.settings.use_temporary_file:
-            dest_temp = dest_final.with_suffix(dest_final.suffix + ".tmp")
-            await self._copy_with_progress(source, dest_temp, source_path)
+        try:
+            # Get tracked file from state manager
+            tracked_file = await self.state_manager.get_file(source_path)
+            if not tracked_file:
+                raise ValueError(f"File not found in state manager: {source_path}")
             
-            # 5. Verificer filstørrelse
-            await self._verify_file_copy(source, dest_temp)
+            # Calculate destination path with conflict resolution
+            source = Path(source_path)
+            dest_final = await self._resolve_destination_path(source)
             
-            # 6. Omdøb temporary til final
-            dest_temp.rename(dest_final)
-            self._logger.debug(f"Temporary fil omdøbt til final: {dest_final}")
+            # Create destination directory if needed
+            dest_final.parent.mkdir(parents=True, exist_ok=True)
             
-        else:
-            # Direct copy uden temporary fil
-            await self._copy_with_progress(source, dest_final, source_path)
+            # Select appropriate copy strategy
+            strategy = self.copy_strategy_factory.get_strategy(tracked_file)
             
-            # Verificer filstørrelse
-            await self._verify_file_copy(source, dest_final)
-        
-        # 7. Slet original source fil
-        source.unlink()
-        self._logger.debug(f"Original source fil slettet: {source}")
-        
-        # 8. Opdater final statistics
-        file_size = dest_final.stat().st_size
-        self._total_bytes_copied += file_size
-        
-        # 9. Opdater status til Completed
+            self._logger.info(f"Using {strategy.__class__.__name__} for {source.name} "
+                            f"(attempt {attempt}/{max_attempts})")
+            
+            # Execute copy using selected strategy
+            success = await strategy.copy_file(source_path, str(dest_final), tracked_file)
+            
+            if success:
+                # Update statistics
+                self._total_files_copied += 1
+                self._total_bytes_copied += tracked_file.file_size
+                
+                self._logger.info(f"Fil kopieret med succes: {source.name} -> {dest_final.name}")
+            else:
+                raise Exception(f"Copy strategy failed for {source_path}")
+                
+        except Exception as e:
+            self._logger.error(f"Fejl under fil kopiering (forsøg {attempt}/{max_attempts}): {e}")
+            raise
         await self.state_manager.update_file_status(
             source_path,
             FileStatus.COMPLETED,

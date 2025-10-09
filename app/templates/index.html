@@ -186,6 +186,7 @@
                 <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
                     <span class="text-blue-300">Total: <strong x-text="$store.files.statistics.totalFiles">0</strong></span>
                     <span class="text-yellow-300">Aktive: <strong x-text="$store.files.statistics.activeFiles">0</strong></span>
+                    <span class="text-orange-300">Growing: <strong x-text="$store.files.statistics.growingFiles">0</strong></span>
                     <span class="text-green-300">Færdige: <strong x-text="$store.files.statistics.completedFiles">0</strong></span>
                     <span class="text-red-300">Fejlede: <strong x-text="$store.files.statistics.failedFiles">0</strong></span>
                 </div>
@@ -220,14 +221,25 @@
                     
                     <!-- File Name (spans 2 columns) -->
                     <div class="md:col-span-2 truncate col-span-2">
-                        <div class="capitalize md:text-sm text-xl font-extrabold truncate text-white"
-                             x-text="UIHelpers.getFileName(file.file_path)">
+                        <div class="flex items-center">
+                            <div class="capitalize md:text-sm text-xl font-extrabold truncate text-white"
+                                 x-text="UIHelpers.getFileName(file.file_path)">
+                            </div>
+                            <!-- Growing File Indicator -->
+                            <span x-show="UIHelpers.isGrowingFile(file)" 
+                                  class="ml-2 text-lg" 
+                                  x-text="UIHelpers.getGrowingFileIcon(file)"
+                                  :title="'Growing file: ' + file.status">
+                            </span>
                         </div>
                     </div>
 
-                    <!-- File Size -->
+                    <!-- File Size with Growth Rate -->
                     <div class="truncate md:order-none order-2">
-                        Størrelse: <span class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></span>
+                        <div>Størrelse: <span class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></span></div>
+                        <div x-show="UIHelpers.isGrowingFile(file) && file.growth_rate_mbps" class="text-xs text-orange-300">
+                            Rate: <span x-text="UIHelpers.formatGrowthRate(file.growth_rate_mbps)"></span>
+                        </div>
                     </div>
 
                     <!-- Discovered Time -->
@@ -237,10 +249,16 @@
                         </div>
                     </div>
 
-                    <!-- Retry Count -->
+                    <!-- Retry Count / Bytes Copied -->
                     <div class="md:block hidden">
-                        <span class="text-gray-300">Retry: </span>
-                        <span class="text-white font-bold" x-text="file.retry_count"></span>
+                        <div x-show="!UIHelpers.isGrowingFile(file)">
+                            <span class="text-gray-300">Retry: </span>
+                            <span class="text-white font-bold" x-text="file.retry_count"></span>
+                        </div>
+                        <div x-show="UIHelpers.isGrowingFile(file) && file.bytes_copied" class="text-xs">
+                            <span class="text-gray-300">Kopieret: </span>
+                            <span class="text-purple-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                        </div>
                     </div>
 
                     <!-- Progress Bar (spans 2 columns) -->
@@ -250,6 +268,26 @@
                                  :style="UIHelpers.getProgressWidth(file)"
                                  :class="UIHelpers.getProgressColor(file)"
                                  x-text="UIHelpers.getProgressText(file)">
+                            </div>
+                        </div>
+                        
+                        <!-- Copy Details (fælles for alle modes) -->
+                        <div x-show="file.status === 'GrowingCopy' || file.status === 'Copying'" class="mt-1 text-xs text-gray-300 space-y-1">
+                            <!-- Copy Speed (altid vist for aktive kopieringer) -->
+                            <div x-show="file.copy_speed_mbps && file.copy_speed_mbps > 0" class="flex justify-between">
+                                <span>Copy Speed:</span>
+                                <span class="text-blue-300" x-text="(file.copy_speed_mbps || 0).toFixed(1) + ' MB/s'"></span>
+                            </div>
+                            
+                            <!-- Bytes Copied (altid vist for aktive kopieringer) -->
+                            <div x-show="file.bytes_copied && file.file_size" class="flex justify-between">
+                                <span>Copied:</span>
+                                <span class="text-green-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                            </div>
+                            
+                            <!-- Growing File Specific Info -->
+                            <div x-show="file.status === 'GrowingCopy'" class="text-orange-300 text-xs">
+                                🌱 Streaming copy - file stadig vokser
                             </div>
                         </div>
                     </div>

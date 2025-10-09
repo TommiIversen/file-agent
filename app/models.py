@@ -15,7 +15,8 @@ class FileStatus(str, Enum):
     """
     Status for en tracked fil gennem hele kopieringsprocessen.
     
-    Workflow: Discovered -> Ready -> InQueue -> Copying -> Completed
+    Normal Workflow: Discovered -> Ready -> InQueue -> Copying -> Completed
+    Growing Workflow: Discovered -> Growing -> ReadyToStartGrowing -> InQueue -> GrowingCopy -> Copying -> Completed
     Alternative: -> Failed (ved fejl)
     Space Management: -> WaitingForSpace -> (retry) eller SpaceError (permanent)
     """
@@ -25,6 +26,11 @@ class FileStatus(str, Enum):
     COPYING = "Copying"             # Fil er ved at blive kopieret
     COMPLETED = "Completed"         # Fil er succesfuldt kopieret og slettet
     FAILED = "Failed"               # Fil kunne ikke kopieres (permanent fejl)
+    
+    # Growing file states
+    GROWING = "Growing"             # Fil er aktiv growing, størrelse ændres
+    READY_TO_START_GROWING = "ReadyToStartGrowing"  # Fil >= minimum size for growing copy
+    GROWING_COPY = "GrowingCopy"    # Aktiv growing copy i gang
     
     # Space management states
     WAITING_FOR_SPACE = "WaitingForSpace"   # Midlertidig plads mangel, venter på retry
@@ -104,6 +110,35 @@ class TrackedFile(BaseModel):
     destination_path: Optional[str] = Field(
         default=None,
         description="Sti til destination filen (med evt. navnekonflikt suffix)"
+    )
+
+    # Growing file tracking
+    is_growing_file: bool = Field(
+        default=False,
+        description="True hvis denne fil er en growing file der kopieres under skrivning"
+    )
+    
+    growth_rate_mbps: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Filens vækstrate i MB per sekund (kun for growing files)"
+    )
+    
+    bytes_copied: int = Field(
+        default=0,
+        ge=0,
+        description="Antal bytes kopieret indtil videre (for growing copy progress)"
+    )
+    
+    copy_speed_mbps: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Aktuel copy hastighed i MB per sekund (for alle copy modes)"
+    )
+    
+    last_growth_check: Optional[datetime] = Field(
+        default=None,
+        description="Sidste gang vi tjekkede for file growth"
     )
 
     model_config = ConfigDict(

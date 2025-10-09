@@ -16,7 +16,8 @@ document.addEventListener('alpine:init', () => {
             totalFiles: 0,
             activeFiles: 0,
             completedFiles: 0,
-            failedFiles: 0
+            failedFiles: 0,
+            growingFiles: 0
         },
         
         // File Management Actions
@@ -32,7 +33,9 @@ document.addEventListener('alpine:init', () => {
                 this.updateStatisticsFromFiles();
                 console.log(`File updated: ${filePath} - Status: ${file.status}`);
             } else {
-                console.warn(`Attempted to update unknown file: ${filePath}`);
+                // File doesn't exist yet - add it automatically
+                console.log(`Auto-adding unknown file during update: ${filePath}`);
+                this.addFile(filePath, file);
             }
         },
         
@@ -80,6 +83,7 @@ document.addEventListener('alpine:init', () => {
                 this.statistics.activeFiles = stats.active_files || 0;
                 this.statistics.completedFiles = stats.completed_files || 0;
                 this.statistics.failedFiles = stats.failed_files || 0;
+                this.statistics.growingFiles = stats.growing_files || 0;
             }
         },
         
@@ -88,10 +92,16 @@ document.addEventListener('alpine:init', () => {
                 total: this.items.size,
                 active: 0,
                 completed: 0,
-                failed: 0
+                failed: 0,
+                growing: 0
             };
             
             this.items.forEach(file => {
+                // Check if it's a growing file
+                if (file.is_growing_file || ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status)) {
+                    stats.growing++;
+                }
+                
                 switch (file.status) {
                     case 'Completed':
                         stats.completed++;
@@ -108,6 +118,7 @@ document.addEventListener('alpine:init', () => {
             this.statistics.activeFiles = stats.active;
             this.statistics.completedFiles = stats.completed;
             this.statistics.failedFiles = stats.failed;
+            this.statistics.growingFiles = stats.growing;
         },
         
         // Computed Properties - File Lists
@@ -125,6 +136,12 @@ document.addEventListener('alpine:init', () => {
         get completedFiles() {
             const files = Array.from(this.items.values())
                 .filter(file => file.status === 'Completed');
+            return this.sortFiles(files);
+        },
+        
+        get growingFiles() {
+            const files = Array.from(this.items.values())
+                .filter(file => file.is_growing_file || ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status));
             return this.sortFiles(files);
         },
         

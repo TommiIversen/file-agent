@@ -40,14 +40,19 @@ class UIHelpers {
         
         switch (file.status) {
             case 'Discovered':
+            case 'Growing':
             case 'Ready':
+            case 'ReadyToStartGrowing':
             case 'InQueue':
+            case 'WaitingForSpace':
                 return 'width: 0%';
             case 'Copying':
+            case 'GrowingCopy':
                 return `width: ${file.copy_progress || 0}%`;
             case 'Completed':
                 return 'width: 100%';
             case 'Failed':
+            case 'SpaceError':
                 return 'width: 100%';
             default:
                 return 'width: 0%';
@@ -62,12 +67,16 @@ class UIHelpers {
         
         switch (file.status) {
             case 'Discovered':
+            case 'Growing':
             case 'Ready':
+            case 'ReadyToStartGrowing':
             case 'InQueue':
             case 'WaitingForSpace':
                 return 'bg-gray-600';
             case 'Copying':
                 return 'bg-blue-600';
+            case 'GrowingCopy':
+                return 'bg-purple-600';
             case 'Completed':
                 return 'bg-green-600';
             case 'Failed':
@@ -86,12 +95,19 @@ class UIHelpers {
         
         switch (file.status) {
             case 'Discovered':
+            case 'Growing':
             case 'Ready':
+            case 'ReadyToStartGrowing':
             case 'InQueue':
             case 'WaitingForSpace':
                 return '0%';
             case 'Copying':
                 return `${(file.copy_progress || 0).toFixed(1)}%`;
+            case 'GrowingCopy':
+                // Show both copy progress and buffer status for growing files
+                const progress = (file.copy_progress || 0).toFixed(1);
+                const buffer = file.buffer_percent ? ` (Buffer: ${file.buffer_percent.toFixed(0)}%)` : '';
+                return `${progress}%${buffer}`;
             case 'Completed':
                 return '100%';
             case 'Failed':
@@ -108,9 +124,12 @@ class UIHelpers {
     static getStatusBadgeColor(status) {
         switch (status) {
             case 'Discovered': return 'bg-blue-600';
+            case 'Growing': return 'bg-orange-600';
+            case 'ReadyToStartGrowing': return 'bg-yellow-600';
             case 'Ready': return 'bg-green-600';
             case 'InQueue': return 'bg-yellow-600';
             case 'Copying': return 'bg-blue-700';
+            case 'GrowingCopy': return 'bg-purple-600';
             case 'Completed': return 'bg-green-700';
             case 'Failed': return 'bg-red-600';
             case 'WaitingForSpace': return 'bg-orange-600';
@@ -270,9 +289,12 @@ class UIHelpers {
         
         const statusColors = {
             'Discovered': 'bg-blue-600 text-blue-100',
+            'Growing': 'bg-orange-600 text-orange-100',
+            'ReadyToStartGrowing': 'bg-yellow-600 text-yellow-100',
             'Ready': 'bg-green-600 text-green-100',
             'InQueue': 'bg-yellow-600 text-yellow-100',
             'Copying': 'bg-blue-700 text-blue-100',
+            'GrowingCopy': 'bg-purple-600 text-purple-100',
             'Completed': 'bg-green-700 text-green-100',
             'Failed': 'bg-red-600 text-red-100',
             'WaitingForSpace': 'bg-orange-600 text-orange-100',
@@ -283,6 +305,61 @@ class UIHelpers {
         const statusClass = statusColors[status] || 'bg-gray-600 text-gray-100';
         
         return `${baseClass} ${statusClass}`;
+    }
+    
+    /**
+     * Format growth rate for growing files
+     */
+    static formatGrowthRate(growthRateMbps) {
+        if (!growthRateMbps || growthRateMbps === 0) return '-';
+        
+        if (growthRateMbps < 1) {
+            return `${(growthRateMbps * 1024).toFixed(1)} KB/s`;
+        } else {
+            return `${growthRateMbps.toFixed(1)} MB/s`;
+        }
+    }
+    
+    /**
+     * Check if file is a growing file
+     */
+    static isGrowingFile(file) {
+        return file && (file.is_growing_file === true || 
+                       ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status));
+    }
+    
+    /**
+     * Get growing file indicator icon
+     */
+    static getGrowingFileIcon(file) {
+        if (!this.isGrowingFile(file)) return '';
+        
+        switch (file.status) {
+            case 'Growing':
+                return '📈'; // Growing chart
+            case 'ReadyToStartGrowing':
+                return '⚡'; // Ready to start
+            case 'GrowingCopy':
+                return '🔄'; // Active copy
+            default:
+                return '📊'; // Generic growing indicator
+        }
+    }
+    
+    /**
+     * Format bytes copied for growing files
+     */
+    static formatBytesCopied(bytesCopied, totalSize) {
+        if (!bytesCopied || bytesCopied === 0) return '0 MB';
+        
+        const copiedMB = bytesCopied / (1024 * 1024);
+        const totalMB = totalSize ? totalSize / (1024 * 1024) : 0;
+        
+        if (totalMB > 0) {
+            return `${copiedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
+        } else {
+            return `${copiedMB.toFixed(1)} MB`;
+        }
     }
 }
 

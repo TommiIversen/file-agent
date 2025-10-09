@@ -22,6 +22,7 @@ import aiofiles.os
 from app.config import Settings
 from app.models import FileStatus
 from app.services.state_manager import StateManager
+from app.services.growing_file_detector import GrowingFileDetector
 
 
 class FileScannerService:
@@ -46,6 +47,12 @@ class FileScannerService:
         self.settings = settings
         self.state_manager = state_manager
         self._logger = logging.getLogger("app.file_scanner")
+        
+        # Growing file support
+        self.growing_file_detector = None
+        if settings.enable_growing_file_support:
+            self.growing_file_detector = GrowingFileDetector(settings, state_manager)
+            self._logger.info("Growing file support enabled")
         
         # Internal tracking til fil-stabilitet
         self._file_last_seen: Dict[str, datetime] = {}
@@ -72,6 +79,10 @@ class FileScannerService:
         self._running = True
         self._logger.info("File Scanner startet")
         
+        # Start growing file monitoring if enabled
+        if self.growing_file_detector:
+            await self.growing_file_detector.start_monitoring()
+        
         try:
             await self._scan_folder_loop()
         except asyncio.CancelledError:
@@ -81,6 +92,10 @@ class FileScannerService:
             self._logger.error(f"Fejl i scanning loop: {e}")
             raise
         finally:
+            # Stop growing file monitoring
+            if self.growing_file_detector:
+                await self.growing_file_detector.stop_monitoring()
+            
             self._running = False
             self._logger.info("File Scanner stoppet")
     
@@ -273,15 +288,20 @@ class FileScannerService:
         """
         Tjek stabilitet for alle Discovered filer og promoter stabile til Ready.
         
-        En fil er stabil hvis:
-        1. LastWriteTime har været uændret i FILE_STABLE_TIME_SECONDS
-        2. Filen kan læses (ikke låst)
+        Hvis growing file support er aktiveret, bruges GrowingFileDetector.
+        Ellers bruges traditional stability logic.
         """
         try:
-            # Hent alle Discovered filer
+            # Hent alle Discovered og Growing filer
             discovered_files = await self.state_manager.get_files_by_status(FileStatus.DISCOVERED)
+            growing_files = []
             
-            for tracked_file in discovered_files:
+            if self.growing_file_detector:
+                growing_files = await self.state_manager.get_files_by_status(FileStatus.GROWING)
+            
+            all_files_to_check = discovered_files + growing_files
+            
+            for tracked_file in all_files_to_check:
                 file_path = tracked_file.file_path
                 
                 # Tjek om filen stadig eksisterer
@@ -293,54 +313,108 @@ class FileScannerService:
                 if current_stats is None:
                     continue
                 
-                _, current_write_time = current_stats
+                current_file_size, current_write_time = current_stats
                 
-                # Tjek om write time har ændret sig
-                previous_write_time = self._file_last_write_times.get(file_path)
-                if previous_write_time != current_write_time:
-                    # Fil er stadig ved at blive skrevet til
-                    self._file_last_write_times[file_path] = current_write_time
-                    self._file_last_seen[file_path] = datetime.now()
-                    
-                    # Opdater file size mens filen vokser
-                    current_file_size, _ = current_stats
-                    if current_file_size != tracked_file.file_size:
-                        await self.state_manager.update_file_status(
-                            file_path=file_path,
-                            status=FileStatus.DISCOVERED,  # Keep same status
-                            file_size=current_file_size
-                        )
-                        self._logger.debug(
-                            f"Fil størrelse opdateret: {os.path.basename(file_path)} "
-                            f"({tracked_file.file_size} -> {current_file_size} bytes)"
-                        )
-                    
-                    self._logger.debug(f"Fil stadig aktiv: {os.path.basename(file_path)}")
-                    continue
-                
-                # Tjek om filen har været stabil længe nok
-                last_seen = self._file_last_seen.get(file_path, datetime.now())
-                stable_duration = (datetime.now() - last_seen).total_seconds()
-                
-                if stable_duration >= self.settings.file_stable_time_seconds:
-                    # Fil er stabil - verificer at den kan læses
-                    if await self._verify_file_accessible(file_path):
-                        # Promoter til Ready status
-                        await self.state_manager.update_file_status(
-                            file_path=file_path,
-                            status=FileStatus.READY
-                        )
-                        
-                        # Cleanup internal tracking da filen nu er Ready
-                        self._file_last_seen.pop(file_path, None)
-                        self._file_last_write_times.pop(file_path, None)
-                        
-                        self._logger.info(f"Fil promoveret til Ready: {os.path.basename(file_path)}")
-                    else:
-                        self._logger.warning(f"Fil er stabil men ikke tilgængelig: {os.path.basename(file_path)}")
+                if self.growing_file_detector:
+                    # Use growing file detection
+                    await self._handle_growing_file_logic(file_path, current_file_size, current_write_time, tracked_file)
+                else:
+                    # Use traditional stability logic
+                    await self._handle_traditional_stability_logic(file_path, current_file_size, current_write_time, tracked_file)
                 
         except Exception as e:
             self._logger.error(f"Fejl ved stability check: {e}")
+    
+    async def _handle_growing_file_logic(self, file_path: str, current_file_size: int, current_write_time: datetime, tracked_file) -> None:
+        """Handle file using growing file detection logic"""
+        try:
+            # Update growth tracking
+            await self.growing_file_detector.update_file_growth_info(file_path, current_file_size)
+            
+            # Check growth status - but only for files that aren't already being processed
+            if tracked_file.status in [FileStatus.DISCOVERED, FileStatus.GROWING]:
+                recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(file_path)
+                
+                # Update file status if it changed
+                if recommended_status != tracked_file.status:
+                    update_kwargs = {'file_size': current_file_size}
+                    
+                    if growth_info:
+                        update_kwargs.update({
+                            'is_growing_file': recommended_status in [FileStatus.GROWING, FileStatus.READY_TO_START_GROWING],
+                            'growth_rate_mbps': growth_info.growth_rate_mbps,
+                            'last_growth_check': datetime.now()
+                        })
+                    
+                    await self.state_manager.update_file_status(
+                        file_path,
+                        recommended_status,
+                        **update_kwargs
+                    )
+                    
+                    self._logger.info(f"Growing file status: {os.path.basename(file_path)} -> {recommended_status.value}")
+            
+            # Update file size if changed
+            elif current_file_size != tracked_file.file_size:
+                await self.state_manager.update_file_status(
+                    file_path=file_path,
+                    status=tracked_file.status,  # Keep same status
+                    file_size=current_file_size
+                )
+                self._logger.debug(f"Growing file size update: {os.path.basename(file_path)} "
+                                 f"({tracked_file.file_size} -> {current_file_size} bytes)")
+                
+        except Exception as e:
+            self._logger.error(f"Error in growing file logic for {file_path}: {e}")
+    
+    async def _handle_traditional_stability_logic(self, file_path: str, current_file_size: int, current_write_time: datetime, tracked_file) -> None:
+        """Handle file using traditional stability logic"""
+        try:
+            # Tjek om write time har ændret sig
+            previous_write_time = self._file_last_write_times.get(file_path)
+            if previous_write_time != current_write_time:
+                # Fil er stadig ved at blive skrevet til
+                self._file_last_write_times[file_path] = current_write_time
+                self._file_last_seen[file_path] = datetime.now()
+                
+                # Opdater file size mens filen vokser
+                if current_file_size != tracked_file.file_size:
+                    await self.state_manager.update_file_status(
+                        file_path=file_path,
+                        status=FileStatus.DISCOVERED,  # Keep same status
+                        file_size=current_file_size
+                    )
+                    self._logger.debug(
+                        f"Fil størrelse opdateret: {os.path.basename(file_path)} "
+                        f"({tracked_file.file_size} -> {current_file_size} bytes)"
+                    )
+                
+                self._logger.debug(f"Fil stadig aktiv: {os.path.basename(file_path)}")
+                return
+            
+            # Tjek om filen har været stabil længe nok
+            last_seen = self._file_last_seen.get(file_path, datetime.now())
+            stable_duration = (datetime.now() - last_seen).total_seconds()
+            
+            if stable_duration >= self.settings.file_stable_time_seconds:
+                # Fil er stabil - verificer at den kan læses
+                if await self._verify_file_accessible(file_path):
+                    # Promoter til Ready status
+                    await self.state_manager.update_file_status(
+                        file_path=file_path,
+                        status=FileStatus.READY
+                    )
+                    
+                    # Cleanup internal tracking da filen nu er Ready
+                    self._file_last_seen.pop(file_path, None)
+                    self._file_last_write_times.pop(file_path, None)
+                    
+                    self._logger.info(f"Fil promoveret til Ready: {os.path.basename(file_path)}")
+                else:
+                    self._logger.warning(f"Fil er stabil men ikke tilgængelig: {os.path.basename(file_path)}")
+                    
+        except Exception as e:
+            self._logger.error(f"Error in traditional stability logic for {file_path}: {e}")
     
     async def _verify_file_accessible(self, file_path: str) -> bool:
         """
@@ -370,13 +444,21 @@ class FileScannerService:
         Returns:
             Dictionary med scanner statistikker
         """
-        return {
+        stats = {
             "is_running": self._running,
             "source_path": self.settings.source_directory,
             "files_being_tracked": len(self._file_last_seen),
             "polling_interval_seconds": self.settings.polling_interval_seconds,
-            "file_stable_time_seconds": self.settings.file_stable_time_seconds
+            "file_stable_time_seconds": self.settings.file_stable_time_seconds,
+            "growing_file_support_enabled": self.settings.enable_growing_file_support
         }
+        
+        # Add growing file statistics if enabled
+        if self.growing_file_detector:
+            growing_stats = self.growing_file_detector.get_monitoring_stats()
+            stats["growing_file_stats"] = growing_stats
+        
+        return stats
     
     def _should_ignore_file(self, file_path: str) -> bool:
         """

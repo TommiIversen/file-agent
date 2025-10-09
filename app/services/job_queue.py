@@ -106,8 +106,8 @@ class JobQueueService:
             update: FileStateUpdate event fra StateManager
         """
         try:
-            # Kun interesseret i filer der bliver Ready
-            if update.new_status == FileStatus.READY:
+            # Interesseret i filer der bliver Ready eller ReadyToStartGrowing
+            if update.new_status in [FileStatus.READY, FileStatus.READY_TO_START_GROWING]:
                 await self._add_job_to_queue(update.tracked_file)
                 
         except Exception as e:

@@ -101,6 +101,15 @@ class StateManager:
             # Opdater status
             tracked_file.status = status
             
+            # Automatisk sæt is_growing_file flag baseret på status
+            if status == FileStatus.READY_TO_START_GROWING:
+                tracked_file.is_growing_file = True
+            elif status in [FileStatus.READY, FileStatus.COMPLETED]:
+                # Reset growing flag for stable files ONLY if not explicitly set
+                if 'is_growing_file' not in kwargs:
+                    tracked_file.is_growing_file = False
+            # Preserve is_growing_file for COPYING, IN_QUEUE, etc. (don't reset)
+            
             # Opdater andre attributter
             for key, value in kwargs.items():
                 if hasattr(tracked_file, key):
@@ -229,6 +238,12 @@ class StateManager:
                     # Bevar COMPLETED filer i memory
                     if tracked_file.status == FileStatus.COMPLETED:
                         self._logger.debug(f"Bevarer completed fil i memory: {file_path}")
+                        continue
+                    
+                    # Bevar filer der er under processing (COPYING, IN_QUEUE, etc.)
+                    if tracked_file.status in [FileStatus.COPYING, FileStatus.IN_QUEUE, 
+                                             FileStatus.GROWING_COPY]:
+                        self._logger.debug(f"Bevarer fil under processing: {file_path} (status: {tracked_file.status})")
                         continue
                     
                     # Alle andre statuses fjernes når source fil ikke eksisterer
@@ -379,10 +394,15 @@ class StateManager:
             # Find aktive kopiering
             copying_files = [f for f in self._files.values() if f.status == FileStatus.COPYING]
             
+            # Find growing files
+            growing_files = [f for f in self._files.values() if f.is_growing_file or 
+                           f.status in [FileStatus.GROWING, FileStatus.READY_TO_START_GROWING, FileStatus.GROWING_COPY]]
+            
             return {
                 "total_files": total_files,
                 "status_counts": status_counts,
                 "total_size_bytes": total_size,
                 "active_copies": len(copying_files),
+                "growing_files": len(growing_files),
                 "subscribers": len(self._subscribers)
             }

@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     keep_completed_files_hours: int = 24        # Keep completed files in memory for 24 hours
     max_completed_files_in_memory: int = 1000   # Max completed files to keep in memory
     
+    # Growing file support
+    enable_growing_file_support: bool = False                    # Enable growing file copy support
+    growing_file_min_size_mb: int = 100                         # Minimum size in MB to start growing copy
+    growing_file_safety_margin_mb: int = 50                     # Stay this many MB behind write head
+    growing_file_poll_interval_seconds: int = 5                 # Check file growth every N seconds
+    growing_file_growth_timeout_seconds: int = 30               # Consider stable after N seconds no growth
+    growing_file_chunk_size_kb: int = 2048                      # Chunk size for growing copy (2MB)
+    growing_copy_pause_ms: int = 100                            # Pause between growing copy cycles (throttling)
+    
+    # Parallel processing
+    max_concurrent_copies: int = 8                              # Maximum number of concurrent copy operations
+    
     model_config = SettingsConfigDict(env_file="settings.env")
     
     @property
