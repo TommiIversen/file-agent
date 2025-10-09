@@ -423,6 +423,7 @@ class FileCopyService:
         file_size = source.stat().st_size
         bytes_copied = 0
         chunk_size = 64 * 1024  # 64KB chunks
+        last_progress_reported = -1  # Track last reported progress to avoid duplicate updates
         
         self._logger.debug(f"Starter chunk-wise copy: {source} → {dest} ({file_size} bytes)")
         
@@ -436,14 +437,24 @@ class FileCopyService:
                     await dst.write(chunk)
                     bytes_copied += len(chunk)
                     
-                    # Opdater progress (hver 5MB eller ved completion)
-                    if bytes_copied % (5 * 1024 * 1024) == 0 or bytes_copied == file_size:
-                        progress = (bytes_copied / file_size) * 100.0
+                    # Calculate progress as whole number percentage
+                    progress_percent = int((bytes_copied / file_size) * 100.0)
+                    
+                    # Only update when progress crosses a configured interval boundary
+                    should_update = (
+                        progress_percent != last_progress_reported and
+                        progress_percent % self.settings.copy_progress_update_interval == 0
+                    ) or bytes_copied == file_size  # Always update on completion
+                    
+                    if should_update:
                         await self.state_manager.update_file_status(
                             source_path,
                             FileStatus.COPYING,
-                            copy_progress=progress
+                            copy_progress=float(progress_percent)
                         )
+                        last_progress_reported = progress_percent
+                        
+                        self._logger.debug(f"Progress update: {progress_percent}% ({bytes_copied}/{file_size} bytes)")
             
             self._logger.debug(f"Copy completed: {bytes_copied} bytes copied")
             

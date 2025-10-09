@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     max_retry_attempts: int = 3
     retry_delay_seconds: int = 10
     global_retry_delay_seconds: int = 60
+    copy_progress_update_interval: int = 1  # Update progress every N percent (10 = every 10%)
     
     # Logging konfiguration
     log_level: str = "INFO"

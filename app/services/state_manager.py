@@ -114,7 +114,15 @@ class StateManager:
             elif status == FileStatus.COMPLETED and not tracked_file.completed_at:
                 tracked_file.completed_at = datetime.now()
             
-            self._logger.info(f"Status opdateret: {file_path} {old_status} -> {status}")
+            # Only log when status actually changes (not for progress updates)
+            if old_status != status:
+                self._logger.info(f"Status opdateret: {file_path} {old_status} -> {status}")
+            else:
+                # Log progress updates at debug level only
+                if 'copy_progress' in kwargs:
+                    self._logger.debug(f"Progress opdateret: {file_path} {kwargs['copy_progress']:.1f}%")
+                else:
+                    self._logger.debug(f"Attributes opdateret: {file_path} {list(kwargs.keys())}")
         
         # Notify subscribers EFTER lock er frigivet for at undgå deadlock
         await self._notify(FileStateUpdate(
