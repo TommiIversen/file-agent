@@ -24,13 +24,15 @@ async def dashboard_page(
         statistics = await state_manager.get_statistics()
         all_files = await state_manager.get_all_files()
         
-        # Calculate active files (non-completed)
+        # Separate active and completed files for UI
         active_files = [f for f in all_files if f.status.value != "Completed"]
+        completed_files = [f for f in all_files if f.status.value == "Completed"]
         
     except Exception:
         # Fallback hvis StateManager ikke er klar endnu
         statistics = {"total_files": 0, "active_files": 0, "completed_files": 0, "failed_files": 0}
         active_files = []
+        completed_files = []
     
     return templates.TemplateResponse(
         "index.html", 
@@ -38,6 +40,7 @@ async def dashboard_page(
             "request": request,
             "statistics": statistics,
             "active_files_count": len(active_files),
+            "completed_files_count": len(completed_files),
             "page_title": "File Transfer Agent - Real-time Monitor"
         }
     )

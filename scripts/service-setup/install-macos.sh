@@ -283,6 +283,12 @@ show_completion_info() {
     echo "  • Start Service: launchctl load $INSTALL_DIR/$PLIST_NAME"
     echo "  • View Logs: tail -f $PROJECT_DIR/logs/file-agent.log"
     echo
+    log_info "SMB Mount Management:"
+    echo "  • Mount SMB: $PROJECT_DIR/scripts/macos/smb-mount.sh mount"
+    echo "  • Check Status: $PROJECT_DIR/scripts/macos/smb-mount.sh status"
+    echo "  • Unmount: $PROJECT_DIR/scripts/macos/smb-mount.sh unmount"
+    echo "  • Configure: $PROJECT_DIR/scripts/macos/smb-mount.sh config"
+    echo
     log_info "Web Interface:"
     echo "  • URL: http://localhost:8000"
     echo "  • Health Check: http://localhost:8000/health"
@@ -290,6 +296,50 @@ show_completion_info() {
     echo
     log_info "To uninstall:"
     echo "  • Run: $PROJECT_DIR/scripts/service-setup/uninstall-macos.sh"
+}
+
+# Check and setup SMB mount if needed
+setup_smb_mount() {
+    local smb_script="$PROJECT_DIR/scripts/macos/smb-mount.sh"
+    
+    if [[ -f "$smb_script" ]]; then
+        log_info "SMB mount script found, making it executable..."
+        chmod +x "$smb_script"
+        
+        # Ask user if they want to configure SMB mounting
+        echo
+        read -p "Do you want to set up automatic SMB mounting? (y/N): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Setting up SMB mount configuration..."
+            
+            # Create config if it doesn't exist
+            if ! "$smb_script" config 2>/dev/null; then
+                log_info "SMB configuration created. Please edit ~/.file-agent/smb-config"
+                log_info "Then run: $smb_script mount"
+            fi
+            
+            # Test mounting
+            echo
+            read -p "Test SMB mount now? (y/N): " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if "$smb_script" mount; then
+                    log_success "SMB mount test successful"
+                else
+                    log_warning "SMB mount test failed. Check configuration and run manually later."
+                fi
+            fi
+        else
+            log_info "Skipping SMB mount setup. You can configure it later with:"
+            log_info "  $smb_script config"
+            log_info "  $smb_script mount"
+        fi
+    else
+        log_info "No SMB mount script found, skipping SMB setup"
+    fi
 }
 
 # Main installation process
@@ -300,6 +350,7 @@ main() {
     
     check_permissions
     check_prerequisites
+    setup_smb_mount          # New SMB mount setup
     
     # Create install directory if it doesn't exist
     mkdir -p "$INSTALL_DIR"

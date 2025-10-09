@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     max_space_retries: int = 6                  # Max 30 minutes waiting for space
     minimum_free_space_after_copy_gb: float = 2.0  # Minimum space to leave after copy
     
+    # Completed file management
+    keep_completed_files_hours: int = 24        # Keep completed files in memory for 24 hours
+    max_completed_files_in_memory: int = 1000   # Max completed files to keep in memory
+    
     model_config = SettingsConfigDict(env_file="settings.env")
     
     @property

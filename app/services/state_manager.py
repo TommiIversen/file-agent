@@ -202,6 +202,9 @@ class StateManager:
         """
         Fjern tracked filer som ikke længere eksisterer på filsystemet.
         
+        VIGTIGT: COMPLETED filer bevares i memory selvom source filen er slettet.
+        Dette sikrer at UI kan vise completed files efter page refresh.
+        
         Args:
             existing_paths: Set af stier til filer der stadig eksisterer
             
@@ -213,8 +216,14 @@ class StateManager:
         async with self._lock:
             # Find filer der skal fjernes
             to_remove = []
-            for file_path in self._files:
+            for file_path, tracked_file in self._files.items():
                 if file_path not in existing_paths:
+                    # Bevar COMPLETED filer i memory
+                    if tracked_file.status == FileStatus.COMPLETED:
+                        self._logger.debug(f"Bevarer completed fil i memory: {file_path}")
+                        continue
+                    
+                    # Alle andre statuses fjernes når source fil ikke eksisterer
                     to_remove.append(file_path)
             
             # Fjern dem
@@ -225,6 +234,67 @@ class StateManager:
         
         if removed_count > 0:
             self._logger.info(f"Cleanup: Fjernede {removed_count} filer der ikke længere eksisterer")
+        
+        return removed_count
+    
+    async def cleanup_old_completed_files(self, max_age_hours: int, max_count: int) -> int:
+        """
+        Fjern gamle COMPLETED filer fra memory for at holde memory usage nede.
+        
+        Args:
+            max_age_hours: Max alder i timer for completed files
+            max_count: Max antal completed files at holde i memory
+            
+        Returns:
+            Antal completed files der blev fjernet
+        """
+        from datetime import timedelta
+        
+        removed_count = 0
+        now = datetime.now()
+        cutoff_time = now - timedelta(hours=max_age_hours)
+        
+        async with self._lock:
+            # Find completed files der skal fjernes
+            completed_files = [
+                (path, file) for path, file in self._files.items() 
+                if file.status == FileStatus.COMPLETED
+            ]
+            
+            # Sort by completion time (newest first)
+            completed_files.sort(
+                key=lambda x: x[1].completed_at or datetime.min, 
+                reverse=True
+            )
+            
+            to_remove = []
+            
+            # Remove files older than cutoff_time
+            for file_path, tracked_file in completed_files:
+                if tracked_file.completed_at and tracked_file.completed_at < cutoff_time:
+                    to_remove.append(file_path)
+            
+            # If still too many, remove oldest ones to stay under max_count
+            if len(completed_files) - len(to_remove) > max_count:
+                remaining_files = [
+                    (path, file) for path, file in completed_files 
+                    if path not in to_remove
+                ]
+                excess_count = len(remaining_files) - max_count
+                
+                # Remove oldest files beyond max_count
+                for i in range(excess_count):
+                    file_path, _ = remaining_files[-(i+1)]  # Start from oldest
+                    to_remove.append(file_path)
+            
+            # Remove the files
+            for file_path in to_remove:
+                self._files.pop(file_path, None)
+                removed_count += 1
+                self._logger.debug(f"Cleanup: Fjernet gammel completed fil: {file_path}")
+        
+        if removed_count > 0:
+            self._logger.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
         
         return removed_count
     

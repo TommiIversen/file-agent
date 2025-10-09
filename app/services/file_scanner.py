@@ -109,10 +109,13 @@ class FileScannerService:
                 # 2. Cleanup - fjern filer fra StateManager der ikke længere eksisterer
                 await self._cleanup_missing_files(current_files)
                 
-                # 3. Discovery - tilføj nye filer til StateManager
+                # 3. Cleanup - fjern gamle completed filer fra memory
+                await self._cleanup_old_completed_files()
+                
+                # 4. Discovery - tilføj nye filer til StateManager
                 await self._process_discovered_files(current_files)
                 
-                # 4. Stability Check - vurder stabilitet for Discovered filer
+                # 5. Stability Check - vurder stabilitet for Discovered filer
                 await self._check_file_stability()
                 
                 scan_duration = (datetime.now() - scan_start).total_seconds()
@@ -187,6 +190,22 @@ class FileScannerService:
             
         except Exception as e:
             self._logger.error(f"Fejl ved cleanup af missing files: {e}")
+    
+    async def _cleanup_old_completed_files(self) -> None:
+        """
+        Fjern gamle completed filer fra memory for at holde memory usage nede.
+        """
+        try:
+            removed_count = await self.state_manager.cleanup_old_completed_files(
+                max_age_hours=self.settings.keep_completed_files_hours,
+                max_count=self.settings.max_completed_files_in_memory
+            )
+            
+            if removed_count > 0:
+                self._logger.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
+                
+        except Exception as e:
+            self._logger.error(f"Fejl ved cleanup af gamle completed filer: {e}")
     
     async def _process_discovered_files(self, current_files: Set[str]) -> None:
         """
