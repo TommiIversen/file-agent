@@ -33,6 +33,26 @@ class UIHelpers {
     }
     
     /**
+     * Format timestamp to custom format: 20/3 20:33:18
+     */
+    static formatCustomDateTime(timestamp) {
+        if (!timestamp) return '-';
+        try {
+            const date = new Date(timestamp);
+            const day = date.getDate();
+            const month = date.getMonth() + 1; // Months are 0-indexed
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            
+            return `${day}/${month} ${hours}:${minutes}:${seconds}`;
+        } catch (error) {
+            console.warn('Invalid timestamp:', timestamp);
+            return '-';
+        }
+    }
+    
+    /**
      * Get progress bar width style for file
      */
     static getProgressWidth(file) {

@@ -216,139 +216,104 @@
             </div>
             
             <template x-for="file in $store.files.allFiles" :key="file.file_path">
-                <!-- File Card Component -->
-                <div class="grid p-2 m-2 items-center shadow-lg md:m-1 rounded-lg overflow-hidden md:grid-cols-6 sm:grid-cols-2 gap-x-1 hover:bg-gray-900 bg-gray-800 text-gray-400 text-sm font-medium">
-                    
-                    <!-- File Name (spans 2 columns) -->
-                    <div class="md:col-span-2 truncate col-span-2">
-                        <div class="flex items-center">
-                            <div class="capitalize md:text-sm text-xl font-extrabold truncate text-white"
-                                 x-text="UIHelpers.getFileName(file.file_path)">
-                            </div>
-                            <!-- Growing File Indicator -->
-                            <span x-show="UIHelpers.isGrowingFile(file)" 
-                                  class="ml-2 text-lg" 
-                                  x-text="UIHelpers.getGrowingFileIcon(file)"
-                                  :title="'Growing file: ' + file.status">
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- File Size with Growth Rate -->
-                    <div class="truncate md:order-none order-2">
-                        <div>Størrelse: <span class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></span></div>
-                        <div x-show="UIHelpers.isGrowingFile(file) && file.growth_rate_mbps" class="text-xs text-orange-300">
-                            Rate: <span x-text="UIHelpers.formatGrowthRate(file.growth_rate_mbps)"></span>
-                        </div>
-                    </div>
-
-                    <!-- Discovered Time -->
-                    <div class="md:order-none order-3">
-                        <div class="truncate">
-                            Opdaget: <span class="text-white" x-text="UIHelpers.formatTime(file.discovered_at)"></span>
-                        </div>
-                    </div>
-
-                    <!-- Retry Count / Bytes Copied -->
-                    <div class="md:block hidden">
-                        <div x-show="!UIHelpers.isGrowingFile(file)">
-                            <span class="text-gray-300">Retry: </span>
-                            <span class="text-white font-bold" x-text="file.retry_count"></span>
-                        </div>
-                        <div x-show="UIHelpers.isGrowingFile(file) && file.bytes_copied" class="text-xs">
-                            <span class="text-gray-300">Kopieret: </span>
-                            <span class="text-purple-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
-                        </div>
-                    </div>
-
-                    <!-- Progress Bar (spans 2 columns) -->
-                    <div class="md:col-span-2 col-span-1 md:order-none order-4">
-                        <div class="w-full bg-gray-700 rounded overflow-hidden">
-                            <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
-                                 :style="UIHelpers.getProgressWidth(file)"
-                                 :class="UIHelpers.getProgressColor(file)"
-                                 x-text="UIHelpers.getProgressText(file)">
-                            </div>
-                        </div>
+                <!-- Simple File Row with Hover Tooltip -->
+                <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
+                    <div class="flex items-center space-x-4">
                         
-                        <!-- Copy Details (fælles for alle modes) -->
-                        <div x-show="file.status === 'GrowingCopy' || file.status === 'Copying'" class="mt-1 text-xs text-gray-300 space-y-1">
-                            <!-- Copy Speed (altid vist for aktive kopieringer) -->
-                            <div x-show="file.copy_speed_mbps && file.copy_speed_mbps > 0" class="flex justify-between">
-                                <span>Copy Speed:</span>
-                                <span class="text-blue-300" x-text="(file.copy_speed_mbps || 0).toFixed(1) + ' MB/s'"></span>
-                            </div>
-                            
-                            <!-- Bytes Copied (altid vist for aktive kopieringer) -->
-                            <div x-show="file.bytes_copied && file.file_size" class="flex justify-between">
-                                <span>Copied:</span>
-                                <span class="text-green-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
-                            </div>
-                            
-                            <!-- Growing File Specific Info -->
-                            <div x-show="file.status === 'GrowingCopy'" class="text-orange-300 text-xs space-y-1">
-                                <div class="flex items-center">
-                                    <span>🌱 Streaming copy</span>
-                                    <template x-if="file.growth_rate_mbps && file.copy_speed_mbps">
-                                        <span class="ml-2" 
-                                              :class="file.copy_speed_mbps >= file.growth_rate_mbps ? 'text-green-400' : 'text-yellow-400'">
-                                            <span x-show="file.copy_speed_mbps >= file.growth_rate_mbps">✓ Keeping up</span>
-                                            <span x-show="file.copy_speed_mbps < file.growth_rate_mbps">⚠ Falling behind</span>
-                                        </span>
-                                    </template>
+                        <!-- File Name -->
+                        <div class="flex-1 min-w-0">
+                            <div class="text-white font-bold truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="flex-1">
+                            <div class="w-full bg-gray-700 rounded overflow-hidden">
+                                <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
+                                     :style="UIHelpers.getProgressWidth(file)"
+                                     :class="UIHelpers.getProgressColor(file)"
+                                     x-text="UIHelpers.getProgressText(file)">
                                 </div>
-                                
-                                <!-- Growth vs Copy Rate Comparison -->
-                                <div x-show="file.growth_rate_mbps && file.growth_rate_mbps > 0" class="flex justify-between">
-                                    <span>File grows at:</span>
-                                    <span class="text-blue-300" x-text="file.growth_rate_mbps.toFixed(1) + ' MB/s'"></span>
-                                </div>
-                                
-                                <!-- Safety Margin Info -->
-                                <div class="flex justify-between">
-                                    <span>Safety margin:</span>
-                                    <span class="text-purple-300">1.0 MB behind write head</span>
-                                </div>
-                                
-                                <!-- Efficiency Indicator -->
-                                <template x-if="file.growth_rate_mbps && file.copy_speed_mbps && file.growth_rate_mbps > 0">
-                                    <div class="flex justify-between">
-                                        <span>Copy efficiency:</span>
-                                        <span :class="(file.copy_speed_mbps / file.growth_rate_mbps) >= 1 ? 'text-green-400' : 'text-yellow-400'"
-                                              x-text="((file.copy_speed_mbps / file.growth_rate_mbps) * 100).toFixed(0) + '%'">
-                                        </span>
-                                    </div>
-                                </template>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Status Badge -->
-                    <div class="md:order-none order-7">
-                        <div class="w-4/6">
-                            <div class="text-green-100 truncate text-center py-1 px-3 rounded-full text-xs font-bold"
+
+                        <!-- Status -->
+                        <div class="w-24 text-center">
+                            <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
                                  :class="UIHelpers.getStatusBadgeColor(file.status)"
                                  x-text="file.status">
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Started Time -->
-                    <div class="md:order-none order-3">
-                        <div class="truncate">
-                            Startet: <span class="text-green-300" x-text="UIHelpers.formatTime(file.started_copying_at)"></span>
+                        <div class="w-48 text-center text-xs">
+                            <div class="text-white text-xs" x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
+                        </div>
+
+                        <!-- Bytes Copied -->
+                        <div class="w-32 text-center text-xs">
+                            <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
+                                <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Completed Time -->
-                    <div class="md:order-none order-5">
-                        <div class="truncate">
-                            Færdig: <span class="text-blue-300" x-text="UIHelpers.formatTime(file.completed_at)"></span>
+                    <!-- Hover Tooltip with Additional Info -->
+                    <div class="absolute top-full left-0 mt-2 w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                        <div class="grid grid-cols-2 gap-6 text-sm">
+                            <!-- Left Column -->
+                            <div class="space-y-2">
+                                <div>
+                                    <span class="text-gray-400">Full Path:</span>
+                                    <div class="text-white text-xs break-all" x-text="file.file_path"></div>
+                                </div>
+                                <div>
+                                    <span class="text-gray-400">Discovered:</span>
+                                    <div class="text-white" x-text="UIHelpers.formatDateTime(file.discovered_at)"></div>
+                                </div>
+                                <div x-show="file.started_copying_at">
+                                    <span class="text-gray-400">Started:</span>
+                                    <div class="text-green-300" x-text="UIHelpers.formatDateTime(file.started_copying_at)"></div>
+                                </div>
+                                <div x-show="file.completed_at">
+                                    <span class="text-gray-400">Completed:</span>
+                                    <div class="text-blue-300" x-text="UIHelpers.formatDateTime(file.completed_at)"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column -->
+                            <div class="space-y-2">
+                                <div>
+                                    <span class="text-gray-400">File Size:</span>
+                                    <div class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></div>
+                                </div>
+                                <div>
+                                    <span class="text-gray-400">Retry Count:</span>
+                                    <div class="text-white font-bold" x-text="file.retry_count"></div>
+                                </div>
+                                <div x-show="UIHelpers.isGrowingFile(file)">
+                                    <span class="text-gray-400">Growing File:</span>
+                                    <div class="text-orange-300">
+                                        <span x-text="UIHelpers.getGrowingFileIcon(file)"></span>
+                                        Yes
+                                    </div>
+                                </div>
+                                <div x-show="file.copy_speed_mbps && file.copy_speed_mbps > 0">
+                                    <span class="text-gray-400">Copy Speed:</span>
+                                    <div class="text-blue-300" x-text="(file.copy_speed_mbps || 0).toFixed(1) + ' MB/s'"></div>
+                                </div>
+                                <div x-show="file.bytes_copied">
+                                    <span class="text-gray-400">Progress:</span>
+                                    <div class="text-green-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></div>
+                                </div>
+                            </div>
                         </div>
+                        
+                        <!-- Arrow pointing up -->
+                        <div class="absolute bottom-full left-8 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-gray-900"></div>
                     </div>
 
-                    <!-- Error Message (full width if present) -->
-                    <div x-show="file.error_message" class="md:col-span-6 col-span-2 mt-2 p-2 bg-red-900 bg-opacity-50 rounded border border-red-600">
+                    <!-- Error Message -->
+                    <div x-show="file.error_message" class="mt-2 p-2 bg-red-900 bg-opacity-50 rounded border border-red-600">
                         <div class="flex items-center">
                             <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
