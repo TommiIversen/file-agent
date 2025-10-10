@@ -72,16 +72,17 @@ class CopyStrategyFactory:
         self.state_manager = state_manager
         self._logger = logging.getLogger("app.strategy_factory")
         
-        # Default copy configuration
-        self.default_chunk_size = 64 * 1024  # 64KB
-        self.large_file_chunk_size = 256 * 1024  # 256KB for files > 100MB
-        self.growing_file_chunk_size = getattr(settings, 'growing_file_chunk_size_kb', 32) * 1024
-        self.large_file_threshold = 100 * 1024 * 1024  # 100MB
+        # Network-optimized copy configuration
+        self.normal_chunk_size = settings.normal_file_chunk_size_kb * 1024     # 1MB default
+        self.large_file_chunk_size = settings.large_file_chunk_size_kb * 1024  # 2MB for large files
+        self.growing_file_chunk_size = settings.growing_file_chunk_size_kb * 1024  # 2MB for growing files
+        self.large_file_threshold = settings.large_file_threshold_gb * (1024 ** 3)  # Convert to bytes
         
-        self._logger.debug(f"CopyStrategyFactory initialized with chunk sizes: "
-                         f"default={self.default_chunk_size}, "
-                         f"large={self.large_file_chunk_size}, "
-                         f"growing={self.growing_file_chunk_size}")
+        self._logger.debug(f"CopyStrategyFactory initialized with optimized chunk sizes: "
+                         f"normal={self.normal_chunk_size//1024}KB, "
+                         f"large={self.large_file_chunk_size//1024}KB, "
+                         f"growing={self.growing_file_chunk_size//1024}KB, "
+                         f"threshold={settings.large_file_threshold_gb}GB")
     
     def get_executor_config(self, tracked_file: TrackedFile) -> ExecutorConfig:
         """
@@ -190,10 +191,10 @@ class CopyStrategyFactory:
             Dictionary with factory configuration details
         """
         return {
-            "default_chunk_size": self.default_chunk_size,
-            "large_file_chunk_size": self.large_file_chunk_size,
-            "growing_file_chunk_size": self.growing_file_chunk_size,
-            "large_file_threshold": self.large_file_threshold,
+            "normal_chunk_size_kb": self.normal_chunk_size // 1024,
+            "large_file_chunk_size_kb": self.large_file_chunk_size // 1024,
+            "growing_file_chunk_size_kb": self.growing_file_chunk_size // 1024,
+            "large_file_threshold_gb": self.settings.large_file_threshold_gb,
             "growing_file_support": self.settings.enable_growing_file_support,
             "default_temp_file_usage": self.settings.use_temporary_file,
             "available_strategies": list(self.get_available_strategies().keys())
@@ -233,7 +234,7 @@ class CopyStrategyFactory:
         elif tracked_file.file_size > self.large_file_threshold:
             return self.large_file_chunk_size
         else:
-            return self.default_chunk_size
+            return self.normal_chunk_size
     
     def _get_progress_update_interval(self, tracked_file: TrackedFile, is_growing: bool) -> int:
         """Determine progress update interval based on file type."""

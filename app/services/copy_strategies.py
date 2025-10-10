@@ -153,7 +153,15 @@ class NormalFileCopyStrategy(FileCopyStrategy):
     async def _copy_with_progress(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
         """Copy file with progress updates using utility functions"""
         try:
-            chunk_size = 64 * 1024  # 64KB chunks
+            # Use optimized chunk size based on file size
+            file_size_gb = tracked_file.file_size / (1024 * 1024 * 1024)
+            if file_size_gb >= self.settings.large_file_threshold_gb:
+                chunk_size = self.settings.large_file_chunk_size_kb * 1024  # 2MB for large files
+                self.logger.debug(f"Using large file chunk size: {chunk_size // 1024}KB for {file_size_gb:.1f}GB file")
+            else:
+                chunk_size = self.settings.normal_file_chunk_size_kb * 1024  # 1MB for normal files
+                self.logger.debug(f"Using normal file chunk size: {chunk_size // 1024}KB for {file_size_gb:.1f}GB file")
+            
             bytes_copied = 0
             total_size = tracked_file.file_size
             last_progress_reported = -1
@@ -436,8 +444,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 # Already copied everything
                 return True
             
-            # Copy remaining data
-            chunk_size = 64 * 1024  # 64KB chunks
+            # Use optimized chunk size for final copy
+            file_size_gb = final_size / (1024 * 1024 * 1024)
+            if file_size_gb >= self.settings.large_file_threshold_gb:
+                chunk_size = self.settings.large_file_chunk_size_kb * 1024  # 2MB for large files
+            else:
+                chunk_size = self.settings.normal_file_chunk_size_kb * 1024  # 1MB for normal files
             
             async with aiofiles.open(source_path, 'rb') as src:
                 async with aiofiles.open(dest_path, 'ab') as dst:  # Append mode
