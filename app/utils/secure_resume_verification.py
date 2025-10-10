@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from .secure_resume_config import SecureResumeConfig, ResumeOperationMetrics
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.utils.secure_resume_verification")
 
 
 class VerificationTimeout(Exception):

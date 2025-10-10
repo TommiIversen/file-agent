@@ -63,7 +63,7 @@ class GrowingFileDetector:
     def __init__(self, settings: Settings, state_manager: StateManager):
         self.settings = settings
         self.state_manager = state_manager
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("app.services.growing_file_detector")
         
         # File growth tracking
         self._growth_tracking: Dict[str, FileGrowthInfo] = {}

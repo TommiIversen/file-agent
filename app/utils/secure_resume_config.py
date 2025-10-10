@@ -10,7 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, validator
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.utils.secure_resume_config")
 
 
 class SecureResumeConfig(BaseModel):

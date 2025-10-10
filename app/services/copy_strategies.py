@@ -33,7 +33,7 @@ class FileCopyStrategy(ABC):
     def __init__(self, settings: Settings, state_manager: StateManager):
         self.settings = settings
         self.state_manager = state_manager
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger("app.services.copy_strategies")
     
     @abstractmethod
     async def copy_file(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
@@ -554,7 +554,7 @@ class CopyStrategyFactory:
         """
         # Debug logging
         import logging
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger("app.services.copy_strategies")
         
         # Check if growing file support is enabled
         if self.settings.enable_growing_file_support:

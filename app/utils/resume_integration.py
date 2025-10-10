@@ -16,7 +16,7 @@ from ..utils.resumable_copy_strategies import (
     ResumeCapableMixin
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.utils.resume_integration")
 
 
 class ResumableStrategyAdapter:

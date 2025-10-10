@@ -17,7 +17,7 @@ from ..models import TrackedFile
 from .secure_resume_config import SecureResumeConfig, ResumeOperationMetrics, CONSERVATIVE_CONFIG
 from .secure_resume_verification import SecureVerificationEngine, VerificationTimeout, QuickIntegrityChecker
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.utils.resumable_copy_strategies")
 
 
 class ResumeCapableMixin:

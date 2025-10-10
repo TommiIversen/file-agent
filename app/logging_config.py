@@ -175,12 +175,13 @@ def setup_logging(settings: Settings) -> None:
                 "level": "INFO",
                 "propagate": False
             },
-            # App loggers
+            # Core app logger (fanger alle app.* loggers via propagation)
             "app": {
                 "handlers": ["console", "file"],
                 "level": settings.log_level,
                 "propagate": False
             },
+            # Explicit app submodule loggers for fine-grained control
             "app.scanner": {
                 "handlers": ["console", "file"],
                 "level": settings.log_level,
@@ -192,6 +193,63 @@ def setup_logging(settings: Settings) -> None:
                 "propagate": False
             },
             "app.state": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            # Resume and utils loggers - CRITICAL for resume logging visibility
+            "app.utils": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.utils.resumable_copy_strategies": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.utils.secure_resume_verification": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.utils.secure_resume_config": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.utils.resume_integration": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            # Services loggers
+            "app.services": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.services.growing_file_detector": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.services.copy_strategies": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.job_processor": {
+                "handlers": ["console", "file"], 
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.copy_executor": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
+            "app.strategy_factory": {
                 "handlers": ["console", "file"],
                 "level": settings.log_level,
                 "propagate": False
