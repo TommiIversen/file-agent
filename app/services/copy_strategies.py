@@ -17,6 +17,8 @@ from typing import Optional, Dict
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
+from app.utils.file_operations import create_temp_file_path
+from app.utils.progress_utils import should_report_progress_with_bytes, calculate_transfer_rate
 
 
 class FileCopyStrategy(ABC):
@@ -92,8 +94,8 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 copy_progress=0.0
             )
             
-            # Create temporary destination path
-            temp_dest_path = f"{dest_path}.tmp"
+            # Create temporary destination path using utility
+            temp_dest_path = create_temp_file_path(Path(dest_path))
             
             # Perform the copy with progress tracking
             success = await self._copy_with_progress(source_path, temp_dest_path, tracked_file)
@@ -141,14 +143,14 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                     self.logger.warning(f"Failed to cleanup temp file {temp_dest_path}: {e}")
     
     async def _copy_with_progress(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
-        """Copy file with progress updates"""
+        """Copy file with progress updates using utility functions"""
         try:
             chunk_size = 64 * 1024  # 64KB chunks
             bytes_copied = 0
             total_size = tracked_file.file_size
-            last_progress_update = 0
+            last_progress_reported = -1
             
-            # Track copy speed (fælles for alle modes)
+            # Track copy speed
             from datetime import datetime
             copy_start_time = datetime.now()
             
@@ -162,22 +164,28 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                         await dst.write(chunk)
                         bytes_copied += len(chunk)
                         
-                        # Update progress every N%
-                        progress = (bytes_copied / total_size) * 100 if total_size > 0 else 0
+                        # Use utility function to determine if we should report progress
+                        should_update, current_percent = should_report_progress_with_bytes(
+                            bytes_copied, 
+                            total_size, 
+                            last_progress_reported, 
+                            self.settings.copy_progress_update_interval
+                        )
                         
-                        if progress - last_progress_update >= self.settings.copy_progress_update_interval:
-                            # Calculate copy speed (fælles logik)
+                        if should_update:
+                            # Calculate transfer rate using utility function
                             elapsed_seconds = (datetime.now() - copy_start_time).total_seconds()
-                            copy_speed_mbps = (bytes_copied / (1024 * 1024)) / elapsed_seconds if elapsed_seconds > 0 else 0.0
+                            transfer_rate = calculate_transfer_rate(bytes_copied, elapsed_seconds)
+                            copy_speed_mbps = transfer_rate / (1024 * 1024)  # Convert to MB/s
                             
                             await self.state_manager.update_file_status(
                                 source_path,
                                 FileStatus.COPYING,
-                                copy_progress=progress,
+                                copy_progress=float(current_percent),
                                 bytes_copied=bytes_copied,
                                 copy_speed_mbps=copy_speed_mbps
                             )
-                            last_progress_update = progress
+                            last_progress_reported = current_percent
             
             return True
             
@@ -227,8 +235,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             self.logger.info(f"Starting growing copy: {os.path.basename(source_path)} "
                            f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)")
             
-            # Create temporary destination path
-            temp_dest_path = f"{dest_path}.tmp"
+            # Create temporary destination path using utility
+            temp_dest_path = create_temp_file_path(Path(dest_path))
             
             # Perform growing copy (status already set by FileCopyService)
             success = await self._copy_growing_file(source_path, temp_dest_path, tracked_file)
@@ -349,10 +357,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                 bytes_copied += chunk_len
                                 bytes_to_copy -= chunk_len
                                 
-                                # Calculate progress and copy speed (fælles for alle modes)
+                                # Calculate progress and copy speed using utilities
                                 copy_ratio = (bytes_copied / current_file_size) * 100 if current_file_size > 0 else 0
                                 
-                                # Calculate copy speed (MB/s)
+                                # Calculate transfer rate using utility function
                                 from datetime import datetime
                                 current_time = datetime.now()
                                 if not hasattr(self, '_copy_start_time'):
@@ -360,10 +368,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                     self._copy_start_bytes = bytes_copied
                                 
                                 elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
-                                if elapsed_seconds > 0:
-                                    copy_speed_mbps = ((bytes_copied - self._copy_start_bytes) / (1024 * 1024)) / elapsed_seconds
-                                else:
-                                    copy_speed_mbps = 0.0
+                                transfer_rate = calculate_transfer_rate(
+                                    bytes_copied - self._copy_start_bytes, 
+                                    elapsed_seconds
+                                )
+                                copy_speed_mbps = transfer_rate / (1024 * 1024)  # Convert to MB/s
                                 
                                 # Standard update for alle copy modes - ingen special growing fields
                                 await self.state_manager.update_file_status(

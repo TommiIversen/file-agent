@@ -1,0 +1,260 @@
+"""
+Destination Checker Strategy for File Transfer Agent.
+
+Part of Phase 2.1 refactoring: Extract Strategy Classes from FileCopyService.
+
+This module implements destination availability checking with caching, concurrent access
+protection, and proper error handling. Extracted from FileCopyService to follow
+Single Responsibility Principle.
+
+Design:
+- Handles destination directory existence and write access validation
+- Implements TTL-based caching to avoid redundant I/O operations  
+- Thread-safe concurrent access protection with asyncio.Lock
+- Configurable cache timeout and cleanup behavior
+"""
+
+import asyncio
+import aiofiles
+import logging
+import time
+import uuid
+from pathlib import Path
+from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass
+class DestinationCheckResult:
+    """Result of destination availability check."""
+    is_available: bool
+    checked_at: datetime
+    error_message: Optional[str] = None
+    test_file_path: Optional[str] = None
+
+
+class DestinationChecker:
+    """
+    Strategy class for checking destination availability with caching.
+    
+    Responsibilities:
+    1. Validate destination directory existence and permissions
+    2. Test write access using temporary test files
+    3. Cache results with configurable TTL to reduce I/O overhead
+    4. Handle concurrent access from multiple workers safely
+    5. Provide detailed error reporting for troubleshooting
+    """
+    
+    def __init__(self, destination_path: Path, cache_ttl_seconds: float = 5.0):
+        """
+        Initialize DestinationChecker.
+        
+        Args:
+            destination_path: Path to destination directory to check
+            cache_ttl_seconds: Time-to-live for cached results in seconds
+        """
+        self.destination_path = destination_path
+        self.cache_ttl_seconds = cache_ttl_seconds
+        
+        # Caching state
+        self._cached_result: Optional[DestinationCheckResult] = None
+        self._cache_timestamp = 0.0
+        
+        # Concurrent access protection
+        self._check_lock = asyncio.Lock()
+        
+        # Logging
+        self._logger = logging.getLogger("app.destination_checker")
+        
+        self._logger.debug(f"DestinationChecker initialized for: {destination_path}")
+        self._logger.debug(f"Cache TTL: {cache_ttl_seconds} seconds")
+    
+    async def is_available(self, force_refresh: bool = False) -> bool:
+        """
+        Check if destination is available, using cache if valid.
+        
+        Args:
+            force_refresh: If True, bypass cache and perform fresh check
+            
+        Returns:
+            True if destination is available and writable
+        """
+        if not force_refresh and self._is_cache_valid():
+            self._logger.debug("Using cached destination availability result")
+            return self._cached_result.is_available
+        
+        # Use lock to prevent multiple concurrent checks
+        async with self._check_lock:
+            # Double-check pattern: another coroutine might have updated cache
+            if not force_refresh and self._is_cache_valid():
+                return self._cached_result.is_available
+            
+            self._logger.debug("Performing fresh destination availability check")
+            result = await self._perform_availability_check()
+            
+            # Update cache
+            self._cached_result = result
+            self._cache_timestamp = time.time()
+            
+            return result.is_available
+    
+    async def test_write_access(self, dest_path: Optional[Path] = None) -> bool:
+        """
+        Test write access to destination directory.
+        
+        Args:
+            dest_path: Specific path to test (defaults to configured destination)
+            
+        Returns:
+            True if write access is available
+        """
+        target_path = dest_path or self.destination_path
+        
+        try:
+            # Create unique test file to avoid conflicts
+            test_file = target_path / f".file_agent_write_test_{uuid.uuid4().hex[:8]}"
+            
+            # Test write operation
+            async with aiofiles.open(test_file, 'w') as f:
+                await f.write("write_test")
+            
+            # Cleanup test file
+            try:
+                test_file.unlink()
+                self._logger.debug(f"Write access test successful: {target_path}")
+                return True
+            except Exception as cleanup_error:
+                self._logger.warning(f"Could not cleanup test file: {cleanup_error}")
+                return True  # Write was successful even if cleanup failed
+                
+        except Exception as e:
+            self._logger.warning(f"Write access test failed for {target_path}: {e}")
+            return False
+    
+    def cache_result(self, result: bool, error_message: Optional[str] = None) -> None:
+        """
+        Manually cache a destination check result.
+        
+        Args:
+            result: Whether destination is available
+            error_message: Optional error message if result is False
+        """
+        self._cached_result = DestinationCheckResult(
+            is_available=result,
+            checked_at=datetime.now(),
+            error_message=error_message
+        )
+        self._cache_timestamp = time.time()
+        
+        self._logger.debug(f"Manually cached destination result: {result}")
+    
+    def get_cached_result(self) -> Optional[DestinationCheckResult]:
+        """
+        Get current cached result if valid.
+        
+        Returns:
+            Cached result if valid, None otherwise
+        """
+        if self._is_cache_valid():
+            return self._cached_result
+        return None
+    
+    def clear_cache(self) -> None:
+        """Clear cached results (useful for testing)."""
+        self._cached_result = None
+        self._cache_timestamp = 0.0
+        self._logger.debug("Destination checker cache cleared")
+    
+    def get_cache_info(self) -> dict:
+        """
+        Get information about cache state (for debugging/monitoring).
+        
+        Returns:
+            Dictionary with cache information
+        """
+        return {
+            "has_cached_result": self._cached_result is not None,
+            "cache_timestamp": self._cache_timestamp,
+            "cache_age_seconds": time.time() - self._cache_timestamp if self._cache_timestamp > 0 else None,
+            "cache_ttl_seconds": self.cache_ttl_seconds,
+            "is_cache_valid": self._is_cache_valid(),
+            "destination_path": str(self.destination_path)
+        }
+    
+    # Private methods
+    
+    def _is_cache_valid(self) -> bool:
+        """Check if cached result is still valid based on TTL."""
+        if self._cached_result is None:
+            return False
+        
+        age = time.time() - self._cache_timestamp
+        return age < self.cache_ttl_seconds
+    
+    async def _perform_availability_check(self) -> DestinationCheckResult:
+        """
+        Perform the actual destination availability check.
+        
+        Returns:
+            DestinationCheckResult with check details
+        """
+        try:
+            # Check if destination exists
+            if not self.destination_path.exists():
+                error_msg = f"Destination directory does not exist: {self.destination_path}"
+                self._logger.warning(error_msg)
+                return DestinationCheckResult(
+                    is_available=False,
+                    checked_at=datetime.now(),
+                    error_message=error_msg
+                )
+            
+            # Check if it's actually a directory
+            if not self.destination_path.is_dir():
+                error_msg = f"Destination is not a directory: {self.destination_path}"
+                self._logger.warning(error_msg)
+                return DestinationCheckResult(
+                    is_available=False,
+                    checked_at=datetime.now(),
+                    error_message=error_msg
+                )
+            
+            # Test write access
+            test_file = self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
+            
+            try:
+                async with aiofiles.open(test_file, 'w') as f:
+                    await f.write("availability_test")
+                
+                # Cleanup test file
+                try:
+                    test_file.unlink()
+                except Exception as cleanup_error:
+                    self._logger.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
+                
+                self._logger.debug(f"Destination availability check passed: {self.destination_path}")
+                return DestinationCheckResult(
+                    is_available=True,
+                    checked_at=datetime.now(),
+                    test_file_path=str(test_file)
+                )
+                
+            except Exception as write_error:
+                error_msg = f"Cannot write to destination: {write_error}"
+                self._logger.warning(error_msg)
+                return DestinationCheckResult(
+                    is_available=False,
+                    checked_at=datetime.now(),
+                    error_message=error_msg,
+                    test_file_path=str(test_file)
+                )
+                
+        except Exception as e:
+            error_msg = f"Error during destination availability check: {e}"
+            self._logger.error(error_msg)
+            return DestinationCheckResult(
+                is_available=False,
+                checked_at=datetime.now(),
+                error_message=error_msg
+            )
