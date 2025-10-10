@@ -76,7 +76,7 @@ def get_job_queue_service() -> JobQueueService:
 
 def get_file_copier() -> FileCopyService:
     """
-    Hent FileCopyService singleton instance med space checking.
+    Hent FileCopyService singleton instance med space checking og resume support.
     
     Returns:
         FileCopyService instance med alle dependencies
@@ -95,7 +95,8 @@ def get_file_copier() -> FileCopyService:
             state_manager=state_manager, 
             job_queue=job_queue_service,
             space_checker=space_checker,
-            space_retry_manager=space_retry_manager
+            space_retry_manager=space_retry_manager,
+            enable_resume=settings.enable_secure_resume  # Enable resume based on settings
         )
     
     return _singletons["file_copier"]

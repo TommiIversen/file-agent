@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     growing_file_chunk_size_kb: int = 2048                      # Chunk size for growing copy (2MB)
     growing_copy_pause_ms: int = 100                            # Pause between growing copy cycles (throttling)
     
+    # Resume functionality
+    enable_secure_resume: bool = True                           # Enable secure resume functionality for interrupted copies
+    resume_verification_mode: str = "conservative"             # Resume mode: conservative, performance, or paranoid
+    resume_min_file_size_mb: int = 10                          # Minimum file size for resume attempts (MB)
+    resume_max_verification_mb: int = 100                      # Maximum verification size for resume (MB)
+    resume_timeout_seconds: int = 300                          # Maximum time for resume verification (5 min)
+    
     # Parallel processing
     max_concurrent_copies: int = 8                              # Maximum number of concurrent copy operations
     

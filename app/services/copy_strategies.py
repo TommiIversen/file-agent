@@ -506,20 +506,41 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return False
 
 
-class FileCopyStrategyFactory:
+class CopyStrategyFactory:
     """
     Factory for creating appropriate copy strategies.
     
     Determines which strategy to use based on file characteristics and settings.
+    Supports both traditional and resumable copy strategies.
     """
     
-    def __init__(self, settings: Settings, state_manager: StateManager):
+    def __init__(self, settings: Settings, state_manager: StateManager, enable_resume: bool = True):
         self.settings = settings
         self.state_manager = state_manager
+        self.enable_resume = enable_resume
         
         # Initialize strategies
-        self.normal_strategy = NormalFileCopyStrategy(settings, state_manager)
-        self.growing_strategy = GrowingFileCopyStrategy(settings, state_manager)
+        if enable_resume:
+            # Import resume strategies
+            from app.utils.resumable_copy_strategies import (
+                ResumableNormalFileCopyStrategy, 
+                ResumableGrowingFileCopyStrategy,
+                CONSERVATIVE_CONFIG
+            )
+            self.normal_strategy = ResumableNormalFileCopyStrategy(
+                settings=settings, 
+                state_manager=state_manager,
+                resume_config=CONSERVATIVE_CONFIG
+            )
+            self.growing_strategy = ResumableGrowingFileCopyStrategy(
+                settings=settings, 
+                state_manager=state_manager,
+                resume_config=CONSERVATIVE_CONFIG
+            )
+        else:
+            # Traditional strategies
+            self.normal_strategy = NormalFileCopyStrategy(settings, state_manager)
+            self.growing_strategy = GrowingFileCopyStrategy(settings, state_manager)
     
     def get_strategy(self, tracked_file: TrackedFile) -> FileCopyStrategy:
         """

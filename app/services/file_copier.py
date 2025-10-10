@@ -32,7 +32,8 @@ class FileCopyService:
         error_handler: Optional[CopyErrorHandler] = None,
         destination_checker: Optional[DestinationChecker] = None,
         space_checker=None,
-        space_retry_manager=None
+        space_retry_manager=None,
+        enable_resume: bool = True
     ):
         self._logger = logging.getLogger(self.__class__.__name__)
         self._running = False
@@ -45,7 +46,9 @@ class FileCopyService:
         
         # Core services - all operations delegated to these
         self.job_queue = job_queue
-        self.copy_strategy_factory = copy_strategy_factory or FileCopyStrategyFactory(settings, state_manager)
+        self.copy_strategy_factory = copy_strategy_factory or FileCopyStrategyFactory(
+            settings, state_manager, enable_resume=enable_resume
+        )
         self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(settings, enable_session_tracking=True)
         self.error_handler = error_handler or CopyErrorHandler(settings)
         self.destination_checker = destination_checker or DestinationChecker(Path(settings.destination_directory))
