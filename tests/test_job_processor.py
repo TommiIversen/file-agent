@@ -22,86 +22,88 @@ from app.services.job_queue import JobQueueService
 from app.services.copy_strategies import FileCopyStrategyFactory
 
 
+# Global fixtures for all test classes
+@pytest.fixture
+def settings():
+    """Create test settings."""
+    return Settings(
+        source_directory="/test/source",
+        destination_directory="/test/dest",
+        enable_pre_copy_space_check=True,
+        max_retry_attempts=3
+    )
+
+@pytest.fixture
+def mock_state_manager():
+    """Create mock StateManager."""
+    mock = AsyncMock(spec=StateManager)
+    return mock
+
+@pytest.fixture
+def mock_job_queue():
+    """Create mock JobQueueService."""
+    mock = AsyncMock(spec=JobQueueService)
+    return mock
+
+@pytest.fixture
+def mock_copy_strategy_factory():
+    """Create mock FileCopyStrategyFactory."""
+    mock = Mock(spec=FileCopyStrategyFactory)
+    # Create a mock strategy
+    mock_strategy = Mock()
+    mock_strategy.__class__.__name__ = "NormalFileCopyStrategy"
+    mock.get_strategy.return_value = mock_strategy
+    mock.get_available_strategies.return_value = {"normal": mock_strategy}
+    return mock
+
+@pytest.fixture
+def mock_space_checker():
+    """Create mock space checker."""
+    mock = Mock()
+    mock.check_space_for_file.return_value = SpaceCheckResult(
+        has_space=True, 
+        reason="OK",
+        available_bytes=10000000000,  # 10GB
+        required_bytes=1000,          # 1KB
+        file_size_bytes=1000,
+        safety_margin_bytes=0
+    )
+    return mock
+
+@pytest.fixture
+def mock_space_retry_manager():
+    """Create mock space retry manager."""
+    mock = AsyncMock()
+    return mock
+
+@pytest.fixture
+def processor(settings, mock_state_manager, mock_job_queue, mock_copy_strategy_factory):
+    """Create JobProcessor instance."""
+    return JobProcessor(
+        settings=settings,
+        state_manager=mock_state_manager,
+        job_queue=mock_job_queue,
+        copy_strategy_factory=mock_copy_strategy_factory
+    )
+
+@pytest.fixture
+def processor_with_space_checking(
+    settings, mock_state_manager, mock_job_queue, 
+    mock_copy_strategy_factory, mock_space_checker, mock_space_retry_manager
+):
+    """Create JobProcessor with space checking enabled."""
+    return JobProcessor(
+        settings=settings,
+        state_manager=mock_state_manager,
+        job_queue=mock_job_queue,
+        copy_strategy_factory=mock_copy_strategy_factory,
+        space_checker=mock_space_checker,
+        space_retry_manager=mock_space_retry_manager
+    )
+
+
 class TestJobProcessorBasics:
     """Test basic JobProcessor functionality."""
-    
-    @pytest.fixture
-    def settings(self):
-        """Create test settings."""
-        return Settings(
-            source_directory="/test/source",
-            destination_directory="/test/dest",
-            enable_pre_copy_space_check=True,
-            max_retry_attempts=3
-        )
-    
-    @pytest.fixture
-    def mock_state_manager(self):
-        """Create mock StateManager."""
-        mock = AsyncMock(spec=StateManager)
-        return mock
-    
-    @pytest.fixture
-    def mock_job_queue(self):
-        """Create mock JobQueueService."""
-        mock = AsyncMock(spec=JobQueueService)
-        return mock
-    
-    @pytest.fixture
-    def mock_copy_strategy_factory(self):
-        """Create mock FileCopyStrategyFactory."""
-        mock = Mock(spec=FileCopyStrategyFactory)
-        # Create a mock strategy
-        mock_strategy = Mock()
-        mock_strategy.__class__.__name__ = "NormalFileCopyStrategy"
-        mock.get_strategy.return_value = mock_strategy
-        mock.get_available_strategies.return_value = {"normal": mock_strategy}
-        return mock
-    
-    @pytest.fixture
-    def mock_space_checker(self):
-        """Create mock space checker."""
-        mock = Mock()
-        mock.check_space_for_file.return_value = SpaceCheckResult(
-            has_space=True, 
-            reason="OK",
-            available_bytes=10000000000,  # 10GB
-            required_bytes=1000,          # 1KB
-            file_size_bytes=1000,
-            safety_margin_bytes=0
-        )
-        return mock
-    
-    @pytest.fixture
-    def mock_space_retry_manager(self):
-        """Create mock space retry manager."""
-        mock = AsyncMock()
-        return mock
-    
-    @pytest.fixture
-    def processor(self, settings, mock_state_manager, mock_job_queue, mock_copy_strategy_factory):
-        """Create JobProcessor instance."""
-        return JobProcessor(
-            settings=settings,
-            state_manager=mock_state_manager,
-            job_queue=mock_job_queue,
-            copy_strategy_factory=mock_copy_strategy_factory
-        )
-    
-    @pytest.fixture
-    def processor_with_space_checking(
-        self, settings, mock_state_manager, mock_job_queue, 
-        mock_copy_strategy_factory, mock_space_checker, mock_space_retry_manager
-    ):
-        """Create JobProcessor with space checking enabled."""
-        return JobProcessor(
-            settings=settings,
-            state_manager=mock_state_manager,
-            job_queue=mock_job_queue,
-            copy_strategy_factory=mock_copy_strategy_factory,
-            space_checker=mock_space_checker,
-            space_retry_manager=mock_space_retry_manager
-        )
     
     def test_initialization(self, processor, settings):
         """Test JobProcessor initialization."""

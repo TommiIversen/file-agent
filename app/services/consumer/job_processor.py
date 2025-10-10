@@ -164,7 +164,15 @@ class JobProcessor:
         """
         if not self.space_checker:
             # If no space checker available, assume space is available
-            return SpaceCheckResult(has_space=True, reason="No space checker configured")
+            file_size = job.get("file_size", 0)
+            return SpaceCheckResult(
+                has_space=True, 
+                available_bytes=0,  # Unknown when no checker
+                required_bytes=file_size,
+                file_size_bytes=file_size,
+                safety_margin_bytes=0,
+                reason="No space checker configured"
+            )
         
         # Get file size from job or tracked file
         file_size = job.get("file_size", 0)

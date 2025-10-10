@@ -6,11 +6,12 @@ import asyncio
 import logging
 from typing import Dict, Optional, List
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.services.job_queue import JobQueueService
 from app.services.consumer.job_processor import JobProcessor
 from app.services.copy.file_copy_executor import FileCopyExecutor
-from app.services.copy.copy_strategy_factory import CopyStrategyFactory
+from app.services.copy_strategies import FileCopyStrategyFactory  # Use the same factory as JobProcessor
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
 from app.services.error_handling.copy_error_handler import CopyErrorHandler
 from app.services.destination.destination_checker import DestinationChecker
@@ -32,7 +33,7 @@ class FileCopyService:
         settings,
         state_manager,
         job_queue: JobQueueService,
-        copy_strategy_factory: Optional[CopyStrategyFactory] = None,
+        copy_strategy_factory: Optional[FileCopyStrategyFactory] = None,
         statistics_tracker: Optional[CopyStatisticsTracker] = None,
         error_handler: Optional[CopyErrorHandler] = None,
         destination_checker: Optional[DestinationChecker] = None
@@ -48,10 +49,10 @@ class FileCopyService:
         
         # Core services - all operations delegated to these
         self.job_queue = job_queue
-        self.copy_strategy_factory = copy_strategy_factory or CopyStrategyFactory(settings, state_manager)
+        self.copy_strategy_factory = copy_strategy_factory or FileCopyStrategyFactory(settings, state_manager)
         self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(settings, enable_session_tracking=True)
         self.error_handler = error_handler or CopyErrorHandler(settings)
-        self.destination_checker = destination_checker or DestinationChecker(settings.destination_directory)
+        self.destination_checker = destination_checker or DestinationChecker(Path(settings.destination_directory))
         
         # Composed services
         self.file_copy_executor = FileCopyExecutor(settings)
@@ -121,7 +122,14 @@ class FileCopyService:
             "total_gb_copied": stats.total_gb_copied,
             "success_rate": stats.success_rate,
             "current_errors": errors.get('current_errors', 0),
-            "global_errors": errors.get('global_errors', 0)
+            "global_errors": errors.get('global_errors', 0),
+            "performance": {
+                "peak_transfer_rate_mbps": stats.peak_transfer_rate_mbps
+            },
+            "error_handling": {
+                "current_errors": errors.get('current_errors', 0),
+                "global_errors": errors.get('global_errors', 0)
+            }
         }
 
     def is_running(self) -> bool:
