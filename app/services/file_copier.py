@@ -7,7 +7,7 @@ from pathlib import Path
 from app.services.job_queue import JobQueueService
 from app.services.consumer.job_processor import JobProcessor
 from app.services.copy.file_copy_executor import FileCopyExecutor
-from app.services.copy_strategies import FileCopyStrategyFactory  # Use the same factory as JobProcessor
+from app.services.copy_strategies import CopyStrategyFactory
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
 from app.services.error_handling.copy_error_handler import CopyErrorHandler
 from app.services.destination.destination_checker import DestinationChecker
@@ -27,7 +27,7 @@ class FileCopyService:
         settings,
         state_manager,
         job_queue: JobQueueService,
-        copy_strategy_factory: Optional[FileCopyStrategyFactory] = None,
+        copy_strategy_factory: Optional[CopyStrategyFactory] = None,
         statistics_tracker: Optional[CopyStatisticsTracker] = None,
         error_handler: Optional[CopyErrorHandler] = None,
         destination_checker: Optional[DestinationChecker] = None,
@@ -46,7 +46,7 @@ class FileCopyService:
         
         # Core services - all operations delegated to these
         self.job_queue = job_queue
-        self.copy_strategy_factory = copy_strategy_factory or FileCopyStrategyFactory(
+        self.copy_strategy_factory = copy_strategy_factory or CopyStrategyFactory(
             settings, state_manager, enable_resume=enable_resume
         )
         self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(settings, enable_session_tracking=True)

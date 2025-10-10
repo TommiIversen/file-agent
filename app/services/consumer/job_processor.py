@@ -21,7 +21,7 @@ from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult, TrackedFile
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
-from app.services.copy_strategies import FileCopyStrategyFactory
+from app.services.copy_strategies import CopyStrategyFactory
 from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
@@ -78,7 +78,7 @@ class JobProcessor:
         settings: Settings,
         state_manager: StateManager,
         job_queue: JobQueueService,
-        copy_strategy_factory: FileCopyStrategyFactory,
+        copy_strategy_factory: CopyStrategyFactory,
         space_checker=None,
         space_retry_manager=None
     ):
