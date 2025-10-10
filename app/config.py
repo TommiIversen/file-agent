@@ -6,6 +6,12 @@ class Settings(BaseSettings):
     source_directory: str
     destination_directory: str
     
+    # Output folder template system
+    output_folder_template_enabled: bool = False
+    output_folder_rules: str = ""  # JSON string or simple rule format
+    output_folder_default_category: str = "OTHER"
+    output_folder_date_format: str = "filename[0:6]"  # Extract first 6 chars as date
+    
     # Timing konfiguration
     file_stable_time_seconds: int = 120
     polling_interval_seconds: int = 10

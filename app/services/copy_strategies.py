@@ -94,6 +94,11 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 copy_progress=0.0
             )
             
+            # Ensure destination directory exists (important for template system)
+            dest_dir = Path(dest_path).parent
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"Ensured destination directory exists: {dest_dir}")
+            
             # Use temporary file if configured to do so
             if self.settings.use_temporary_file:
                 temp_dest_path = create_temp_file_path(Path(dest_path))
@@ -250,6 +255,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         try:
             self.logger.info(f"Starting growing copy: {os.path.basename(source_path)} "
                            f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)")
+            
+            # Ensure destination directory exists (important for template system)
+            dest_dir = Path(dest_path).parent
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"Ensured destination directory exists: {dest_dir}")
             
             # Use temporary file if configured to do so
             if self.settings.use_temporary_file:

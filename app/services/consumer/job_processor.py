@@ -22,6 +22,7 @@ from app.models import FileStatus, SpaceCheckResult, TrackedFile
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
 from app.services.copy_strategies import FileCopyStrategyFactory
+from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
 @dataclass
@@ -100,7 +101,12 @@ class JobProcessor:
         self.space_retry_manager = space_retry_manager
         self._logger = logging.getLogger("app.job_processor")
         
+        # Initialize output folder template engine
+        self.template_engine = OutputFolderTemplateEngine(settings)
+        
         self._logger.debug("JobProcessor initialized")
+        if self.template_engine.is_enabled():
+            self._logger.info(f"Output folder template system enabled with {len(self.template_engine.rules)} rules")
     
     async def process_job(self, job: Dict) -> ProcessResult:
         """
@@ -232,16 +238,18 @@ class JobProcessor:
         else:
             initial_status = FileStatus.COPYING
         
-        # Calculate destination path (this should ideally be done by FileCopyExecutor)
-        # For now, we'll use a simple implementation
-        from app.utils.file_operations import calculate_relative_path, generate_conflict_free_path
+        # Calculate destination path using template engine if enabled
+        from app.utils.file_operations import build_destination_path_with_template, generate_conflict_free_path
         
         source = Path(file_path)
         source_base = Path(self.settings.source_directory)
-        relative_path = calculate_relative_path(source, source_base)
         dest_base = Path(self.settings.destination_directory)
-        dest_path = dest_base / relative_path
-        destination_path = generate_conflict_free_path(dest_path)
+        
+        # Use template engine for path generation
+        dest_path = build_destination_path_with_template(
+            source, source_base, dest_base, self.template_engine
+        )
+        destination_path = generate_conflict_free_path(Path(dest_path))
         
         return PreparedFile(
             tracked_file=tracked_file,

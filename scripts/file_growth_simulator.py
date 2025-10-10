@@ -30,8 +30,9 @@ class VideoStream:
     
     def __init__(self, stream_id: int, output_folder: Path, 
                  chunk_size_kb: int, write_interval_ms: int,
-                 clip_duration_minutes: int):
+                 clip_duration_minutes: int, stream_type: str = "Cam"):
         self.stream_id = stream_id
+        self.stream_type = stream_type  # "Cam", "PGM", "CLN"
         self.output_folder = output_folder
         self.chunk_size_bytes = chunk_size_kb * 1024
         self.write_interval_seconds = write_interval_ms / 1000.0
@@ -47,8 +48,23 @@ class VideoStream:
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
     def _get_filename(self) -> str:
-        """Genererer filnavn"""
-        return f"stream_{self.stream_id:02d}_{self.current_file_number:03d}.mxf"
+        """Genererer filnavn der matcher template system"""
+        # Format: YYMMDD_HHMM_Ingest_TYPE.mxf
+        # Eksempel: 200305_1344_Ingest_Cam1.mxf
+        now = datetime.now()
+        date_str = now.strftime("%y%m%d")  # YYMMDD format
+        time_str = now.strftime("%H%M")    # HHMM format
+        
+        if self.stream_type == "Cam":
+            type_suffix = f"Cam{self.stream_id}"
+        elif self.stream_type == "PGM":
+            type_suffix = "PGM" 
+        elif self.stream_type == "CLN":
+            type_suffix = "CLN"
+        else:
+            type_suffix = f"{self.stream_type}{self.stream_id}"
+            
+        return f"{date_str}_{time_str}_Ingest_{type_suffix}.mxf"
     
     def _start_new_file(self):
         """Starter en ny fil for denne stream"""
@@ -120,13 +136,15 @@ class FileGrowthSimulator:
     
     def __init__(self, output_folder: str, stream_count: int, 
                  write_interval_ms: int, chunk_size_kb: int,
-                 clip_duration_minutes: int, new_file_interval_minutes: int):
+                 clip_duration_minutes: int, new_file_interval_minutes: int,
+                 stream_mix: str = "mixed"):
         self.output_folder = Path(output_folder)
         self.stream_count = stream_count
         self.write_interval_ms = write_interval_ms
         self.chunk_size_kb = chunk_size_kb
         self.clip_duration_minutes = clip_duration_minutes
         self.new_file_interval_minutes = new_file_interval_minutes
+        self.stream_mix = stream_mix  # "mixed", "cameras", "program"
         
         self.streams: List[VideoStream] = []
         self.stream_tasks: List[asyncio.Task] = []
@@ -138,22 +156,42 @@ class FileGrowthSimulator:
             datefmt='%H:%M:%S'
         )
     
+    def _get_stream_type(self, stream_index: int) -> str:
+        """Bestem stream type baseret på stream mix konfiguration"""
+        if self.stream_mix == "cameras":
+            return "Cam"
+        elif self.stream_mix == "program":
+            # Alternér mellem PGM og CLN for program streams
+            return "PGM" if stream_index % 2 == 0 else "CLN"
+        else:  # mixed (default)
+            # Fordel streams: 60% kameraer, 20% PGM, 20% CLN
+            if stream_index < self.stream_count * 0.6:
+                return "Cam"
+            elif stream_index < self.stream_count * 0.8:
+                return "PGM"
+            else:
+                return "CLN"
+    
     async def start_streams(self):
         """Starter alle streams parallelt"""
         logging.info(f"Starter {self.stream_count} streams parallelt i {self.output_folder}")
+        logging.info(f"Stream mix: {self.stream_mix}")
         logging.info(f"Skriveinterval: {self.write_interval_ms}ms, Chunk størrelse: {self.chunk_size_kb}KB")
         logging.info(f"Clip længde: {self.clip_duration_minutes} min")
         
-        # Opret alle streams
+        # Opret alle streams med forskellige typer
         for i in range(self.stream_count):
+            stream_type = self._get_stream_type(i)
             stream = VideoStream(
                 stream_id=i + 1,
                 output_folder=self.output_folder,
                 chunk_size_kb=self.chunk_size_kb,
                 write_interval_ms=self.write_interval_ms,
-                clip_duration_minutes=self.clip_duration_minutes
+                clip_duration_minutes=self.clip_duration_minutes,
+                stream_type=stream_type
             )
             self.streams.append(stream)
+            logging.info(f"Stream {i+1}: Type = {stream_type}")
         
         # Start alle stream tasks parallelt (med optional forskydning)
         logging.info(f"Starter alle {self.stream_count} streams samtidigt...")
@@ -203,32 +241,37 @@ def main():
     
     parser.add_argument('--output-folder', 
                        default=DEFAULT_OUTPUT_FOLDER,
-                       help=f'Output mappe (default: {DEFAULT_OUTPUT_FOLDER})')
+                       help='Output mappe (default: %(default)s)')
     
     parser.add_argument('--stream-count', 
                        type=int, 
                        default=DEFAULT_STREAM_COUNT,
-                       help=f'Antal samtidige streams (default: {DEFAULT_STREAM_COUNT})')
+                       help='Antal samtidige streams (default: %(default)s)')
     
     parser.add_argument('--write-interval-ms', 
                        type=int, 
                        default=DEFAULT_WRITE_INTERVAL_MS,
-                       help=f'Millisekunder mellem skrivninger (default: {DEFAULT_WRITE_INTERVAL_MS})')
+                       help='Millisekunder mellem skrivninger (default: %(default)s)')
     
     parser.add_argument('--chunk-size-kb', 
                        type=int, 
                        default=DEFAULT_CHUNK_SIZE_KB,
-                       help=f'KB per skrivning (default: {DEFAULT_CHUNK_SIZE_KB})')
+                       help='KB per skrivning (default: %(default)s)')
     
     parser.add_argument('--clip-duration-minutes', 
                        type=float, 
                        default=DEFAULT_CLIP_DURATION_MINUTES,
-                       help=f'Minutter før ny fil (default: {DEFAULT_CLIP_DURATION_MINUTES})')
+                       help='Minutter før ny fil (default: %(default)s)')
     
     parser.add_argument('--new-file-interval-minutes', 
                        type=float, 
                        default=DEFAULT_NEW_FILE_INTERVAL_MINUTES,
-                       help=f'Optional forskydning mellem stream starts i minutter (default: {DEFAULT_NEW_FILE_INTERVAL_MINUTES}, 0=alle samtidigt)')
+                       help='Optional forskydning mellem stream starts i minutter (default: %(default)s, 0=alle samtidigt)')
+    
+    parser.add_argument('--stream-mix', 
+                       choices=['mixed', 'cameras', 'program'],
+                       default='mixed',
+                       help='Type af streams at generere: mixed=60%% Cam/20%% PGM/20%% CLN, cameras=kun kameraer, program=kun PGM/CLN')
     
     args = parser.parse_args()
     
@@ -239,7 +282,8 @@ def main():
         write_interval_ms=args.write_interval_ms,
         chunk_size_kb=args.chunk_size_kb,
         clip_duration_minutes=args.clip_duration_minutes,
-        new_file_interval_minutes=args.new_file_interval_minutes
+        new_file_interval_minutes=args.new_file_interval_minutes,
+        stream_mix=args.stream_mix
     )
     
     # Kør simulator

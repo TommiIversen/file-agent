@@ -168,6 +168,55 @@ def build_destination_path(source_path: Path, source_base: Path, dest_base: Path
     return dest_base / relative_path
 
 
+def build_destination_path_with_template(
+    source_path: Path, 
+    source_base: Path, 
+    dest_base: Path,
+    template_engine=None
+) -> Path:
+    """
+    Build destination path with optional template engine support.
+    
+    If template engine is provided and enabled, uses template-based folder organization.
+    Otherwise falls back to preserving original directory structure.
+    
+    Args:
+        source_path: The source file path
+        source_base: The source base directory  
+        dest_base: The destination base directory
+        template_engine: Optional OutputFolderTemplateEngine instance
+        
+    Returns:
+        Complete destination path with template-based or standard organization
+        
+    Examples:
+        # Without template (preserves structure):
+        >>> build_destination_path_with_template(
+        ...     Path("/src/folder/video.mxf"), 
+        ...     Path("/src"), 
+        ...     Path("/dest")
+        ... )
+        Path("/dest/folder/video.mxf")
+        
+        # With template (organized by rules):
+        >>> build_destination_path_with_template(
+        ...     Path("/src/200305_1344_Ingest_Cam1.mxf"), 
+        ...     Path("/src"), 
+        ...     Path("/dest"),
+        ...     template_engine
+        ... )
+        Path("/dest/KAMERA/200305/200305_1344_Ingest_Cam1.mxf")
+    """
+    filename = source_path.name
+    
+    # Use template engine if available and enabled
+    if template_engine and template_engine.is_enabled():
+        return Path(template_engine.generate_output_path(filename))
+    
+    # Fall back to standard path preservation
+    return build_destination_path(source_path, source_base, dest_base)
+
+
 def resolve_destination_with_conflicts(source_path: Path, source_base: Path, dest_base: Path) -> Path:
     """
     Resolve complete destination path including conflict resolution.
