@@ -372,6 +372,30 @@ class JobProcessor:
             # Get the copy strategy for this file
             strategy = self.copy_strategy_factory.get_strategy(prepared_file.tracked_file)
             
+            # Check if destination exists for resume detection logging
+            dest_path = Path(str(prepared_file.destination_path))
+            source_path = Path(prepared_file.tracked_file.file_path)
+            
+            dest_exists = dest_path.exists()
+            if dest_exists:
+                dest_size = dest_path.stat().st_size
+                source_size = source_path.stat().st_size
+                completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
+                
+                self._logger.info(
+                    f"RESUME SCENARIO DETECTED: {dest_path.name} "
+                    f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}% complete)"
+                )
+                
+                # Check if strategy has resume capabilities
+                strategy_name = strategy.__class__.__name__
+                if "Resumable" in strategy_name:
+                    self._logger.info(f"Using RESUME-CAPABLE strategy: {strategy_name}")
+                else:
+                    self._logger.warning(f"Using NON-RESUMABLE strategy: {strategy_name} - will restart from beginning!")
+            else:
+                self._logger.info("FRESH COPY: No existing destination file")
+            
             # Execute the copy operation with progress tracking
             self._logger.info(
                 f"Starting copy with {strategy.__class__.__name__}: "
@@ -386,8 +410,22 @@ class JobProcessor:
             
             if copy_success:
                 self._logger.info(f"Copy completed successfully: {prepared_file.tracked_file.file_path}")
+                
+                # Log resume metrics if available
+                if hasattr(strategy, 'get_resume_metrics') and dest_exists:
+                    metrics = strategy.get_resume_metrics()
+                    if metrics:
+                        self._logger.info(
+                            f"RESUME METRICS: {dest_path.name} - "
+                            f"preserved {metrics.preservation_percentage:.1f}% of data, "
+                            f"verification took {metrics.verification_time_seconds:.2f}s"
+                        )
             else:
                 self._logger.error(f"Copy failed: {prepared_file.tracked_file.file_path}")
+                
+                # Log resume failure context if applicable
+                if dest_exists:
+                    self._logger.error(f"RESUME FAILURE: Could not resume {dest_path.name} - may need fresh copy")
             
             return copy_success
             

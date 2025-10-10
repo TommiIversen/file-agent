@@ -47,39 +47,46 @@ class ResumeCapableMixin:
         """
         # Check om destination fil eksisterer
         if not dest_path.exists():
-            logger.debug(f"Destination eksisterer ikke - fresh copy: {dest_path.name}")
+            logger.info(f"RESUME CHECK: Destination ikke fundet - starter fresh copy: {dest_path.name}")
             return False
         
         # Quick integrity checks
+        logger.info(f"RESUME CHECK: Destination exists - running quick integrity check: {dest_path.name}")
         if not await QuickIntegrityChecker.quick_size_check(source_path, dest_path):
-            logger.warning(f"Quick size check failed - fresh copy: {dest_path.name}")
+            logger.warning(f"RESUME CHECK: Quick size check failed - starter fresh copy: {dest_path.name}")
             # Delete corrupt destination
             try:
                 dest_path.unlink()
+                logger.info(f"RESUME CHECK: Deleted corrupt destination: {dest_path.name}")
             except Exception as e:
-                logger.error(f"Kunne ikke slette corrupt destination: {e}")
+                logger.error(f"RESUME CHECK: Kunne ikke slette corrupt destination: {e}")
             return False
         
         dest_size = dest_path.stat().st_size
         source_size = source_path.stat().st_size
+        completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
+        
+        logger.info(f"RESUME CHECK: Size comparison - {dest_size:,}/{source_size:,} bytes ({completion_pct:.1f}%)")
         
         # Hvis dest er tom, start fresh
         if dest_size == 0:
-            logger.debug(f"Destination er tom - fresh copy: {dest_path.name}")
+            logger.info(f"RESUME CHECK: Destination er tom - starter fresh copy: {dest_path.name}")
             return False
         
         # Hvis dest er komplet, skip helt
         if dest_size == source_size:
             # Quick tail check for at være sikker
+            logger.info(f"RESUME CHECK: Komplet fil detecteret - running tail verification: {dest_path.name}")
             if await QuickIntegrityChecker.quick_tail_check(source_path, dest_path):
-                logger.info(f"Fil allerede komplet og verificeret: {dest_path.name}")
+                logger.info(f"RESUME CHECK: Fil allerede komplet og verificeret - skipping: {dest_path.name}")
                 return False
             else:
-                logger.warning(f"Komplet fil failed tail check - fresh copy: {dest_path.name}")
+                logger.warning(f"RESUME CHECK: Komplet fil failed tail check - starter fresh copy: {dest_path.name}")
                 try:
                     dest_path.unlink()
+                    logger.info(f"RESUME CHECK: Deleted corrupt komplet fil: {dest_path.name}")
                 except Exception as e:
-                    logger.error(f"Kunne ikke slette corrupt komplet fil: {e}")
+                    logger.error(f"RESUME CHECK: Kunne ikke slette corrupt komplet fil: {e}")
                 return False
         
         # Hvis dest er for lille til at være værd at resume
@@ -89,14 +96,15 @@ class ResumeCapableMixin:
         )
         
         if dest_size < min_resume_size:
-            logger.debug(
-                f"Destination for lille til resume ({dest_size:,} < {min_resume_size:,}) - "
-                f"fresh copy: {dest_path.name}"
+            logger.info(
+                f"RESUME CHECK: Destination for lille til resume ({dest_size:,} < {min_resume_size:,}) - "
+                f"starter fresh copy: {dest_path.name}"
             )
             try:
                 dest_path.unlink()
+                logger.info(f"RESUME CHECK: Deleted lille destination: {dest_path.name}")
             except Exception as e:
-                logger.error(f"Kunne ikke slette lille destination: {e}")
+                logger.error(f"RESUME CHECK: Kunne ikke slette lille destination: {e}")
             return False
         
         logger.info(
@@ -125,39 +133,60 @@ class ResumeCapableMixin:
         operation_start = time.time()
         
         try:
-            logger.info(f"Starter resume copy: {source_path.name}")
+            dest_size = dest_path.stat().st_size
+            source_size = source_path.stat().st_size
+            
+            logger.info(f"RESUME COPY: Starting verification for {source_path.name}")
+            logger.info(f"RESUME COPY: Current state - {dest_size:,}/{source_size:,} bytes ({(dest_size/source_size)*100:.1f}%)")
             
             # Find sikker resume position
             try:
+                verification_start = time.time()
+                logger.info(f"RESUME COPY: Finding safe resume position using {self.resume_config.verification_mode} verification...")
+                
                 resume_position, metrics = await self.verification_engine.find_safe_resume_position(
                     source_path, dest_path
                 )
                 self._resume_metrics = metrics
                 
+                verification_time = time.time() - verification_start
+                bytes_preserved = resume_position
+                preservation_pct = (bytes_preserved / source_size) * 100 if source_size > 0 else 0
+                
+                logger.info(
+                    f"RESUME COPY: Verification completed in {verification_time:.2f}s - "
+                    f"can preserve {bytes_preserved:,} bytes ({preservation_pct:.1f}%)"
+                )
+                
                 if self.resume_config.detailed_corruption_logging:
                     metrics.log_metrics()
                 
             except VerificationTimeout as e:
-                logger.error(f"Verification timeout - fallback til fresh copy: {e}")
+                logger.error(f"RESUME COPY: Verification timeout - fallback til fresh copy: {e}")
                 return await self._fallback_to_fresh_copy(source_path, dest_path, progress_callback)
             
             except Exception as e:
-                logger.error(f"Verification error - fallback til fresh copy: {e}")
+                logger.error(f"RESUME COPY: Verification error - fallback til fresh copy: {e}")
                 return await self._fallback_to_fresh_copy(source_path, dest_path, progress_callback)
             
             # Hvis resume_position er 0, start fresh (men behold existing metrics)
             if resume_position == 0:
-                logger.info(f"Resume position er 0 - starter fresh copy: {source_path.name}")
+                logger.warning(f"RESUME COPY: Resume position er 0 - ingen data kan preserveres, starter fresh copy: {source_path.name}")
                 return await self._fresh_copy_with_cleanup(source_path, dest_path, progress_callback)
             
             # Truncate destination til resume position
+            logger.info(f"RESUME COPY: Truncating destination til resume position {resume_position:,} bytes")
             try:
                 await self._truncate_destination(dest_path, resume_position)
+                logger.info("RESUME COPY: Destination truncated successfully")
             except Exception as e:
-                logger.error(f"Kunne ikke truncate destination til {resume_position:,}: {e}")
+                logger.error(f"RESUME COPY: Kunne ikke truncate destination til {resume_position:,}: {e}")
                 return await self._fallback_to_fresh_copy(source_path, dest_path, progress_callback)
             
             # Fortsæt copy fra resume position
+            bytes_to_copy = source_size - resume_position
+            logger.info(f"RESUME COPY: Continuing copy from position {resume_position:,}, {bytes_to_copy:,} bytes remaining")
+            
             success = await self._continue_copy_from_position(
                 source_path, dest_path, resume_position, progress_callback
             )
