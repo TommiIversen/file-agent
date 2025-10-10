@@ -141,8 +141,27 @@ class JobProcessor:
             # Step 3: Initialize file status for copying
             await self._initialize_copy_status(prepared_file)
             
-            # Job is ready for copy execution
-            return ProcessResult(success=True, file_path=file_path)
+            # Step 4: Execute the actual copy operation
+            copy_success = await self._execute_copy(prepared_file)
+            
+            if copy_success:
+                # Step 5: Finalize successful copy
+                await self.finalize_job_success(job, prepared_file.tracked_file.file_size)
+                return ProcessResult(success=True, file_path=file_path)
+            else:
+                # Copy failed
+                await self.state_manager.update_file_status(
+                    file_path,
+                    FileStatus.FAILED,
+                    copy_progress=0.0,
+                    bytes_copied=0,
+                    error_message="Copy operation failed"
+                )
+                return ProcessResult(
+                    success=False,
+                    file_path=file_path,
+                    error_message="Copy operation failed"
+                )
             
         except Exception as e:
             self._logger.error(f"Unexpected error processing job {file_path}: {e}")
@@ -330,6 +349,43 @@ class JobProcessor:
             f"Initialized copy status for {prepared_file.tracked_file.file_path} "
             f"with strategy {prepared_file.strategy_name}"
         )
+    
+    async def _execute_copy(self, prepared_file: PreparedFile) -> bool:
+        """
+        Execute the actual copy operation using the selected strategy.
+        
+        Args:
+            prepared_file: Prepared file information with strategy
+            
+        Returns:
+            True if copy was successful, False otherwise
+        """
+        try:
+            # Get the copy strategy for this file
+            strategy = self.copy_strategy_factory.get_strategy(prepared_file.tracked_file)
+            
+            # Execute the copy operation with progress tracking
+            self._logger.info(
+                f"Starting copy with {strategy.__class__.__name__}: "
+                f"{prepared_file.tracked_file.file_path} -> {prepared_file.destination_path}"
+            )
+            
+            copy_success = await strategy.copy_file(
+                prepared_file.tracked_file.file_path,
+                str(prepared_file.destination_path),
+                prepared_file.tracked_file
+            )
+            
+            if copy_success:
+                self._logger.info(f"Copy completed successfully: {prepared_file.tracked_file.file_path}")
+            else:
+                self._logger.error(f"Copy failed: {prepared_file.tracked_file.file_path}")
+            
+            return copy_success
+            
+        except Exception as e:
+            self._logger.error(f"Error executing copy for {prepared_file.tracked_file.file_path}: {e}")
+            return False
     
     async def _handle_space_shortage_result(self, job: Dict, space_check: SpaceCheckResult) -> ProcessResult:
         """

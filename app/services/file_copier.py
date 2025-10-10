@@ -1,7 +1,3 @@
-"""
-Ultra-lean FileCopyService orchestrator implementing pure delegation pattern.
-Achieves <150 lines by eliminating all non-essential methods and documentation.
-"""
 import asyncio
 import logging
 from typing import Dict, Optional, List
@@ -25,9 +21,7 @@ class FileCopyServiceConfig:
     destination_path: str = ""
 
 
-class FileCopyService:
-    """Ultra-lean orchestrator that delegates all operations to specialized services."""
-    
+class FileCopyService:   
     def __init__(
         self,
         settings,
@@ -36,7 +30,9 @@ class FileCopyService:
         copy_strategy_factory: Optional[FileCopyStrategyFactory] = None,
         statistics_tracker: Optional[CopyStatisticsTracker] = None,
         error_handler: Optional[CopyErrorHandler] = None,
-        destination_checker: Optional[DestinationChecker] = None
+        destination_checker: Optional[DestinationChecker] = None,
+        space_checker=None,
+        space_retry_manager=None
     ):
         self._logger = logging.getLogger(self.__class__.__name__)
         self._running = False
@@ -61,7 +57,9 @@ class FileCopyService:
             settings=settings,
             state_manager=state_manager,
             job_queue=job_queue,
-            copy_strategy_factory=self.copy_strategy_factory
+            copy_strategy_factory=self.copy_strategy_factory,
+            space_checker=space_checker,
+            space_retry_manager=space_retry_manager
         )
 
     async def start_consumer(self) -> None:

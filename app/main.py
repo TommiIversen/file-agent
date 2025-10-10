@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
     # Stop alle background tasks gracefully
     file_scanner.stop_scanning()
     job_queue_service.stop_producer()
-    file_copier.stop_consumer()
+    await file_copier.stop_consumer()
     await storage_monitor.stop_monitoring()
     
     # Cancel alle background tasks

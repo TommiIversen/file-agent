@@ -80,7 +80,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
         """
         Copy a complete stable file.
         
-        Uses traditional copy approach with temporary file and verification.
+        Uses traditional copy approach with optional temporary file and verification.
         """
         temp_dest_path = None
         
@@ -94,17 +94,25 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 copy_progress=0.0
             )
             
-            # Create temporary destination path using utility
-            temp_dest_path = create_temp_file_path(Path(dest_path))
+            # Use temporary file if configured to do so
+            if self.settings.use_temporary_file:
+                temp_dest_path = create_temp_file_path(Path(dest_path))
+                copy_dest_path = temp_dest_path
+                self.logger.debug(f"Using temporary file: {temp_dest_path}")
+            else:
+                copy_dest_path = dest_path
+                self.logger.debug(f"Using direct copy to: {dest_path}")
             
             # Perform the copy with progress tracking
-            success = await self._copy_with_progress(source_path, temp_dest_path, tracked_file)
+            success = await self._copy_with_progress(source_path, copy_dest_path, tracked_file)
             
             if success:
                 # Verify file integrity
-                if await self._verify_file_integrity(source_path, temp_dest_path):
-                    # Rename temp file to final destination
-                    os.rename(temp_dest_path, dest_path)
+                if await self._verify_file_integrity(source_path, copy_dest_path):
+                    # If using temp file, rename it to final destination
+                    if self.settings.use_temporary_file and temp_dest_path:
+                        os.rename(temp_dest_path, dest_path)
+                        self.logger.debug(f"Renamed temp file to final destination: {dest_path}")
                     
                     # Try to delete source file, but don't fail if it's locked
                     try:
@@ -235,11 +243,17 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             self.logger.info(f"Starting growing copy: {os.path.basename(source_path)} "
                            f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)")
             
-            # Create temporary destination path using utility
-            temp_dest_path = create_temp_file_path(Path(dest_path))
+            # Use temporary file if configured to do so
+            if self.settings.use_temporary_file:
+                temp_dest_path = create_temp_file_path(Path(dest_path))
+                copy_dest_path = temp_dest_path
+                self.logger.debug(f"Using temporary file for growing copy: {temp_dest_path}")
+            else:
+                copy_dest_path = dest_path
+                self.logger.debug(f"Using direct growing copy to: {dest_path}")
             
             # Perform growing copy (status already set by FileCopyService)
-            success = await self._copy_growing_file(source_path, temp_dest_path, tracked_file)
+            success = await self._copy_growing_file(source_path, copy_dest_path, tracked_file)
             
             if success:
                 # Switch to normal copy mode for final data
@@ -251,12 +265,15 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 )
                 
                 # Finish copying any remaining data
-                final_success = await self._finish_normal_copy(source_path, temp_dest_path, tracked_file)
+                final_success = await self._finish_normal_copy(source_path, copy_dest_path, tracked_file)
                 
                 if final_success:
                     # Verify and finalize
-                    if await self._verify_file_integrity(source_path, temp_dest_path):
-                        os.rename(temp_dest_path, dest_path)
+                    if await self._verify_file_integrity(source_path, copy_dest_path):
+                        # If using temp file, rename it to final destination
+                        if self.settings.use_temporary_file and temp_dest_path:
+                            os.rename(temp_dest_path, dest_path)
+                            self.logger.debug(f"Renamed temp file to final destination: {dest_path}")
                         
                         # Try to delete source file, but don't fail if it's locked
                         try:
