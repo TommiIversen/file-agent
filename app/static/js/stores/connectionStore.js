@@ -18,7 +18,7 @@ document.addEventListener('alpine:init', () => {
         reconnectAttempts: 0,
         maxReconnectAttempts: Infinity,  // Retry forever
         reconnectDelay: 1000,           // Base delay in ms
-        isReconnecting: false,
+        reconnectTimeoutId: null,       // Track active reconnection timeout
         
         // Connection Actions
         connect() {
@@ -43,7 +43,7 @@ document.addEventListener('alpine:init', () => {
                 console.log('WebSocket connected');
                 this.updateStatus('connected', 'Forbundet til server');
                 this.reconnectAttempts = 0;
-                this.isReconnecting = false;
+                this.cancelReconnect(); // Clear any pending reconnection
                 
                 // Notify other stores/services
                 this.onConnected();
@@ -76,9 +76,22 @@ document.addEventListener('alpine:init', () => {
         handleDisconnection() {
             this.updateStatus('disconnected', 'Forbindelse afbrudt');
             
-            if (this.isReconnecting) return; // Prevent multiple reconnection attempts
+            // Clean up socket reference
+            if (this.socket) {
+                this.socket = null;
+            }
             
-            this.isReconnecting = true;
+            // Cancel any existing reconnection timeout to avoid duplicates
+            this.cancelReconnect();
+            
+            // Start reconnection process
+            this.scheduleReconnect();
+        },
+        
+        scheduleReconnect() {
+            // Don't schedule if we're already trying to reconnect
+            if (this.reconnectTimeoutId) return;
+            
             this.reconnectAttempts++;
             
             // Calculate delay with exponential backoff, capped at 10 seconds
@@ -92,12 +105,21 @@ document.addEventListener('alpine:init', () => {
                 `Prøver at forbinde igen om ${Math.round(delay/1000)}s... (forsøg #${this.reconnectAttempts})`
             );
             
-            setTimeout(() => {
+            this.reconnectTimeoutId = setTimeout(() => {
+                this.reconnectTimeoutId = null; // Clear the timeout ID
                 this.connect();
             }, delay);
         },
         
+        cancelReconnect() {
+            if (this.reconnectTimeoutId) {
+                clearTimeout(this.reconnectTimeoutId);
+                this.reconnectTimeoutId = null;
+            }
+        },
+        
         disconnect() {
+            this.cancelReconnect(); // Cancel any pending reconnections
             if (this.socket) {
                 this.socket.close();
                 this.socket = null;
@@ -129,7 +151,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         get isConnecting() {
-            return this.status === 'connecting';
+            return this.status === 'connecting' || this.reconnectTimeoutId !== null;
         },
         
         get isDisconnected() {
