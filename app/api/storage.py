@@ -42,13 +42,13 @@ async def get_storage_overview(
     """
     Get complete storage overview for both source and destination.
     
+    Always returns HTTP 200 with status information in response body.
+    This endpoint is used by the frontend UI for status display.
+    
+    For HTTP status code based monitoring, use /storage/source and /storage/destination.
+    
     Returns:
-        StorageResponse with both source and destination info
-        
-    HTTP Status Codes:
-        200: Normal operation (all OK or WARNING)
-        507: Insufficient Storage (WARNING threshold exceeded)
-        503: Service Unavailable (ERROR or CRITICAL status)
+        StorageResponse with both source and destination info (always HTTP 200)
     """
     source_info = storage_monitor.get_source_info()
     destination_info = storage_monitor.get_destination_info()
@@ -63,24 +63,7 @@ async def get_storage_overview(
         monitoring_active=monitoring_status["is_running"]
     )
     
-    # Set appropriate HTTP status code based on storage status
-    if overall_status == StorageStatus.CRITICAL:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Critical storage issues detected"
-        )
-    elif overall_status == StorageStatus.ERROR:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Storage access errors detected"
-        )
-    elif overall_status == StorageStatus.WARNING:
-        raise HTTPException(
-            status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
-            detail="Storage space warnings detected"
-        )
-    
-    # Status OK - return 200
+    # Always return 200 OK with status in response body for frontend compatibility
     return response
 
 
@@ -123,6 +106,11 @@ async def get_source_storage(
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Source storage low on space: {source_info.free_space_gb:.1f}GB remaining"
+        )
+    elif source_info.status == StorageStatus.UNKNOWN:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Source storage status being checked - please wait for monitoring to complete"
         )
     
     return source_info
@@ -168,6 +156,11 @@ async def get_destination_storage(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Destination storage low on space: {destination_info.free_space_gb:.1f}GB remaining"
         )
+    elif destination_info.status == StorageStatus.UNKNOWN:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Destination storage status being checked - please wait for monitoring to complete"
+        )
     
     return destination_info
 
@@ -197,8 +190,10 @@ async def get_storage_health(
         health_status = "warning"
     elif overall_status == StorageStatus.ERROR:
         health_status = "error"
-    else:  # CRITICAL
+    elif overall_status == StorageStatus.CRITICAL:
         health_status = "critical"
+    else:  # UNKNOWN
+        health_status = "initializing"
     
     # Build details dictionary
     details = {
@@ -223,40 +218,3 @@ async def get_storage_health(
         details=details
     )
 
-
-# Additional utility endpoints for advanced monitoring
-
-@router.get("/storage/thresholds")
-async def get_storage_thresholds(
-    storage_monitor: StorageMonitorService = Depends(get_storage_monitor)
-) -> dict:
-    """
-    Get configured storage thresholds.
-    
-    Returns:
-        Dictionary with current threshold configuration
-    """
-    monitoring_status = storage_monitor.get_monitoring_status()
-    
-    # Get thresholds from current storage info
-    source_info = storage_monitor.get_source_info()
-    destination_info = storage_monitor.get_destination_info()
-    
-    thresholds = {
-        "monitoring_active": monitoring_status["is_running"],
-        "check_interval_seconds": monitoring_status["check_interval_seconds"]
-    }
-    
-    if source_info:
-        thresholds["source"] = {
-            "warning_threshold_gb": source_info.warning_threshold_gb,
-            "critical_threshold_gb": source_info.critical_threshold_gb
-        }
-    
-    if destination_info:
-        thresholds["destination"] = {
-            "warning_threshold_gb": destination_info.warning_threshold_gb,
-            "critical_threshold_gb": destination_info.critical_threshold_gb
-        }
-    
-    return thresholds
