@@ -28,14 +28,16 @@ class WebSocketManager:
     4. Message Formatting: Format data til JSON for frontend
     """
     
-    def __init__(self, state_manager: StateManager):
+    def __init__(self, state_manager: StateManager, storage_monitor=None):
         """
         Initialize WebSocketManager.
         
         Args:
             state_manager: Central state manager to subscribe to
+            storage_monitor: Storage monitor for getting storage data in initial state
         """
         self.state_manager = state_manager
+        self._storage_monitor = storage_monitor
         self._connections: List[WebSocket] = []
         self._logger = logging.getLogger("app.websocket_manager")
         
@@ -84,17 +86,32 @@ class WebSocketManager:
             all_files = await self.state_manager.get_all_files()
             statistics = await self.state_manager.get_statistics()
             
+            # Get storage data if available
+            storage_data = None
+            if self._storage_monitor:
+                source_info = self._storage_monitor.get_source_info()
+                destination_info = self._storage_monitor.get_destination_info()
+                overall_status = self._storage_monitor.get_overall_status()
+                
+                storage_data = {
+                    "source": self._serialize_storage_info(source_info) if source_info else None,
+                    "destination": self._serialize_storage_info(destination_info) if destination_info else None,
+                    "overall_status": overall_status.value,
+                    "monitoring_active": self._storage_monitor.get_monitoring_status()["is_running"]
+                }
+            
             initial_data = {
                 "type": "initial_state",
                 "data": {
                     "files": [self._serialize_tracked_file(f) for f in all_files],
                     "statistics": statistics,
+                    "storage": storage_data,
                     "timestamp": self._get_timestamp()
                 }
             }
             
             await websocket.send_text(json.dumps(initial_data))
-            self._logger.debug(f"Sent initial state to client: {len(all_files)} files")
+            self._logger.debug(f"Sent initial state to client: {len(all_files)} files, storage: {storage_data is not None}")
             
         except Exception as e:
             self._logger.error(f"Fejl ved sending af initial state: {e}")

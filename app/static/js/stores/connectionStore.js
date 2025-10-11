@@ -141,8 +141,9 @@ document.addEventListener('alpine:init', () => {
         
         // Connection Events
         onConnected() {
-            // Load initial data when connected
-            Alpine.store('storage')?.loadStorageData();
+            // WebSocket initial_state message will handle loading data
+            // No need for manual HTTP calls anymore - everything comes via WebSocket!
+            console.log('WebSocket connected - waiting for initial_state message...');
         },
         
         // Computed Properties

@@ -93,6 +93,10 @@ class MessageHandler {
             if (data.storage.destination) {
                 this.storageStore?.updateDestination(data.storage.destination);
             }
+            if (data.storage.overall_status) {
+                this.storageStore.overall_status = data.storage.overall_status;
+            }
+            console.log('Storage data loaded from initial state');
         }
         
         console.log(`Initial state loaded: ${data.files?.length || 0} files`);

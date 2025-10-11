@@ -54,33 +54,7 @@ document.addEventListener('alpine:init', () => {
             
             console.log(`Overall storage status: ${this.overall_status}`);
         },
-        
-        // Data Loading
-        async loadStorageData() {
-            if (this.isLoading) return;
-            
-            this.isLoading = true;
-            console.log('Loading storage data...');
-            
-            try {
-                const response = await fetch('/api/storage');
-                if (response.ok) {
-                    const data = await response.json();
-                    this.source = data.source;
-                    this.destination = data.destination;
-                    this.overall_status = data.overall_status;
-                    this.lastUpdated = new Date();
-                    console.log('Storage data loaded successfully:', data);
-                } else {
-                    console.error('Failed to load storage data:', response.statusText);
-                }
-            } catch (error) {
-                console.error('Error loading storage data:', error);
-            } finally {
-                this.isLoading = false;
-            }
-        },
-        
+
         // Storage Update Handlers (for WebSocket messages)
         handleStorageUpdate(data) {
             console.log('Storage update received:', data);

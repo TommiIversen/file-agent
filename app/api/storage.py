@@ -1,97 +1,22 @@
 """
 Storage API Endpoints for File Transfer Agent.
 
-REST API endpoints for storage monitoring with appropriate HTTP status codes.
-Provides external monitoring capabilities and health check integration.
+Specialized REST API endpoints for Nagios-style monitoring with HTTP status codes.
+General storage monitoring is now handled via WebSocket real-time updates.
 """
 
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
-from datetime import datetime
 
 from ..dependencies import get_storage_monitor
 from ..services.storage_monitor import StorageMonitorService
 from ..models import StorageInfo, StorageStatus
-from pydantic import BaseModel
 
 
-# Response models
-class StorageResponse(BaseModel):
-    """Complete storage overview response"""
-    source: Optional[StorageInfo]
-    destination: Optional[StorageInfo]
-    overall_status: StorageStatus
-    last_updated: datetime
-    monitoring_active: bool
-    # Health check compatibility fields
-    health_status: str  # "healthy", "warning", "error", "critical", "initializing"
-    details: dict       # Additional monitoring details
+# Response models are imported from models.py (StorageInfo, StorageStatus)
+# No additional response models needed - storage data is sent via WebSocket
 
 
 router = APIRouter(prefix="/api", tags=["storage"])
-
-
-@router.get("/storage", response_model=StorageResponse)
-async def get_storage_overview(
-    storage_monitor: StorageMonitorService = Depends(get_storage_monitor)
-) -> StorageResponse:
-    """
-    Get complete storage overview for both source and destination.
-    
-    Always returns HTTP 200 with status information in response body.
-    This endpoint serves both frontend UI and health check monitoring.
-    
-    For HTTP status code based monitoring, use /storage/source and /storage/destination.
-    
-    Returns:
-        StorageResponse with complete storage info and health status (always HTTP 200)
-    """
-    source_info = storage_monitor.get_source_info()
-    destination_info = storage_monitor.get_destination_info()
-    overall_status = storage_monitor.get_overall_status()
-    monitoring_status = storage_monitor.get_monitoring_status()
-    
-    # Create health status string for monitoring compatibility
-    if overall_status == StorageStatus.OK:
-        health_status = "healthy"
-    elif overall_status == StorageStatus.WARNING:
-        health_status = "warning"
-    elif overall_status == StorageStatus.ERROR:
-        health_status = "error"
-    elif overall_status == StorageStatus.CRITICAL:
-        health_status = "critical"
-    else:  # UNKNOWN
-        health_status = "initializing"
-    
-    # Build details dictionary for monitoring
-    details = {
-        "monitoring_active": monitoring_status["is_running"],
-        "check_interval_seconds": monitoring_status["check_interval_seconds"],
-        "source_status": source_info.status.value if source_info else "unknown",
-        "destination_status": destination_info.status.value if destination_info else "unknown"
-    }
-    
-    # Add space details if available
-    if source_info:
-        details["source_free_gb"] = round(source_info.free_space_gb, 2)
-        details["source_total_gb"] = round(source_info.total_space_gb, 2)
-    
-    if destination_info:
-        details["destination_free_gb"] = round(destination_info.free_space_gb, 2)
-        details["destination_total_gb"] = round(destination_info.total_space_gb, 2)
-    
-    response = StorageResponse(
-        source=source_info,
-        destination=destination_info,
-        overall_status=overall_status,
-        last_updated=datetime.now(),
-        monitoring_active=monitoring_status["is_running"],
-        health_status=health_status,
-        details=details
-    )
-    
-    # Always return 200 OK with status in response body for frontend & health check compatibility
-    return response
 
 
 @router.get("/storage/source", response_model=StorageInfo)

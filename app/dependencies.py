@@ -149,6 +149,7 @@ def get_websocket_manager() -> WebSocketManager:
     """
     if "websocket_manager" not in _singletons:
         state_manager = get_state_manager()
+        # Note: storage_monitor will be set later to avoid circular dependency
         _singletons["websocket_manager"] = WebSocketManager(state_manager)
     
     return _singletons["websocket_manager"]
@@ -187,6 +188,9 @@ def get_storage_monitor() -> StorageMonitorService:
             storage_checker=storage_checker,
             websocket_manager=websocket_manager
         )
+        
+        # Set storage_monitor reference in WebSocketManager to avoid circular dependency
+        websocket_manager._storage_monitor = _singletons["storage_monitor"]
     
     return _singletons["storage_monitor"]
 
