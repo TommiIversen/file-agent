@@ -217,6 +217,45 @@ class StorageMonitorService:
         except Exception as e:
             self._logger.error(f"Error broadcasting storage update via WebSocket: {e}")
     
+    async def trigger_immediate_check(self, storage_type: str = "destination") -> None:
+        """
+        Trigger immediate storage check for specified storage type.
+        
+        This can be called by other services (like FileCopyService) when they
+        detect storage issues to provide instant WebSocket updates to UI.
+        
+        Args:
+            storage_type: "source" or "destination" to check immediately
+        """
+        if not self._is_running:
+            self._logger.warning(f"Storage monitoring not running - cannot trigger immediate {storage_type} check")
+            return
+            
+        self._logger.debug(f"Triggering immediate {storage_type} check")
+        
+        try:
+            if storage_type == "source":
+                await self._check_single_storage(
+                    storage_type="source",
+                    path=self._settings.source_directory,
+                    warning_threshold=self._settings.source_warning_threshold_gb,
+                    critical_threshold=self._settings.source_critical_threshold_gb,
+                    current_info=self._source_info
+                )
+            elif storage_type == "destination":
+                await self._check_single_storage(
+                    storage_type="destination", 
+                    path=self._settings.destination_directory,
+                    warning_threshold=self._settings.destination_warning_threshold_gb,
+                    critical_threshold=self._settings.destination_critical_threshold_gb,
+                    current_info=self._destination_info
+                )
+            else:
+                self._logger.error(f"Invalid storage_type: {storage_type}")
+                
+        except Exception as e:
+            self._logger.error(f"Error in immediate {storage_type} check: {e}")
+
     # API-friendly getter methods
     def get_source_info(self) -> Optional[StorageInfo]:
         """Get current source storage information."""

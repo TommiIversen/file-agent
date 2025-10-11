@@ -90,12 +90,16 @@ def get_file_copier() -> FileCopyService:
         space_checker = get_space_checker() if settings.enable_pre_copy_space_check else None
         space_retry_manager = get_space_retry_manager() if space_checker else None
         
+        # Get storage monitor for destination checker integration
+        storage_monitor = get_storage_monitor()
+        
         _singletons["file_copier"] = FileCopyService(
             settings=settings,
             state_manager=state_manager, 
             job_queue=job_queue_service,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
+            storage_monitor=storage_monitor,
             enable_resume=settings.enable_secure_resume  # Enable resume based on settings
         )
     

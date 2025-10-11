@@ -33,6 +33,7 @@ class FileCopyService:
         destination_checker: Optional[DestinationChecker] = None,
         space_checker=None,
         space_retry_manager=None,
+        storage_monitor=None,
         enable_resume: bool = True
     ):
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -51,7 +52,10 @@ class FileCopyService:
         )
         self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(settings, enable_session_tracking=True)
         self.error_handler = error_handler or CopyErrorHandler(settings)
-        self.destination_checker = destination_checker or DestinationChecker(Path(settings.destination_directory))
+        self.destination_checker = destination_checker or DestinationChecker(
+            Path(settings.destination_directory), 
+            storage_monitor=storage_monitor
+        )
         
         # Composed services
         self.file_copy_executor = FileCopyExecutor(settings)

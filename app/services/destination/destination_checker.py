@@ -46,16 +46,18 @@ class DestinationChecker:
     5. Provide detailed error reporting for troubleshooting
     """
     
-    def __init__(self, destination_path: Path, cache_ttl_seconds: float = 5.0):
+    def __init__(self, destination_path: Path, cache_ttl_seconds: float = 5.0, storage_monitor=None):
         """
         Initialize DestinationChecker.
         
         Args:
             destination_path: Path to destination directory to check
             cache_ttl_seconds: Time-to-live for cached results in seconds
+            storage_monitor: Optional StorageMonitorService for triggering immediate updates
         """
         self.destination_path = destination_path
         self.cache_ttl_seconds = cache_ttl_seconds
+        self._storage_monitor = storage_monitor
         
         # Caching state
         self._cached_result: Optional[DestinationCheckResult] = None
@@ -69,6 +71,8 @@ class DestinationChecker:
         
         self._logger.debug(f"DestinationChecker initialized for: {destination_path}")
         self._logger.debug(f"Cache TTL: {cache_ttl_seconds} seconds")
+        if storage_monitor:
+            self._logger.debug("Connected to StorageMonitorService for instant updates")
     
     async def is_available(self, force_refresh: bool = False) -> bool:
         """
@@ -96,6 +100,9 @@ class DestinationChecker:
             # Update cache
             self._cached_result = result
             self._cache_timestamp = time.time()
+            
+            # Trigger storage monitor update if availability changed
+            await self._trigger_storage_update_if_changed(result.is_available)
             
             return result.is_available
     
@@ -182,6 +189,35 @@ class DestinationChecker:
             "destination_path": str(self.destination_path)
         }
     
+    async def _trigger_storage_update_if_changed(self, current_available: bool) -> None:
+        """
+        Trigger storage monitor update if availability status changed.
+        
+        Args:
+            current_available: Current availability status
+        """
+        if not self._storage_monitor:
+            return
+            
+        # Check if status actually changed from previous cached result
+        previous_result = None
+        if hasattr(self, '_previous_result_for_comparison'):
+            previous_result = self._previous_result_for_comparison
+            
+        # If this is the first check or status changed, trigger update
+        if (previous_result is None or 
+            previous_result != current_available):
+            
+            self._logger.debug(f"Destination availability changed: {previous_result} -> {current_available}")
+            try:
+                await self._storage_monitor.trigger_immediate_check("destination")
+                self._logger.debug("Triggered immediate storage monitor update")
+            except Exception as e:
+                self._logger.warning(f"Failed to trigger storage monitor update: {e}")
+        
+        # Store current status for next comparison
+        self._previous_result_for_comparison = current_available
+
     # Private methods
     
     def _is_cache_valid(self) -> bool:
