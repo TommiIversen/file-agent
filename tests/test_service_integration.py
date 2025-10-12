@@ -33,7 +33,15 @@ def test_settings():
     settings.global_retry_delay_seconds = 5
     settings.copy_progress_update_interval = 2
     settings.growing_file_chunk_size_kb = 32
+    settings.normal_file_chunk_size_kb = 1024  # Add missing attribute
+    settings.large_file_chunk_size_kb = 2048   # Add missing attribute 
+    settings.large_file_threshold_gb = 1.0     # Add missing attribute
     settings.max_concurrent_copies = 1
+    # Output folder template settings
+    settings.output_folder_template_enabled = False
+    settings.output_folder_default_category = "OTHER"
+    settings.output_folder_rules = ""
+    settings.output_folder_date_format = "filename[0:6]"
     return settings
 
 

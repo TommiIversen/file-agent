@@ -7,7 +7,7 @@ kontrol over hvordan resume operationer udføres.
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 import logging
 
 logger = logging.getLogger("app.utils.secure_resume_config")
@@ -103,25 +103,29 @@ class SecureResumeConfig(BaseModel):
         description="Log verification progress (kan være meget verbose)"
     )
 
-    @validator('max_verify_mb')
-    def max_verify_reasonable(cls, v, values):
+    @field_validator('max_verify_mb')
+    @classmethod
+    def max_verify_reasonable(cls, v, info):
         """Sørg for at max verification størrelse er rimelig"""
-        if 'large_file_verification_mb' in values:
-            if v < values['large_file_verification_mb']:
+        if info.data and 'large_file_verification_mb' in info.data:
+            large_file_value = info.data['large_file_verification_mb']
+            if v < large_file_value:
                 raise ValueError(
                     f"max_verify_mb ({v}) skal være >= large_file_verification_mb "
-                    f"({values['large_file_verification_mb']})"
+                    f"({large_file_value})"
                 )
         return v
 
-    @validator('binary_search_chunk_mb')
-    def binary_search_chunk_reasonable(cls, v, values):
+    @field_validator('binary_search_chunk_mb')
+    @classmethod
+    def binary_search_chunk_reasonable(cls, v, info):
         """Sørg for at binary search chunk er mindre end max verification"""
-        if 'max_verify_mb' in values:
-            if v > values['max_verify_mb']:
+        if info.data and 'max_verify_mb' in info.data:
+            max_verify_value = info.data['max_verify_mb']
+            if v > max_verify_value:
                 raise ValueError(
                     f"binary_search_chunk_mb ({v}) skal være <= max_verify_mb "
-                    f"({values['max_verify_mb']})"
+                    f"({max_verify_value})"
                 )
         return v
 

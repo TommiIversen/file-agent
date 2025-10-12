@@ -41,8 +41,9 @@ class TestFileCopyExecutorBasics:
     def test_initialization(self, executor, settings):
         """Test FileCopyExecutor initialization."""
         assert executor.settings == settings
-        assert executor.chunk_size == 64 * 1024
-        assert executor.progress_update_interval == 10
+        assert executor.normal_chunk_size == settings.normal_file_chunk_size_kb * 1024
+        assert executor.large_chunk_size == settings.large_file_chunk_size_kb * 1024
+        assert executor.progress_update_interval == settings.copy_progress_update_interval
     
     def test_initialization_with_default_progress_interval(self):
         """Test initialization with default progress interval."""
@@ -59,8 +60,10 @@ class TestFileCopyExecutorBasics:
         info = executor.get_executor_info()
         
         expected_info = {
-            "chunk_size": 64 * 1024,
-            "progress_update_interval": 10,
+            "normal_chunk_size_kb": 1024,  # From settings
+            "large_chunk_size_kb": 2048,   # From settings 
+            "large_file_threshold_gb": 1.0, # From settings
+            "progress_update_interval": 10,  # From settings (fixed)
             "use_temporary_file": True,
             "default_strategy": "temp_file"
         }
