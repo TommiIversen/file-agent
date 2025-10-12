@@ -13,7 +13,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from app.config import load_settings
+from app.config import Settings
 from app.logging_config import setup_logging
 
 def test_resume_loggers():
@@ -22,7 +22,7 @@ def test_resume_loggers():
     print("=" * 50)
     
     # Setup logging
-    settings = load_settings()
+    settings = Settings()
     setup_logging(settings)
     
     # Test alle resume loggers

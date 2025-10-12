@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.services.file_copier import FileCopyService
 from app.services.job_queue import JobQueueService
-from app.services.copy_strategies import FileCopyStrategyFactory
+from app.services.copy_strategies import CopyStrategyFactory
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
 from app.services.error_handling.copy_error_handler import CopyErrorHandler
 from app.services.destination.destination_checker import DestinationChecker
@@ -133,7 +133,7 @@ class TestFileCopyServiceOrchestrator:
     def test_orchestrator_service_composition(self, orchestrator):
         """Test that all services are properly composed."""
         # Verify types of composed services
-        assert isinstance(orchestrator.copy_strategy_factory, FileCopyStrategyFactory)
+        assert isinstance(orchestrator.copy_strategy_factory, CopyStrategyFactory)
         assert isinstance(orchestrator.statistics_tracker, CopyStatisticsTracker)
         assert isinstance(orchestrator.error_handler, CopyErrorHandler)
         assert isinstance(orchestrator.destination_checker, DestinationChecker)
