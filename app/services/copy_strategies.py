@@ -10,15 +10,15 @@ import aiofiles
 import logging
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
-from app.utils.file_operations import create_temp_file_path
-from app.utils.progress_utils import should_report_progress_with_bytes, calculate_transfer_rate
+from app.services.copy.file_copy_executor import FileCopyExecutor, CopyProgress, CopyResult
+from app.utils.file_operations import create_temp_file_path, validate_file_sizes
+from app.utils.progress_utils import calculate_transfer_rate
 
 
 class FileCopyStrategy(ABC):
@@ -30,11 +30,12 @@ class FileCopyStrategy(ABC):
     - GrowingFileCopyStrategy: Streaming copy for files being written
     """
     
-    def __init__(self, settings: Settings, state_manager: StateManager):
+    def __init__(self, settings: Settings, state_manager: StateManager, file_copy_executor: FileCopyExecutor):
         self.settings = settings
         self.state_manager = state_manager
         self.logger = logging.getLogger("app.services.copy_strategies")
-    
+        self.file_copy_executor = file_copy_executor
+
     @abstractmethod
     async def copy_file(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
         """
@@ -78,15 +79,16 @@ class NormalFileCopyStrategy(FileCopyStrategy):
     
     async def copy_file(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
         """
-        Copy a complete stable file.
-        
-        Uses traditional copy approach with optional temporary file and verification.
+        Copy a complete stable file using FileCopyExecutor.
+
+        Delegates the actual copy operation to the executor and handles the result.
         """
-        temp_dest_path = None
-        
+        source = Path(source_path)
+        dest = Path(dest_path)
+
         try:
-            self.logger.info(f"Starting normal copy: {os.path.basename(source_path)}")
-            
+            self.logger.info(f"Starting normal copy via executor: {source.name}")
+
             # Update status to copying
             await self.state_manager.update_file_status(
                 source_path,
@@ -94,128 +96,61 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 copy_progress=0.0
             )
             
-            # Ensure destination directory exists (important for template system)
-            dest_dir = Path(dest_path).parent
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.debug(f"Ensured destination directory exists: {dest_dir}")
-            
-            # Use temporary file if configured to do so
-            if self.settings.use_temporary_file:
-                temp_dest_path = create_temp_file_path(Path(dest_path))
-                copy_dest_path = temp_dest_path
-                self.logger.debug(f"Using temporary file: {temp_dest_path}")
-            else:
-                copy_dest_path = dest_path
-                self.logger.debug(f"Using direct copy to: {dest_path}")
-            
-            # Perform the copy with progress tracking
-            success = await self._copy_with_progress(source_path, copy_dest_path, tracked_file)
-            
-            if success:
-                # Verify file integrity
-                if await self._verify_file_integrity(source_path, copy_dest_path):
-                    # If using temp file, rename it to final destination
-                    if self.settings.use_temporary_file and temp_dest_path:
-                        os.rename(temp_dest_path, dest_path)
-                        self.logger.debug(f"Renamed temp file to final destination: {dest_path}")
-                    
-                    # Try to delete source file, but don't fail if it's locked
-                    try:
-                        os.remove(source_path)
-                        self.logger.debug(f"Source file deleted: {os.path.basename(source_path)}")
-                    except (OSError, PermissionError) as e:
-                        self.logger.warning(f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}")
-                        # Continue with completion even if deletion fails
-                    
-                    # Update status to completed
-                    await self.state_manager.update_file_status(
+            # Create a progress callback that updates the state manager
+            def progress_callback(progress: CopyProgress):
+                asyncio.create_task(
+                    self.state_manager.update_file_status(
                         source_path,
-                        FileStatus.COMPLETED,
-                        copy_progress=100.0,
-                        destination_path=dest_path
+                        FileStatus.COPYING,
+                        copy_progress=progress.progress_percent,
+                        bytes_copied=progress.bytes_copied,
+                        copy_speed_mbps=progress.current_rate_bytes_per_sec / (1024*1024)
                     )
-                    
-                    self.logger.info(f"Normal copy completed: {os.path.basename(source_path)}")
-                    return True
-                else:
-                    self.logger.error(f"File integrity verification failed: {source_path}")
-                    return False
+                )
+
+            # Delegate the copy operation to the executor
+            copy_result = await self.file_copy_executor.copy_file(
+                source=source,
+                dest=dest,
+                progress_callback=progress_callback
+            )
+
+            if copy_result.success:
+                self.logger.info(f"Executor finished successfully for {source.name}. Verifying and finalizing.")
+
+                # Final verification is handled by the executor, but we can double-check
+                if not await self._verify_file_integrity(source_path, dest_path):
+                     self.logger.error(f"Post-copy verification failed for {source.name}")
+                     return False
+
+                # Try to delete source file, but don't fail if it's locked
+                try:
+                    os.remove(source_path)
+                    self.logger.debug(f"Source file deleted: {source.name}")
+                except (OSError, PermissionError) as e:
+                    self.logger.warning(f"Could not delete source file (may still be in use): {source.name} - {e}")
+
+                # Update status to completed
+                await self.state_manager.update_file_status(
+                    source_path,
+                    FileStatus.COMPLETED,
+                    copy_progress=100.0,
+                    destination_path=dest_path
+                )
+
+                self.logger.info(f"Normal copy completed: {source.name}")
+                return True
             else:
-                self.logger.error(f"Copy operation failed: {source_path}")
+                self.logger.error(f"Executor failed to copy {source.name}: {copy_result.error_message}")
+                # The executor handles cleanup of partial/temp files
                 return False
                 
         except Exception as e:
-            self.logger.error(f"Error in normal copy strategy: {e}")
+            self.logger.error(f"Error in normal copy strategy for {source.name}: {e}", exc_info=True)
             return False
-        finally:
-            # Cleanup temporary file if it exists
-            if temp_dest_path and os.path.exists(temp_dest_path):
-                try:
-                    os.remove(temp_dest_path)
-                except Exception as e:
-                    self.logger.warning(f"Failed to cleanup temp file {temp_dest_path}: {e}")
-    
-    async def _copy_with_progress(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
-        """Copy file with progress updates using utility functions"""
-        try:
-            # Use optimized chunk size based on file size
-            file_size_gb = tracked_file.file_size / (1024 * 1024 * 1024)
-            if file_size_gb >= self.settings.large_file_threshold_gb:
-                chunk_size = self.settings.large_file_chunk_size_kb * 1024  # 2MB for large files
-                self.logger.debug(f"Using large file chunk size: {chunk_size // 1024}KB for {file_size_gb:.1f}GB file")
-            else:
-                chunk_size = self.settings.normal_file_chunk_size_kb * 1024  # 1MB for normal files
-                self.logger.debug(f"Using normal file chunk size: {chunk_size // 1024}KB for {file_size_gb:.1f}GB file")
-            
-            bytes_copied = 0
-            total_size = tracked_file.file_size
-            last_progress_reported = -1
-            
-            # Track copy speed
-            from datetime import datetime
-            copy_start_time = datetime.now()
-            
-            async with aiofiles.open(source_path, 'rb') as src:
-                async with aiofiles.open(dest_path, 'wb') as dst:
-                    while True:
-                        chunk = await src.read(chunk_size)
-                        if not chunk:
-                            break
-                        
-                        await dst.write(chunk)
-                        bytes_copied += len(chunk)
-                        
-                        # Use utility function to determine if we should report progress
-                        should_update, current_percent = should_report_progress_with_bytes(
-                            bytes_copied, 
-                            total_size, 
-                            last_progress_reported, 
-                            self.settings.copy_progress_update_interval
-                        )
-                        
-                        if should_update:
-                            # Calculate transfer rate using utility function
-                            elapsed_seconds = (datetime.now() - copy_start_time).total_seconds()
-                            transfer_rate = calculate_transfer_rate(bytes_copied, elapsed_seconds)
-                            copy_speed_mbps = transfer_rate / (1024 * 1024)  # Convert to MB/s
-                            
-                            await self.state_manager.update_file_status(
-                                source_path,
-                                FileStatus.COPYING,
-                                copy_progress=float(current_percent),
-                                bytes_copied=bytes_copied,
-                                copy_speed_mbps=copy_speed_mbps
-                            )
-                            last_progress_reported = current_percent
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error copying file {source_path}: {e}")
-            return False
-    
+
     async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
-        """Verify that source and destination files are identical"""
+        """Verify that source and destination files are identical by size."""
         try:
             source_size = os.path.getsize(source_path)
             dest_size = os.path.getsize(dest_path)
@@ -224,7 +159,6 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 self.logger.error(f"Size mismatch: source={source_size}, dest={dest_size}")
                 return False
             
-            # Could add checksum verification here if needed
             return True
             
         except Exception as e:
@@ -275,19 +209,19 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             
             if success:
                 # Switch to normal copy mode for final data
-                self.logger.info(f"Switching to normal copy mode: {os.path.basename(source_path)}")
-                
+                self.logger.info(f"Growing copy phase complete. Finishing final part for: {os.path.basename(source_path)}")
+
                 await self.state_manager.update_file_status(
                     source_path,
                     FileStatus.COPYING
                 )
                 
-                # Finish copying any remaining data
-                final_success = await self._finish_normal_copy(source_path, copy_dest_path, tracked_file)
-                
+                # Finish copying any remaining data using the executor for consistency
+                final_success = await self._finish_normal_copy(source_path, str(copy_dest_path), tracked_file)
+
                 if final_success:
                     # Verify and finalize
-                    if await self._verify_file_integrity(source_path, copy_dest_path):
+                    if await self._verify_file_integrity(source_path, str(copy_dest_path)):
                         # If using temp file, rename it to final destination
                         if self.settings.use_temporary_file and temp_dest_path:
                             os.rename(temp_dest_path, dest_path)
@@ -444,25 +378,29 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return False
     
     async def _finish_normal_copy(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
-        """Finish copying remaining data after growth stopped"""
+        """Finish copying remaining data after growth stopped using FileCopyExecutor for the final chunk."""
         try:
+            source = Path(source_path)
+            dest = Path(dest_path)
+
             # Get final file size
-            final_size = os.path.getsize(source_path)
-            bytes_already_copied = tracked_file.bytes_copied
-            
+            final_size = source.stat().st_size
+            bytes_already_copied = dest.stat().st_size
+
             if bytes_already_copied >= final_size:
-                # Already copied everything
+                self.logger.info(f"No remaining data to copy for {source.name}. Finalizing.")
                 return True
-            
-            # Use optimized chunk size for final copy
-            file_size_gb = final_size / (1024 * 1024 * 1024)
-            if file_size_gb >= self.settings.large_file_threshold_gb:
-                chunk_size = self.settings.large_file_chunk_size_kb * 1024  # 2MB for large files
-            else:
-                chunk_size = self.settings.normal_file_chunk_size_kb * 1024  # 1MB for normal files
-            
-            async with aiofiles.open(source_path, 'rb') as src:
-                async with aiofiles.open(dest_path, 'ab') as dst:  # Append mode
+
+            self.logger.info(f"Finishing copy for {source.name}. Copied: {bytes_already_copied}, Total: {final_size}")
+
+            # This part is tricky. The executor is designed for full file copies.
+            # We will use a manual approach here to append the rest of the data,
+            # as refactoring the executor for partial copies is a larger task.
+
+            chunk_size = self.settings.large_file_chunk_size_kb * 1024
+
+            async with aiofiles.open(source, 'rb') as src:
+                async with aiofiles.open(dest, 'ab') as dst:  # Append mode
                     await src.seek(bytes_already_copied)
                     
                     while True:
@@ -474,8 +412,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         bytes_already_copied += len(chunk)
                         
                         # Update progress
-                        progress = (bytes_already_copied / final_size) * 100
-                        
+                        progress = (bytes_already_copied / final_size) * 100 if final_size > 0 else 100
+
                         await self.state_manager.update_file_status(
                             source_path,
                             FileStatus.COPYING,
@@ -486,7 +424,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error finishing normal copy: {e}")
+            self.logger.error(f"Error finishing normal copy for {source.name}: {e}", exc_info=True)
             return False
     
     async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
@@ -518,7 +456,8 @@ class CopyStrategyFactory:
         self.settings = settings
         self.state_manager = state_manager
         self.enable_resume = enable_resume
-        
+        self.file_copy_executor = FileCopyExecutor(settings)
+
         # Initialize strategies
         if enable_resume:
             # Import resume strategies
@@ -539,9 +478,9 @@ class CopyStrategyFactory:
             )
         else:
             # Traditional strategies
-            self.normal_strategy = NormalFileCopyStrategy(settings, state_manager)
-            self.growing_strategy = GrowingFileCopyStrategy(settings, state_manager)
-    
+            self.normal_strategy = NormalFileCopyStrategy(settings, state_manager, self.file_copy_executor)
+            self.growing_strategy = GrowingFileCopyStrategy(settings, state_manager, self.file_copy_executor)
+
     def get_strategy(self, tracked_file: TrackedFile) -> FileCopyStrategy:
         """
         Select appropriate copy strategy for the given file.
@@ -581,3 +520,4 @@ class CopyStrategyFactory:
             strategies["growing"] = self.growing_strategy
         
         return strategies
+

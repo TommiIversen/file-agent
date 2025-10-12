@@ -159,9 +159,14 @@ class FileScannerService:
             source_path = Path(self.settings.source_directory)
             
             if not await aiofiles.os.path.exists(source_path):
-                self._logger.warning(f"Source directory eksisterer ikke: {source_path}")
-                return discovered_files
-            
+                self._logger.warning(f"Source directory eksisterer ikke: {source_path}. Forsøger at oprette den.")
+                try:
+                    await aiofiles.os.makedirs(source_path, exist_ok=True)
+                    self._logger.info(f"Source directory oprettet: {source_path}")
+                except Exception as e:
+                    self._logger.error(f"Kunne ikke oprette source directory {source_path}: {e}")
+                    return discovered_files
+
             if not await aiofiles.os.path.isdir(source_path):
                 self._logger.error(f"Source path er ikke en directory: {source_path}")
                 return discovered_files

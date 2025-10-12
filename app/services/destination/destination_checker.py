@@ -236,16 +236,21 @@ class DestinationChecker:
             DestinationCheckResult with check details
         """
         try:
-            # Check if destination exists
+            # Check if destination exists, and try to create it if it doesn't.
             if not self.destination_path.exists():
-                error_msg = f"Destination directory does not exist: {self.destination_path}"
-                self._logger.warning(error_msg)
-                return DestinationCheckResult(
-                    is_available=False,
-                    checked_at=datetime.now(),
-                    error_message=error_msg
-                )
-            
+                self._logger.warning(f"Destination directory does not exist: {self.destination_path}. Attempting to create it.")
+                try:
+                    self.destination_path.mkdir(parents=True, exist_ok=True)
+                    self._logger.info(f"Successfully created destination directory: {self.destination_path}")
+                except Exception as e:
+                    error_msg = f"Failed to create destination directory {self.destination_path}: {e}"
+                    self._logger.error(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg
+                    )
+
             # Check if it's actually a directory
             if not self.destination_path.is_dir():
                 error_msg = f"Destination is not a directory: {self.destination_path}"

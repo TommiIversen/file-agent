@@ -25,15 +25,15 @@ class ResumeCapableMixin:
     Mixin class der tilføjer resume capabilities til existing copy strategies.
     """
     
-    def __init__(self, *args, resume_config=None, **kwargs):
+    def __init__(self, *args, resume_config=None, file_copy_executor=None, **kwargs):
         # Extract resume_config before passing to super()
         self.resume_config: SecureResumeConfig = resume_config or CONSERVATIVE_CONFIG
         self.verification_engine = SecureVerificationEngine(self.resume_config)
         self._resume_metrics: Optional[ResumeOperationMetrics] = None
         
-        # Pass remaining args to parent
-        super().__init__(*args, **kwargs)
-    
+        # Pass remaining args to parent, ensuring file_copy_executor is included
+        super().__init__(*args, file_copy_executor=file_copy_executor, **kwargs)
+
     async def should_attempt_resume(self, source_path: Path, dest_path: Path) -> bool:
         """
         Afgør om vi skal forsøge resume for denne fil.
