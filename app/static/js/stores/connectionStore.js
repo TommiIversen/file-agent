@@ -4,8 +4,6 @@
  * Centralized state for WebSocket connection, reconnection logic,
  * and connection status tracking with Alpine.js store pattern.
  */
-
-// Connection Store with Alpine.js
 document.addEventListener('alpine:init', () => {
     Alpine.store('connection', {
         // Connection State
@@ -44,8 +42,6 @@ document.addEventListener('alpine:init', () => {
                 this.updateStatus('connected', 'Forbundet til server');
                 this.reconnectAttempts = 0;
                 this.cancelReconnect(); // Clear any pending reconnection
-                
-                // Notify other stores/services
                 this.onConnected();
             };
             
@@ -53,8 +49,6 @@ document.addEventListener('alpine:init', () => {
                 try {
                     const message = JSON.parse(event.data);
                     this.updateLastUpdate();
-                    
-                    // Dispatch message to message handler
                     window.messageHandler?.handleMessage(message);
                     
                 } catch (error) {
@@ -75,26 +69,18 @@ document.addEventListener('alpine:init', () => {
         
         handleDisconnection() {
             this.updateStatus('disconnected', 'Forbindelse afbrudt');
-            
-            // Clean up socket reference
             if (this.socket) {
                 this.socket = null;
             }
             
-            // Cancel any existing reconnection timeout to avoid duplicates
             this.cancelReconnect();
-            
-            // Start reconnection process
             this.scheduleReconnect();
         },
         
         scheduleReconnect() {
-            // Don't schedule if we're already trying to reconnect
             if (this.reconnectTimeoutId) return;
             
             this.reconnectAttempts++;
-            
-            // Calculate delay with exponential backoff, capped at 10 seconds
             const delay = Math.min(
                 this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 
                 10000
@@ -117,17 +103,7 @@ document.addEventListener('alpine:init', () => {
                 this.reconnectTimeoutId = null;
             }
         },
-        
-        disconnect() {
-            this.cancelReconnect(); // Cancel any pending reconnections
-            if (this.socket) {
-                this.socket.close();
-                this.socket = null;
-            }
-            this.updateStatus('disconnected', 'Forbindelse lukket');
-        },
-        
-        // Status Management
+
         updateStatus(status, text) {
             this.status = status;
             this.text = text;
@@ -139,26 +115,10 @@ document.addEventListener('alpine:init', () => {
             this.lastUpdate = `Sidst opdateret: ${now}`;
         },
         
-        // Connection Events
         onConnected() {
-            // WebSocket initial_state message will handle loading data
-            // No need for manual HTTP calls anymore - everything comes via WebSocket!
             console.log('WebSocket connected - waiting for initial_state message...');
         },
-        
-        // Computed Properties
-        get isConnected() {
-            return this.status === 'connected';
-        },
-        
-        get isConnecting() {
-            return this.status === 'connecting' || this.reconnectTimeoutId !== null;
-        },
-        
-        get isDisconnected() {
-            return this.status === 'disconnected';
-        },
-        
+
         get statusColor() {
             switch (this.status) {
                 case 'connected': return 'bg-green-500';

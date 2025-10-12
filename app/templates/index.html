@@ -96,8 +96,8 @@
                             
                             <!-- Storage Details -->
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${$store.storage?.sourceFreeSpaceGB || '0.0'} GB`"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${$store.storage?.sourceTotalSpaceGB || '0.0'} GB`"></strong></span>
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'"></strong></span>
                             </div>
                             
                             <!-- Access Status -->
@@ -151,8 +151,8 @@
                             
                             <!-- Storage Details -->
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="`${$store.storage?.destinationFreeSpaceGB || '0.0'} GB`"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="`${$store.storage?.destinationTotalSpaceGB || '0.0'} GB`"></strong></span>
+                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'"></strong></span>
+                                <span class="text-gray-300">Total: <strong class="text-white" x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'"></strong></span>
                             </div>
                             
                             <!-- Access Status -->

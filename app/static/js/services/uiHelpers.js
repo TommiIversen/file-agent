@@ -6,19 +6,7 @@
  */
 
 class UIHelpers {
-    /**
-     * Format timestamp to Danish locale time string
-     */
-    static formatTime(timestamp) {
-        if (!timestamp) return '-';
-        try {
-            return new Date(timestamp).toLocaleTimeString('da-DK');
-        } catch (error) {
-            console.warn('Invalid timestamp:', timestamp);
-            return '-';
-        }
-    }
-    
+
     /**
      * Format timestamp to Danish locale date and time string
      */
@@ -165,26 +153,7 @@ class UIHelpers {
         if (!filePath) return '';
         return filePath.split(/[/\\]/).pop();
     }
-    
-    /**
-     * Format file size in MB
-     */
-    static formatFileSize(sizeBytes) {
-        if (!sizeBytes || sizeBytes === 0) return '0 MB';
-        
-        const sizeMB = sizeBytes / (1024 * 1024);
-        
-        if (sizeMB < 1) {
-            const sizeKB = sizeBytes / 1024;
-            return `${sizeKB.toFixed(1)} KB`;
-        } else if (sizeMB < 1024) {
-            return `${sizeMB.toFixed(1)} MB`;
-        } else {
-            const sizeGB = sizeMB / 1024;
-            return `${sizeGB.toFixed(2)} GB`;
-        }
-    }
-    
+
     /**
      * Format file size from MB value
      */
@@ -199,147 +168,7 @@ class UIHelpers {
             return `${(sizeMB / 1024).toFixed(2)} GB`;
         }
     }
-    
-    /**
-     * Calculate duration between two timestamps
-     */
-    static calculateDuration(startTime, endTime) {
-        if (!startTime) return '-';
-        
-        const start = new Date(startTime);
-        const end = endTime ? new Date(endTime) : new Date();
-        const durationMs = end - start;
-        
-        if (durationMs < 0) return '-';
-        
-        const seconds = Math.floor(durationMs / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        
-        if (hours > 0) {
-            return `${hours}t ${minutes % 60}m`;
-        } else if (minutes > 0) {
-            return `${minutes}m ${seconds % 60}s`;
-        } else {
-            return `${seconds}s`;
-        }
-    }
-    
-    /**
-     * Get relative time string (e.g., "2 minutes ago")
-     */
-    static getRelativeTime(timestamp) {
-        if (!timestamp) return '-';
-        
-        const now = new Date();
-        const time = new Date(timestamp);
-        const diffMs = now - time;
-        
-        if (diffMs < 0) return 'i fremtiden';
-        
-        const seconds = Math.floor(diffMs / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-        
-        if (days > 0) {
-            return `${days} dag${days !== 1 ? 'e' : ''} siden`;
-        } else if (hours > 0) {
-            return `${hours} time${hours !== 1 ? 'r' : ''} siden`;
-        } else if (minutes > 0) {
-            return `${minutes} minut${minutes !== 1 ? 'ter' : ''} siden`;
-        } else if (seconds > 30) {
-            return `${seconds} sekunder siden`;
-        } else {
-            return 'lige nu';
-        }
-    }
-    
-    /**
-     * Debounce function calls
-     */
-    static debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
-    /**
-     * Throttle function calls
-     */
-    static throttle(func, limit) {
-        let inThrottle;
-        return function executedFunction(...args) {
-            if (!inThrottle) {
-                func.apply(this, args);
-                inThrottle = true;
-                setTimeout(() => inThrottle = false, limit);
-            }
-        };
-    }
-    
-    /**
-     * Copy text to clipboard
-     */
-    static async copyToClipboard(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-            return true;
-        } catch (error) {
-            console.error('Failed to copy to clipboard:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * Generate CSS classes for status indicators
-     */
-    static getStatusClasses(status, type = 'badge') {
-        const baseClasses = {
-            badge: 'text-green-100 truncate text-center py-1 px-3 rounded-full text-xs font-bold',
-            indicator: 'w-3 h-3 rounded-full',
-            text: 'text-sm font-medium'
-        };
-        
-        const statusColors = {
-            'Discovered': 'bg-blue-600 text-blue-100',
-            'Growing': 'bg-orange-600 text-orange-100',
-            'ReadyToStartGrowing': 'bg-yellow-600 text-yellow-100',
-            'Ready': 'bg-green-600 text-green-100',
-            'InQueue': 'bg-yellow-600 text-yellow-100',
-            'Copying': 'bg-blue-700 text-blue-100',
-            'GrowingCopy': 'bg-purple-600 text-purple-100',
-            'Completed': 'bg-green-700 text-green-100',
-            'Failed': 'bg-red-600 text-red-100',
-            'WaitingForSpace': 'bg-orange-600 text-orange-100',
-            'SpaceError': 'bg-purple-600 text-purple-100'
-        };
-        
-        const baseClass = baseClasses[type] || baseClasses.badge;
-        const statusClass = statusColors[status] || 'bg-gray-600 text-gray-100';
-        
-        return `${baseClass} ${statusClass}`;
-    }
-    
-    /**
-     * Format growth rate for growing files
-     */
-    static formatGrowthRate(growthRateMbps) {
-        if (!growthRateMbps || growthRateMbps === 0) return '-';
-        
-        if (growthRateMbps < 1) {
-            return `${(growthRateMbps * 1024).toFixed(1)} KB/s`;
-        } else {
-            return `${growthRateMbps.toFixed(1)} MB/s`;
-        }
-    }
-    
+
     /**
      * Check if file is a growing file
      */
@@ -379,6 +208,27 @@ class UIHelpers {
             return `${copiedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
         } else {
             return `${copiedMB.toFixed(1)} MB`;
+        }
+    }
+
+    /**
+     * Format size from GB to a human-readable string (GB, TB, PB).
+     */
+    static formatSizeFromGB(sizeGB) {
+        if (sizeGB === null || typeof sizeGB === 'undefined' || isNaN(sizeGB)) {
+            return '0 GB';
+        }
+        if (sizeGB === 0) return '0 GB';
+
+        const sizeTB = sizeGB / 1024;
+        const sizePB = sizeTB / 1024;
+
+        if (sizePB >= 1) {
+            return `${sizePB.toFixed(2)} PB`;
+        } else if (sizeTB >= 1) {
+            return `${sizeTB.toFixed(2)} TB`;
+        } else {
+            return `${sizeGB.toFixed(1)} GB`;
         }
     }
 }

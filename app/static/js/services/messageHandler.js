@@ -174,18 +174,7 @@ class MessageHandler {
             console.log('Service status:', data.services);
         }
     }
-    
-    /**
-     * Get message handler statistics
-     */
-    getStatistics() {
-        return {
-            storesInitialized: !!(this.fileStore && this.storageStore && this.connectionStore),
-            fileStoreReady: !!this.fileStore,
-            storageStoreReady: !!this.storageStore,
-            connectionStoreReady: !!this.connectionStore
-        };
-    }
+
 }
 
 // Create global message handler instance

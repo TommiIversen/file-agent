@@ -38,26 +38,7 @@ document.addEventListener('alpine:init', () => {
                 this.addFile(file);  // Send only the file object, not filePath
             }
         },
-        
-        removeFile(filePath) {
-            if (this.items.delete(filePath)) {
-                this.updateStatisticsFromFiles();
-                console.log(`File removed: ${filePath}`);
-                return true;
-            }
-            return false;
-        },
-        
-        getFile(filePath) {
-            return this.items.get(filePath) || null;
-        },
-        
-        clearAllFiles() {
-            this.items.clear();
-            this.updateStatisticsFromFiles();
-            console.log('All files cleared');
-        },
-        
+
         // Initial State Management
         setInitialFiles(files) {
             console.log('Setting initial files:', files.length);
@@ -192,26 +173,6 @@ document.addEventListener('alpine:init', () => {
                 }
             });
         },
-        
-        // File Filtering Helpers
-        getFilesByStatus(status) {
-            return Array.from(this.items.values())
-                .filter(file => file.status === status);
-        },
-        
-        getFilesByPattern(pattern) {
-            const regex = new RegExp(pattern, 'i');
-            return Array.from(this.items.values())
-                .filter(file => regex.test(file.file_path));
-        },
-        
-        // Status Distribution
-        get statusDistribution() {
-            const distribution = {};
-            this.items.forEach(file => {
-                distribution[file.status] = (distribution[file.status] || 0) + 1;
-            });
-            return distribution;
-        }
+
     });
 });

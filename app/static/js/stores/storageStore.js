@@ -96,12 +96,12 @@ document.addEventListener('alpine:init', () => {
             return ((this.source.total_space_gb - this.source.free_space_gb) / this.source.total_space_gb) * 100;
         },
         
-        get sourceFreeSpaceGB() {
-            return this.source?.free_space_gb?.toFixed(1) || '0.0';
+        get sourceFreeSpaceFormatted() {
+            return UIHelpers.formatSizeFromGB(this.source?.free_space_gb);
         },
         
-        get sourceTotalSpaceGB() {
-            return this.source?.total_space_gb?.toFixed(1) || '0.0';
+        get sourceTotalSpaceFormatted() {
+            return UIHelpers.formatSizeFromGB(this.source?.total_space_gb);
         },
         
         // Computed Properties - Destination
@@ -134,37 +134,14 @@ document.addEventListener('alpine:init', () => {
             return ((this.destination.total_space_gb - this.destination.free_space_gb) / this.destination.total_space_gb) * 100;
         },
         
-        get destinationFreeSpaceGB() {
-            return this.destination?.free_space_gb?.toFixed(1) || '0.0';
+        get destinationFreeSpaceFormatted() {
+            return UIHelpers.formatSizeFromGB(this.destination?.free_space_gb);
         },
         
-        get destinationTotalSpaceGB() {
-            return this.destination?.total_space_gb?.toFixed(1) || '0.0';
+        get destinationTotalSpaceFormatted() {
+            return UIHelpers.formatSizeFromGB(this.destination?.total_space_gb);
         },
-        
-        // Computed Properties - Overall
-        get overallStatusColor() {
-            switch (this.overall_status) {
-                case 'OK': return 'bg-green-500';
-                case 'WARNING': return 'bg-yellow-500';
-                case 'ERROR':
-                case 'CRITICAL': return 'bg-red-500';
-                default: return 'bg-gray-500';
-            }
-        },
-        
-        get hasStorageData() {
-            return this.source && this.destination;
-        },
-        
-        get isHealthy() {
-            return this.overall_status === 'OK';
-        },
-        
-        get needsAttention() {
-            return ['WARNING', 'ERROR', 'CRITICAL'].includes(this.overall_status);
-        },
-        
+
         // Access Status Helpers
         get sourceAccessible() {
             return this.source?.is_accessible || false;
