@@ -9,18 +9,20 @@ This service handles:
 - Copy strategy execution with progress tracking
 - Resume scenario detection and logging
 - Copy operation logging and metrics
-- Error handling during copy execution
+- Intelligent error handling with pause vs fail classification
 """
 
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from app.config import Settings
 from app.models import FileStatus
 from app.services.state_manager import StateManager
 from app.services.copy_strategies import CopyStrategyFactory
 from app.services.consumer.job_models import PreparedFile
+from app.services.consumer.job_error_classifier import JobErrorClassifier
 
 
 class JobCopyExecutor:
@@ -35,7 +37,8 @@ class JobCopyExecutor:
         self,
         settings: Settings,
         state_manager: StateManager,
-        copy_strategy_factory: CopyStrategyFactory
+        copy_strategy_factory: CopyStrategyFactory,
+        error_classifier: Optional[JobErrorClassifier] = None
     ):
         """
         Initialize JobCopyExecutor with required dependencies.
@@ -44,10 +47,12 @@ class JobCopyExecutor:
             settings: Application settings
             state_manager: Central state manager for status updates
             copy_strategy_factory: Factory for copy strategy selection
+            error_classifier: Optional error classifier for intelligent handling
         """
         self.settings = settings
         self.state_manager = state_manager
         self.copy_strategy_factory = copy_strategy_factory
+        self.error_classifier = error_classifier
         self._logger = logging.getLogger("app.job_copy_executor")
         
         self._logger.debug("JobCopyExecutor initialized")
@@ -146,23 +151,97 @@ class JobCopyExecutor:
             self._logger.error(f"Error executing copy for {prepared_file.tracked_file.file_path}: {e}")
             return False
     
-    async def handle_copy_failure(self, prepared_file: PreparedFile, error_message: str) -> None:
+    async def handle_copy_failure(self, prepared_file: PreparedFile, error: Exception) -> bool:
         """
-        Handle copy failure by updating file status.
+        Handle copy failure with intelligent error classification.
         
         Args:
             prepared_file: Prepared file information
-            error_message: Error message to record
+            error: The original exception that caused the failure
+            
+        Returns:
+            True if error was classified for pause (should retry later)
+            False if error was classified for immediate failure
         """
+        file_path = prepared_file.tracked_file.file_path
+        
+        # Use intelligent error classification if available
+        if self.error_classifier:
+            should_pause, reason = self.error_classifier.classify_copy_error(error, file_path)
+            
+            if should_pause:
+                # Network/destination error - pause for later resume
+                await self._handle_pause_error(prepared_file, reason, error)
+                return True
+            else:
+                # Local/source error - fail immediately
+                await self._handle_fail_error(prepared_file, reason, error)
+                return False
+        else:
+            # Fallback: treat all errors as failures (original behavior)
+            await self._handle_fail_error(prepared_file, "Copy operation failed", error)
+            return False
+    
+    async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+        """
+        Handle errors that should trigger pause instead of failure.
+        
+        Args:
+            prepared_file: Prepared file information
+            reason: Reason for pause classification
+            error: Original exception
+        """
+        file_path = prepared_file.tracked_file.file_path
+        current_tracked = await self.state_manager.get_file(file_path)
+        
+        if current_tracked:
+            # Determine appropriate paused status based on current status
+            current_status = current_tracked.status
+            if current_status == FileStatus.COPYING:
+                paused_status = FileStatus.PAUSED_COPYING
+            elif current_status == FileStatus.GROWING_COPY:
+                paused_status = FileStatus.PAUSED_GROWING_COPY
+            else:
+                paused_status = FileStatus.PAUSED_COPYING  # Default
+            
+            # Pause with preserved progress (don't reset bytes_copied or copy_progress)
+            await self.state_manager.update_file_status(
+                file_path,
+                paused_status,
+                error_message=f"Paused: {reason}"
+                # Note: bytes_copied and copy_progress are preserved automatically
+            )
+            
+            self._logger.warning(
+                f"⏸️ COPY PAUSED: {Path(file_path).name} - {reason} "
+                f"(preserved {current_tracked.bytes_copied or 0:,} bytes)"
+            )
+        else:
+            # Fallback to failure if we can't get current state
+            await self._handle_fail_error(prepared_file, f"Pause failed - {reason}", error)
+    
+    async def _handle_fail_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+        """
+        Handle errors that should result in immediate failure.
+        
+        Args:
+            prepared_file: Prepared file information  
+            reason: Reason for failure classification
+            error: Original exception
+        """
+        file_path = prepared_file.tracked_file.file_path
+        
         await self.state_manager.update_file_status(
-            prepared_file.tracked_file.file_path,
+            file_path,
             FileStatus.FAILED,
             copy_progress=0.0,
             bytes_copied=0,
-            error_message=error_message
+            error_message=f"Failed: {reason}"
         )
         
-        self._logger.error(f"Copy failed for {prepared_file.tracked_file.file_path}: {error_message}")
+        self._logger.error(
+            f"❌ COPY FAILED: {Path(file_path).name} - {reason} (Original error: {error})"
+        )
     
     def get_copy_executor_info(self) -> dict:
         """

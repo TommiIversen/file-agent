@@ -165,27 +165,18 @@ class FileScannerService:
         try:
             source_path = Path(self.settings.source_directory)
             
-            # Enhanced: Query StorageMonitorService for directory readiness instead of direct I/O
-            # This follows Central Storage Authority pattern and eliminates Shotgun Surgery
-            if self.storage_monitor:
-                directory_readiness = self.storage_monitor.get_directory_readiness()
-                if not directory_readiness["source_ready"]:
-                    self._logger.warning("Source directory not ready according to StorageMonitor - skipping scan")
-                    return discovered_files
-                    
-                if not directory_readiness["source_writable"]:
-                    self._logger.warning("Source directory not writable according to StorageMonitor - skipping scan")
-                    return discovered_files
-            else:
-                # Fallback for backward compatibility (should not happen in production)
-                self._logger.warning("StorageMonitor not available - performing direct directory check")
-                if not await aiofiles.os.path.exists(source_path):
-                    self._logger.error(f"Source directory does not exist and StorageMonitor not available: {source_path}")
-                    return discovered_files
+            # DECOUPLED: FileScannerService should scan regardless of destination status
+            # File discovery and copy operations are separate concerns
+            # We scan what's available and let the queue handle processing logic
+            
+            # Direct directory check - always try to scan if directory exists
+            if not await aiofiles.os.path.exists(source_path):
+                self._logger.debug(f"Source directory does not exist: {source_path}")
+                return discovered_files
 
-                if not await aiofiles.os.path.isdir(source_path):
-                    self._logger.error(f"Source path er ikke en directory: {source_path}")
-                    return discovered_files
+            if not await aiofiles.os.path.isdir(source_path):
+                self._logger.debug(f"Source path er ikke en directory: {source_path}")
+                return discovered_files
             
             # Scan rekursivt for .mxf filer
             for root, dirs, files in os.walk(source_path):

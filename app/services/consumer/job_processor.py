@@ -43,6 +43,7 @@ from app.services.consumer.job_space_manager import JobSpaceManager
 from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
 from app.services.consumer.job_copy_executor import JobCopyExecutor
+from app.services.consumer.job_error_classifier import JobErrorClassifier
 
 
 class JobProcessor:
@@ -132,7 +133,8 @@ class JobProcessor:
         self.copy_executor = JobCopyExecutor(
             settings=settings,
             state_manager=state_manager,
-            copy_strategy_factory=copy_strategy_factory
+            copy_strategy_factory=copy_strategy_factory,
+            error_classifier=None  # Will be injected later by dependencies
         )
         
         self._logger.debug("JobProcessor initialized")
@@ -179,20 +181,44 @@ class JobProcessor:
             await self.copy_executor.initialize_copy_status(prepared_file)
             
             # Step 4: Execute the actual copy operation
-            copy_success = await self.copy_executor.execute_copy(prepared_file)
-            
-            if copy_success:
-                # Step 5: Finalize successful copy
-                await self.finalization_service.finalize_success(job, prepared_file.tracked_file.file_size)
-                return ProcessResult(success=True, file_path=file_path)
-            else:
-                # Copy failed - use copy executor for failure handling
-                await self.copy_executor.handle_copy_failure(prepared_file, "Copy operation failed")
-                return ProcessResult(
-                    success=False,
-                    file_path=file_path,
-                    error_message="Copy operation failed"
-                )
+            try:
+                copy_success = await self.copy_executor.execute_copy(prepared_file)
+                
+                if copy_success:
+                    # Step 5: Finalize successful copy
+                    await self.finalization_service.finalize_success(job, prepared_file.tracked_file.file_size)
+                    return ProcessResult(success=True, file_path=file_path)
+                else:
+                    # Copy failed during execution
+                    self._logger.warning(f"Copy execution returned failure: {file_path}")
+                    return ProcessResult(
+                        success=False,
+                        file_path=file_path,
+                        error_message="Copy execution failed"
+                    )
+                    
+            except Exception as copy_error:
+                # Copy threw exception - use intelligent error handling
+                self._logger.warning(f"Copy exception for {file_path}: {copy_error}")
+                
+                # Use intelligent error classification
+                was_paused = await self.copy_executor.handle_copy_failure(prepared_file, copy_error)
+                
+                if was_paused:
+                    # Error was classified for pause - operation will resume later
+                    return ProcessResult(
+                        success=False,
+                        file_path=file_path,
+                        error_message=f"Copy paused due to network issue: {copy_error}",
+                        should_retry=True  # Indicate this should be retried after recovery
+                    )
+                else:
+                    # Error was classified for immediate failure
+                    return ProcessResult(
+                        success=False,
+                        file_path=file_path,
+                        error_message=f"Copy failed permanently: {copy_error}"
+                    )
             
         except Exception as e:
             self._logger.error(f"Unexpected error processing job {file_path}: {e}")

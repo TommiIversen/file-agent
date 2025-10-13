@@ -187,6 +187,39 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         temp_dest_path = None
         
         try:
+            # Check if file meets minimum size requirement before starting copy
+            current_size = os.path.getsize(source_path)
+            min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
+            
+            if current_size < min_size_bytes:
+                size_mb = current_size / (1024 * 1024)
+                self.logger.info(
+                    f"⏳ WAITING FOR SIZE: {os.path.basename(source_path)} "
+                    f"({size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB) - "
+                    f"waiting for file to reach minimum size..."
+                )
+                
+                # Wait for file to grow to minimum size
+                while current_size < min_size_bytes:
+                    await asyncio.sleep(self.settings.growing_file_poll_interval_seconds)
+                    
+                    try:
+                        current_size = os.path.getsize(source_path)
+                        size_mb = current_size / (1024 * 1024)
+                        
+                        self.logger.debug(
+                            f"📏 SIZE CHECK: {os.path.basename(source_path)} "
+                            f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
+                        )
+                    except OSError as e:
+                        self.logger.error(f"Failed to check file size: {e}")
+                        return False
+                
+                self.logger.info(
+                    f"✅ SIZE REACHED: {os.path.basename(source_path)} "
+                    f"({size_mb:.1f}MB >= {self.settings.growing_file_min_size_mb}MB) - starting copy"
+                )
+            
             self.logger.info(f"Starting growing copy: {os.path.basename(source_path)} "
                            f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)")
             

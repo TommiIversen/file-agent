@@ -19,9 +19,9 @@ import logging
 
 # Konfiguration variabler
 DEFAULT_OUTPUT_FOLDER = r"C:\temp_input"
-DEFAULT_STREAM_COUNT = 8
+DEFAULT_STREAM_COUNT = 1
 DEFAULT_WRITE_INTERVAL_MS = 500  # Millisekunder mellem hver skrivning
-DEFAULT_CHUNK_SIZE_KB = 64*2       # KB per skrivning (realistisk for video)
+DEFAULT_CHUNK_SIZE_KB = 64*4       # KB per skrivning (realistisk for video)
 DEFAULT_CLIP_DURATION_MINUTES = 4  # Minutter før ny fil startes
 DEFAULT_NEW_FILE_INTERVAL_MINUTES = 0  # Forskydning mellem stream starts (0 = alle samtidigt)
 

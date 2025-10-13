@@ -25,6 +25,7 @@ class ProcessResult:
     error_message: Optional[str] = None
     retry_scheduled: bool = False
     space_shortage: bool = False
+    should_retry: bool = False  # Indicates error should be retried (for pause/resume)
     
     def get_summary(self) -> str:
         """Get a human-readable summary of the processing result."""

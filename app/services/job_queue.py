@@ -424,7 +424,13 @@ class JobQueueService:
         # Få alle aktive operations
         active_files = await self.state_manager.get_active_copy_files()
         
-        for tracked_file in active_files:
+        # ALSO get recent FAILED files that might be network-related
+        recent_failed_files = await self._get_recent_network_failed_files()
+        
+        # Combine active and recent failed files
+        all_files_to_pause = active_files + recent_failed_files
+        
+        for tracked_file in all_files_to_pause:
             current_status = tracked_file.status
             file_path = tracked_file.file_path
             
@@ -436,8 +442,16 @@ class JobQueueService:
                     new_status = FileStatus.PAUSED_COPYING
                 elif current_status == FileStatus.GROWING_COPY:
                     new_status = FileStatus.PAUSED_GROWING_COPY
+                elif current_status == FileStatus.FAILED and self._is_likely_network_failure(tracked_file):
+                    # Convert network-related FAILED to appropriate pause state
+                    if tracked_file.bytes_copied and tracked_file.bytes_copied > 0:
+                        # Had progress, likely was copying when it failed
+                        new_status = FileStatus.PAUSED_GROWING_COPY if "growing" in (tracked_file.error_message or "").lower() else FileStatus.PAUSED_COPYING
+                    else:
+                        # No progress, likely failed early
+                        new_status = FileStatus.PAUSED_IN_QUEUE
                 else:
-                    continue  # Skip files not in active copy states
+                    continue  # Skip files not in active copy states or non-network failures
                 
                 # Pause med preserved context (bytes_copied, copy_progress bevares)
                 await self.state_manager.update_file_status(
@@ -493,3 +507,64 @@ class JobQueueService:
             
         except Exception as e:
             self._logger.error(f"❌ Error resuming {file_path}: {e}")
+    
+    async def _get_recent_network_failed_files(self) -> List[TrackedFile]:
+        """
+        Get FAILED files from recent time that might be network-related.
+        
+        Returns:
+            List of TrackedFile objects that failed recently and might be network issues
+        """
+        from datetime import datetime, timedelta
+        
+        # Look for files that failed in the last 5 minutes
+        cutoff_time = datetime.now() - timedelta(minutes=5)
+        
+        recent_failed = []
+        all_files = await self.state_manager.get_all_files()
+        
+        for tracked_file in all_files:
+            if (tracked_file.status == FileStatus.FAILED and 
+                tracked_file.last_error_at and 
+                tracked_file.last_error_at >= cutoff_time and
+                self._is_likely_network_failure(tracked_file)):
+                
+                recent_failed.append(tracked_file)
+        
+        if recent_failed:
+            self._logger.info(f"🔍 Found {len(recent_failed)} recent network-failed files to pause")
+        
+        return recent_failed
+    
+    def _is_likely_network_failure(self, tracked_file: TrackedFile) -> bool:
+        """
+        Check if a FAILED file is likely due to network/destination issues.
+        
+        Args:
+            tracked_file: TrackedFile to check
+            
+        Returns:
+            True if failure appears to be network-related
+        """
+        error_msg = (tracked_file.error_message or "").lower()
+        
+        # Look for network error indicators in error message
+        network_indicators = [
+            "input/output error",
+            "errno 5",
+            "paused:",  # Our new pause-classified errors
+            "network error",
+            "destination unavailable",
+            "connection refused",
+            "connection timed out",
+            "broken pipe",
+            "smb error",
+            "mount_smbfs",
+            "network mount"
+        ]
+        
+        for indicator in network_indicators:
+            if indicator in error_msg:
+                return True
+        
+        return False

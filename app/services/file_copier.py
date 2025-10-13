@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.services.job_queue import JobQueueService
 from app.services.consumer.job_processor import JobProcessor
+from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy_strategies import CopyStrategyFactory
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
@@ -60,6 +61,9 @@ class FileCopyService:
         # Composed services
         self.file_copy_executor = FileCopyExecutor(settings)
         
+        # Create error classifier if storage monitor is available
+        error_classifier = JobErrorClassifier(storage_monitor) if storage_monitor else None
+        
         self.job_processor = JobProcessor(
             settings=settings,
             state_manager=state_manager,
@@ -68,6 +72,10 @@ class FileCopyService:
             space_checker=space_checker,
             space_retry_manager=space_retry_manager
         )
+        
+        # Inject error classifier into copy executor
+        if error_classifier and hasattr(self.job_processor, 'copy_executor'):
+            self.job_processor.copy_executor.error_classifier = error_classifier
 
     async def start_consumer(self) -> None:
         """Start consumer workers."""
@@ -95,9 +103,9 @@ class FileCopyService:
         """Worker that processes jobs from queue."""
         try:
             while self._running:
-                if not await self.destination_checker.is_available():
-                    await self.error_handler.handle_global_error("Destination unavailable")
-                    continue
+                # DECOUPLED: Let StorageMonitorService handle destination problems via pause/resume
+                # Don't check destination availability here - let the intelligent error handling 
+                # and pause/resume system handle it at the job level
                 
                 job = await self.job_queue.get_next_job()
                 if job is None:
