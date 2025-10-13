@@ -53,21 +53,34 @@
     <div class="container mx-auto p-4 max-w-7xl">
         <!-- Header with Status -->
         <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-6 mb-4 text-white">
-            <div class="flex justify-between items-start mb-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center mb-4">
+                <!-- Titel (venstre) -->
                 <div>
                     <h1 class="text-3xl font-bold">Dr. Feta</h1>
-                    <p class="text-lg text-gray-300">File Egress Transfer Agent</p>
+                    <p class="text-sm text-gray-300">File Egress Transfer Agent</p>
                 </div>
                 
-                <div class="flex items-center space-x-6">
-                    <!-- Connection Status -->
-                    <div class="flex items-center">
-                        <div class="status-indicator rounded-full mr-2"
-                             :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
-                        <span x-text="$store.connection?.text || 'Indlæser...'" class="text-sm"></span>
+                <!-- File Statistics (centered) -->
+                <div class="flex justify-center">
+                    <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
+                        <span class="text-blue-300">Total: <strong x-text="$store.files.statistics.totalFiles">0</strong></span>
+                        <span class="text-yellow-300">Aktive: <strong x-text="$store.files.statistics.activeFiles">0</strong></span>
+                        <span class="text-orange-300">Growing: <strong x-text="$store.files.statistics.growingFiles">0</strong></span>
+                        <span class="text-green-300">Færdige: <strong x-text="$store.files.statistics.completedFiles">0</strong></span>
+                        <span class="text-red-300">Fejlede: <strong x-text="$store.files.statistics.failedFiles">0</strong></span>
                     </div>
-                    
-                    <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
+                </div>
+                
+                <!-- Connection Status (højre) -->
+                <div class="flex justify-end">
+                    <div class="text-right">
+                        <div class="flex items-center justify-end mb-1">
+                            <div class="status-indicator rounded-full mr-2"
+                                 :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
+                            <span x-text="$store.connection?.text || 'Indlæser...'" class="text-sm"></span>
+                        </div>
+                        <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
+                    </div>
                 </div>
             </div>
             
@@ -181,17 +194,6 @@
                     <template x-if="!$store.storage?.destination">
                         <div class="text-gray-400 text-sm">Indlæser storage information...</div>
                     </template>
-                </div>
-            </div>
-            
-            <!-- File Statistics -->
-            <div class="flex justify-center">
-                <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-                    <span class="text-blue-300">Total: <strong x-text="$store.files.statistics.totalFiles">0</strong></span>
-                    <span class="text-yellow-300">Aktive: <strong x-text="$store.files.statistics.activeFiles">0</strong></span>
-                    <span class="text-orange-300">Growing: <strong x-text="$store.files.statistics.growingFiles">0</strong></span>
-                    <span class="text-green-300">Færdige: <strong x-text="$store.files.statistics.completedFiles">0</strong></span>
-                    <span class="text-red-300">Fejlede: <strong x-text="$store.files.statistics.failedFiles">0</strong></span>
                 </div>
             </div>
         </div>
@@ -328,7 +330,7 @@
             </template>
             
             <!-- Empty State -->
-            <div x-show="$store.files.allFiles.length === 0" class="text-center py-12">
+            <div x-show="$store.files.allFiles.length === 0" class="text-center">
                 <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
                     <div class="text-4xl mb-4">📁</div>
                     Ingen filer fundet
