@@ -36,7 +36,6 @@ class RetryDecision(str, Enum):
     Beslutning om hvordan en fejl skal håndteres.
     """
 
-    RETRY_IMMEDIATELY = "retry_immediately"  # Retry uden delay
     RETRY_SHORT_DELAY = "retry_short_delay"  # Retry med kort delay (lokal fejl)
     RETRY_LONG_DELAY = "retry_long_delay"  # Retry med lang delay (global fejl)
     NO_RETRY = "no_retry"  # Giv op, marker som failed
@@ -56,7 +55,6 @@ class ErrorHandlingResult:
     delay_seconds: float
     should_retry: bool
     error_message: str
-    classification_reason: str
     timestamp: datetime
 
     @property
@@ -146,7 +144,6 @@ class CopyErrorHandler:
                 delay_seconds=0.0,
                 should_retry=False,
                 error_message=f"Permanent error: {str(error)}",
-                classification_reason=f"Error classified as permanent: {error.__class__.__name__}",
                 timestamp=datetime.now(),
             )
 
@@ -159,7 +156,6 @@ class CopyErrorHandler:
                 delay_seconds=float(self.settings.global_retry_delay_seconds),
                 should_retry=True,
                 error_message=f"Global error (escalated): {str(error)}",
-                classification_reason=f"Error classified as global: {error.__class__.__name__}",
                 timestamp=datetime.now(),
             )
 
@@ -174,7 +170,6 @@ class CopyErrorHandler:
                     delay_seconds=0.0,
                     should_retry=False,
                     error_message=f"Max retry attempts ({max_attempts}) reached: {str(error)}",
-                    classification_reason="Retry limit exceeded for local error",
                     timestamp=datetime.now(),
                 )
             else:
@@ -186,7 +181,6 @@ class CopyErrorHandler:
                     delay_seconds=float(self.settings.retry_delay_seconds),
                     should_retry=True,
                     error_message=f"Local error (attempt {attempt}/{max_attempts}): {str(error)}",
-                    classification_reason=f"Retriable local error, attempt {attempt} of {max_attempts}",
                     timestamp=datetime.now(),
                 )
 

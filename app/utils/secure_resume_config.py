@@ -72,12 +72,7 @@ class SecureResumeConfig(BaseModel):
         le=50,
     )
 
-    corruption_expansion_factor: float = Field(
-        default=2.0,
-        description="Faktor for udvidelse af verification ved corruption",
-        ge=1.5,
-        le=5.0,
-    )
+
 
     # Safety margins
     safety_margin_kb: int = Field(
@@ -88,10 +83,6 @@ class SecureResumeConfig(BaseModel):
     )
 
     # Performance tuning
-    enable_parallel_verification: bool = Field(
-        default=False,
-        description="Aktiver parallel verification (eksperimentel)",
-    )
 
     max_verification_time_seconds: int = Field(
         default=300,  # 5 minutter max

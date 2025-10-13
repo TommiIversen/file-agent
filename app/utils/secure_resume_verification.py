@@ -24,12 +24,6 @@ class VerificationTimeout(Exception):
     pass
 
 
-class CorruptionDetected(Exception):
-    """Raised når data corruption bliver detekteret"""
-
-    def __init__(self, offset: int, message: str):
-        self.offset = offset
-        super().__init__(message)
 
 
 class SecureVerificationEngine:

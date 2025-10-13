@@ -10,10 +10,7 @@ import logging
 from pathlib import Path
 
 from ..models import TrackedFile
-from ..services.copy.file_copy_executor import FileCopyExecutor
 from ..utils.resumable_copy_strategies import (
-    ResumableNormalFileCopyStrategy,
-    ResumableGrowingFileCopyStrategy,
     ResumeCapableMixin,
 )
 
@@ -112,74 +109,6 @@ class ResumableStrategyAdapter:
             # Default til True for backward compatibility
             return True
 
-
-class ResumableStrategyFactory:
-    """
-    Factory der opretter resumable strategies og wrapper dem med adapter.
-    """
-
-    def __init__(self, settings, state_manager, enable_resume: bool = True):
-        self.settings = settings
-        self.state_manager = state_manager
-        self.enable_resume = enable_resume
-
-        if enable_resume:
-            logger.info("Resume functionality ENABLED - using ResumableStrategies")
-        else:
-            logger.info("Resume functionality DISABLED - using traditional strategies")
-
-    def create_adapted_strategy(self, strategy_type: str) -> ResumableStrategyAdapter:
-        """
-        Create resumable strategy og wrap med adapter.
-
-        Args:
-            strategy_type: "normal" eller "growing"
-
-        Returns:
-            ResumableStrategyAdapter wrapping appropriate strategy
-        """
-        if not self.enable_resume:
-            # Brug traditional strategies
-            from ..services.copy_strategies import (
-                NormalFileCopyStrategy,
-                GrowingFileCopyStrategy,
-            )
-
-            # Create FileCopyExecutor instance for traditional strategies
-            file_copy_executor = FileCopyExecutor(self.settings)
-
-            if strategy_type == "growing":
-                strategy = GrowingFileCopyStrategy(
-                    self.settings, self.state_manager, file_copy_executor
-                )
-            else:
-                strategy = NormalFileCopyStrategy(
-                    self.settings, self.state_manager, file_copy_executor
-                )
-
-        else:
-            # Brug resumable strategies
-            from ..utils.resumable_copy_strategies import CONSERVATIVE_CONFIG
-
-            # Create FileCopyExecutor instance for resumable strategies
-            file_copy_executor = FileCopyExecutor(self.settings)
-
-            if strategy_type == "growing":
-                strategy = ResumableGrowingFileCopyStrategy(
-                    settings=self.settings,
-                    state_manager=self.state_manager,
-                    file_copy_executor=file_copy_executor,
-                    resume_config=CONSERVATIVE_CONFIG,
-                )
-            else:
-                strategy = ResumableNormalFileCopyStrategy(
-                    settings=self.settings,
-                    state_manager=self.state_manager,
-                    file_copy_executor=file_copy_executor,
-                    resume_config=CONSERVATIVE_CONFIG,
-                )
-
-        return ResumableStrategyAdapter(strategy)
 
 
 def get_resume_config_for_mode(mode: str):

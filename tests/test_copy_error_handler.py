@@ -337,7 +337,6 @@ class TestErrorHandlingResult:
             delay_seconds=1.0,
             should_retry=True,
             error_message="Test error",
-            classification_reason="Test classification",
             timestamp=datetime.now(),
         )
 
@@ -353,7 +352,6 @@ class TestErrorHandlingResult:
             delay_seconds=1.0,
             should_retry=True,
             error_message="Test",
-            classification_reason="Test",
             timestamp=datetime.now(),
         )
         assert retriable_result.is_retriable is True
@@ -365,7 +363,6 @@ class TestErrorHandlingResult:
             delay_seconds=0.0,
             should_retry=False,
             error_message="Test",
-            classification_reason="Test",
             timestamp=datetime.now(),
         )
         assert non_retriable_result.is_retriable is False

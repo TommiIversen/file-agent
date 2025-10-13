@@ -14,7 +14,7 @@ logic fra FileCopyService for at følge SOLID principper.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Dict, Any
 
 from app.config import Settings
 from app.models import TrackedFile, FileStatus
@@ -36,7 +36,6 @@ class ExecutorConfig:
     progress_update_interval: int
     strategy_name: str
     is_growing_file: bool
-    expected_file_size: Optional[int] = None
     copy_mode: str = "normal"  # "normal", "growing", "stream"
 
     def get_summary(self) -> str:

@@ -19,7 +19,7 @@ class TestJobProcessor:
     @patch("app.services.consumer.job_processor.JobCopyExecutor")
     @patch("app.services.consumer.job_processor.OutputFolderTemplateEngine")
     def test_processor_initialization(
-        self, mock_template, mock_executor, mock_prep, mock_final, mock_space
+        self, _mock_template, mock_executor, mock_prep, mock_final, mock_space
     ):
         """Test that processor initializes all services."""
         settings = MagicMock()

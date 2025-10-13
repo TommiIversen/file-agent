@@ -45,7 +45,6 @@ class VideoStream:
         self.write_interval_seconds = write_interval_ms / 1000.0
         self.clip_duration = timedelta(minutes=clip_duration_minutes)
 
-        self.current_file_number = 1
         self.current_file = None
         self.current_file_start_time = None
         self.total_bytes_written = 0
@@ -98,7 +97,6 @@ class VideoStream:
         )
 
         self.current_file = None
-        self.current_file_number += 1
 
     async def run(self):
         """Hovedloop for denne stream"""
