@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 
 from .config import Settings
 from .services.state_manager import StateManager
-from .services.file_scanner import FileScannerService
+from .services.scanner.file_scanner_service import FileScannerService
 from .services.job_queue import JobQueueService
 from .services.file_copier import FileCopyService
 from .services.websocket_manager import WebSocketManager

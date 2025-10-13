@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.services.state_manager import StateManager
-from app.services.file_scanner import FileScannerService
+from app.services.scanner.file_scanner_service import FileScannerService
 from app.models import FileStatus
 from app.config import Settings
 
