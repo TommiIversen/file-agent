@@ -127,6 +127,7 @@ class StorageMonitorService:
                                    current_info: Optional[StorageInfo]) -> None:
         """
         Check single storage location and handle state updates.
+        Enhanced with directory recreation capability for runtime resilience.
         
         Args:
             storage_type: "source" or "destination"
@@ -142,6 +143,20 @@ class StorageMonitorService:
                 warning_threshold_gb=warning_threshold,
                 critical_threshold_gb=critical_threshold
             )
+            
+            # Enhanced: If directory is not accessible, attempt recreation
+            if not new_info.is_accessible:
+                self._logger.warning(f"{storage_type.title()} directory not accessible: {path}. Attempting recreation.")
+                recreation_success = await self._ensure_directory_exists(path, storage_type)
+                
+                if recreation_success:
+                    # Re-check storage after successful recreation
+                    self._logger.info(f"Re-checking {storage_type} storage after directory recreation")
+                    new_info = await self._storage_checker.check_path(
+                        path=path,
+                        warning_threshold_gb=warning_threshold,
+                        critical_threshold_gb=critical_threshold
+                    )
             
             # Update state cache
             if storage_type == "source":
@@ -296,6 +311,65 @@ class StorageMonitorService:
                 return status
         
         return StorageStatus.OK
+    
+    async def _ensure_directory_exists(self, path: str, storage_type: str) -> bool:
+        """
+        Central directory recreation logic - the single authority for directory lifecycle.
+        
+        This method eliminates Shotgun Surgery by consolidating ALL directory creation
+        logic into StorageMonitorService, adhering to SRP mandate.
+        
+        Args:
+            path: Directory path to ensure exists
+            storage_type: "source" or "destination" for logging context
+            
+        Returns:
+            True if directory exists or was successfully created
+        """
+        try:
+            from pathlib import Path
+            path_obj = Path(path)
+            
+            if path_obj.exists() and path_obj.is_dir():
+                return True
+                
+            self._logger.info(f"Creating missing {storage_type} directory: {path}")
+            path_obj.mkdir(parents=True, exist_ok=True)
+            
+            # Verify creation was successful
+            if path_obj.exists() and path_obj.is_dir():
+                self._logger.info(f"Successfully created {storage_type} directory: {path}")
+                return True
+            else:
+                self._logger.error(f"Directory creation appeared successful but verification failed: {path}")
+                return False
+                
+        except Exception as e:
+            self._logger.error(f"Failed to create {storage_type} directory {path}: {e}")
+            return False
+    
+    def get_directory_readiness(self) -> dict:
+        """
+        Get current directory readiness state - cached, no I/O operations.
+        
+        This provides consumers with instant access to directory state without
+        performing any I/O operations, following the Central Storage Authority pattern.
+        
+        Returns:
+            Dictionary with directory readiness information
+        """
+        return {
+            "source_ready": self._source_info.is_accessible if self._source_info else False,
+            "destination_ready": self._destination_info.is_accessible if self._destination_info else False,
+            "source_writable": (self._source_info.has_write_access if self._source_info else False),
+            "destination_writable": (self._destination_info.has_write_access if self._destination_info else False),
+            "last_source_check": self._source_info.last_checked if self._source_info else None,
+            "last_destination_check": self._destination_info.last_checked if self._destination_info else None,
+            "overall_ready": (
+                (self._source_info.is_accessible if self._source_info else False) and 
+                (self._destination_info.is_accessible if self._destination_info else False)
+            )
+        }
     
     def get_monitoring_status(self) -> dict:
         """

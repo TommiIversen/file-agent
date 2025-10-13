@@ -236,14 +236,42 @@ class DestinationChecker:
             DestinationCheckResult with check details
         """
         try:
-            # Check if destination exists, and try to create it if it doesn't.
-            if not self.destination_path.exists():
-                self._logger.warning(f"Destination directory does not exist: {self.destination_path}. Attempting to create it.")
-                try:
-                    self.destination_path.mkdir(parents=True, exist_ok=True)
-                    self._logger.info(f"Successfully created destination directory: {self.destination_path}")
-                except Exception as e:
-                    error_msg = f"Failed to create destination directory {self.destination_path}: {e}"
+            # Enhanced: Query StorageMonitorService instead of direct I/O operations
+            # This follows Central Storage Authority pattern and eliminates race conditions
+            if self._storage_monitor:
+                storage_info = self._storage_monitor.get_destination_info()
+                
+                if not storage_info:
+                    error_msg = "Destination storage information not available from StorageMonitor"
+                    self._logger.warning(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg
+                    )
+                
+                if not storage_info.is_accessible:
+                    error_msg = f"Destination directory not accessible according to StorageMonitor: {storage_info.error_message or 'Unknown reason'}"
+                    self._logger.warning(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg
+                    )
+                
+                if not storage_info.has_write_access:
+                    error_msg = "Destination directory not writable according to StorageMonitor"
+                    self._logger.warning(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg
+                    )
+            else:
+                # Fallback for backward compatibility (should not happen in production)
+                self._logger.warning("StorageMonitor not available - performing direct directory check")
+                if not self.destination_path.exists():
+                    error_msg = f"Destination directory does not exist and StorageMonitor not available: {self.destination_path}"
                     self._logger.error(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
@@ -251,45 +279,52 @@ class DestinationChecker:
                         error_message=error_msg
                     )
 
-            # Check if it's actually a directory
-            if not self.destination_path.is_dir():
-                error_msg = f"Destination is not a directory: {self.destination_path}"
-                self._logger.warning(error_msg)
-                return DestinationCheckResult(
-                    is_available=False,
-                    checked_at=datetime.now(),
-                    error_message=error_msg
-                )
+                if not self.destination_path.is_dir():
+                    error_msg = f"Destination is not a directory: {self.destination_path}"
+                    self._logger.warning(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg
+                    )
             
-            # Test write access
-            test_file = self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
-            
-            try:
-                async with aiofiles.open(test_file, 'w') as f:
-                    await f.write("availability_test")
-                
-                # Cleanup test file
-                try:
-                    test_file.unlink()
-                except Exception as cleanup_error:
-                    self._logger.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
-                
-                self._logger.debug(f"Destination availability check passed: {self.destination_path}")
+            # If we reach here with StorageMonitor, destination is ready
+            if self._storage_monitor:
+                self._logger.debug("Destination availability confirmed by StorageMonitor")
                 return DestinationCheckResult(
                     is_available=True,
-                    checked_at=datetime.now(),
-                    test_file_path=str(test_file)
+                    checked_at=datetime.now()
                 )
+            else:
+                # Fallback: Perform basic write test if StorageMonitor unavailable
+                test_file = self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 
-            except Exception as write_error:
-                error_msg = f"Cannot write to destination: {write_error}"
-                self._logger.warning(error_msg)
-                return DestinationCheckResult(
-                    is_available=False,
-                    checked_at=datetime.now(),
-                    error_message=error_msg,
-                    test_file_path=str(test_file)
-                )
+                try:
+                    async with aiofiles.open(test_file, 'w') as f:
+                        await f.write("availability_test")
+                    
+                    # Cleanup test file
+                    try:
+                        test_file.unlink()
+                    except Exception as cleanup_error:
+                        self._logger.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
+                    
+                    self._logger.debug(f"Destination availability check passed: {self.destination_path}")
+                    return DestinationCheckResult(
+                        is_available=True,
+                        checked_at=datetime.now(),
+                        test_file_path=str(test_file)
+                    )
+                    
+                except Exception as write_error:
+                    error_msg = f"Cannot write to destination: {write_error}"
+                    self._logger.warning(error_msg)
+                    return DestinationCheckResult(
+                        is_available=False,
+                        checked_at=datetime.now(),
+                        error_message=error_msg,
+                        test_file_path=str(test_file)
+                    )
                 
         except Exception as e:
             error_msg = f"Error during destination availability check: {e}"

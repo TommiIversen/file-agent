@@ -350,7 +350,7 @@ main() {
     
     check_permissions
     check_prerequisites
-    setup_smb_mount          # New SMB mount setup
+    #setup_smb_mount          # New SMB mount setup
     
     # Create install directory if it doesn't exist
     mkdir -p "$INSTALL_DIR"

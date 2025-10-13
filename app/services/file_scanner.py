@@ -23,6 +23,11 @@ from app.config import Settings
 from app.models import FileStatus
 from app.services.state_manager import StateManager
 from app.services.growing_file_detector import GrowingFileDetector
+from typing import TYPE_CHECKING
+
+# Avoid circular imports
+if TYPE_CHECKING:
+    from app.services.storage_monitor import StorageMonitorService
 
 
 class FileScannerService:
@@ -36,16 +41,18 @@ class FileScannerService:
     4. Cleanup: Fjern tracking af slettede filer
     """
     
-    def __init__(self, settings: Settings, state_manager: StateManager):
+    def __init__(self, settings: Settings, state_manager: StateManager, storage_monitor: "StorageMonitorService" = None):
         """
         Initialize FileScannerService.
         
         Args:
             settings: Application settings med source path og timing
             state_manager: Central state manager til fil tracking
+            storage_monitor: Central storage authority for directory state queries
         """
         self.settings = settings
         self.state_manager = state_manager
+        self.storage_monitor = storage_monitor
         self._logger = logging.getLogger("app.file_scanner")
         
         # Growing file support
@@ -158,18 +165,27 @@ class FileScannerService:
         try:
             source_path = Path(self.settings.source_directory)
             
-            if not await aiofiles.os.path.exists(source_path):
-                self._logger.warning(f"Source directory eksisterer ikke: {source_path}. Forsøger at oprette den.")
-                try:
-                    await aiofiles.os.makedirs(source_path, exist_ok=True)
-                    self._logger.info(f"Source directory oprettet: {source_path}")
-                except Exception as e:
-                    self._logger.error(f"Kunne ikke oprette source directory {source_path}: {e}")
+            # Enhanced: Query StorageMonitorService for directory readiness instead of direct I/O
+            # This follows Central Storage Authority pattern and eliminates Shotgun Surgery
+            if self.storage_monitor:
+                directory_readiness = self.storage_monitor.get_directory_readiness()
+                if not directory_readiness["source_ready"]:
+                    self._logger.warning("Source directory not ready according to StorageMonitor - skipping scan")
+                    return discovered_files
+                    
+                if not directory_readiness["source_writable"]:
+                    self._logger.warning("Source directory not writable according to StorageMonitor - skipping scan")
+                    return discovered_files
+            else:
+                # Fallback for backward compatibility (should not happen in production)
+                self._logger.warning("StorageMonitor not available - performing direct directory check")
+                if not await aiofiles.os.path.exists(source_path):
+                    self._logger.error(f"Source directory does not exist and StorageMonitor not available: {source_path}")
                     return discovered_files
 
-            if not await aiofiles.os.path.isdir(source_path):
-                self._logger.error(f"Source path er ikke en directory: {source_path}")
-                return discovered_files
+                if not await aiofiles.os.path.isdir(source_path):
+                    self._logger.error(f"Source path er ikke en directory: {source_path}")
+                    return discovered_files
             
             # Scan rekursivt for .mxf filer
             for root, dirs, files in os.walk(source_path):

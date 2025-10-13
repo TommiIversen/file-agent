@@ -46,6 +46,7 @@ def get_state_manager() -> StateManager:
 def get_file_scanner() -> FileScannerService:
     """
     Hent FileScannerService singleton instance.
+    Enhanced: Now injects StorageMonitorService following Central Storage Authority pattern.
     
     Returns:
         FileScannerService instance (oprettes kun én gang)
@@ -53,7 +54,8 @@ def get_file_scanner() -> FileScannerService:
     if "file_scanner" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
-        _singletons["file_scanner"] = FileScannerService(settings, state_manager)
+        storage_monitor = get_storage_monitor()  # Inject Central Storage Authority
+        _singletons["file_scanner"] = FileScannerService(settings, state_manager, storage_monitor)
     
     return _singletons["file_scanner"]
 
