@@ -1,7 +1,7 @@
 """
 Storage Monitor Module - Clean Architecture Implementation
 
-This module contains the refactored storage monitoring system that adheres to 
+This module contains the refactored storage monitoring system that adheres to
 Single Responsibility Principle and size mandates (<250 lines per class).
 
 Components:
@@ -18,4 +18,9 @@ from .storage_state import StorageState
 from .directory_manager import DirectoryManager
 from .notification_handler import NotificationHandler
 
-__all__ = ['StorageMonitorService', 'StorageState', 'DirectoryManager', 'NotificationHandler']
+__all__ = [
+    "StorageMonitorService",
+    "StorageState",
+    "DirectoryManager",
+    "NotificationHandler",
+]

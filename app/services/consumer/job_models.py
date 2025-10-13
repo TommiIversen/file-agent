@@ -17,16 +17,17 @@ if TYPE_CHECKING:
 class ProcessResult:
     """
     Result of a job processing operation.
-    
+
     Provides information about job processing outcome and any errors.
     """
+
     success: bool
     file_path: str
     error_message: Optional[str] = None
     retry_scheduled: bool = False
     space_shortage: bool = False
     should_retry: bool = False  # Indicates error should be retried (for pause/resume)
-    
+
     def get_summary(self) -> str:
         """Get a human-readable summary of the processing result."""
         if self.success:
@@ -41,10 +42,11 @@ class ProcessResult:
 class PreparedFile:
     """
     Information about a file prepared for copying.
-    
+
     Contains validated file information and copy strategy.
     """
-    tracked_file: 'TrackedFile'  # Forward reference to avoid circular import
+
+    tracked_file: "TrackedFile"  # Forward reference to avoid circular import
     strategy_name: str
-    initial_status: 'FileStatus'  # Forward reference to avoid circular import
+    initial_status: "FileStatus"  # Forward reference to avoid circular import
     destination_path: Path

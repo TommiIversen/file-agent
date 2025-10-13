@@ -18,7 +18,7 @@ def finalizer():
     settings = MagicMock(max_retry_attempts=3)
     state_manager = AsyncMock()
     job_queue = AsyncMock()
-    
+
     return JobFinalizationService(settings, state_manager, job_queue)
 
 
@@ -35,8 +35,11 @@ class TestJobFinalizationService:
 
         finalizer.job_queue.mark_job_completed.assert_called_once_with(job)
         finalizer.state_manager.update_file_status.assert_called_once_with(
-            "/test/file.txt", FileStatus.COMPLETED, copy_progress=100.0,
-            error_message=None, retry_count=0
+            "/test/file.txt",
+            FileStatus.COMPLETED,
+            copy_progress=100.0,
+            error_message=None,
+            retry_count=0,
         )
 
     @pytest.mark.asyncio
@@ -59,16 +62,19 @@ class TestJobFinalizationService:
 
         await finalizer.finalize_max_retries(job)
 
-        finalizer.job_queue.mark_job_failed.assert_called_once_with(job, "Max retry attempts reached")
+        finalizer.job_queue.mark_job_failed.assert_called_once_with(
+            job, "Max retry attempts reached"
+        )
         finalizer.state_manager.update_file_status.assert_called_once_with(
-            "/test/file.txt", FileStatus.FAILED, 
-            error_message="Failed after 3 retry attempts"
+            "/test/file.txt",
+            FileStatus.FAILED,
+            error_message="Failed after 3 retry attempts",
         )
 
     def test_get_finalization_info(self, finalizer):
         """Test configuration info retrieval."""
         info = finalizer.get_finalization_info()
-        
+
         assert info["max_retry_attempts"] == 3
         assert info["state_manager_available"] is True
         assert info["job_queue_available"] is True

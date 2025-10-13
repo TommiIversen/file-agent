@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.consumer.job_space_manager import JobSpaceManager
-from app.models import SpaceCheckResult, FileStatus
+from app.models import SpaceCheckResult
 from app.services.consumer.job_models import ProcessResult
 
 
@@ -21,8 +21,10 @@ def space_manager():
     job_queue = AsyncMock()
     space_checker = MagicMock()
     space_retry_manager = AsyncMock()
-    
-    return JobSpaceManager(settings, state_manager, job_queue, space_checker, space_retry_manager)
+
+    return JobSpaceManager(
+        settings, state_manager, job_queue, space_checker, space_retry_manager
+    )
 
 
 class TestJobSpaceManager:
@@ -42,13 +44,17 @@ class TestJobSpaceManager:
         """Test space check with sufficient space."""
         job = {"file_path": "/test/file.txt", "file_size": 1000}
         expected = SpaceCheckResult(
-            has_space=True, available_bytes=5000, required_bytes=1000,
-            file_size_bytes=1000, safety_margin_bytes=100, reason="OK"
+            has_space=True,
+            available_bytes=5000,
+            required_bytes=1000,
+            file_size_bytes=1000,
+            safety_margin_bytes=100,
+            reason="OK",
         )
         space_manager.space_checker.check_space_for_file.return_value = expected
-        
+
         result = await space_manager.check_space_for_job(job)
-        
+
         assert result.has_space is True
         space_manager.space_checker.check_space_for_file.assert_called_once_with(1000)
 
@@ -57,8 +63,12 @@ class TestJobSpaceManager:
         """Test space shortage handling with retry manager."""
         job = {"file_path": "/test/file.txt"}
         space_check = SpaceCheckResult(
-            has_space=False, available_bytes=500, required_bytes=1000,
-            file_size_bytes=1000, safety_margin_bytes=100, reason="Insufficient"
+            has_space=False,
+            available_bytes=500,
+            required_bytes=1000,
+            file_size_bytes=1000,
+            safety_margin_bytes=100,
+            reason="Insufficient",
         )
 
         result = await space_manager.handle_space_shortage(job, space_check)
@@ -74,8 +84,12 @@ class TestJobSpaceManager:
         space_manager.space_retry_manager = None
         job = {"file_path": "/test/file.txt"}
         space_check = SpaceCheckResult(
-            has_space=False, available_bytes=500, required_bytes=1000,
-            file_size_bytes=1000, safety_margin_bytes=100, reason="Insufficient"
+            has_space=False,
+            available_bytes=500,
+            required_bytes=1000,
+            file_size_bytes=1000,
+            safety_margin_bytes=100,
+            reason="Insufficient",
         )
 
         result = await space_manager.handle_space_shortage(job, space_check)

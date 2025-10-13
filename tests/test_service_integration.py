@@ -34,8 +34,8 @@ def test_settings():
     settings.copy_progress_update_interval = 2
     settings.growing_file_chunk_size_kb = 32
     settings.normal_file_chunk_size_kb = 1024  # Add missing attribute
-    settings.large_file_chunk_size_kb = 2048   # Add missing attribute 
-    settings.large_file_threshold_gb = 1.0     # Add missing attribute
+    settings.large_file_chunk_size_kb = 2048  # Add missing attribute
+    settings.large_file_threshold_gb = 1.0  # Add missing attribute
     settings.max_concurrent_copies = 1
     # Output folder template settings
     settings.output_folder_template_enabled = False
@@ -72,145 +72,155 @@ def file_copier_service(test_settings, mock_state_manager, mock_job_queue):
     return FileCopyService(
         settings=test_settings,
         state_manager=mock_state_manager,
-        job_queue=mock_job_queue
+        job_queue=mock_job_queue,
     )
 
 
 class TestServiceIntegration:
     """Test integration of new modular services."""
-    
+
     def test_service_initialization(self, file_copier_service):
         """Test that all new services are properly initialized."""
         service = file_copier_service
-        
+
         # Verify new services are initialized
-        assert hasattr(service, 'copy_strategy_factory')  # Fixed: was 'new_copy_strategy_factory'
-        assert hasattr(service, 'file_copy_executor')
-        assert hasattr(service, 'job_processor')
-        
+        assert hasattr(
+            service, "copy_strategy_factory"
+        )  # Fixed: was 'new_copy_strategy_factory'
+        assert hasattr(service, "file_copy_executor")
+        assert hasattr(service, "job_processor")
+
         # Verify other services exist
-        assert hasattr(service, 'destination_checker')
-        assert hasattr(service, 'error_handler')
-        assert hasattr(service, 'statistics_tracker')
-        
+        assert hasattr(service, "destination_checker")
+        assert hasattr(service, "error_handler")
+        assert hasattr(service, "statistics_tracker")
+
         # Note: factory_info and executor_info methods may not exist in current implementation
         # These tests are skipped pending full integration
-    
+
     @pytest.mark.asyncio
     async def test_copy_strategy_factory_integration(self, file_copier_service):
         """Test CopyStrategyFactory configuration generation."""
-        factory = file_copier_service.copy_strategy_factory  # Fixed: was new_copy_strategy_factory
-        
+        factory = (
+            file_copier_service.copy_strategy_factory
+        )  # Fixed: was new_copy_strategy_factory
+
         # Note: The factory interface may differ from original expectations
         # This test is simplified for the current orchestrator implementation
         assert factory is not None
-        
+
         # Skip complex configuration tests - interface has changed in new orchestrator
-    
+
     @pytest.mark.asyncio
     async def test_file_copy_executor_integration(self, file_copier_service, tmp_path):
         """Test FileCopyExecutor with real files."""
         executor = file_copier_service.file_copy_executor
-        
+
         # Create test files
         source_file = tmp_path / "source" / "test.txt"
         source_file.parent.mkdir(parents=True)
         source_file.write_text("Test content for integration test")
-        
+
         dest_file = tmp_path / "dest" / "test.txt"
         dest_file.parent.mkdir(parents=True)
-        
+
         # Test copy operation
         result = await executor.copy_file(source_file, dest_file)
-        
+
         assert result.success is True
         assert result.bytes_copied > 0
         assert result.elapsed_seconds > 0
         assert dest_file.exists()
         assert dest_file.read_text() == "Test content for integration test"
-        
+
         # Test copy verification
         verification_result = await executor.verify_copy(source_file, dest_file)
         assert verification_result is True
-    
+
     @pytest.mark.asyncio
-    async def test_job_processor_integration(self, file_copier_service, mock_state_manager):
+    async def test_job_processor_integration(
+        self, file_copier_service, mock_state_manager
+    ):
         """Test JobProcessor workflow with mock file."""
         processor = file_copier_service.job_processor
-        
+
         # Setup mock tracked file
         tracked_file = TrackedFile(
             file_path="/source/test.mxf",
             file_size=1024 * 1024,  # 1MB
             status=FileStatus.READY,
             is_growing_file=False,
-            discovered_at=datetime.now()
+            discovered_at=datetime.now(),
         )
-        
+
         mock_state_manager.get_file.return_value = tracked_file
-        
+
         # Create test job
         job = {
             "file_path": "/source/test.mxf",
             "file_size": 1024 * 1024,
             "added_to_queue_at": datetime.now(),
-            "retry_count": 0
+            "retry_count": 0,
         }
-        
+
         # Test job processing (will fail due to missing source file, but tests workflow)
         result = await processor.process_job(job)
-        
+
         # Verify result structure
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'file_path')
-        assert hasattr(result, 'error_message')
-        assert hasattr(result, 'retry_scheduled')
-        assert hasattr(result, 'space_shortage')
-        
+        assert hasattr(result, "success")
+        assert hasattr(result, "file_path")
+        assert hasattr(result, "error_message")
+        assert hasattr(result, "retry_scheduled")
+        assert hasattr(result, "space_shortage")
+
         # Verify file_path is correct
         assert result.file_path == "/source/test.mxf"
-    
+
     @pytest.mark.asyncio
     async def test_statistics_integration(self, file_copier_service):
         """Test enhanced statistics with new service information."""
         stats = await file_copier_service.get_copy_statistics()
-        
+
         # Verify basic statistics structure
         assert "is_running" in stats
         assert "total_files_copied" in stats
         assert "performance" in stats
         assert "error_handling" in stats
-        
+
         # Note: architecture details are not currently implemented in the orchestrator
         # The current implementation focuses on basic statistics
-    
+
     def test_strategy_compatibility(self, file_copier_service):
         """Test that both old and new strategy factories work."""
         # Test strategy factory (current implementation)
-        factory = file_copier_service.copy_strategy_factory  # Fixed: was new_copy_strategy_factory
+        factory = (
+            file_copier_service.copy_strategy_factory
+        )  # Fixed: was new_copy_strategy_factory
         strategies = factory.get_available_strategies()
         assert isinstance(strategies, dict)
         assert len(strategies) > 0
-        
+
         # Note: The interface may be different in the current orchestrator implementation
-    
+
     def test_service_info_methods(self, file_copier_service):
         """Test that all services provide comprehensive info methods."""
         # Note: Service info methods are not currently implemented in the orchestrator
         # The current implementation focuses on basic functionality
-        
+
         # Test that services exist and are accessible
-        assert file_copier_service.copy_strategy_factory is not None  # Fixed: was new_copy_strategy_factory
+        assert (
+            file_copier_service.copy_strategy_factory is not None
+        )  # Fixed: was new_copy_strategy_factory
         assert file_copier_service.file_copy_executor is not None
         assert file_copier_service.job_processor is not None
 
 
 class TestNewArchitectureBehavior:
     """Test specific behavior of the new architecture."""
-    
+
     # Test skipped - _process_job method no longer exists in orchestrator
     # Job processing is now handled through the consumer worker pattern
-    
+
     # Test skipped - copy_single_file method no longer exists in orchestrator
     # Individual copy methods are now handled by specialized services
 

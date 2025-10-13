@@ -1,7 +1,7 @@
 """
 Datamodeller for File Transfer Agent.
 
-Indeholder alle Pydantic modeller og enums der definerer 
+Indeholder alle Pydantic modeller og enums der definerer
 systemets grundlæggende datastrukturer.
 """
 
@@ -14,144 +14,137 @@ from pydantic import BaseModel, Field, ConfigDict
 class FileStatus(str, Enum):
     """
     Status for en tracked fil gennem hele kopieringsprocessen.
-    
+
     Normal Workflow: Discovered -> Ready -> InQueue -> Copying -> Completed
     Growing Workflow: Discovered -> Growing -> ReadyToStartGrowing -> InQueue -> GrowingCopy -> Copying -> Completed
     Alternative: -> Failed (ved fejl)
     Space Management: -> WaitingForSpace -> (retry) eller SpaceError (permanent)
     """
-    DISCOVERED = "Discovered"        # Fil fundet, men ikke stabil endnu
-    READY = "Ready"                 # Fil er stabil og klar til kopiering
-    IN_QUEUE = "InQueue"            # Fil er tilføjet til job queue
-    COPYING = "Copying"             # Fil er ved at blive kopieret
-    COMPLETED = "Completed"         # Fil er succesfuldt kopieret og slettet
-    FAILED = "Failed"               # Fil kunne ikke kopieres (permanent fejl)
-    
+
+    DISCOVERED = "Discovered"  # Fil fundet, men ikke stabil endnu
+    READY = "Ready"  # Fil er stabil og klar til kopiering
+    IN_QUEUE = "InQueue"  # Fil er tilføjet til job queue
+    COPYING = "Copying"  # Fil er ved at blive kopieret
+    COMPLETED = "Completed"  # Fil er succesfuldt kopieret og slettet
+    FAILED = "Failed"  # Fil kunne ikke kopieres (permanent fejl)
+
     # Growing file states
-    GROWING = "Growing"             # Fil er aktiv growing, størrelse ændres
-    READY_TO_START_GROWING = "ReadyToStartGrowing"  # Fil >= minimum size for growing copy
-    GROWING_COPY = "GrowingCopy"    # Aktiv growing copy i gang
-    
+    GROWING = "Growing"  # Fil er aktiv growing, størrelse ændres
+    READY_TO_START_GROWING = (
+        "ReadyToStartGrowing"  # Fil >= minimum size for growing copy
+    )
+    GROWING_COPY = "GrowingCopy"  # Aktiv growing copy i gang
+
     # Space management states
-    WAITING_FOR_SPACE = "WaitingForSpace"   # Midlertidig plads mangel, venter på retry
-    SPACE_ERROR = "SpaceError"              # Permanent plads problem, kræver indgriben
-    
+    WAITING_FOR_SPACE = "WaitingForSpace"  # Midlertidig plads mangel, venter på retry
+    SPACE_ERROR = "SpaceError"  # Permanent plads problem, kræver indgriben
+
     # Pause/Resume states for destination issues
-    PAUSED_IN_QUEUE = "PausedInQueue"       # Job var i queue da destination blev unavailable
-    PAUSED_COPYING = "PausedCopying"        # Copy var i gang da destination blev unavailable  
-    PAUSED_GROWING_COPY = "PausedGrowingCopy" # Growing copy var i gang da destination blev unavailable
+    PAUSED_IN_QUEUE = "PausedInQueue"  # Job var i queue da destination blev unavailable
+    PAUSED_COPYING = "PausedCopying"  # Copy var i gang da destination blev unavailable
+    PAUSED_GROWING_COPY = (
+        "PausedGrowingCopy"  # Growing copy var i gang da destination blev unavailable
+    )
 
 
 class StorageStatus(str, Enum):
     """Storage status levels for monitoring disk space and accessibility"""
-    OK = "OK"                   # Normal operation
-    WARNING = "WARNING"         # Low space warning
-    ERROR = "ERROR"             # Unmounted/inaccessible
-    CRITICAL = "CRITICAL"       # Very low space / read-only
+
+    OK = "OK"  # Normal operation
+    WARNING = "WARNING"  # Low space warning
+    ERROR = "ERROR"  # Unmounted/inaccessible
+    CRITICAL = "CRITICAL"  # Very low space / read-only
 
 
 class MountStatus(str, Enum):
     """Network mount operation status for real-time UI feedback"""
-    ATTEMPTING = "ATTEMPTING"   # Mount operation in progress
-    SUCCESS = "SUCCESS"         # Mount completed successfully  
-    FAILED = "FAILED"           # Mount operation failed
+
+    ATTEMPTING = "ATTEMPTING"  # Mount operation in progress
+    SUCCESS = "SUCCESS"  # Mount completed successfully
+    FAILED = "FAILED"  # Mount operation failed
     NOT_CONFIGURED = "NOT_CONFIGURED"  # Network mount not configured
 
 
 class TrackedFile(BaseModel):
     """
     Central datastruktur der repræsenterer en fil gennem hele kopieringsprocessen.
-    
+
     Bruges af StateManager til at holde styr på alle filer og deres tilstand.
     Indeholder både metadata og progress information.
     """
-    
-    file_path: str = Field(
-        ..., 
-        description="Absolut sti til kildefilen"
-    )
-    
+
+    file_path: str = Field(..., description="Absolut sti til kildefilen")
+
     status: FileStatus = Field(
         default=FileStatus.DISCOVERED,
-        description="Filens nuværende status i workflow'et"
+        description="Filens nuværende status i workflow'et",
     )
-    
-    file_size: int = Field(
-        default=0,
-        ge=0,
-        description="Filstørrelse i bytes"
-    )
-    
+
+    file_size: int = Field(default=0, ge=0, description="Filstørrelse i bytes")
+
     last_write_time: Optional[datetime] = Field(
         default=None,
-        description="Sidste gang filen blev modificeret (til stabilitetschek)"
+        description="Sidste gang filen blev modificeret (til stabilitetschek)",
     )
-    
+
     copy_progress: float = Field(
         default=0.0,
         ge=0.0,
         le=100.0,
-        description="Kopieringsprogress i procent (0-100)"
+        description="Kopieringsprogress i procent (0-100)",
     )
-    
+
     error_message: Optional[str] = Field(
-        default=None,
-        description="Fejlbesked hvis status er FAILED"
+        default=None, description="Fejlbesked hvis status er FAILED"
     )
-    
+
     retry_count: int = Field(
-        default=0,
-        ge=0,
-        description="Antal retry forsøg for denne fil"
+        default=0, ge=0, description="Antal retry forsøg for denne fil"
     )
-    
+
     discovered_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Tidspunkt hvor filen blev opdaget"
+        default_factory=datetime.now, description="Tidspunkt hvor filen blev opdaget"
     )
-    
+
     started_copying_at: Optional[datetime] = Field(
-        default=None,
-        description="Tidspunkt hvor kopiering startede"
+        default=None, description="Tidspunkt hvor kopiering startede"
     )
-    
+
     completed_at: Optional[datetime] = Field(
-        default=None,
-        description="Tidspunkt hvor kopiering blev færdig"
+        default=None, description="Tidspunkt hvor kopiering blev færdig"
     )
-    
+
     destination_path: Optional[str] = Field(
         default=None,
-        description="Sti til destination filen (med evt. navnekonflikt suffix)"
+        description="Sti til destination filen (med evt. navnekonflikt suffix)",
     )
 
     # Growing file tracking
     is_growing_file: bool = Field(
         default=False,
-        description="True hvis denne fil er en growing file der kopieres under skrivning"
+        description="True hvis denne fil er en growing file der kopieres under skrivning",
     )
-    
+
     growth_rate_mbps: float = Field(
         default=0.0,
         ge=0.0,
-        description="Filens vækstrate i MB per sekund (kun for growing files)"
+        description="Filens vækstrate i MB per sekund (kun for growing files)",
     )
-    
+
     bytes_copied: int = Field(
         default=0,
         ge=0,
-        description="Antal bytes kopieret indtil videre (for growing copy progress)"
+        description="Antal bytes kopieret indtil videre (for growing copy progress)",
     )
-    
+
     copy_speed_mbps: float = Field(
         default=0.0,
         ge=0.0,
-        description="Aktuel copy hastighed i MB per sekund (for alle copy modes)"
+        description="Aktuel copy hastighed i MB per sekund (for alle copy modes)",
     )
-    
+
     last_growth_check: Optional[datetime] = Field(
-        default=None,
-        description="Sidste gang vi tjekkede for file growth"
+        default=None, description="Sidste gang vi tjekkede for file growth"
     )
 
     model_config = ConfigDict(
@@ -168,7 +161,7 @@ class TrackedFile(BaseModel):
                 "discovered_at": "2025-10-08T14:25:00",
                 "started_copying_at": "2025-10-08T14:27:00",
                 "completed_at": None,
-                "destination_path": "/destination/video_clip_001.mxv"
+                "destination_path": "/destination/video_clip_001.mxv",
             }
         }
     )
@@ -177,68 +170,38 @@ class TrackedFile(BaseModel):
 class StorageInfo(BaseModel):
     """
     Storage information for a single path (source or destination).
-    
+
     Contains disk space, accessibility status, and configuration thresholds.
     """
-    
-    path: str = Field(
-        ...,
-        description="Absolut sti til storage location"
-    )
-    
+
+    path: str = Field(..., description="Absolut sti til storage location")
+
     is_accessible: bool = Field(
-        ...,
-        description="Om stien er tilgængelig (mounted/exists)"
+        ..., description="Om stien er tilgængelig (mounted/exists)"
     )
-    
-    has_write_access: bool = Field(
-        ..., 
-        description="Om vi kan skrive til stien"
-    )
-    
-    free_space_gb: float = Field(
-        ...,
-        ge=0.0,
-        description="Ledig plads i GB"
-    )
-    
-    total_space_gb: float = Field(
-        ...,
-        ge=0.0, 
-        description="Total plads i GB"
-    )
-    
-    used_space_gb: float = Field(
-        ...,
-        ge=0.0,
-        description="Brugt plads i GB"
-    )
-    
-    status: StorageStatus = Field(
-        ...,
-        description="Current storage status"
-    )
-    
+
+    has_write_access: bool = Field(..., description="Om vi kan skrive til stien")
+
+    free_space_gb: float = Field(..., ge=0.0, description="Ledig plads i GB")
+
+    total_space_gb: float = Field(..., ge=0.0, description="Total plads i GB")
+
+    used_space_gb: float = Field(..., ge=0.0, description="Brugt plads i GB")
+
+    status: StorageStatus = Field(..., description="Current storage status")
+
     warning_threshold_gb: float = Field(
-        ...,
-        ge=0.0,
-        description="Warning threshold i GB"
+        ..., ge=0.0, description="Warning threshold i GB"
     )
-    
+
     critical_threshold_gb: float = Field(
-        ...,
-        ge=0.0,
-        description="Critical threshold i GB"
+        ..., ge=0.0, description="Critical threshold i GB"
     )
-    
-    last_checked: datetime = Field(
-        ...,
-        description="Tidspunkt for sidste check"
-    )
-    
+
+    last_checked: datetime = Field(..., description="Tidspunkt for sidste check")
+
     error_message: Optional[str] = Field(
-        default=None,
-        description="Fejlbesked hvis der er problemer"
+        default=None, description="Fejlbesked hvis der er problemer"
     )
 
     model_config = ConfigDict(
@@ -253,7 +216,7 @@ class StorageInfo(BaseModel):
                 "status": "WARNING",
                 "warning_threshold_gb": 50.0,
                 "critical_threshold_gb": 20.0,
-                "last_checked": "2025-10-09T10:30:00Z"
+                "last_checked": "2025-10-09T10:30:00Z",
             }
         }
     )
@@ -262,33 +225,24 @@ class StorageInfo(BaseModel):
 class StorageUpdate(BaseModel):
     """
     Event data structure for storage change notifications.
-    
+
     Used by StorageMonitorService to notify WebSocketManager of changes.
     """
-    
+
     storage_type: str = Field(
-        ...,
-        description="Type of storage: 'source' or 'destination'"
+        ..., description="Type of storage: 'source' or 'destination'"
     )
-    
+
     old_status: Optional[StorageStatus] = Field(
-        default=None,
-        description="Previous storage status"
+        default=None, description="Previous storage status"
     )
-    
-    new_status: StorageStatus = Field(
-        ...,
-        description="New storage status"
-    )
-    
-    storage_info: StorageInfo = Field(
-        ...,
-        description="Complete storage information"
-    )
-    
+
+    new_status: StorageStatus = Field(..., description="New storage status")
+
+    storage_info: StorageInfo = Field(..., description="Complete storage information")
+
     timestamp: datetime = Field(
-        default_factory=datetime.now,
-        description="Tidspunkt for opdateringen"
+        default_factory=datetime.now, description="Tidspunkt for opdateringen"
     )
 
     model_config = ConfigDict()
@@ -297,44 +251,36 @@ class StorageUpdate(BaseModel):
 class MountStatusUpdate(BaseModel):
     """
     Event data structure for network mount status notifications.
-    
+
     Used by StorageMonitorService to notify WebSocketManager of mount operations
     for real-time UI feedback during network mount attempts.
     """
-    
+
     storage_type: str = Field(
-        ...,
-        description="Type of storage: 'source' or 'destination'"
+        ..., description="Type of storage: 'source' or 'destination'"
     )
-    
-    mount_status: MountStatus = Field(
-        ...,
-        description="Current mount operation status"
-    )
-    
+
+    mount_status: MountStatus = Field(..., description="Current mount operation status")
+
     share_url: Optional[str] = Field(
-        default=None,
-        description="Network share URL being mounted (e.g., //nas/shared)"
+        default=None, description="Network share URL being mounted (e.g., //nas/shared)"
     )
-    
+
     mount_path: Optional[str] = Field(
         default=None,
-        description="Local path where share is mounted (e.g., /Volumes/shared)"
+        description="Local path where share is mounted (e.g., /Volumes/shared)",
     )
-    
+
     target_path: str = Field(
-        ...,
-        description="Target storage path that triggered mount operation"
+        ..., description="Target storage path that triggered mount operation"
     )
-    
+
     error_message: Optional[str] = Field(
-        default=None,
-        description="Error message if mount operation failed"
+        default=None, description="Error message if mount operation failed"
     )
-    
+
     timestamp: datetime = Field(
-        default_factory=datetime.now,
-        description="Timestamp of mount status update"
+        default_factory=datetime.now, description="Timestamp of mount status update"
     )
 
     model_config = ConfigDict(
@@ -346,7 +292,7 @@ class MountStatusUpdate(BaseModel):
                 "mount_path": "/Volumes/shared",
                 "target_path": "/Volumes/shared/ingest",
                 "error_message": None,
-                "timestamp": "2025-10-13T14:30:00Z"
+                "timestamp": "2025-10-13T14:30:00Z",
             }
         }
     )
@@ -355,10 +301,10 @@ class MountStatusUpdate(BaseModel):
 class FileStateUpdate(BaseModel):
     """
     Event data structure for pub/sub system.
-    
+
     Bruges til at notificere subscribers om ændringer i fil status.
     """
-    
+
     file_path: str
     old_status: Optional[FileStatus]
     new_status: FileStatus
@@ -371,81 +317,72 @@ class FileStateUpdate(BaseModel):
 class SpaceCheckResult(BaseModel):
     """
     Result of disk space pre-flight check before file copying.
-    
+
     Used by FileCopyService to determine if destination has sufficient space
     for a file before attempting to copy it. Includes logic for determining
     if space shortage might be temporary.
     """
-    
+
     has_space: bool = Field(
-        ..., 
-        description="Whether destination has enough space for the file"
+        ..., description="Whether destination has enough space for the file"
     )
-    
+
     available_bytes: int = Field(
-        ..., 
-        description="Available space on destination in bytes"
+        ..., description="Available space on destination in bytes"
     )
-    
+
     required_bytes: int = Field(
-        ..., 
-        description="Required space including file size and safety margin"
+        ..., description="Required space including file size and safety margin"
     )
-    
-    file_size_bytes: int = Field(
-        ..., 
-        description="Actual file size in bytes"
-    )
-    
+
+    file_size_bytes: int = Field(..., description="Actual file size in bytes")
+
     safety_margin_bytes: int = Field(
-        ..., 
-        description="Safety margin in bytes to prevent disk full"
+        ..., description="Safety margin in bytes to prevent disk full"
     )
-    
+
     reason: str = Field(
-        ..., 
-        description="Human-readable explanation of the space check result"
+        ..., description="Human-readable explanation of the space check result"
     )
-    
+
     timestamp: datetime = Field(
-        default_factory=datetime.now,
-        description="When the space check was performed"
+        default_factory=datetime.now, description="When the space check was performed"
     )
-    
+
     def is_temporary_shortage(self) -> bool:
         """
         Determine if space shortage might be temporary and worth retrying.
-        
+
         Logic: If we're within 20% of required space, it might be temporary
         due to other operations completing, temp files being cleaned, etc.
-        
+
         Returns:
             True if shortage might be temporary and worth retrying later
         """
         if self.has_space:
             return False
-            
+
         shortage = self.required_bytes - self.available_bytes
         shortage_percentage = shortage / self.required_bytes
-        
+
         # Consider temporary if shortage is less than 20% of required space
         return shortage_percentage < 0.2
-    
+
     def get_shortage_gb(self) -> float:
         """
         Get space shortage amount in GB for display purposes.
-        
+
         Returns:
             Shortage in GB, or 0.0 if there's sufficient space
         """
         if self.has_space:
             return 0.0
         return (self.required_bytes - self.available_bytes) / (1024**3)
-    
+
     def get_available_gb(self) -> float:
         """Get available space in GB for display"""
         return self.available_bytes / (1024**3)
-    
+
     def get_required_gb(self) -> float:
         """Get required space in GB for display"""
         return self.required_bytes / (1024**3)

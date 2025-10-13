@@ -7,9 +7,7 @@ extracted from JobProcessor for SRP compliance.
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from pathlib import Path
 
-from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult, TrackedFile
 from app.services.consumer.job_space_manager import JobSpaceManager
 from app.services.consumer.job_models import ProcessResult
@@ -53,7 +51,7 @@ def job_space_manager(
     mock_state_manager,
     mock_job_queue,
     mock_space_checker,
-    mock_space_retry_manager
+    mock_space_retry_manager,
 ):
     """Create JobSpaceManager instance for testing."""
     return JobSpaceManager(
@@ -61,7 +59,7 @@ def job_space_manager(
         state_manager=mock_state_manager,
         job_queue=mock_job_queue,
         space_checker=mock_space_checker,
-        space_retry_manager=mock_space_retry_manager
+        space_retry_manager=mock_space_retry_manager,
     )
 
 
@@ -96,16 +94,20 @@ class TestJobSpaceManager:
             required_bytes=1000,
             file_size_bytes=1000,
             safety_margin_bytes=100,
-            reason="Sufficient space"
+            reason="Sufficient space",
         )
-        job_space_manager.space_checker.check_space_for_file.return_value = expected_result
+        job_space_manager.space_checker.check_space_for_file.return_value = (
+            expected_result
+        )
 
         # Act
         result = await job_space_manager.check_space_for_job(job)
 
         # Assert
         assert result == expected_result
-        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(1000)
+        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(
+            1000
+        )
 
     @pytest.mark.asyncio
     async def test_check_space_for_job_no_checker(self, job_space_manager):
@@ -123,32 +125,36 @@ class TestJobSpaceManager:
         assert result.reason == "No space checker configured"
 
     @pytest.mark.asyncio
-    async def test_check_space_for_job_fallback_to_tracked_file(self, job_space_manager):
+    async def test_check_space_for_job_fallback_to_tracked_file(
+        self, job_space_manager
+    ):
         """Test space checking with fallback to tracked file for size."""
         # Arrange
         job = {"file_path": "/test/file.txt"}  # No file_size in job
         tracked_file = TrackedFile(
-            file_path="/test/file.txt",
-            file_size=2000,
-            status=FileStatus.DISCOVERED
+            file_path="/test/file.txt", file_size=2000, status=FileStatus.DISCOVERED
         )
         job_space_manager.state_manager.get_file.return_value = tracked_file
-        
+
         expected_result = SpaceCheckResult(
             has_space=True,
             available_bytes=5000,
             required_bytes=2000,
             file_size_bytes=2000,
             safety_margin_bytes=100,
-            reason="Sufficient space"
+            reason="Sufficient space",
         )
-        job_space_manager.space_checker.check_space_for_file.return_value = expected_result
+        job_space_manager.space_checker.check_space_for_file.return_value = (
+            expected_result
+        )
 
         # Act
-        result = await job_space_manager.check_space_for_job(job)
+        await job_space_manager.check_space_for_job(job)
 
         # Assert
-        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(2000)
+        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(
+            2000
+        )
 
     @pytest.mark.asyncio
     async def test_handle_space_shortage_with_retry_manager(self, job_space_manager):
@@ -161,7 +167,7 @@ class TestJobSpaceManager:
             required_bytes=1000,
             file_size_bytes=1000,
             safety_margin_bytes=100,
-            reason="Insufficient space"
+            reason="Insufficient space",
         )
 
         # Act
@@ -186,7 +192,7 @@ class TestJobSpaceManager:
             required_bytes=1000,
             file_size_bytes=1000,
             safety_margin_bytes=100,
-            reason="Insufficient space"
+            reason="Insufficient space",
         )
 
         # Act

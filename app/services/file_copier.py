@@ -17,12 +17,13 @@ from app.services.destination.destination_checker import DestinationChecker
 @dataclass
 class FileCopyServiceConfig:
     """Configuration for FileCopyService."""
+
     max_concurrent_copies: int = 1
     source_path: str = ""
     destination_path: str = ""
 
 
-class FileCopyService:   
+class FileCopyService:
     def __init__(
         self,
         settings,
@@ -35,45 +36,48 @@ class FileCopyService:
         space_checker=None,
         space_retry_manager=None,
         storage_monitor=None,
-        enable_resume: bool = True
+        enable_resume: bool = True,
     ):
         self._running = False
         self._consumer_tasks: List[asyncio.Task] = []
         self._max_concurrent_copies = settings.max_concurrent_copies
-        
+
         # Store settings for backward compatibility
         self.settings = settings
         self._destination_available = True  # For test compatibility
-        
+
         # Core services - all operations delegated to these
         self.job_queue = job_queue
         self.copy_strategy_factory = copy_strategy_factory or CopyStrategyFactory(
             settings, state_manager, enable_resume=enable_resume
         )
-        self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(settings, enable_session_tracking=True)
+        self.statistics_tracker = statistics_tracker or CopyStatisticsTracker(
+            settings, enable_session_tracking=True
+        )
         self.error_handler = error_handler or CopyErrorHandler(settings)
         self.destination_checker = destination_checker or DestinationChecker(
-            Path(settings.destination_directory), 
-            storage_monitor=storage_monitor
+            Path(settings.destination_directory), storage_monitor=storage_monitor
         )
-        
+
         # Composed services
         self.file_copy_executor = FileCopyExecutor(settings)
-        
+
         # Create error classifier if storage monitor is available
-        error_classifier = JobErrorClassifier(storage_monitor) if storage_monitor else None
-        
+        error_classifier = (
+            JobErrorClassifier(storage_monitor) if storage_monitor else None
+        )
+
         self.job_processor = JobProcessor(
             settings=settings,
             state_manager=state_manager,
             job_queue=job_queue,
             copy_strategy_factory=self.copy_strategy_factory,
             space_checker=space_checker,
-            space_retry_manager=space_retry_manager
+            space_retry_manager=space_retry_manager,
         )
-        
+
         # Inject error classifier into copy executor
-        if error_classifier and hasattr(self.job_processor, 'copy_executor'):
+        if error_classifier and hasattr(self.job_processor, "copy_executor"):
             self.job_processor.copy_executor.error_classifier = error_classifier
 
     async def start_consumer(self) -> None:
@@ -82,11 +86,11 @@ class FileCopyService:
             return
         self._running = True
         logging.info(f"Starting {self._max_concurrent_copies} workers")
-        
+
         for i in range(self._max_concurrent_copies):
             task = asyncio.create_task(self._consumer_worker(i))
             self._consumer_tasks.append(task)
-        
+
         await asyncio.gather(*self._consumer_tasks, return_exceptions=True)
 
     async def stop_consumer(self) -> None:
@@ -103,16 +107,16 @@ class FileCopyService:
         try:
             while self._running:
                 # DECOUPLED: Let StorageMonitorService handle destination problems via pause/resume
-                # Don't check destination availability here - let the intelligent error handling 
+                # Don't check destination availability here - let the intelligent error handling
                 # and pause/resume system handle it at the job level
-                
+
                 job = await self.job_queue.get_next_job()
                 if job is None:
                     await asyncio.sleep(1)
                     continue
-                
+
                 await self.job_processor.process_job(job)
-                
+
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -123,7 +127,7 @@ class FileCopyService:
         """Get copy statistics."""
         stats = self.statistics_tracker.get_statistics_summary()
         errors = self.error_handler.get_error_statistics()
-        
+
         return {
             "is_running": self._running,
             "active_workers": len([t for t in self._consumer_tasks if not t.done()]),
@@ -133,15 +137,13 @@ class FileCopyService:
             "total_files_failed": stats.total_files_failed,
             "total_gb_copied": stats.total_gb_copied,
             "success_rate": stats.success_rate,
-            "current_errors": errors.get('current_errors', 0),
-            "global_errors": errors.get('global_errors', 0),
-            "performance": {
-                "peak_transfer_rate_mbps": stats.peak_transfer_rate_mbps
-            },
+            "current_errors": errors.get("current_errors", 0),
+            "global_errors": errors.get("global_errors", 0),
+            "performance": {"peak_transfer_rate_mbps": stats.peak_transfer_rate_mbps},
             "error_handling": {
-                "current_errors": errors.get('current_errors', 0),
-                "global_errors": errors.get('global_errors', 0)
-            }
+                "current_errors": errors.get("current_errors", 0),
+                "global_errors": errors.get("global_errors", 0),
+            },
         }
 
     def is_running(self) -> bool:

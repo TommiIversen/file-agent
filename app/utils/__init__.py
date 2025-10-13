@@ -7,7 +7,7 @@ the main application logic without side effects.
 
 from .file_operations import (
     calculate_relative_path,
-    generate_conflict_free_path, 
+    generate_conflict_free_path,
     validate_file_sizes,
     create_temp_file_path,
     build_destination_path,
@@ -33,7 +33,7 @@ __all__ = [
     # File operations
     "calculate_relative_path",
     "generate_conflict_free_path",
-    "validate_file_sizes", 
+    "validate_file_sizes",
     "create_temp_file_path",
     "build_destination_path",
     "resolve_destination_with_conflicts",

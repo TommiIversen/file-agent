@@ -21,8 +21,10 @@ def preparer():
     copy_strategy_factory = MagicMock()
     template_engine = MagicMock()
     template_engine.is_enabled.return_value = True
-    
-    return JobFilePreparationService(settings, state_manager, copy_strategy_factory, template_engine)
+
+    return JobFilePreparationService(
+        settings, state_manager, copy_strategy_factory, template_engine
+    )
 
 
 class TestJobFilePreparationService:
@@ -32,18 +34,26 @@ class TestJobFilePreparationService:
     async def test_prepare_file_success(self, preparer):
         """Test successful file preparation."""
         job = {"file_path": "/src/test.mxf"}
-        tracked_file = TrackedFile(file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY)
+        tracked_file = TrackedFile(
+            file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
+        )
         strategy = MagicMock(__class__=MagicMock(__name__="StandardCopyStrategy"))
-        
+
         preparer.state_manager.get_file.return_value = tracked_file
         preparer.copy_strategy_factory.get_strategy.return_value = strategy
-        
+
         # Mock the utils functions
-        with patch('app.services.consumer.job_file_preparation_service.build_destination_path_with_template') as mock_build, \
-             patch('app.services.consumer.job_file_preparation_service.generate_conflict_free_path') as mock_generate:
+        with (
+            patch(
+                "app.services.consumer.job_file_preparation_service.build_destination_path_with_template"
+            ) as mock_build,
+            patch(
+                "app.services.consumer.job_file_preparation_service.generate_conflict_free_path"
+            ) as mock_generate,
+        ):
             mock_build.return_value = "/dst/test.mxf"
             mock_generate.return_value = Path("/dst/test.mxf")
-            
+
             result = await preparer.prepare_file_for_copy(job)
 
         assert result is not None
