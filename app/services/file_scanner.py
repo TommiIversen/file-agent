@@ -183,7 +183,7 @@ class FileScannerService:
                 return discovered_files
 
             # Scan rekursivt for .mxf filer
-            for root, dirs, files in os.walk(source_path):
+            for root, _, files in os.walk(source_path):
                 for file in files:
                     if file.lower().endswith(".mxf"):
                         file_path = os.path.join(root, file)

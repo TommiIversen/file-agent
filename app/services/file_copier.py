@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Dict, Optional, List
-from dataclasses import dataclass
 from pathlib import Path
 
 from app.services.job_queue import JobQueueService
@@ -12,15 +11,6 @@ from app.services.copy_strategies import CopyStrategyFactory
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
 from app.services.error_handling.copy_error_handler import CopyErrorHandler
 from app.services.destination.destination_checker import DestinationChecker
-
-
-@dataclass
-class FileCopyServiceConfig:
-    """Configuration for FileCopyService."""
-
-    max_concurrent_copies: int = 1
-    source_path: str = ""
-    destination_path: str = ""
 
 
 class FileCopyService:
