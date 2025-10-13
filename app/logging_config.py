@@ -239,6 +239,11 @@ def setup_logging(settings: Settings) -> None:
                 "level": settings.log_level,
                 "propagate": False
             },
+            "app.file_scanner": {
+                "handlers": ["console", "file"],
+                "level": settings.log_level,
+                "propagate": False
+            },
             "app.job_processor": {
                 "handlers": ["console", "file"], 
                 "level": settings.log_level,

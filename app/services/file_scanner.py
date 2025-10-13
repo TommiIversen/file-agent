@@ -340,6 +340,13 @@ class FileScannerService:
     async def _handle_growing_file_logic(self, file_path: str, current_file_size: int, current_write_time: datetime, tracked_file) -> None:
         """Handle file using growing file detection logic"""
         try:
+            # Always log growing file status for debugging
+            if tracked_file.status == FileStatus.GROWING:
+                self._logger.info(f"🔄 GROWING FILE CHECK: {os.path.basename(file_path)} "
+                                f"current: {current_file_size / (1024*1024):.2f}MB / "
+                                f"needed: {self.settings.growing_file_min_size_mb}MB "
+                                f"(tracked: {tracked_file.file_size / (1024*1024):.2f}MB)")
+            
             # Update growth tracking
             await self.growing_file_detector.update_file_growth_info(file_path, current_file_size)
             
@@ -350,6 +357,12 @@ class FileScannerService:
                 # Update file status if it changed
                 if recommended_status != tracked_file.status:
                     update_kwargs = {'file_size': current_file_size}
+                    
+                    # For GROWING files, set bytes_copied=0 for UI progress display
+                    if recommended_status == FileStatus.GROWING:
+                        update_kwargs['bytes_copied'] = 0  # Haven't started copying yet
+                        self._logger.info(f"⏳ GROWING FILE STATUS CHANGE: {os.path.basename(file_path)} "
+                                        f"now GROWING with size: {current_file_size / (1024*1024):.1f}MB (0 bytes copied)")
                     
                     if growth_info:
                         update_kwargs.update({
@@ -366,13 +379,30 @@ class FileScannerService:
                     
                     self._logger.info(f"Growing file status: {os.path.basename(file_path)} -> {recommended_status.value}")
             
-            # Update file size if changed
-            elif current_file_size != tracked_file.file_size:
-                await self.state_manager.update_file_status(
-                    file_path=file_path,
-                    status=tracked_file.status,  # Keep same status
-                    file_size=current_file_size
-                )
+            # ALWAYS check for size changes, regardless of status changes above
+            if current_file_size != tracked_file.file_size:
+                self._logger.info(f"📏 FILE SIZE CHANGED: {os.path.basename(file_path)} "
+                                f"{tracked_file.file_size / (1024*1024):.2f}MB → {current_file_size / (1024*1024):.2f}MB")
+                
+                # For GROWING files, send separate update with bytes_copied=0 for UI progress
+                if tracked_file.status == FileStatus.GROWING:
+                    await self.state_manager.update_file_status(
+                        file_path=file_path,
+                        status=FileStatus.GROWING,  # Keep same status
+                        file_size=current_file_size,
+                        bytes_copied=0  # Show 0 copied since we haven't started copying yet
+                    )
+                    self._logger.info(f"📈 GROWING FILE PROGRESS UPDATE: {os.path.basename(file_path)} "
+                                     f"0 / {current_file_size / (1024*1024):.2f}MB "
+                                     f"(waiting for {self.settings.growing_file_min_size_mb}MB minimum)")
+                
+                # For non-GROWING files, just update size
+                elif tracked_file.status not in [FileStatus.DISCOVERED, FileStatus.GROWING]:
+                    await self.state_manager.update_file_status(
+                        file_path=file_path,
+                        status=tracked_file.status,  # Keep same status
+                        file_size=current_file_size
+                    )
                 self._logger.debug(f"Growing file size update: {os.path.basename(file_path)} "
                                  f"({tracked_file.file_size} -> {current_file_size} bytes)")
                 
