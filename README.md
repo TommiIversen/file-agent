@@ -50,3 +50,17 @@ uvicorn app.main:app --reload
 eller
 
 python -m uvicorn app.main:app --reload
+
+
+
+# Find alle unused/dead code patterns
+ruff check . --select F,E
+
+# Find kompleksitets issues  
+ruff check . --select C901
+
+# Find alle potentielle bugs
+ruff check . --select B
+
+# Find style issues
+ruff check . --select E,W
