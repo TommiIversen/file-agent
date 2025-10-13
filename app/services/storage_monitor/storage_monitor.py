@@ -412,7 +412,7 @@ class StorageMonitorService:
             logging.info("⏸️ Operations paused successfully - awaiting recovery")
             
         except Exception as e:
-            logging.error(f"❌ Error during destination pause handling: {e}")
+            logging.error(f"ERROR: Error during destination pause handling: {e}")
     
     async def _handle_destination_recovery(self, storage_type: str, old_info: StorageInfo, 
                                          new_info: StorageInfo) -> None:
@@ -442,4 +442,4 @@ class StorageMonitorService:
             logging.info("✅ Intelligent resume initiated successfully")
             
         except Exception as e:
-            logging.error(f"❌ Error during universal recovery: {e}")
+            logging.error(f"ERROR: Error during universal recovery: {e}")

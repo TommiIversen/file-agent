@@ -271,13 +271,18 @@ class DestinationChecker:
                 # Fallback for backward compatibility (should not happen in production)
                 logging.warning("StorageMonitor not available - performing direct directory check")
                 if not self.destination_path.exists():
-                    error_msg = f"Destination directory does not exist and StorageMonitor not available: {self.destination_path}"
-                    logging.error(error_msg)
-                    return DestinationCheckResult(
-                        is_available=False,
-                        checked_at=datetime.now(),
-                        error_message=error_msg
-                    )
+                    # Try to create the directory
+                    try:
+                        self.destination_path.mkdir(parents=True, exist_ok=True)
+                        logging.info(f"Created missing destination directory: {self.destination_path}")
+                    except Exception as e:
+                        error_msg = f"Destination directory does not exist and could not create: {self.destination_path} - {e}"
+                        logging.error(error_msg)
+                        return DestinationCheckResult(
+                            is_available=False,
+                            checked_at=datetime.now(),
+                            error_message=error_msg
+                        )
 
                 if not self.destination_path.is_dir():
                     error_msg = f"Destination is not a directory: {self.destination_path}"

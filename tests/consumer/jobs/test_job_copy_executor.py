@@ -87,7 +87,7 @@ class TestJobCopyExecutor:
 
         executor.state_manager.update_file_status.assert_called_once_with(
             "/src/test.mxf", FileStatus.FAILED, copy_progress=0.0,
-            bytes_copied=0, error_message="Test error"
+            bytes_copied=0, error_message="Failed: Copy operation failed"
         )
 
     def test_get_copy_executor_info(self, executor):
