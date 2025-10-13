@@ -42,7 +42,7 @@ class StorageMonitorService:
     """
     
     def __init__(self, settings: Settings, storage_checker: StorageChecker, 
-                 websocket_manager=None, network_mount_service=None):
+                 websocket_manager=None, network_mount_service=None, job_queue=None):
         """
         Initialize StorageMonitorService.
         
@@ -51,11 +51,13 @@ class StorageMonitorService:
             storage_checker: Utility for checking storage health
             websocket_manager: WebSocket manager for real-time updates
             network_mount_service: Network mount service for automatic mounting
+            job_queue: Job queue service for universal recovery (optional)
         """
         # This class is responsible solely for orchestrating storage monitoring, adhering to SRP
         self._settings = settings
         self._storage_checker = storage_checker
         self._network_mount_service = network_mount_service
+        self._job_queue = job_queue  # For universal recovery system
         
         # Specialized components (SRP compliance)
         self._storage_state = StorageState()
@@ -227,6 +229,10 @@ class StorageMonitorService:
             # Handle status changes via NotificationHandler
             await self._notification_handler.handle_status_change(storage_type, old_info, new_info)
             
+            # 🔄 UNIVERSAL RECOVERY: Detect and handle destination recovery
+            if self._is_destination_recovery(storage_type, old_info, new_info):
+                await self._handle_destination_recovery(storage_type, old_info, new_info)
+            
         except Exception as e:
             self._logger.error(f"Error checking {storage_type} storage at {path}: {e}")
     
@@ -299,3 +305,71 @@ class StorageMonitorService:
             "check_interval_seconds": self._settings.storage_check_interval_seconds
         })
         return status
+    
+    def _is_destination_recovery(self, storage_type: str, old_info: Optional[StorageInfo], 
+                                new_info: StorageInfo) -> bool:
+        """
+        Detect universal destination recovery scenarios.
+        
+        Recovery happens when destination transitions from problematic state to OK:
+        - ERROR (network offline, mount failure) → OK  
+        - CRITICAL (disk full, no write access) → OK
+        
+        Args:
+            storage_type: Type of storage being checked
+            old_info: Previous storage info (can be None on first check)
+            new_info: Current storage info
+            
+        Returns:
+            True if this is a destination recovery event
+        """
+        # Only handle destination recovery
+        if storage_type != "destination":
+            return False
+            
+        # No recovery if no previous state
+        if not old_info:
+            return False
+            
+        # Recovery = transition from problematic state to OK
+        problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
+        is_recovery = (old_info.status in problematic_states and 
+                      new_info.status == StorageStatus.OK)
+        
+        if is_recovery:
+            self._logger.info(
+                f"🔄 DESTINATION RECOVERY DETECTED: {old_info.status} → {new_info.status} "
+                f"(path: {new_info.path})"
+            )
+        
+        return is_recovery
+    
+    async def _handle_destination_recovery(self, storage_type: str, old_info: StorageInfo, 
+                                         new_info: StorageInfo) -> None:
+        """
+        Handle destination recovery by triggering universal file recovery.
+        
+        Args:
+            storage_type: Type of storage that recovered
+            old_info: Previous storage state
+            new_info: Current recovered storage state
+        """
+        if not self._job_queue:
+            self._logger.warning("⚠️ Job queue not available - cannot perform automatic recovery")
+            return
+            
+        try:
+            recovery_reason = f"{old_info.status} → {new_info.status}"
+            
+            self._logger.info(
+                f"🚀 INITIATING UNIVERSAL RECOVERY: {recovery_reason} "
+                f"(Free space: {new_info.free_space_gb:.1f} GB)"
+            )
+            
+            # Trigger universal recovery via job queue
+            await self._job_queue.handle_destination_recovery()
+            
+            self._logger.info("✅ Universal recovery initiated successfully")
+            
+        except Exception as e:
+            self._logger.error(f"❌ Error during universal recovery: {e}")

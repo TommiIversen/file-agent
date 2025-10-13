@@ -406,3 +406,42 @@ class StateManager:
                 "growing_files": len(growing_files),
                 "subscribers": len(self._subscribers)
             }
+    
+    async def get_failed_files(self) -> List[TrackedFile]:
+        """
+        Hent alle filer med FAILED status.
+        
+        Returns:
+            Liste af TrackedFile objekter med FAILED status
+        """
+        async with self._lock:
+            return [tracked_file for tracked_file in self._files.values()
+                    if tracked_file.status == FileStatus.FAILED]
+    
+    async def get_failed_growing_files(self) -> List[TrackedFile]:
+        """
+        Hent alle failed growing files der kan retries.
+        
+        Returns:
+            Liste af TrackedFile objekter der er growing files og FAILED
+        """
+        async with self._lock:
+            return [tracked_file for tracked_file in self._files.values()
+                    if (tracked_file.status == FileStatus.FAILED and 
+                        tracked_file.is_growing_file)]
+    
+    async def get_interrupted_copy_files(self) -> List[TrackedFile]:
+        """
+        Hent alle filer der var i gang med kopiering da system stoppede.
+        Dette inkluderer files i COPYING, GROWING_COPY, og IN_QUEUE status.
+        
+        Returns:
+            Liste af TrackedFile objekter der kan resumes
+        """
+        async with self._lock:
+            return [tracked_file for tracked_file in self._files.values()
+                    if tracked_file.status in [
+                        FileStatus.COPYING, 
+                        FileStatus.GROWING_COPY, 
+                        FileStatus.IN_QUEUE
+                    ]]

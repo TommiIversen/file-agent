@@ -195,7 +195,8 @@ def get_network_mount_service() -> NetworkMountService:
 def get_storage_monitor() -> StorageMonitorService:
     """
     Hent StorageMonitorService singleton instance.
-    Enhanced: Now integrates with NetworkMountService for automatic network mount handling.
+    Enhanced: Now integrates with NetworkMountService for automatic network mount handling
+    and JobQueueService for universal recovery system.
     
     Returns:
         StorageMonitorService instance (oprettes kun én gang)
@@ -205,12 +206,14 @@ def get_storage_monitor() -> StorageMonitorService:
         storage_checker = get_storage_checker()
         websocket_manager = get_websocket_manager()
         network_mount_service = get_network_mount_service()  # Phase 2 integration
+        job_queue_service = get_job_queue_service()  # Universal recovery system
         
         _singletons["storage_monitor"] = StorageMonitorService(
             settings=settings,
             storage_checker=storage_checker,
             websocket_manager=websocket_manager,
-            network_mount_service=network_mount_service
+            network_mount_service=network_mount_service,
+            job_queue=job_queue_service  # Enable universal recovery
         )
         
         # Set storage_monitor reference in WebSocketManager to avoid circular dependency

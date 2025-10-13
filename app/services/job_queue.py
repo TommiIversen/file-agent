@@ -15,7 +15,7 @@ from typing import Optional, Dict, List
 from datetime import datetime
 
 from app.config import Settings
-from app.models import FileStatus
+from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
 
 
@@ -364,3 +364,73 @@ class JobQueueService:
             "task_created": self._producer_task is not None,
             "subscribed_to_state_manager": True  # Vi subscriber i start_producer
         }
+    
+    async def handle_destination_recovery(self) -> None:
+        """
+        Håndter destination recovery - requeue alle interrupted/failed files.
+        
+        Dette er det universelle recovery system der håndterer:
+        - Network share offline recovery
+        - Disk space recovery (fuld disk -> plads igen)
+        - Mount failure recovery  
+        - Andre destination problemer
+        """
+        self._logger.info("🔄 DESTINATION RECOVERY: Starting universal file recovery process")
+        
+        # Få alle filer der kan resumes
+        failed_files = await self.state_manager.get_failed_files()
+        interrupted_files = await self.state_manager.get_interrupted_copy_files()
+        
+        total_recovered = 0
+        
+        # Requeue failed files (inkluderer growing files)
+        if failed_files:
+            self._logger.info(f"📂 Requeuing {len(failed_files)} failed files")
+            for tracked_file in failed_files:
+                await self._reset_and_requeue_file(tracked_file, "FAILED recovery")
+                total_recovered += 1
+        
+        # Requeue interrupted files (var i gang med kopiering)  
+        if interrupted_files:
+            self._logger.info(f"⏸️ Requeuing {len(interrupted_files)} interrupted files")
+            for tracked_file in interrupted_files:
+                await self._reset_and_requeue_file(tracked_file, "Interrupted recovery")
+                total_recovered += 1
+        
+        if total_recovered > 0:
+            self._logger.info(
+                f"✅ DESTINATION RECOVERY COMPLETE: Successfully requeued {total_recovered} files "
+                f"({len(failed_files)} failed + {len(interrupted_files)} interrupted)"
+            )
+        else:
+            self._logger.info("ℹ️ DESTINATION RECOVERY: No files needed recovery")
+    
+    async def _reset_and_requeue_file(self, tracked_file: TrackedFile, recovery_reason: str) -> None:
+        """
+        Reset file status og requeue til fresh start med resume capabilities.
+        
+        Args:
+            tracked_file: File der skal requeues
+            recovery_reason: Årsag til recovery (for logging)
+        """
+        file_path = tracked_file.file_path
+        
+        try:
+            # Reset file status til READY (bevarer is_growing_file flag)
+            await self.state_manager.update_file_status(
+                file_path,
+                FileStatus.READY,
+                error_message=None,
+                copy_progress=0.0,
+                retry_count=0,  # Reset retry count for fresh start
+                # Bevar is_growing_file flag hvis det var sat
+                is_growing_file=tracked_file.is_growing_file
+            )
+            
+            self._logger.info(
+                f"🔄 {recovery_reason}: Reset {file_path} to READY "
+                f"(growing: {tracked_file.is_growing_file})"
+            )
+            
+        except Exception as e:
+            self._logger.error(f"❌ Error resetting file {file_path} during recovery: {e}")
