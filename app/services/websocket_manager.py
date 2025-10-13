@@ -13,7 +13,7 @@ import logging
 from typing import List, Dict, Any
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.models import FileStateUpdate, StorageUpdate
+from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
 
@@ -273,6 +273,39 @@ class WebSocketManager:
             
         except Exception as e:
             self._logger.error(f"Error broadcasting storage update: {e}")
+    
+    async def broadcast_mount_status(self, update: MountStatusUpdate) -> None:
+        """
+        Broadcast network mount status update til alle klienter.
+        
+        Args:
+            update: MountStatusUpdate event fra StorageMonitorService
+        """
+        if not self._connections:
+            return
+        
+        try:
+            message_data = {
+                "type": "mount_status", 
+                "data": {
+                    "storage_type": update.storage_type,
+                    "mount_status": update.mount_status.value,
+                    "share_url": update.share_url,
+                    "mount_path": update.mount_path,
+                    "target_path": update.target_path,
+                    "error_message": update.error_message,
+                    "timestamp": self._get_timestamp()
+                }
+            }
+            
+            await self._broadcast_message(message_data)
+            
+            self._logger.debug(
+                f"Broadcasted mount status: {update.storage_type} -> {update.mount_status.value}"
+            )
+            
+        except Exception as e:
+            self._logger.error(f"Error broadcasting mount status: {e}")
     
     def _serialize_storage_info(self, storage_info) -> dict:
         """

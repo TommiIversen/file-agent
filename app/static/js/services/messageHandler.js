@@ -52,6 +52,10 @@ class MessageHandler {
                     this.handleStorageUpdate(message.data);
                     break;
                     
+                case 'mount_status':
+                    this.handleMountStatus(message.data);
+                    break;
+                    
                 case 'system_status':
                     this.handleSystemStatus(message.data);
                     break;
@@ -155,6 +159,20 @@ class MessageHandler {
         }
         
         this.storageStore.handleStorageUpdate(data);
+    }
+    
+    /**
+     * Handle mount status updates
+     */
+    handleMountStatus(data) {
+        console.log('Mount status update received:', data.storage_type, data.mount_status);
+        
+        if (!this.storageStore) {
+            console.error('StorageStore not available for mount status update');
+            return;
+        }
+        
+        this.storageStore.handleMountStatus(data);
     }
     
     /**

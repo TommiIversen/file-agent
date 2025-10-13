@@ -7,7 +7,7 @@ and status change broadcasting, adhering to SRP.
 
 from typing import Optional
 
-from ...models import StorageInfo, StorageUpdate
+from ...models import StorageInfo, StorageUpdate, MountStatusUpdate
 from ...logging_config import get_app_logger
 
 
@@ -91,3 +91,40 @@ class NotificationHandler:
             await self._websocket_manager.broadcast_storage_update(update)
         except Exception as e:
             self._logger.error(f"Error broadcasting storage update via WebSocket: {e}")
+    
+    async def handle_mount_status(self, mount_update: MountStatusUpdate) -> None:
+        """
+        Handle network mount status updates and trigger notifications.
+        
+        Args:
+            mount_update: MountStatusUpdate event to broadcast
+        """
+        self._logger.info(
+            f"Mount status update: {mount_update.storage_type} -> {mount_update.mount_status.value}",
+            extra={
+                "operation": "mount_status_update",
+                "storage_type": mount_update.storage_type,
+                "mount_status": mount_update.mount_status.value,
+                "share_url": mount_update.share_url,
+                "target_path": mount_update.target_path,
+                "error_message": mount_update.error_message
+            }
+        )
+        
+        # Send to WebSocketManager if available
+        await self._notify_mount_websocket(mount_update)
+    
+    async def _notify_mount_websocket(self, update: MountStatusUpdate) -> None:
+        """
+        Send mount status update to WebSocketManager.
+        
+        Args:
+            update: MountStatusUpdate event to broadcast
+        """
+        if not self._websocket_manager:
+            return
+            
+        try:
+            await self._websocket_manager.broadcast_mount_status(update)
+        except Exception as e:
+            self._logger.error(f"Error broadcasting mount status via WebSocket: {e}")

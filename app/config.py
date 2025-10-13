@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # Parallel processing
     max_concurrent_copies: int = 8                              # Maximum number of concurrent copy operations
     
+    # Network mount configuration
+    enable_auto_mount: bool = False                             # Enable automatic network mount attempts
+    network_share_url: str = ""                                # Network share URL (e.g., smb://server/share)
+    windows_drive_letter: str = ""                             # Windows drive letter (e.g., "Z") or empty for UNC
+    macos_mount_point: str = ""                                # macOS mount point prefix (default: /Volumes)
+    
     model_config = SettingsConfigDict(env_file="settings.env")
     
     @property

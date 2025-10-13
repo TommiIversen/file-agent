@@ -12,6 +12,12 @@ document.addEventListener('alpine:init', () => {
         destination: null,
         overall_status: 'Unknown',
         
+        // Mount Status State
+        mountStatus: {
+            source: null,
+            destination: null
+        },
+        
         // Loading State
         isLoading: false,
         lastUpdated: null,
@@ -64,6 +70,22 @@ document.addEventListener('alpine:init', () => {
             } else if (data.storage_type === 'destination') {
                 this.updateDestination(data.storage_info);
             }
+        },
+        
+        // Mount Status Update Handler
+        handleMountStatus(data) {
+            console.log('Mount status update received:', data);
+            
+            this.mountStatus[data.storage_type] = {
+                status: data.mount_status,
+                shareUrl: data.share_url,
+                mountPath: data.mount_path,
+                targetPath: data.target_path,
+                errorMessage: data.error_message,
+                timestamp: new Date(data.timestamp)
+            };
+            
+            this.lastUpdated = new Date();
         },
         
         // Computed Properties - Source
@@ -157,6 +179,53 @@ document.addEventListener('alpine:init', () => {
         
         get destinationWritable() {
             return this.destination?.has_write_access || false;
+        },
+        
+        // Mount Status Computed Properties
+        get sourceMountStatus() {
+            return this.mountStatus.source?.status || null;
+        },
+        
+        get destinationMountStatus() {
+            return this.mountStatus.destination?.status || null;
+        },
+        
+        get sourceMountStatusColor() {
+            switch (this.sourceMountStatus) {
+                case 'SUCCESS': return 'text-green-400';
+                case 'ATTEMPTING': return 'text-blue-400';
+                case 'FAILED': return 'text-red-400';
+                case 'NOT_CONFIGURED': return 'text-gray-400';
+                default: return 'text-gray-500';
+            }
+        },
+        
+        get destinationMountStatusColor() {
+            switch (this.destinationMountStatus) {
+                case 'SUCCESS': return 'text-green-400';
+                case 'ATTEMPTING': return 'text-blue-400';
+                case 'FAILED': return 'text-red-400';
+                case 'NOT_CONFIGURED': return 'text-gray-400';
+                default: return 'text-gray-500';
+            }
+        },
+        
+        get destinationMountMessage() {
+            const mount = this.mountStatus.destination;
+            if (!mount) return null;
+            
+            switch (mount.status) {
+                case 'ATTEMPTING':
+                    return `Mounting ${mount.shareUrl}...`;
+                case 'SUCCESS':
+                    return `Mounted ${mount.shareUrl}`;
+                case 'FAILED':
+                    return `Mount failed: ${mount.errorMessage || 'Unknown error'}`;
+                case 'NOT_CONFIGURED':
+                    return 'Network mount not configured';
+                default:
+                    return null;
+            }
         }
     });
 });

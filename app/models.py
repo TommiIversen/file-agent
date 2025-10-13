@@ -45,6 +45,14 @@ class StorageStatus(str, Enum):
     CRITICAL = "CRITICAL"       # Very low space / read-only
 
 
+class MountStatus(str, Enum):
+    """Network mount operation status for real-time UI feedback"""
+    ATTEMPTING = "ATTEMPTING"   # Mount operation in progress
+    SUCCESS = "SUCCESS"         # Mount completed successfully  
+    FAILED = "FAILED"           # Mount operation failed
+    NOT_CONFIGURED = "NOT_CONFIGURED"  # Network mount not configured
+
+
 class TrackedFile(BaseModel):
     """
     Central datastruktur der repræsenterer en fil gennem hele kopieringsprocessen.
@@ -279,6 +287,64 @@ class StorageUpdate(BaseModel):
     )
 
     model_config = ConfigDict()
+
+
+class MountStatusUpdate(BaseModel):
+    """
+    Event data structure for network mount status notifications.
+    
+    Used by StorageMonitorService to notify WebSocketManager of mount operations
+    for real-time UI feedback during network mount attempts.
+    """
+    
+    storage_type: str = Field(
+        ...,
+        description="Type of storage: 'source' or 'destination'"
+    )
+    
+    mount_status: MountStatus = Field(
+        ...,
+        description="Current mount operation status"
+    )
+    
+    share_url: Optional[str] = Field(
+        default=None,
+        description="Network share URL being mounted (e.g., //nas/shared)"
+    )
+    
+    mount_path: Optional[str] = Field(
+        default=None,
+        description="Local path where share is mounted (e.g., /Volumes/shared)"
+    )
+    
+    target_path: str = Field(
+        ...,
+        description="Target storage path that triggered mount operation"
+    )
+    
+    error_message: Optional[str] = Field(
+        default=None,
+        description="Error message if mount operation failed"
+    )
+    
+    timestamp: datetime = Field(
+        default_factory=datetime.now,
+        description="Timestamp of mount status update"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "storage_type": "destination",
+                "mount_status": "ATTEMPTING",
+                "share_url": "//nas/shared",
+                "mount_path": "/Volumes/shared",
+                "target_path": "/Volumes/shared/ingest",
+                "error_message": None,
+                "timestamp": "2025-10-13T14:30:00Z"
+            }
+        }
+    )
 
 
 class FileStateUpdate(BaseModel):

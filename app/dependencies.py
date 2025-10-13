@@ -17,6 +17,7 @@ from .services.file_copier import FileCopyService
 from .services.websocket_manager import WebSocketManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
+from .services.network_mount import NetworkMountService
 from .services.space_checker import SpaceChecker
 from .services.space_retry_manager import SpaceRetryManager
 
@@ -177,9 +178,24 @@ def get_storage_checker() -> StorageChecker:
     return _singletons["storage_checker"]
 
 
+def get_network_mount_service() -> NetworkMountService:
+    """
+    Hent NetworkMountService singleton instance.
+    
+    Returns:
+        NetworkMountService instance (oprettes kun én gang)
+    """
+    if "network_mount_service" not in _singletons:
+        settings = get_settings()
+        _singletons["network_mount_service"] = NetworkMountService(settings)
+    
+    return _singletons["network_mount_service"]
+
+
 def get_storage_monitor() -> StorageMonitorService:
     """
     Hent StorageMonitorService singleton instance.
+    Enhanced: Now integrates with NetworkMountService for automatic network mount handling.
     
     Returns:
         StorageMonitorService instance (oprettes kun én gang)
@@ -188,11 +204,13 @@ def get_storage_monitor() -> StorageMonitorService:
         settings = get_settings()
         storage_checker = get_storage_checker()
         websocket_manager = get_websocket_manager()
+        network_mount_service = get_network_mount_service()  # Phase 2 integration
         
         _singletons["storage_monitor"] = StorageMonitorService(
             settings=settings,
             storage_checker=storage_checker,
-            websocket_manager=websocket_manager
+            websocket_manager=websocket_manager,
+            network_mount_service=network_mount_service
         )
         
         # Set storage_monitor reference in WebSocketManager to avoid circular dependency

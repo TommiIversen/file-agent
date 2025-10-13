@@ -16,6 +16,7 @@ from ...models import StorageInfo, StorageStatus
 from .storage_state import StorageState
 from .directory_manager import DirectoryManager
 from .notification_handler import NotificationHandler
+from .mount_status_broadcaster import MountStatusBroadcaster
 
 
 class StorageMonitorService:
@@ -41,7 +42,7 @@ class StorageMonitorService:
     """
     
     def __init__(self, settings: Settings, storage_checker: StorageChecker, 
-                 websocket_manager=None):
+                 websocket_manager=None, network_mount_service=None):
         """
         Initialize StorageMonitorService.
         
@@ -49,15 +50,18 @@ class StorageMonitorService:
             settings: Application configuration
             storage_checker: Utility for checking storage health
             websocket_manager: WebSocket manager for real-time updates
+            network_mount_service: Network mount service for automatic mounting
         """
         # This class is responsible solely for orchestrating storage monitoring, adhering to SRP
         self._settings = settings
         self._storage_checker = storage_checker
+        self._network_mount_service = network_mount_service
         
         # Specialized components (SRP compliance)
         self._storage_state = StorageState()
         self._directory_manager = DirectoryManager()
         self._notification_handler = NotificationHandler(websocket_manager)
+        self._mount_broadcaster = MountStatusBroadcaster(self._notification_handler)
         
         # Runtime state (minimal, orchestration only)
         self._is_running = False
@@ -150,19 +154,71 @@ class StorageMonitorService:
                 critical_threshold_gb=critical_threshold
             )
             
-            # Enhanced: If directory is not accessible, attempt recreation
+            # Enhanced: If directory is not accessible, try network mount first (for destination), then directory recreation
             if not new_info.is_accessible:
-                self._logger.warning(f"{storage_type.title()} directory not accessible: {path}. Attempting recreation.")
-                recreation_success = await self._directory_manager.ensure_directory_exists(path, storage_type)
+                self._logger.warning(f"{storage_type.title()} directory not accessible: {path}.")
                 
-                if recreation_success:
-                    # Re-check storage after successful recreation
-                    self._logger.info(f"Re-checking {storage_type} storage after directory recreation")
-                    new_info = await self._storage_checker.check_path(
-                        path=path,
-                        warning_threshold_gb=warning_threshold,
-                        critical_threshold_gb=critical_threshold
-                    )
+                # PHASE 2: Network mount integration - attempt network remount for destination paths
+                mount_attempted = False
+                if storage_type == "destination" and self._network_mount_service:
+                    if self._network_mount_service.is_network_mount_configured():
+                        share_url = self._network_mount_service.get_network_share_url()
+                        if share_url:
+                            self._logger.info(f"Attempting network mount for destination: {share_url}")
+                            
+                            # PHASE 3: Broadcast mount attempt status
+                            await self._mount_broadcaster.broadcast_mount_attempt(
+                                storage_type=storage_type,
+                                share_url=share_url,
+                                target_path=path
+                            )
+                            
+                            mount_success = await self._network_mount_service.ensure_mount_available(share_url, path)
+                            mount_attempted = True
+                            
+                            if mount_success:
+                                self._logger.info(f"Network mount successful, re-checking storage: {path}")
+                                
+                                # PHASE 3: Broadcast mount success status
+                                await self._mount_broadcaster.broadcast_mount_success(
+                                    storage_type=storage_type,
+                                    share_url=share_url,
+                                    target_path=path
+                                )
+                                
+                                # Re-check storage after successful mount
+                                new_info = await self._storage_checker.check_path(
+                                    path=path,
+                                    warning_threshold_gb=warning_threshold,
+                                    critical_threshold_gb=critical_threshold
+                                )
+                            else:
+                                # PHASE 3: Broadcast mount failure status
+                                await self._mount_broadcaster.broadcast_mount_failure(
+                                    storage_type=storage_type,
+                                    share_url=share_url,
+                                    target_path=path
+                                )
+                    else:
+                        # PHASE 3: Broadcast not configured status
+                        await self._mount_broadcaster.broadcast_not_configured(
+                            storage_type=storage_type,
+                            target_path=path
+                        )
+                
+                # Fallback: If still not accessible and no mount was attempted, try directory recreation
+                if not new_info.is_accessible and not mount_attempted:
+                    self._logger.info(f"Attempting directory recreation: {path}")
+                    recreation_success = await self._directory_manager.ensure_directory_exists(path, storage_type)
+                    
+                    if recreation_success:
+                        # Re-check storage after successful recreation
+                        self._logger.info(f"Re-checking {storage_type} storage after directory recreation")
+                        new_info = await self._storage_checker.check_path(
+                            path=path,
+                            warning_threshold_gb=warning_threshold,
+                            critical_threshold_gb=critical_threshold
+                        )
             
             # Update state using StorageState component
             old_info = self._get_current_info(storage_type)
