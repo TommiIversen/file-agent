@@ -57,7 +57,7 @@
                 <!-- Titel (venstre) -->
                 <div>
                     <h1 class="text-3xl font-bold">Dr. Feta</h1>
-                    <p class="text-sm text-gray-300">File Egress Transfer Agent</p>
+                    <p class="text-xs text-gray-300">File Egress Transfer Agent</p>
                 </div>
                 
                 <!-- File Statistics (centered) -->
@@ -92,7 +92,7 @@
                         <div class="flex items-center justify-end mb-1">
                             <div class="status-indicator rounded-full mr-2"
                                  :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
-                            <span x-text="$store.connection?.text || 'Indlæser...'" class="text-sm"></span>
+                            <span x-text="$store.connection?.text || 'Indlæser...'" class="text-xs"></span>
                         </div>
                         <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
                     </div>
