@@ -1,23 +1,10 @@
-"""
-Storage API Endpoints for File Transfer Agent.
-
-Specialized REST API endpoints for Nagios-style monitoring with HTTP status codes.
-General storage monitoring is now handled via WebSocket real-time updates.
-"""
-
 from fastapi import APIRouter, HTTPException, Depends, status
 
 from ..dependencies import get_storage_monitor
 from ..services.storage_monitor import StorageMonitorService
 from ..models import StorageInfo, StorageStatus
 
-
-# Response models are imported from models.py (StorageInfo, StorageStatus)
-# No additional response models needed - storage data is sent via WebSocket
-
-
 router = APIRouter(prefix="/api", tags=["storage"])
-
 
 @router.get("/storage/source", response_model=StorageInfo)
 async def get_source_storage(
@@ -41,9 +28,7 @@ async def get_source_storage(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source storage information not available. Monitoring may not be started."
-        )
-    
-    # Set HTTP status based on source storage status
+        )    
     if source_info.status == StorageStatus.CRITICAL:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
