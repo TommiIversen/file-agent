@@ -52,7 +52,7 @@
     
     <div class="container mx-auto p-4 max-w-7xl">
         <!-- Header with Status -->
-        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-6 mb-4 text-white">
+        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 text-white">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center mb-4">
                 <!-- Titel (venstre) -->
                 <div>
@@ -196,29 +196,27 @@
                     </template>
                 </div>
             </div>
+            
+            <!-- Sort Options - flyttet fra Files List til main container -->
+            <div class="flex justify-end">
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-300 text-sm">Sorter efter:</span>
+                    <select x-model="$store.files.sortBy" 
+                            @change="$store.files.setSortBy($event.target.value)"
+                            class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
+                        <option value="activity">Seneste aktivitet</option>
+                        <option value="discovered">Opdaget tidspunkt</option>
+                        <option value="started">Startet tidspunkt</option>
+                        <option value="completed">Færdig tidspunkt</option>
+                        <option value="filename">Filnavn</option>
+                        <option value="size">Filstørrelse</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
         <!-- Files List -->
         <div class="space-y-2">
-            <!-- Sort Options -->
-            <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 mb-4">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-white">📁 Filer</h2>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-gray-300 text-sm">Sorter efter:</span>
-                        <select x-model="$store.files.sortBy" 
-                                @change="$store.files.setSortBy($event.target.value)"
-                                class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
-                            <option value="activity">Seneste aktivitet</option>
-                            <option value="discovered">Opdaget tidspunkt</option>
-                            <option value="started">Startet tidspunkt</option>
-                            <option value="completed">Færdig tidspunkt</option>
-                            <option value="filename">Filnavn</option>
-                            <option value="size">Filstørrelse</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
             
             <template x-for="file in $store.files.allFiles" :key="file.file_path">
                 <!-- Simple File Row with Hover Tooltip -->
