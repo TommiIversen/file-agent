@@ -144,16 +144,21 @@ class ResumableStrategyFactory:
             # Brug resumable strategies
             from ..utils.resumable_copy_strategies import CONSERVATIVE_CONFIG
             
+            # Create FileCopyExecutor instance for resumable strategies
+            file_copy_executor = FileCopyExecutor(self.settings)
+            
             if strategy_type == "growing":
                 strategy = ResumableGrowingFileCopyStrategy(
                     settings=self.settings,
                     state_manager=self.state_manager,
+                    file_copy_executor=file_copy_executor,
                     resume_config=CONSERVATIVE_CONFIG
                 )
             else:
                 strategy = ResumableNormalFileCopyStrategy(
                     settings=self.settings, 
                     state_manager=self.state_manager,
+                    file_copy_executor=file_copy_executor,
                     resume_config=CONSERVATIVE_CONFIG
                 )
         

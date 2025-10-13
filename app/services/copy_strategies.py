@@ -469,11 +469,13 @@ class CopyStrategyFactory:
             self.normal_strategy = ResumableNormalFileCopyStrategy(
                 settings=settings, 
                 state_manager=state_manager,
+                file_copy_executor=self.file_copy_executor,
                 resume_config=CONSERVATIVE_CONFIG
             )
             self.growing_strategy = ResumableGrowingFileCopyStrategy(
                 settings=settings, 
                 state_manager=state_manager,
+                file_copy_executor=self.file_copy_executor,
                 resume_config=CONSERVATIVE_CONFIG
             )
         else:
