@@ -63,11 +63,26 @@
                 <!-- File Statistics (centered) -->
                 <div class="flex justify-center">
                     <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-                        <span class="text-blue-300">Total: <strong x-text="$store.files.statistics.totalFiles">0</strong></span>
-                        <span class="text-yellow-300">Aktive: <strong x-text="$store.files.statistics.activeFiles">0</strong></span>
-                        <span class="text-orange-300">Growing: <strong x-text="$store.files.statistics.growingFiles">0</strong></span>
-                        <span class="text-green-300">Færdige: <strong x-text="$store.files.statistics.completedFiles">0</strong></span>
-                        <span class="text-red-300">Fejlede: <strong x-text="$store.files.statistics.failedFiles">0</strong></span>
+                        <div class="text-center">
+                            <div class="text-blue-300">Total</div>
+                            <strong class="text-white" x-text="$store.files.statistics.totalFiles">0</strong>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-yellow-300">Aktive</div>
+                            <strong class="text-white" x-text="$store.files.statistics.activeFiles">0</strong>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-orange-300">Growing</div>
+                            <strong class="text-white" x-text="$store.files.statistics.growingFiles">0</strong>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-green-300">Færdige</div>
+                            <strong class="text-white" x-text="$store.files.statistics.completedFiles">0</strong>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-red-300">Fejlede</div>
+                            <strong class="text-white" x-text="$store.files.statistics.failedFiles">0</strong>
+                        </div>
                     </div>
                 </div>
                 
