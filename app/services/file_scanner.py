@@ -53,13 +53,12 @@ class FileScannerService:
         self.settings = settings
         self.state_manager = state_manager
         self.storage_monitor = storage_monitor
-        self._logger = logging.getLogger("app.file_scanner")
         
         # Growing file support
         self.growing_file_detector = None
         if settings.enable_growing_file_support:
             self.growing_file_detector = GrowingFileDetector(settings, state_manager)
-            self._logger.info("Growing file support enabled")
+            logging.info("Growing file support enabled")
         
         # Internal tracking til fil-stabilitet
         self._file_last_seen: Dict[str, datetime] = {}
@@ -68,10 +67,10 @@ class FileScannerService:
         # Flag til at stoppe scanning loop
         self._running = False
         
-        self._logger.info("FileScannerService initialiseret")
-        self._logger.info(f"Overvåger: {settings.source_directory}")
-        self._logger.info(f"Fil stabilitet: {settings.file_stable_time_seconds}s")
-        self._logger.info(f"Polling interval: {settings.polling_interval_seconds}s")
+        logging.info("FileScannerService initialiseret")
+        logging.info(f"Overvåger: {settings.source_directory}")
+        logging.info(f"Fil stabilitet: {settings.file_stable_time_seconds}s")
+        logging.info(f"Polling interval: {settings.polling_interval_seconds}s")
     
     async def start_scanning(self) -> None:
         """
@@ -80,11 +79,11 @@ class FileScannerService:
         Denne metode kører indefinitely indtil stop_scanning() kaldes.
         """
         if self._running:
-            self._logger.warning("Scanner er allerede startet")
+            logging.warning("Scanner er allerede startet")
             return
         
         self._running = True
-        self._logger.info("File Scanner startet")
+        logging.info("File Scanner startet")
         
         # Start growing file monitoring if enabled
         if self.growing_file_detector:
@@ -93,10 +92,10 @@ class FileScannerService:
         try:
             await self._scan_folder_loop()
         except asyncio.CancelledError:
-            self._logger.info("File Scanner blev cancelled")
+            logging.info("File Scanner blev cancelled")
             raise
         except Exception as e:
-            self._logger.error(f"Fejl i scanning loop: {e}")
+            logging.error(f"Fejl i scanning loop: {e}")
             raise
         finally:
             # Stop growing file monitoring
@@ -104,12 +103,12 @@ class FileScannerService:
                 await self.growing_file_detector.stop_monitoring()
             
             self._running = False
-            self._logger.info("File Scanner stoppet")
+            logging.info("File Scanner stoppet")
     
     def stop_scanning(self) -> None:
         """Stop fil scanning loop."""
         self._running = False
-        self._logger.info("File Scanner stop request")
+        logging.info("File Scanner stop request")
     
     async def _scan_folder_loop(self) -> None:
         """
@@ -141,7 +140,7 @@ class FileScannerService:
                 await self._check_file_stability()
                 
                 scan_duration = (datetime.now() - scan_start).total_seconds()
-                self._logger.debug(f"Scan iteration komplet på {scan_duration:.2f}s")
+                logging.debug(f"Scan iteration komplet på {scan_duration:.2f}s")
                 
                 # Vent før næste iteration
                 await asyncio.sleep(self.settings.polling_interval_seconds)
@@ -149,7 +148,7 @@ class FileScannerService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self._logger.error(f"Fejl i scan iteration: {e}")
+                logging.error(f"Fejl i scan iteration: {e}")
                 # Vent lidt før retry for at undgå tight error loop
                 await asyncio.sleep(5)
     
@@ -171,11 +170,11 @@ class FileScannerService:
             
             # Direct directory check - always try to scan if directory exists
             if not await aiofiles.os.path.exists(source_path):
-                self._logger.debug(f"Source directory does not exist: {source_path}")
+                logging.debug(f"Source directory does not exist: {source_path}")
                 return discovered_files
 
             if not await aiofiles.os.path.isdir(source_path):
-                self._logger.debug(f"Source path er ikke en directory: {source_path}")
+                logging.debug(f"Source path er ikke en directory: {source_path}")
                 return discovered_files
             
             # Scan rekursivt for .mxf filer
@@ -189,10 +188,10 @@ class FileScannerService:
                         if not self._should_ignore_file(abs_file_path):
                             discovered_files.add(abs_file_path)
             
-            self._logger.debug(f"Opdagede {len(discovered_files)} MXF filer")
+            logging.debug(f"Opdagede {len(discovered_files)} MXF filer")
             
         except Exception as e:
-            self._logger.error(f"Fejl ved discovery af filer: {e}")
+            logging.error(f"Fejl ved discovery af filer: {e}")
         
         return discovered_files
     
@@ -207,7 +206,7 @@ class FileScannerService:
             removed_count = await self.state_manager.cleanup_missing_files(current_files)
             
             if removed_count > 0:
-                self._logger.info(f"Cleanup: Fjernede {removed_count} filer der ikke længere eksisterer")
+                logging.info(f"Cleanup: Fjernede {removed_count} filer der ikke længere eksisterer")
             
             # Cleanup internal tracking data
             paths_to_remove = set(self._file_last_seen.keys()) - current_files
@@ -216,7 +215,7 @@ class FileScannerService:
                 self._file_last_write_times.pop(path, None)
             
         except Exception as e:
-            self._logger.error(f"Fejl ved cleanup af missing files: {e}")
+            logging.error(f"Fejl ved cleanup af missing files: {e}")
     
     async def _cleanup_old_completed_files(self) -> None:
         """
@@ -229,10 +228,10 @@ class FileScannerService:
             )
             
             if removed_count > 0:
-                self._logger.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
+                logging.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
                 
         except Exception as e:
-            self._logger.error(f"Fejl ved cleanup af gamle completed filer: {e}")
+            logging.error(f"Fejl ved cleanup af gamle completed filer: {e}")
     
     async def _process_discovered_files(self, current_files: Set[str]) -> None:
         """
@@ -257,7 +256,7 @@ class FileScannerService:
                 
                 # Skip tomme filer
                 if file_size == 0:
-                    self._logger.debug(f"Skipper tom fil: {file_path}")
+                    logging.debug(f"Skipper tom fil: {file_path}")
                     continue
                 
                 # Tilføj fil til StateManager
@@ -271,10 +270,10 @@ class FileScannerService:
                 self._file_last_seen[file_path] = datetime.now()
                 self._file_last_write_times[file_path] = last_write_time
                 
-                self._logger.info(f"Ny fil opdaget: {os.path.basename(file_path)} ({file_size} bytes)")
+                logging.info(f"Ny fil opdaget: {os.path.basename(file_path)} ({file_size} bytes)")
                 
             except Exception as e:
-                self._logger.error(f"Fejl ved processing af fil {file_path}: {e}")
+                logging.error(f"Fejl ved processing af fil {file_path}: {e}")
     
     async def _get_file_stats(self, file_path: str) -> Optional[tuple]:
         """
@@ -293,7 +292,7 @@ class FileScannerService:
             return (file_size, last_write_time)
         
         except (OSError, IOError) as e:
-            self._logger.warning(f"Kan ikke læse fil stats for {file_path}: {e}")
+            logging.warning(f"Kan ikke læse fil stats for {file_path}: {e}")
             return None
     
     async def _check_file_stability(self) -> None:
@@ -335,14 +334,14 @@ class FileScannerService:
                     await self._handle_traditional_stability_logic(file_path, current_file_size, current_write_time, tracked_file)
                 
         except Exception as e:
-            self._logger.error(f"Fejl ved stability check: {e}")
+            logging.error(f"Fejl ved stability check: {e}")
     
     async def _handle_growing_file_logic(self, file_path: str, current_file_size: int, current_write_time: datetime, tracked_file) -> None:
         """Handle file using growing file detection logic"""
         try:
             # Always log growing file status for debugging
             if tracked_file.status == FileStatus.GROWING:
-                self._logger.info(f"🔄 GROWING FILE CHECK: {os.path.basename(file_path)} "
+                logging.info(f"🔄 GROWING FILE CHECK: {os.path.basename(file_path)} "
                                 f"current: {current_file_size / (1024*1024):.2f}MB / "
                                 f"needed: {self.settings.growing_file_min_size_mb}MB "
                                 f"(tracked: {tracked_file.file_size / (1024*1024):.2f}MB)")
@@ -361,7 +360,7 @@ class FileScannerService:
                     # For GROWING files, set bytes_copied=0 for UI progress display
                     if recommended_status == FileStatus.GROWING:
                         update_kwargs['bytes_copied'] = 0  # Haven't started copying yet
-                        self._logger.info(f"⏳ GROWING FILE STATUS CHANGE: {os.path.basename(file_path)} "
+                        logging.info(f"⏳ GROWING FILE STATUS CHANGE: {os.path.basename(file_path)} "
                                         f"now GROWING with size: {current_file_size / (1024*1024):.1f}MB (0 bytes copied)")
                     
                     if growth_info:
@@ -377,11 +376,11 @@ class FileScannerService:
                         **update_kwargs
                     )
                     
-                    self._logger.info(f"Growing file status: {os.path.basename(file_path)} -> {recommended_status.value}")
+                    logging.info(f"Growing file status: {os.path.basename(file_path)} -> {recommended_status.value}")
             
             # ALWAYS check for size changes, regardless of status changes above
             if current_file_size != tracked_file.file_size:
-                self._logger.info(f"📏 FILE SIZE CHANGED: {os.path.basename(file_path)} "
+                logging.info(f"📏 FILE SIZE CHANGED: {os.path.basename(file_path)} "
                                 f"{tracked_file.file_size / (1024*1024):.2f}MB → {current_file_size / (1024*1024):.2f}MB")
                 
                 # For GROWING files, send separate update with bytes_copied=0 for UI progress
@@ -392,7 +391,7 @@ class FileScannerService:
                         file_size=current_file_size,
                         bytes_copied=0  # Show 0 copied since we haven't started copying yet
                     )
-                    self._logger.info(f"📈 GROWING FILE PROGRESS UPDATE: {os.path.basename(file_path)} "
+                    logging.info(f"📈 GROWING FILE PROGRESS UPDATE: {os.path.basename(file_path)} "
                                      f"0 / {current_file_size / (1024*1024):.2f}MB "
                                      f"(waiting for {self.settings.growing_file_min_size_mb}MB minimum)")
                 
@@ -403,11 +402,11 @@ class FileScannerService:
                         status=tracked_file.status,  # Keep same status
                         file_size=current_file_size
                     )
-                self._logger.debug(f"Growing file size update: {os.path.basename(file_path)} "
+                logging.debug(f"Growing file size update: {os.path.basename(file_path)} "
                                  f"({tracked_file.file_size} -> {current_file_size} bytes)")
                 
         except Exception as e:
-            self._logger.error(f"Error in growing file logic for {file_path}: {e}")
+            logging.error(f"Error in growing file logic for {file_path}: {e}")
     
     async def _handle_traditional_stability_logic(self, file_path: str, current_file_size: int, current_write_time: datetime, tracked_file) -> None:
         """Handle file using traditional stability logic"""
@@ -426,12 +425,12 @@ class FileScannerService:
                         status=FileStatus.DISCOVERED,  # Keep same status
                         file_size=current_file_size
                     )
-                    self._logger.debug(
+                    logging.debug(
                         f"Fil størrelse opdateret: {os.path.basename(file_path)} "
                         f"({tracked_file.file_size} -> {current_file_size} bytes)"
                     )
                 
-                self._logger.debug(f"Fil stadig aktiv: {os.path.basename(file_path)}")
+                logging.debug(f"Fil stadig aktiv: {os.path.basename(file_path)}")
                 return
             
             # Tjek om filen har været stabil længe nok
@@ -451,12 +450,12 @@ class FileScannerService:
                     self._file_last_seen.pop(file_path, None)
                     self._file_last_write_times.pop(file_path, None)
                     
-                    self._logger.info(f"Fil promoveret til Ready: {os.path.basename(file_path)}")
+                    logging.info(f"Fil promoveret til Ready: {os.path.basename(file_path)}")
                 else:
-                    self._logger.warning(f"Fil er stabil men ikke tilgængelig: {os.path.basename(file_path)}")
+                    logging.warning(f"Fil er stabil men ikke tilgængelig: {os.path.basename(file_path)}")
                     
         except Exception as e:
-            self._logger.error(f"Error in traditional stability logic for {file_path}: {e}")
+            logging.error(f"Error in traditional stability logic for {file_path}: {e}")
     
     async def _verify_file_accessible(self, file_path: str) -> bool:
         """
@@ -476,7 +475,7 @@ class FileScannerService:
             return True
             
         except (OSError, IOError, PermissionError) as e:
-            self._logger.debug(f"Fil ikke tilgængelig {file_path}: {e}")
+            logging.debug(f"Fil ikke tilgængelig {file_path}: {e}")
             return False
     
     async def get_scanning_statistics(self) -> Dict:
@@ -518,17 +517,17 @@ class FileScannerService:
         
         # Ignore storage test files
         if filename.startswith(self.settings.storage_test_file_prefix):
-            self._logger.debug(f"Ignoring storage test file: {filename}")
+            logging.debug(f"Ignoring storage test file: {filename}")
             return True
         
         # Ignore macOS system files
         if filename == ".DS_Store":
-            self._logger.debug(f"Ignoring macOS system file: {filename}")
+            logging.debug(f"Ignoring macOS system file: {filename}")
             return True
             
         # Ignore other hidden system files
         if filename.startswith("._"):  # macOS AppleDouble files
-            self._logger.debug(f"Ignoring macOS AppleDouble file: {filename}")
+            logging.debug(f"Ignoring macOS AppleDouble file: {filename}")
             return True
             
         # Add other ignore patterns here if needed

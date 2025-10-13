@@ -53,9 +53,9 @@ class JobSpaceManager:
         self.job_queue = job_queue
         self.space_checker = space_checker
         self.space_retry_manager = space_retry_manager
-        self._logger = logging.getLogger("app.job_space_manager")
         
-        self._logger.debug("JobSpaceManager initialized")
+        
+        logging.debug("JobSpaceManager initialized")
     
     def should_check_space(self) -> bool:
         """
@@ -115,7 +115,7 @@ class JobSpaceManager:
         """
         file_path = job["file_path"]
         
-        self._logger.warning(
+        logging.warning(
             f"Insufficient space for {file_path}: {space_check.reason}",
             extra={
                 "operation": "space_shortage",
@@ -138,7 +138,7 @@ class JobSpaceManager:
                     space_shortage=True
                 )
             except Exception as e:
-                self._logger.error(f"Error scheduling space retry for {file_path}: {e}")
+                logging.error(f"Error scheduling space retry for {file_path}: {e}")
         
         # Fallback: mark as failed if no retry manager or retry scheduling failed
         try:
@@ -149,7 +149,7 @@ class JobSpaceManager:
             )
             await self.job_queue.mark_job_failed(job, "Insufficient disk space")
         except Exception as e:
-            self._logger.error(f"Error marking job as failed due to space shortage {file_path}: {e}")
+            logging.error(f"Error marking job as failed due to space shortage {file_path}: {e}")
         
         return ProcessResult(
             success=False,

@@ -53,9 +53,9 @@ class JobFilePreparationService:
         self.state_manager = state_manager
         self.copy_strategy_factory = copy_strategy_factory
         self.template_engine = template_engine
-        self._logger = logging.getLogger("app.job_file_preparation")
         
-        self._logger.debug("JobFilePreparationService initialized")
+        
+        logging.debug("JobFilePreparationService initialized")
     
     async def prepare_file_for_copy(self, job: dict) -> Optional[PreparedFile]:
         """
@@ -72,7 +72,7 @@ class JobFilePreparationService:
         # Get tracked file from state manager
         tracked_file = await self.state_manager.get_file(file_path)
         if not tracked_file:
-            self._logger.error(f"File not found in state manager: {file_path}")
+            logging.error(f"File not found in state manager: {file_path}")
             return None
         
         # Select appropriate copy strategy

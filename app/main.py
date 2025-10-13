@@ -16,9 +16,9 @@ import uvicorn
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-
+import logging
 from .config import Settings
-from .logging_config import setup_logging, get_app_logger
+from .logging_config import setup_logging
 from .api import state, websockets, storage
 from .routers import views
 from .dependencies import get_file_scanner, get_job_queue_service, get_file_copier, get_websocket_manager, get_storage_monitor
@@ -34,44 +34,44 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     setup_logging(settings)
-    logger = get_app_logger()
-    logger.info("File Transfer Agent starting up...")
-    logger.info(f"Source directory: {settings.source_directory}")
-    logger.info(f"Destination directory: {settings.destination_directory}")
-    logger.info("StateManager klar til brug")
+    
+    logging.info("File Transfer Agent starting up...")
+    logging.info(f"Source directory: {settings.source_directory}")
+    logging.info(f"Destination directory: {settings.destination_directory}")
+    logging.info("StateManager klar til brug")
     
     # Start FileScannerService som background task
     file_scanner = get_file_scanner()
     scanner_task = asyncio.create_task(file_scanner.start_scanning())
     _background_tasks.append(scanner_task)
-    logger.info("FileScannerService startet som background task")
+    logging.info("FileScannerService startet som background task")
     
     # Start JobQueueService producer som background task
     job_queue_service = get_job_queue_service()
     queue_task = asyncio.create_task(job_queue_service.start_producer())
     _background_tasks.append(queue_task)
-    logger.info("JobQueueService producer startet som background task")
+    logging.info("JobQueueService producer startet som background task")
     
     # Start FileCopyService consumer som background task
     file_copier = get_file_copier()
     copier_task = asyncio.create_task(file_copier.start_consumer())
     _background_tasks.append(copier_task)
-    logger.info("FileCopyService consumer startet som background task")
+    logging.info("FileCopyService consumer startet som background task")
     
     # Initialize WebSocketManager (subscription happens automatically)
     get_websocket_manager()  # Initialize singleton
-    logger.info("WebSocketManager initialiseret og subscribed til StateManager")
+    logging.info("WebSocketManager initialiseret og subscribed til StateManager")
     
     # Start StorageMonitorService som background task
     storage_monitor = get_storage_monitor()
     storage_task = asyncio.create_task(storage_monitor.start_monitoring())
     _background_tasks.append(storage_task)
-    logger.info("StorageMonitorService startet som background task")
+    logging.info("StorageMonitorService startet som background task")
     
     yield
     
     # Shutdown
-    logger.info("File Transfer Agent shutting down...")
+    logging.info("File Transfer Agent shutting down...")
     
     # Stop alle background tasks gracefully
     file_scanner.stop_scanning()
@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     if _background_tasks:
         await asyncio.gather(*_background_tasks, return_exceptions=True)
     
-    logger.info("Alle background tasks stoppet")
+    logging.info("Alle background tasks stoppet")
 
 # Create FastAPI application
 app = FastAPI(
@@ -101,16 +101,16 @@ app = FastAPI(
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
-    logger = get_app_logger()
-    logger.info(f"Static files mounted at /static from {static_path}")
+    
+    logging.info(f"Static files mounted at /static from {static_path}")
 
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger = get_app_logger()
+    
     
     # Log indkommende request
-    logger.info(
+    logging.info(
         f"Incoming request: {request.method} {request.url.path}",
         extra={
             "operation": "http_request",
@@ -124,7 +124,7 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     
     # Log response
-    logger.info(
+    logging.info(
         f"Response: {response.status_code}",
         extra={
             "operation": "http_response", 

@@ -53,9 +53,9 @@ class JobCopyExecutor:
         self.state_manager = state_manager
         self.copy_strategy_factory = copy_strategy_factory
         self.error_classifier = error_classifier
-        self._logger = logging.getLogger("app.job_copy_executor")
         
-        self._logger.debug("JobCopyExecutor initialized")
+        
+        logging.debug("JobCopyExecutor initialized")
     
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
         """
@@ -71,7 +71,7 @@ class JobCopyExecutor:
             started_copying_at=datetime.now()
         )
         
-        self._logger.debug(
+        logging.debug(
             f"Initialized copy status for {prepared_file.tracked_file.file_path} "
             f"with strategy {prepared_file.strategy_name}"
         )
@@ -100,7 +100,7 @@ class JobCopyExecutor:
                 source_size = source_path.stat().st_size
                 completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
                 
-                self._logger.info(
+                logging.info(
                     f"RESUME SCENARIO DETECTED: {dest_path.name} "
                     f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}% complete)"
                 )
@@ -108,14 +108,14 @@ class JobCopyExecutor:
                 # Check if strategy has resume capabilities
                 strategy_name = strategy.__class__.__name__
                 if "Resumable" in strategy_name:
-                    self._logger.info(f"Using RESUME-CAPABLE strategy: {strategy_name}")
+                    logging.info(f"Using RESUME-CAPABLE strategy: {strategy_name}")
                 else:
-                    self._logger.warning(f"Using NON-RESUMABLE strategy: {strategy_name} - will restart from beginning!")
+                    logging.warning(f"Using NON-RESUMABLE strategy: {strategy_name} - will restart from beginning!")
             else:
-                self._logger.info("FRESH COPY: No existing destination file")
+                logging.info("FRESH COPY: No existing destination file")
             
             # Execute the copy operation with progress tracking
-            self._logger.info(
+            logging.info(
                 f"Starting copy with {strategy.__class__.__name__}: "
                 f"{prepared_file.tracked_file.file_path} -> {prepared_file.destination_path}"
             )
@@ -127,28 +127,28 @@ class JobCopyExecutor:
             )
             
             if copy_success:
-                self._logger.info(f"Copy completed successfully: {prepared_file.tracked_file.file_path}")
+                logging.info(f"Copy completed successfully: {prepared_file.tracked_file.file_path}")
                 
                 # Log resume metrics if available
                 if hasattr(strategy, 'get_resume_metrics') and dest_exists:
                     metrics = strategy.get_resume_metrics()
                     if metrics:
-                        self._logger.info(
+                        logging.info(
                             f"RESUME METRICS: {dest_path.name} - "
                             f"preserved {metrics.preservation_percentage:.1f}% of data, "
                             f"verification took {metrics.verification_time_seconds:.2f}s"
                         )
             else:
-                self._logger.error(f"Copy failed: {prepared_file.tracked_file.file_path}")
+                logging.error(f"Copy failed: {prepared_file.tracked_file.file_path}")
                 
                 # Log resume failure context if applicable
                 if dest_exists:
-                    self._logger.error(f"RESUME FAILURE: Could not resume {dest_path.name} - may need fresh copy")
+                    logging.error(f"RESUME FAILURE: Could not resume {dest_path.name} - may need fresh copy")
             
             return copy_success
             
         except Exception as e:
-            self._logger.error(f"Error executing copy for {prepared_file.tracked_file.file_path}: {e}")
+            logging.error(f"Error executing copy for {prepared_file.tracked_file.file_path}: {e}")
             return False
     
     async def handle_copy_failure(self, prepared_file: PreparedFile, error: Exception) -> bool:
@@ -212,7 +212,7 @@ class JobCopyExecutor:
                 # Note: bytes_copied and copy_progress are preserved automatically
             )
             
-            self._logger.warning(
+            logging.warning(
                 f"⏸️ COPY PAUSED: {Path(file_path).name} - {reason} "
                 f"(preserved {current_tracked.bytes_copied or 0:,} bytes)"
             )
@@ -239,7 +239,7 @@ class JobCopyExecutor:
             error_message=f"Failed: {reason}"
         )
         
-        self._logger.error(
+        logging.error(
             f"❌ COPY FAILED: {Path(file_path).name} - {reason} (Original error: {error})"
         )
     

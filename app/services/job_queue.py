@@ -41,7 +41,7 @@ class JobQueueService:
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue: Optional[asyncio.Queue] = None  # Will be created when needed
-        self._logger = logging.getLogger("app.job_queue")
+        
         
         # Queue statistics
         self._total_jobs_added = 0
@@ -52,8 +52,8 @@ class JobQueueService:
         self._running = False
         self._producer_task: Optional[asyncio.Task] = None
         
-        self._logger.info("JobQueueService initialiseret")
-        self._logger.info("Queue vil blive oprettet når start_producer kaldes")
+        logging.info("JobQueueService initialiseret")
+        logging.info("Queue vil blive oprettet når start_producer kaldes")
     
     async def start_producer(self) -> None:
         """
@@ -63,20 +63,20 @@ class JobQueueService:
         med status READY til job queue automatisk.
         """
         if self._running:
-            self._logger.warning("Producer task er allerede startet")
+            logging.warning("Producer task er allerede startet")
             return
         
         # Create queue if not exists
         if self.job_queue is None:
             self.job_queue = asyncio.Queue()
-            self._logger.info("Queue oprettet med kapacitet: unlimited")
+            logging.info("Queue oprettet med kapacitet: unlimited")
         
         self._running = True
         
         # Subscribe til StateManager events
         self.state_manager.subscribe(self._handle_state_change)
         
-        self._logger.info("Job Queue Producer startet")
+        logging.info("Job Queue Producer startet")
         
         try:
             # Producer kører indefinitely og lytter på events
@@ -84,19 +84,19 @@ class JobQueueService:
                 await asyncio.sleep(1)  # Keep alive loop
                 
         except asyncio.CancelledError:
-            self._logger.info("Job Queue Producer blev cancelled")
+            logging.info("Job Queue Producer blev cancelled")
             raise
         except Exception as e:
-            self._logger.error(f"Fejl i producer task: {e}")
+            logging.error(f"Fejl i producer task: {e}")
             raise
         finally:
             self._running = False
-            self._logger.info("Job Queue Producer stoppet")
+            logging.info("Job Queue Producer stoppet")
     
     def stop_producer(self) -> None:
         """Stop producer task gracefully."""
         self._running = False
-        self._logger.info("Job Queue Producer stop request")
+        logging.info("Job Queue Producer stop request")
     
     async def _handle_state_change(self, update) -> None:
         """
@@ -111,7 +111,7 @@ class JobQueueService:
                 await self._add_job_to_queue(update.tracked_file)
                 
         except Exception as e:
-            self._logger.error(f"Fejl ved håndtering af state change: {e}")
+            logging.error(f"Fejl ved håndtering af state change: {e}")
     
     async def _add_job_to_queue(self, tracked_file) -> None:
         """
@@ -121,7 +121,7 @@ class JobQueueService:
             tracked_file: TrackedFile objekt der skal kopieres
         """
         if self.job_queue is None:
-            self._logger.error("Queue er ikke oprettet endnu!")
+            logging.error("Queue er ikke oprettet endnu!")
             return
             
         try:
@@ -143,15 +143,15 @@ class JobQueueService:
                 FileStatus.IN_QUEUE
             )
             
-            self._logger.info(f"Job tilføjet til queue: {tracked_file.file_path}")
-            self._logger.debug(f"Queue size nu: {self.job_queue.qsize()}")
+            logging.info(f"Job tilføjet til queue: {tracked_file.file_path}")
+            logging.debug(f"Queue size nu: {self.job_queue.qsize()}")
             
         except asyncio.QueueFull:
-            self._logger.error(f"Queue er fuld! Kan ikke tilføje: {tracked_file.file_path}")
+            logging.error(f"Queue er fuld! Kan ikke tilføje: {tracked_file.file_path}")
             # Kunne implementere retry logic her
             
         except Exception as e:
-            self._logger.error(f"Fejl ved tilføjelse til queue: {e}")
+            logging.error(f"Fejl ved tilføjelse til queue: {e}")
     
     async def get_next_job(self) -> Optional[Dict]:
         """
@@ -168,7 +168,7 @@ class JobQueueService:
             job = await asyncio.wait_for(self.job_queue.get(), timeout=1.0)
             self._total_jobs_processed += 1
             
-            self._logger.debug(f"Job hentet fra queue: {job['file_path']}")
+            logging.debug(f"Job hentet fra queue: {job['file_path']}")
             return job
             
         except asyncio.TimeoutError:
@@ -176,7 +176,7 @@ class JobQueueService:
             return None
             
         except Exception as e:
-            self._logger.error(f"Fejl ved hentning fra queue: {e}")
+            logging.error(f"Fejl ved hentning fra queue: {e}")
             return None
     
     async def mark_job_completed(self, job: Dict) -> None:
@@ -193,10 +193,10 @@ class JobQueueService:
             # Marker task som done i asyncio.Queue
             self.job_queue.task_done()
             
-            self._logger.debug(f"Job markeret som completed: {job['file_path']}")
+            logging.debug(f"Job markeret som completed: {job['file_path']}")
             
         except Exception as e:
-            self._logger.error(f"Fejl ved marking job completed: {e}")
+            logging.error(f"Fejl ved marking job completed: {e}")
     
     async def mark_job_failed(self, job: Dict, error_message: str) -> None:
         """
@@ -214,7 +214,7 @@ class JobQueueService:
             self.job_queue.task_done()
             
             # Log failure
-            self._logger.warning(f"Job failed: {job['file_path']} - {error_message}")
+            logging.warning(f"Job failed: {job['file_path']} - {error_message}")
             
             # Tilføj til failed jobs liste (kunne implementere dead letter queue)
             failed_job = {
@@ -230,7 +230,7 @@ class JobQueueService:
                 self._failed_jobs = self._failed_jobs[-100:]
             
         except Exception as e:
-            self._logger.error(f"Fejl ved marking job failed: {e}")
+            logging.error(f"Fejl ved marking job failed: {e}")
     
     async def requeue_job(self, job: Dict) -> None:
         """
@@ -240,7 +240,7 @@ class JobQueueService:
             job: Job dictionary der skal requeues
         """
         if self.job_queue is None:
-            self._logger.error("Queue er ikke oprettet endnu!")
+            logging.error("Queue er ikke oprettet endnu!")
             return
             
         try:
@@ -251,10 +251,10 @@ class JobQueueService:
             # Put tilbage i queue
             await self.job_queue.put(job)
             
-            self._logger.info(f"Job requeued (retry {job['retry_count']}): {job['file_path']}")
+            logging.info(f"Job requeued (retry {job['retry_count']}): {job['file_path']}")
             
         except Exception as e:
-            self._logger.error(f"Fejl ved requeue af job: {e}")
+            logging.error(f"Fejl ved requeue af job: {e}")
     
     def get_queue_size(self) -> int:
         """
@@ -332,7 +332,7 @@ class JobQueueService:
         """
         count = len(self._failed_jobs)
         self._failed_jobs.clear()
-        self._logger.info(f"Cleared {count} failed jobs")
+        logging.info(f"Cleared {count} failed jobs")
         return count
     
     async def peek_next_job(self) -> Optional[Dict]:
@@ -374,15 +374,15 @@ class JobQueueService:
         2. Pause alle jobs i queue (de kan ikke starte)
         3. Bevare interrupt context for seamless resume
         """
-        self._logger.info("⏸️ DESTINATION UNAVAILABLE: Pausing active operations")
+        logging.info("⏸️ DESTINATION UNAVAILABLE: Pausing active operations")
         
         # Få alle aktive operations der skal pauses
         paused_count = await self._pause_active_operations()
         
         if paused_count > 0:
-            self._logger.info(f"⏸️ PAUSED: {paused_count} active operations until destination recovery")
+            logging.info(f"⏸️ PAUSED: {paused_count} active operations until destination recovery")
         else:
-            self._logger.info("ℹ️ No active operations to pause")
+            logging.info("ℹ️ No active operations to pause")
 
     async def handle_destination_recovery(self) -> None:
         """
@@ -393,7 +393,7 @@ class JobQueueService:
         - Bruger existing resumable strategies  
         - Fortsætter seamless fra hvor det slap
         """
-        self._logger.info("� DESTINATION RECOVERY: Starting intelligent resume process")
+        logging.info("� DESTINATION RECOVERY: Starting intelligent resume process")
         
         # Få alle paused operations der kan resumes
         paused_files = await self.state_manager.get_paused_files()
@@ -402,15 +402,15 @@ class JobQueueService:
         
         # Resume paused files med preserved context
         if paused_files:
-            self._logger.info(f"▶️ Resuming {len(paused_files)} paused operations")
+            logging.info(f"▶️ Resuming {len(paused_files)} paused operations")
             for tracked_file in paused_files:
                 await self._resume_paused_file(tracked_file)
                 total_resumed += 1
         
         if total_resumed > 0:
-            self._logger.info(f"✅ DESTINATION RECOVERY COMPLETE: Successfully resumed {total_resumed} operations")
+            logging.info(f"✅ DESTINATION RECOVERY COMPLETE: Successfully resumed {total_resumed} operations")
         else:
-            self._logger.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
+            logging.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
     
     async def _pause_active_operations(self) -> int:
         """
@@ -462,10 +462,10 @@ class JobQueueService:
                 )
                 
                 paused_count += 1
-                self._logger.info(f"⏸️ PAUSED: {file_path} ({current_status} → {new_status})")
+                logging.info(f"⏸️ PAUSED: {file_path} ({current_status} → {new_status})")
                 
             except Exception as e:
-                self._logger.error(f"❌ Error pausing {file_path}: {e}")
+                logging.error(f"❌ Error pausing {file_path}: {e}")
         
         return paused_count
 
@@ -488,7 +488,7 @@ class JobQueueService:
             elif current_status == FileStatus.PAUSED_GROWING_COPY:
                 new_status = FileStatus.READY  # Will be requeued and resume via checksum
             else:
-                self._logger.warning(f"⚠️ Unknown paused status for {file_path}: {current_status}")
+                logging.warning(f"⚠️ Unknown paused status for {file_path}: {current_status}")
                 return
             
             # Resume med preserved context (bytes_copied bevares)
@@ -500,13 +500,13 @@ class JobQueueService:
                 # Note: bytes_copied og copy_progress bevares fra pause
             )
             
-            self._logger.info(
+            logging.info(
                 f"▶️ RESUMED: {file_path} ({current_status} → {new_status}) "
                 f"- preserved {tracked_file.bytes_copied:,} bytes"
             )
             
         except Exception as e:
-            self._logger.error(f"❌ Error resuming {file_path}: {e}")
+            logging.error(f"❌ Error resuming {file_path}: {e}")
     
     async def _get_recent_network_failed_files(self) -> List[TrackedFile]:
         """
@@ -532,7 +532,7 @@ class JobQueueService:
                 recent_failed.append(tracked_file)
         
         if recent_failed:
-            self._logger.info(f"🔍 Found {len(recent_failed)} recent network-failed files to pause")
+            logging.info(f"🔍 Found {len(recent_failed)} recent network-failed files to pause")
         
         return recent_failed
     

@@ -67,12 +67,12 @@ class DestinationChecker:
         self._check_lock = asyncio.Lock()
         
         # Logging
-        self._logger = logging.getLogger("app.destination_checker")
         
-        self._logger.debug(f"DestinationChecker initialized for: {destination_path}")
-        self._logger.debug(f"Cache TTL: {cache_ttl_seconds} seconds")
+        
+        logging.debug(f"DestinationChecker initialized for: {destination_path}")
+        logging.debug(f"Cache TTL: {cache_ttl_seconds} seconds")
         if storage_monitor:
-            self._logger.debug("Connected to StorageMonitorService for instant updates")
+            logging.debug("Connected to StorageMonitorService for instant updates")
     
     async def is_available(self, force_refresh: bool = False) -> bool:
         """
@@ -85,7 +85,7 @@ class DestinationChecker:
             True if destination is available and writable
         """
         if not force_refresh and self._is_cache_valid():
-            self._logger.debug("Using cached destination availability result")
+            logging.debug("Using cached destination availability result")
             return self._cached_result.is_available
         
         # Use lock to prevent multiple concurrent checks
@@ -94,7 +94,7 @@ class DestinationChecker:
             if not force_refresh and self._is_cache_valid():
                 return self._cached_result.is_available
             
-            self._logger.debug("Performing fresh destination availability check")
+            logging.debug("Performing fresh destination availability check")
             result = await self._perform_availability_check()
             
             # Update cache
@@ -129,14 +129,14 @@ class DestinationChecker:
             # Cleanup test file
             try:
                 test_file.unlink()
-                self._logger.debug(f"Write access test successful: {target_path}")
+                logging.debug(f"Write access test successful: {target_path}")
                 return True
             except Exception as cleanup_error:
-                self._logger.warning(f"Could not cleanup test file: {cleanup_error}")
+                logging.warning(f"Could not cleanup test file: {cleanup_error}")
                 return True  # Write was successful even if cleanup failed
                 
         except Exception as e:
-            self._logger.warning(f"Write access test failed for {target_path}: {e}")
+            logging.warning(f"Write access test failed for {target_path}: {e}")
             return False
     
     def cache_result(self, result: bool, error_message: Optional[str] = None) -> None:
@@ -154,7 +154,7 @@ class DestinationChecker:
         )
         self._cache_timestamp = time.time()
         
-        self._logger.debug(f"Manually cached destination result: {result}")
+        logging.debug(f"Manually cached destination result: {result}")
     
     def get_cached_result(self) -> Optional[DestinationCheckResult]:
         """
@@ -171,7 +171,7 @@ class DestinationChecker:
         """Clear cached results (useful for testing)."""
         self._cached_result = None
         self._cache_timestamp = 0.0
-        self._logger.debug("Destination checker cache cleared")
+        logging.debug("Destination checker cache cleared")
     
     def get_cache_info(self) -> dict:
         """
@@ -208,12 +208,12 @@ class DestinationChecker:
         if (previous_result is None or 
             previous_result != current_available):
             
-            self._logger.debug(f"Destination availability changed: {previous_result} -> {current_available}")
+            logging.debug(f"Destination availability changed: {previous_result} -> {current_available}")
             try:
                 await self._storage_monitor.trigger_immediate_check("destination")
-                self._logger.debug("Triggered immediate storage monitor update")
+                logging.debug("Triggered immediate storage monitor update")
             except Exception as e:
-                self._logger.warning(f"Failed to trigger storage monitor update: {e}")
+                logging.warning(f"Failed to trigger storage monitor update: {e}")
         
         # Store current status for next comparison
         self._previous_result_for_comparison = current_available
@@ -243,7 +243,7 @@ class DestinationChecker:
                 
                 if not storage_info:
                     error_msg = "Destination storage information not available from StorageMonitor"
-                    self._logger.warning(error_msg)
+                    logging.warning(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -252,7 +252,7 @@ class DestinationChecker:
                 
                 if not storage_info.is_accessible:
                     error_msg = f"Destination directory not accessible according to StorageMonitor: {storage_info.error_message or 'Unknown reason'}"
-                    self._logger.warning(error_msg)
+                    logging.warning(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -261,7 +261,7 @@ class DestinationChecker:
                 
                 if not storage_info.has_write_access:
                     error_msg = "Destination directory not writable according to StorageMonitor"
-                    self._logger.warning(error_msg)
+                    logging.warning(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -269,10 +269,10 @@ class DestinationChecker:
                     )
             else:
                 # Fallback for backward compatibility (should not happen in production)
-                self._logger.warning("StorageMonitor not available - performing direct directory check")
+                logging.warning("StorageMonitor not available - performing direct directory check")
                 if not self.destination_path.exists():
                     error_msg = f"Destination directory does not exist and StorageMonitor not available: {self.destination_path}"
-                    self._logger.error(error_msg)
+                    logging.error(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -281,7 +281,7 @@ class DestinationChecker:
 
                 if not self.destination_path.is_dir():
                     error_msg = f"Destination is not a directory: {self.destination_path}"
-                    self._logger.warning(error_msg)
+                    logging.warning(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -290,7 +290,7 @@ class DestinationChecker:
             
             # If we reach here with StorageMonitor, destination is ready
             if self._storage_monitor:
-                self._logger.debug("Destination availability confirmed by StorageMonitor")
+                logging.debug("Destination availability confirmed by StorageMonitor")
                 return DestinationCheckResult(
                     is_available=True,
                     checked_at=datetime.now()
@@ -307,9 +307,9 @@ class DestinationChecker:
                     try:
                         test_file.unlink()
                     except Exception as cleanup_error:
-                        self._logger.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
+                        logging.debug(f"Could not cleanup test file (ignoring): {cleanup_error}")
                     
-                    self._logger.debug(f"Destination availability check passed: {self.destination_path}")
+                    logging.debug(f"Destination availability check passed: {self.destination_path}")
                     return DestinationCheckResult(
                         is_available=True,
                         checked_at=datetime.now(),
@@ -318,7 +318,7 @@ class DestinationChecker:
                     
                 except Exception as write_error:
                     error_msg = f"Cannot write to destination: {write_error}"
-                    self._logger.warning(error_msg)
+                    logging.warning(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
@@ -328,7 +328,7 @@ class DestinationChecker:
                 
         except Exception as e:
             error_msg = f"Error during destination availability check: {e}"
-            self._logger.error(error_msg)
+            logging.error(error_msg)
             return DestinationCheckResult(
                 is_available=False,
                 checked_at=datetime.now(),

@@ -37,7 +37,6 @@ class FileCopyService:
         storage_monitor=None,
         enable_resume: bool = True
     ):
-        self._logger = logging.getLogger(self.__class__.__name__)
         self._running = False
         self._consumer_tasks: List[asyncio.Task] = []
         self._max_concurrent_copies = settings.max_concurrent_copies
@@ -82,7 +81,7 @@ class FileCopyService:
         if self._running:
             return
         self._running = True
-        self._logger.info(f"Starting {self._max_concurrent_copies} workers")
+        logging.info(f"Starting {self._max_concurrent_copies} workers")
         
         for i in range(self._max_concurrent_copies):
             task = asyncio.create_task(self._consumer_worker(i))
@@ -117,7 +116,7 @@ class FileCopyService:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            self._logger.error(f"Worker {worker_id} error: {e}")
+            logging.error(f"Worker {worker_id} error: {e}")
             raise
 
     async def get_copy_statistics(self) -> Dict:

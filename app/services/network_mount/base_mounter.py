@@ -2,14 +2,14 @@
 
 from abc import ABC, abstractmethod
 from typing import Tuple
-from ...logging_config import get_app_logger
+
 
 
 class BaseMounter(ABC):
     """Abstract base class for platform-specific mount operations. SRP: Interface definition ONLY."""
     
     def __init__(self):
-        self._logger = get_app_logger()
+        pass        
     
     @abstractmethod
     async def attempt_mount(self, share_url: str) -> bool:

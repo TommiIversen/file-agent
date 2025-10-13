@@ -8,7 +8,7 @@ providing state-related operations, adhering to SRP.
 from typing import Optional
 
 from ...models import StorageInfo, StorageStatus
-from ...logging_config import get_app_logger
+
 
 
 class StorageState:
@@ -26,7 +26,7 @@ class StorageState:
         # This class is responsible solely for storage state caching, adhering to SRP
         self._source_info: Optional[StorageInfo] = None
         self._destination_info: Optional[StorageInfo] = None
-        self._logger = get_app_logger()
+        
         
     def update_source_info(self, info: StorageInfo) -> bool:
         """

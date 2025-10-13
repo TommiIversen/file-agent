@@ -7,10 +7,10 @@ Uses StorageChecker for actual health checks and delegates to specialized compon
 
 import asyncio
 from typing import Optional
-
+import logging
 from ..storage_checker import StorageChecker
 from ...config import Settings
-from ...logging_config import get_app_logger
+
 from ...models import StorageInfo, StorageStatus
 
 from .storage_state import StorageState
@@ -69,18 +69,18 @@ class StorageMonitorService:
         self._is_running = False
         self._monitor_task: Optional[asyncio.Task] = None
         
-        self._logger = get_app_logger()
-        self._logger.info("StorageMonitorService initialized with SRP-compliant architecture")
+        
+        logging.info("StorageMonitorService initialized with SRP-compliant architecture")
     
     async def start_monitoring(self) -> None:
         """Start background monitoring with immediate first check."""
         if self._is_running:
-            self._logger.warning("Storage monitoring already running")
+            logging.warning("Storage monitoring already running")
             return
             
         self._is_running = True
         self._monitor_task = asyncio.create_task(self._monitoring_loop())
-        self._logger.info("Storage monitoring started")
+        logging.info("Storage monitoring started")
         
         # Immediate first check
         await self._check_all_storage()
@@ -99,7 +99,7 @@ class StorageMonitorService:
             except asyncio.CancelledError:
                 pass
         
-        self._logger.info("Storage monitoring stopped")
+        logging.info("Storage monitoring stopped")
     
     async def _monitoring_loop(self) -> None:
         """Main monitoring loop - runs on configured interval."""
@@ -108,15 +108,15 @@ class StorageMonitorService:
                 try:
                     await self._check_all_storage()
                 except Exception as e:
-                    self._logger.error(f"Error in storage monitoring loop: {e}")
+                    logging.error(f"Error in storage monitoring loop: {e}")
                 
                 # Wait for next check interval
                 await asyncio.sleep(self._settings.storage_check_interval_seconds)
                 
         except asyncio.CancelledError:
-            self._logger.debug("Storage monitoring loop cancelled")
+            logging.debug("Storage monitoring loop cancelled")
         except Exception as e:
-            self._logger.error(f"Unexpected error in monitoring loop: {e}")
+            logging.error(f"Unexpected error in monitoring loop: {e}")
     
     async def _check_all_storage(self) -> None:
         """Check both source and destination storage using StorageChecker."""
@@ -158,7 +158,7 @@ class StorageMonitorService:
             
             # Enhanced: If directory is not accessible, try network mount first (for destination), then directory recreation
             if not new_info.is_accessible:
-                self._logger.warning(f"{storage_type.title()} directory not accessible: {path}.")
+                logging.warning(f"{storage_type.title()} directory not accessible: {path}.")
                 
                 # PHASE 2: Network mount integration - attempt network remount for destination paths
                 mount_attempted = False
@@ -166,7 +166,7 @@ class StorageMonitorService:
                     if self._network_mount_service.is_network_mount_configured():
                         share_url = self._network_mount_service.get_network_share_url()
                         if share_url:
-                            self._logger.info(f"Attempting network mount for destination: {share_url}")
+                            logging.info(f"Attempting network mount for destination: {share_url}")
                             
                             # PHASE 3: Broadcast mount attempt status
                             await self._mount_broadcaster.broadcast_mount_attempt(
@@ -179,7 +179,7 @@ class StorageMonitorService:
                             mount_attempted = True
                             
                             if mount_success:
-                                self._logger.info(f"Network mount successful, re-checking storage: {path}")
+                                logging.info(f"Network mount successful, re-checking storage: {path}")
                                 
                                 # PHASE 3: Broadcast mount success status
                                 await self._mount_broadcaster.broadcast_mount_success(
@@ -210,12 +210,12 @@ class StorageMonitorService:
                 
                 # Fallback: If still not accessible and no mount was attempted, try directory recreation
                 if not new_info.is_accessible and not mount_attempted:
-                    self._logger.info(f"Attempting directory recreation: {path}")
+                    logging.info(f"Attempting directory recreation: {path}")
                     recreation_success = await self._directory_manager.ensure_directory_exists(path, storage_type)
                     
                     if recreation_success:
                         # Re-check storage after successful recreation
-                        self._logger.info(f"Re-checking {storage_type} storage after directory recreation")
+                        logging.info(f"Re-checking {storage_type} storage after directory recreation")
                         new_info = await self._storage_checker.check_path(
                             path=path,
                             warning_threshold_gb=warning_threshold,
@@ -236,7 +236,7 @@ class StorageMonitorService:
                 await self._handle_destination_recovery(storage_type, old_info, new_info)
             
         except Exception as e:
-            self._logger.error(f"Error checking {storage_type} storage at {path}: {e}")
+            logging.error(f"Error checking {storage_type} storage at {path}: {e}")
     
     def _get_current_info(self, storage_type: str) -> Optional[StorageInfo]:
         """Get current storage info for comparison."""
@@ -262,10 +262,10 @@ class StorageMonitorService:
             storage_type: "source" or "destination" to check immediately
         """
         if not self._is_running:
-            self._logger.warning(f"Storage monitoring not running - cannot trigger immediate {storage_type} check")
+            logging.warning(f"Storage monitoring not running - cannot trigger immediate {storage_type} check")
             return
             
-        self._logger.debug(f"Triggering immediate {storage_type} check")
+        logging.debug(f"Triggering immediate {storage_type} check")
         
         if storage_type == "source":
             await self._check_single_storage(
@@ -339,7 +339,7 @@ class StorageMonitorService:
                       new_info.status == StorageStatus.OK)
         
         if is_recovery:
-            self._logger.info(
+            logging.info(
                 f"🔄 DESTINATION RECOVERY DETECTED: {old_info.status} → {new_info.status} "
                 f"(path: {new_info.path})"
             )
@@ -377,7 +377,7 @@ class StorageMonitorService:
                          new_info.status in problematic_states)
         
         if is_unavailable:
-            self._logger.warning(
+            logging.warning(
                 f"⏸️ DESTINATION UNAVAILABLE: {old_info.status} → {new_info.status} "
                 f"(path: {new_info.path})"
             )
@@ -395,13 +395,13 @@ class StorageMonitorService:
             new_info: Current unavailable storage state
         """
         if not self._job_queue:
-            self._logger.warning("⚠️ Job queue not available - cannot pause operations")
+            logging.warning("⚠️ Job queue not available - cannot pause operations")
             return
             
         try:
             unavailable_reason = f"{old_info.status} → {new_info.status}"
             
-            self._logger.warning(
+            logging.warning(
                 f"⏸️ PAUSING OPERATIONS: {unavailable_reason} "
                 f"(Reason: {new_info.error_message or 'Unknown'})"
             )
@@ -409,10 +409,10 @@ class StorageMonitorService:
             # Trigger intelligent pause via job queue
             await self._job_queue.handle_destination_unavailable()
             
-            self._logger.info("⏸️ Operations paused successfully - awaiting recovery")
+            logging.info("⏸️ Operations paused successfully - awaiting recovery")
             
         except Exception as e:
-            self._logger.error(f"❌ Error during destination pause handling: {e}")
+            logging.error(f"❌ Error during destination pause handling: {e}")
     
     async def _handle_destination_recovery(self, storage_type: str, old_info: StorageInfo, 
                                          new_info: StorageInfo) -> None:
@@ -425,13 +425,13 @@ class StorageMonitorService:
             new_info: Current recovered storage state
         """
         if not self._job_queue:
-            self._logger.warning("⚠️ Job queue not available - cannot perform automatic recovery")
+            logging.warning("⚠️ Job queue not available - cannot perform automatic recovery")
             return
             
         try:
             recovery_reason = f"{old_info.status} → {new_info.status}"
             
-            self._logger.info(
+            logging.info(
                 f"🚀 INITIATING UNIVERSAL RECOVERY: {recovery_reason} "
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
             )
@@ -439,7 +439,7 @@ class StorageMonitorService:
             # Trigger intelligent resume via job queue
             await self._job_queue.handle_destination_recovery()
             
-            self._logger.info("✅ Intelligent resume initiated successfully")
+            logging.info("✅ Intelligent resume initiated successfully")
             
         except Exception as e:
-            self._logger.error(f"❌ Error during universal recovery: {e}")
+            logging.error(f"❌ Error during universal recovery: {e}")

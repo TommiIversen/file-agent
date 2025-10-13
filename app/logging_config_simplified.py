@@ -4,49 +4,46 @@ Ultra-simple logging configuration for File Transfer Agent
 Principles:
 - ONE logger for entire app
 - Console + File output (with nightly rotation)
-- Beautiful Rich console output with colors and formatting
+- Automatic file/class/line information via %(pathname)s, %(funcName)s, %(lineno)s
 - Keep X days of logs
 """
 
 import logging
 import logging.handlers
-from rich.logging import RichHandler
-from rich.console import Console
 
 from .config import Settings
 
 
 def setup_logging(settings: Settings) -> None:
     """
-    Setup beautiful logging: Rich console + rotating file
+    Setup simple logging: console + rotating file with same content
     """
     
     # Ensure log directory exists
     log_dir = settings.log_directory
     log_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create Rich console handler for beautiful output
-    console = Console(width=120)
-    rich_handler = RichHandler(
-        console=console,
-        show_time=True,
-        show_level=True,
-        show_path=True,
-        markup=True,
-        rich_tracebacks=True,
-        tracebacks_show_locals=False,
-        locals_max_length=10,
-        locals_max_string=80,
-    )
-    rich_handler.setLevel(settings.log_level)
-    
-    # File handler with detailed format for debugging
-    file_format = (
+    # Create formatters
+    # Console: colored and readable
+    console_format = (
         "%(asctime)s - %(levelname)s - "
-        "%(filename)s:%(lineno)d in %(funcName)s() - "
+        "%(pathname)s:%(lineno)d in %(funcName)s() - "
         "%(message)s"
     )
     
+    # File: same info but without colors
+    file_format = (
+        "%(asctime)s - %(levelname)s - "
+        "%(pathname)s:%(lineno)d in %(funcName)s() - "
+        "%(message)s"
+    )
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(settings.log_level)
+    console_handler.setFormatter(logging.Formatter(console_format))
+    
+    # File handler with nightly rotation
     file_handler = logging.handlers.TimedRotatingFileHandler(
         filename=settings.log_file_path,
         when='midnight',
@@ -57,29 +54,20 @@ def setup_logging(settings: Settings) -> None:
     file_handler.setLevel(settings.log_level)
     file_handler.setFormatter(logging.Formatter(file_format))
     
-    # Configure root logger (catches everything) 
+    # Configure root logger (catches everything)
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.log_level)
-    
-    # Clear any existing handlers to avoid duplicates
-    root_logger.handlers.clear()
-    
-    # Add only our handlers
-    root_logger.addHandler(rich_handler)
+    root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
     
     # Silence noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     
-    # Prevent propagation to avoid duplicate logs
-    logging.getLogger().propagate = False
-    
-    # Test log with Rich markup
+    # Test log
     logging.info(
-        f"[bold green]Logging initialized[/] - "
-        f"File: [cyan]{settings.log_file_path}[/], "
-        f"Level: [yellow]{settings.log_level}[/], "
-        f"Retention: [blue]{settings.log_retention_days}[/] days"
+        f"Logging initialized - File: {settings.log_file_path}, "
+        f"Level: {settings.log_level}, "
+        f"Retention: {settings.log_retention_days} days"
     )
 
 

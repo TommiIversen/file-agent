@@ -2,7 +2,7 @@
 
 from typing import Optional
 from ...config import Settings
-from ...logging_config import get_app_logger
+
 
 
 class MountConfigHandler:
@@ -10,7 +10,7 @@ class MountConfigHandler:
     
     def __init__(self, settings: Settings):
         self._settings = settings
-        self._logger = get_app_logger()
+        
     
     def is_auto_mount_enabled(self) -> bool:
         """Check if auto-mount is enabled in settings."""

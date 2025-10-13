@@ -135,7 +135,7 @@ class FileCopyExecutor:
             settings: Application settings for copy configuration
         """
         self.settings = settings
-        self._logger = logging.getLogger("app.copy_executor")
+        
         
         # Copy configuration - optimized for network transfers
         self.normal_chunk_size = settings.normal_file_chunk_size_kb * 1024  # 1MB default
@@ -143,7 +143,7 @@ class FileCopyExecutor:
         self.large_file_threshold = settings.large_file_threshold_gb * (1024 ** 3)  # Convert to bytes
         self.progress_update_interval = getattr(settings, 'copy_progress_update_interval', 1)
         
-        self._logger.debug(f"FileCopyExecutor initialized with optimized chunk sizes: "
+        logging.debug(f"FileCopyExecutor initialized with optimized chunk sizes: "
                          f"normal={self.normal_chunk_size//1024}KB, "
                          f"large={self.large_chunk_size//1024}KB, "
                          f"threshold={settings.large_file_threshold_gb}GB")
@@ -194,7 +194,7 @@ class FileCopyExecutor:
         temp_path = create_temp_file_path(dest)
         
         try:
-            self._logger.debug(f"Starting temp file copy: {source} -> {temp_path} -> {dest}")
+            logging.debug(f"Starting temp file copy: {source} -> {temp_path} -> {dest}")
             
             # Ensure destination directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -237,7 +237,7 @@ class FileCopyExecutor:
             result.temp_file_used = True
             result.temp_file_path = temp_path
             
-            self._logger.debug(f"Temp file copy completed successfully: {source} -> {dest}")
+            logging.debug(f"Temp file copy completed successfully: {source} -> {dest}")
             return result
             
         except Exception as e:
@@ -245,13 +245,13 @@ class FileCopyExecutor:
             if temp_path.exists():
                 try:
                     temp_path.unlink()
-                    self._logger.debug(f"Cleaned up temp file after error: {temp_path}")
+                    logging.debug(f"Cleaned up temp file after error: {temp_path}")
                 except Exception:
                     pass
             
             end_time = datetime.now()
             error_msg = f"Temp file copy failed: {str(e)}"
-            self._logger.error(error_msg)
+            logging.error(error_msg)
             
             return CopyResult(
                 success=False,
@@ -289,7 +289,7 @@ class FileCopyExecutor:
         start_time = datetime.now()
         
         try:
-            self._logger.debug(f"Starting direct copy: {source} -> {dest}")
+            logging.debug(f"Starting direct copy: {source} -> {dest}")
             
             # Ensure destination directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -311,7 +311,7 @@ class FileCopyExecutor:
                     result.end_time = end_time
                     result.elapsed_seconds = (end_time - start_time).total_seconds()
                 else:
-                    self._logger.debug(f"Direct copy completed successfully: {source} -> {dest}")
+                    logging.debug(f"Direct copy completed successfully: {source} -> {dest}")
             
             return result
             
@@ -320,13 +320,13 @@ class FileCopyExecutor:
             if dest.exists():
                 try:
                     dest.unlink()
-                    self._logger.debug(f"Cleaned up destination file after error: {dest}")
+                    logging.debug(f"Cleaned up destination file after error: {dest}")
                 except Exception:
                     pass
             
             end_time = datetime.now()
             error_msg = f"Direct copy failed: {str(e)}"
-            self._logger.error(error_msg)
+            logging.error(error_msg)
             
             return CopyResult(
                 success=False,
@@ -365,10 +365,10 @@ class FileCopyExecutor:
         # Select optimal chunk size based on file size
         if file_size >= self.large_file_threshold:
             chunk_size = self.large_chunk_size
-            self._logger.debug(f"Using large file chunk size: {chunk_size//1024}KB for {file_size/(1024**3):.1f}GB file")
+            logging.debug(f"Using large file chunk size: {chunk_size//1024}KB for {file_size/(1024**3):.1f}GB file")
         else:
             chunk_size = self.normal_chunk_size  
-            self._logger.debug(f"Using normal chunk size: {chunk_size//1024}KB for {file_size/(1024**2):.1f}MB file")
+            logging.debug(f"Using normal chunk size: {chunk_size//1024}KB for {file_size/(1024**2):.1f}MB file")
         
         try:
             async with aiofiles.open(source, 'rb') as src, aiofiles.open(dest, 'wb') as dst:
@@ -405,7 +405,7 @@ class FileCopyExecutor:
                                 progress_callback(progress)
                                 last_progress_reported = current_percent
                             except Exception as e:
-                                self._logger.warning(f"Progress callback error: {e}")
+                                logging.warning(f"Progress callback error: {e}")
             
             end_time = datetime.now()
             elapsed_seconds = (end_time - start_time).total_seconds()
@@ -448,7 +448,7 @@ class FileCopyExecutor:
         """
         try:
             if not dest.exists():
-                self._logger.warning(f"Destination file does not exist: {dest}")
+                logging.warning(f"Destination file does not exist: {dest}")
                 return False
             
             source_size = source.stat().st_size
@@ -457,14 +457,14 @@ class FileCopyExecutor:
             is_valid = validate_file_sizes(source_size, dest_size)
             
             if is_valid:
-                self._logger.debug(f"File verification successful: {source_size} bytes")
+                logging.debug(f"File verification successful: {source_size} bytes")
             else:
-                self._logger.error(f"File size mismatch: source={source_size}, dest={dest_size}")
+                logging.error(f"File size mismatch: source={source_size}, dest={dest_size}")
             
             return is_valid
             
         except Exception as e:
-            self._logger.error(f"File verification error: {e}")
+            logging.error(f"File verification error: {e}")
             return False
     
     def get_executor_info(self) -> dict:

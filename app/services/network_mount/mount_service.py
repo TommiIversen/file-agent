@@ -1,19 +1,19 @@
 """Network Mount Service - SRP compliant orchestrator."""
 
 from typing import Optional
-
+import logging
 from .platform_factory import PlatformFactory, UnsupportedPlatformError
 from .base_mounter import BaseMounter
 from .mount_config import MountConfigHandler
 from ...config import Settings
-from ...logging_config import get_app_logger
+
 
 
 class NetworkMountService:
     """Orchestrates network mount operations across platforms. SRP: Mount orchestration ONLY."""
     
     def __init__(self, settings: Settings):
-        self._logger = get_app_logger()
+        
         self._config = MountConfigHandler(settings)
         self._platform_factory = PlatformFactory()
         self._mounter: Optional[BaseMounter] = None
@@ -23,7 +23,7 @@ class NetworkMountService:
         """Initialize platform-specific mounter."""
         try:
             platform_name = self._platform_factory.detect_platform()
-            self._logger.info(f"Detected platform: {platform_name}")
+            logging.info(f"Detected platform: {platform_name}")
             
             if platform_name == "windows":
                 from .windows_mounter import WindowsMounter
@@ -31,10 +31,10 @@ class NetworkMountService:
             else:
                 self._mounter = self._platform_factory.create_mounter()
             
-            self._logger.info(f"Initialized {self._mounter.get_platform_name()} mounter")
+            logging.info(f"Initialized {self._mounter.get_platform_name()} mounter")
             
         except (UnsupportedPlatformError, Exception) as e:
-            self._logger.error(f"Error initializing network mounter: {e}")
+            logging.error(f"Error initializing network mounter: {e}")
             self._mounter = None
     
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
@@ -57,7 +57,7 @@ class NetworkMountService:
             return False
             
         except Exception as e:
-            self._logger.error(f"Error ensuring mount availability: {e}")
+            logging.error(f"Error ensuring mount availability: {e}")
             return False
     
     async def verify_mount_accessible(self, local_path: str) -> bool:
@@ -68,7 +68,7 @@ class NetworkMountService:
             is_mounted, is_accessible = await self._mounter.verify_mount_accessible(local_path)
             return is_mounted and is_accessible
         except Exception as e:
-            self._logger.error(f"Error verifying mount accessibility: {e}")
+            logging.error(f"Error verifying mount accessibility: {e}")
             return False
     
     def is_network_mount_configured(self) -> bool:
@@ -89,7 +89,7 @@ class NetworkMountService:
         try:
             return self._mounter.get_mount_point_from_url(share_url) if hasattr(self._mounter, 'get_mount_point_from_url') else None
         except Exception as e:
-            self._logger.error(f"Error getting expected mount point: {e}")
+            logging.error(f"Error getting expected mount point: {e}")
             return None
     
     def get_platform_info(self) -> dict:

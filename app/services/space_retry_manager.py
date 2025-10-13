@@ -8,9 +8,9 @@ Follows Single Responsibility Principle - only manages space retries.
 import asyncio
 from typing import Dict
 from datetime import datetime, timedelta
-
+import logging
 from ..config import Settings
-from ..logging_config import get_app_logger
+
 from ..models import FileStatus, SpaceCheckResult
 from ..services.state_manager import StateManager
 
@@ -41,13 +41,13 @@ class SpaceRetryManager:
         """
         self._settings = settings
         self._state_manager = state_manager
-        self._logger = get_app_logger()
+        
         
         # Track files waiting for space retry
         self._retry_tracking: Dict[str, RetryInfo] = {}
         self._retry_tasks: Dict[str, asyncio.Task] = {}
         
-        self._logger.debug("SpaceRetryManager initialized")
+        logging.debug("SpaceRetryManager initialized")
     
     async def schedule_space_retry(self, file_path: str, space_check: SpaceCheckResult) -> None:
         """
@@ -59,7 +59,7 @@ class SpaceRetryManager:
         """
         tracked_file = await self._state_manager.get_file(file_path)
         if not tracked_file:
-            self._logger.warning(f"Cannot schedule retry for unknown file: {file_path}")
+            logging.warning(f"Cannot schedule retry for unknown file: {file_path}")
             return
         
         # Check if we should retry or give up
@@ -118,7 +118,7 @@ class SpaceRetryManager:
         )
         self._retry_tasks[file_path] = retry_task
         
-        self._logger.info(
+        logging.info(
             f"Scheduled space retry for {file_path} in {delay_seconds}s due to {reason}",
             extra={
                 "operation": "space_retry_scheduled",
@@ -136,7 +136,7 @@ class SpaceRetryManager:
             # Check if file still exists and needs retry
             tracked_file = await self._state_manager.get_file(file_path)
             if not tracked_file or tracked_file.status != FileStatus.WAITING_FOR_SPACE:
-                self._logger.debug(f"File {file_path} no longer needs space retry")
+                logging.debug(f"File {file_path} no longer needs space retry")
                 return
             
             # Reset to READY status so FileCopyService will pick it up again
@@ -146,7 +146,7 @@ class SpaceRetryManager:
                 error_message=None
             )
             
-            self._logger.info(
+            logging.info(
                 f"Space retry executed for {file_path} - reset to READY",
                 extra={
                     "operation": "space_retry_executed",
@@ -155,9 +155,9 @@ class SpaceRetryManager:
             )
             
         except asyncio.CancelledError:
-            self._logger.debug(f"Space retry cancelled for {file_path}")
+            logging.debug(f"Space retry cancelled for {file_path}")
         except Exception as e:
-            self._logger.error(f"Error in space retry for {file_path}: {e}")
+            logging.error(f"Error in space retry for {file_path}: {e}")
         finally:
             # Cleanup tracking
             self._retry_tracking.pop(file_path, None)
@@ -171,7 +171,7 @@ class SpaceRetryManager:
             error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}"
         )
         
-        self._logger.warning(
+        logging.warning(
             f"File {file_path} marked as permanent space error after max retries",
             extra={
                 "operation": "permanent_space_error",
@@ -199,7 +199,7 @@ class SpaceRetryManager:
     
     async def cancel_all_retries(self) -> None:
         """Cancel all pending space retries (for shutdown)"""
-        self._logger.info("Cancelling all space retries")
+        logging.info("Cancelling all space retries")
         
         for file_path in list(self._retry_tasks.keys()):
             await self._cancel_existing_retry(file_path)

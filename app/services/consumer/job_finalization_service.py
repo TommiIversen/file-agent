@@ -46,9 +46,9 @@ class JobFinalizationService:
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue = job_queue
-        self._logger = logging.getLogger("app.job_finalization")
         
-        self._logger.debug("JobFinalizationService initialized")
+        
+        logging.debug("JobFinalizationService initialized")
     
     async def finalize_success(self, job: Dict, file_size: int) -> None:
         """
@@ -73,10 +73,10 @@ class JobFinalizationService:
                 retry_count=0
             )
             
-            self._logger.info(f"Job completed successfully: {file_path}")
+            logging.info(f"Job completed successfully: {file_path}")
             
         except Exception as e:
-            self._logger.error(f"Error finalizing successful job {file_path}: {e}")
+            logging.error(f"Error finalizing successful job {file_path}: {e}")
     
     async def finalize_failure(self, job: Dict, error: Exception) -> None:
         """
@@ -100,10 +100,10 @@ class JobFinalizationService:
                 error_message=error_message
             )
             
-            self._logger.error(f"Job failed permanently: {file_path} - {error_message}")
+            logging.error(f"Job failed permanently: {file_path} - {error_message}")
             
         except Exception as e:
-            self._logger.error(f"Error finalizing failed job {file_path}: {e}")
+            logging.error(f"Error finalizing failed job {file_path}: {e}")
     
     async def finalize_max_retries(self, job: Dict) -> None:
         """
@@ -126,10 +126,10 @@ class JobFinalizationService:
                 error_message=error_message
             )
             
-            self._logger.error(f"Job failed after max retries: {file_path}")
+            logging.error(f"Job failed after max retries: {file_path}")
             
         except Exception as e:
-            self._logger.error(f"Error finalizing job after max retries {file_path}: {e}")
+            logging.error(f"Error finalizing job after max retries {file_path}: {e}")
     
     def get_finalization_info(self) -> dict:
         """

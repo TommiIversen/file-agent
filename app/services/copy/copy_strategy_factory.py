@@ -70,7 +70,7 @@ class CopyStrategyFactory:
         """
         self.settings = settings
         self.state_manager = state_manager
-        self._logger = logging.getLogger("app.strategy_factory")
+        
         
         # Network-optimized copy configuration
         self.normal_chunk_size = settings.normal_file_chunk_size_kb * 1024     # 1MB default
@@ -78,7 +78,7 @@ class CopyStrategyFactory:
         self.growing_file_chunk_size = settings.growing_file_chunk_size_kb * 1024  # 2MB for growing files
         self.large_file_threshold = settings.large_file_threshold_gb * (1024 ** 3)  # Convert to bytes
         
-        self._logger.debug(f"CopyStrategyFactory initialized with optimized chunk sizes: "
+        logging.debug(f"CopyStrategyFactory initialized with optimized chunk sizes: "
                          f"normal={self.normal_chunk_size//1024}KB, "
                          f"large={self.large_file_chunk_size//1024}KB, "
                          f"growing={self.growing_file_chunk_size//1024}KB, "
@@ -125,7 +125,7 @@ class CopyStrategyFactory:
             copy_mode=copy_mode
         )
         
-        self._logger.debug(f"Generated config for {Path(tracked_file.file_path).name}: "
+        logging.debug(f"Generated config for {Path(tracked_file.file_path).name}: "
                          f"{config.get_summary()}")
         
         return config
@@ -274,12 +274,12 @@ class CopyStrategyFactory:
                     copy_speed_mbps=copy_speed_mbps
                 )
                 
-                self._logger.debug(f"Normal copy progress: {Path(file_path).name} - "
+                logging.debug(f"Normal copy progress: {Path(file_path).name} - "
                                  f"{progress.progress_percent:.1f}% "
                                  f"({copy_speed_mbps:.2f} MB/s)")
                 
             except Exception as e:
-                self._logger.warning(f"Progress callback error for {file_path}: {e}")
+                logging.warning(f"Progress callback error for {file_path}: {e}")
         
         return normal_progress_callback
     
@@ -301,12 +301,12 @@ class CopyStrategyFactory:
                     copy_speed_mbps=copy_speed_mbps
                 )
                 
-                self._logger.debug(f"Growing copy progress: {Path(file_path).name} - "
+                logging.debug(f"Growing copy progress: {Path(file_path).name} - "
                                  f"{progress.progress_percent:.1f}% "
                                  f"({progress.bytes_copied} / {progress.total_bytes} bytes, "
                                  f"{copy_speed_mbps:.2f} MB/s)")
                 
             except Exception as e:
-                self._logger.warning(f"Growing file progress callback error for {file_path}: {e}")
+                logging.warning(f"Growing file progress callback error for {file_path}: {e}")
         
         return growing_progress_callback

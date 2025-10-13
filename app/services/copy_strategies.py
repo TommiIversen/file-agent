@@ -33,7 +33,7 @@ class FileCopyStrategy(ABC):
     def __init__(self, settings: Settings, state_manager: StateManager, file_copy_executor: FileCopyExecutor):
         self.settings = settings
         self.state_manager = state_manager
-        self.logger = logging.getLogger("app.services.copy_strategies")
+        
         self.file_copy_executor = file_copy_executor
 
     @abstractmethod
@@ -87,7 +87,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
         dest = Path(dest_path)
 
         try:
-            self.logger.info(f"Starting normal copy via executor: {source.name}")
+            logging.info(f"Starting normal copy via executor: {source.name}")
 
             # Update status to copying
             await self.state_manager.update_file_status(
@@ -116,19 +116,19 @@ class NormalFileCopyStrategy(FileCopyStrategy):
             )
 
             if copy_result.success:
-                self.logger.info(f"Executor finished successfully for {source.name}. Verifying and finalizing.")
+                logging.info(f"Executor finished successfully for {source.name}. Verifying and finalizing.")
 
                 # Final verification is handled by the executor, but we can double-check
                 if not await self._verify_file_integrity(source_path, dest_path):
-                     self.logger.error(f"Post-copy verification failed for {source.name}")
+                     logging.error(f"Post-copy verification failed for {source.name}")
                      return False
 
                 # Try to delete source file, but don't fail if it's locked
                 try:
                     os.remove(source_path)
-                    self.logger.debug(f"Source file deleted: {source.name}")
+                    logging.debug(f"Source file deleted: {source.name}")
                 except (OSError, PermissionError) as e:
-                    self.logger.warning(f"Could not delete source file (may still be in use): {source.name} - {e}")
+                    logging.warning(f"Could not delete source file (may still be in use): {source.name} - {e}")
 
                 # Update status to completed
                 await self.state_manager.update_file_status(
@@ -138,15 +138,15 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                     destination_path=dest_path
                 )
 
-                self.logger.info(f"Normal copy completed: {source.name}")
+                logging.info(f"Normal copy completed: {source.name}")
                 return True
             else:
-                self.logger.error(f"Executor failed to copy {source.name}: {copy_result.error_message}")
+                logging.error(f"Executor failed to copy {source.name}: {copy_result.error_message}")
                 # The executor handles cleanup of partial/temp files
                 return False
                 
         except Exception as e:
-            self.logger.error(f"Error in normal copy strategy for {source.name}: {e}", exc_info=True)
+            logging.error(f"Error in normal copy strategy for {source.name}: {e}", exc_info=True)
             return False
 
     async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
@@ -156,13 +156,13 @@ class NormalFileCopyStrategy(FileCopyStrategy):
             dest_size = os.path.getsize(dest_path)
             
             if source_size != dest_size:
-                self.logger.error(f"Size mismatch: source={source_size}, dest={dest_size}")
+                logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
                 return False
             
             return True
             
         except Exception as e:
-            self.logger.error(f"Error verifying file integrity: {e}")
+            logging.error(f"Error verifying file integrity: {e}")
             return False
 
 
@@ -193,7 +193,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             
             if current_size < min_size_bytes:
                 size_mb = current_size / (1024 * 1024)
-                self.logger.info(
+                logging.info(
                     f"⏳ WAITING FOR SIZE: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB) - "
                     f"waiting for file to reach minimum size..."
@@ -207,42 +207,42 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         current_size = os.path.getsize(source_path)
                         size_mb = current_size / (1024 * 1024)
                         
-                        self.logger.debug(
+                        logging.debug(
                             f"📏 SIZE CHECK: {os.path.basename(source_path)} "
                             f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
                         )
                     except OSError as e:
-                        self.logger.error(f"Failed to check file size: {e}")
+                        logging.error(f"Failed to check file size: {e}")
                         return False
                 
-                self.logger.info(
+                logging.info(
                     f"✅ SIZE REACHED: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB >= {self.settings.growing_file_min_size_mb}MB) - starting copy"
                 )
             
-            self.logger.info(f"Starting growing copy: {os.path.basename(source_path)} "
+            logging.info(f"Starting growing copy: {os.path.basename(source_path)} "
                            f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)")
             
             # Ensure destination directory exists (important for template system)
             dest_dir = Path(dest_path).parent
             dest_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.debug(f"Ensured destination directory exists: {dest_dir}")
+            logging.debug(f"Ensured destination directory exists: {dest_dir}")
             
             # Use temporary file if configured to do so
             if self.settings.use_temporary_file:
                 temp_dest_path = create_temp_file_path(Path(dest_path))
                 copy_dest_path = temp_dest_path
-                self.logger.debug(f"Using temporary file for growing copy: {temp_dest_path}")
+                logging.debug(f"Using temporary file for growing copy: {temp_dest_path}")
             else:
                 copy_dest_path = dest_path
-                self.logger.debug(f"Using direct growing copy to: {dest_path}")
+                logging.debug(f"Using direct growing copy to: {dest_path}")
             
             # Perform growing copy (status already set by FileCopyService)
             success = await self._copy_growing_file(source_path, copy_dest_path, tracked_file)
             
             if success:
                 # Switch to normal copy mode for final data
-                self.logger.info(f"Growing copy phase complete. Finishing final part for: {os.path.basename(source_path)}")
+                logging.info(f"Growing copy phase complete. Finishing final part for: {os.path.basename(source_path)}")
 
                 await self.state_manager.update_file_status(
                     source_path,
@@ -258,14 +258,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         # If using temp file, rename it to final destination
                         if self.settings.use_temporary_file and temp_dest_path:
                             os.rename(temp_dest_path, dest_path)
-                            self.logger.debug(f"Renamed temp file to final destination: {dest_path}")
+                            logging.debug(f"Renamed temp file to final destination: {dest_path}")
                         
                         # Try to delete source file, but don't fail if it's locked
                         try:
                             os.remove(source_path)
-                            self.logger.debug(f"Source file deleted: {os.path.basename(source_path)}")
+                            logging.debug(f"Source file deleted: {os.path.basename(source_path)}")
                         except (OSError, PermissionError) as e:
-                            self.logger.warning(f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}")
+                            logging.warning(f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}")
                             # This is OK for growing files that may still be open by the writer
                         
                         await self.state_manager.update_file_status(
@@ -275,10 +275,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                             destination_path=dest_path
                         )
                         
-                        self.logger.info(f"Growing copy completed: {os.path.basename(source_path)}")
+                        logging.info(f"Growing copy completed: {os.path.basename(source_path)}")
                         return True
                     else:
-                        self.logger.error(f"Growing copy verification failed: {source_path}")
+                        logging.error(f"Growing copy verification failed: {source_path}")
                         return False
                 else:
                     return False
@@ -286,7 +286,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 return False
                 
         except Exception as e:
-            self.logger.error(f"Error in growing copy strategy: {e}")
+            logging.error(f"Error in growing copy strategy: {e}")
             return False
         finally:
             # Cleanup temporary file if it exists
@@ -294,7 +294,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 try:
                     os.remove(temp_dest_path)
                 except Exception as e:
-                    self.logger.warning(f"Failed to cleanup temp file {temp_dest_path}: {e}")
+                    logging.warning(f"Failed to cleanup temp file {temp_dest_path}: {e}")
     
     async def _copy_growing_file(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
         """
@@ -321,7 +321,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     try:
                         current_file_size = os.path.getsize(source_path)
                     except OSError:
-                        self.logger.warning(f"Cannot access source file: {source_path}")
+                        logging.warning(f"Cannot access source file: {source_path}")
                         break
                     
                     # Check if file is still growing
@@ -334,7 +334,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         no_growth_cycles += 1
                         
                         if no_growth_cycles >= max_no_growth_cycles:
-                            self.logger.info(f"File stopped growing: {os.path.basename(source_path)}")
+                            logging.info(f"File stopped growing: {os.path.basename(source_path)}")
                             break
                     
                     # Calculate safe copy position (stay behind write head)
@@ -407,7 +407,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error in growing file copy: {e}")
+            logging.error(f"Error in growing file copy: {e}")
             return False
     
     async def _finish_normal_copy(self, source_path: str, dest_path: str, tracked_file: TrackedFile) -> bool:
@@ -421,10 +421,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             bytes_already_copied = dest.stat().st_size
 
             if bytes_already_copied >= final_size:
-                self.logger.info(f"No remaining data to copy for {source.name}. Finalizing.")
+                logging.info(f"No remaining data to copy for {source.name}. Finalizing.")
                 return True
 
-            self.logger.info(f"Finishing copy for {source.name}. Copied: {bytes_already_copied}, Total: {final_size}")
+            logging.info(f"Finishing copy for {source.name}. Copied: {bytes_already_copied}, Total: {final_size}")
 
             # This part is tricky. The executor is designed for full file copies.
             # We will use a manual approach here to append the rest of the data,
@@ -457,7 +457,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return True
             
         except Exception as e:
-            self.logger.error(f"Error finishing normal copy for {source.name}: {e}", exc_info=True)
+            logging.error(f"Error finishing normal copy for {source.name}: {e}", exc_info=True)
             return False
     
     async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
@@ -467,13 +467,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             dest_size = os.path.getsize(dest_path)
             
             if source_size != dest_size:
-                self.logger.error(f"Size mismatch: source={source_size}, dest={dest_size}")
+                logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
                 return False
             
             return True
             
         except Exception as e:
-            self.logger.error(f"Error verifying file integrity: {e}")
+            logging.error(f"Error verifying file integrity: {e}")
             return False
 
 

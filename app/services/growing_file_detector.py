@@ -63,7 +63,6 @@ class GrowingFileDetector:
     def __init__(self, settings: Settings, state_manager: StateManager):
         self.settings = settings
         self.state_manager = state_manager
-        self.logger = logging.getLogger("app.services.growing_file_detector")
         
         # File growth tracking
         self._growth_tracking: Dict[str, FileGrowthInfo] = {}
@@ -74,17 +73,17 @@ class GrowingFileDetector:
         self.poll_interval = settings.growing_file_poll_interval_seconds
         self.growth_timeout = settings.growing_file_growth_timeout_seconds
         
-        self.logger.info(f"GrowingFileDetector initialized - min_size: {settings.growing_file_min_size_mb}MB, "
+        logging.info(f"GrowingFileDetector initialized - min_size: {settings.growing_file_min_size_mb}MB, "
                         f"poll_interval: {self.poll_interval}s, timeout: {self.growth_timeout}s")
     
     async def start_monitoring(self):
         """Start the background monitoring task"""
         if self._monitoring_active:
-            self.logger.warning("Growing file monitoring already active")
+            logging.warning("Growing file monitoring already active")
             return
             
         self._monitoring_active = True
-        self.logger.info("Starting growing file monitoring")
+        logging.info("Starting growing file monitoring")
         
         # Start background monitoring task
         asyncio.create_task(self._monitor_growing_files_loop())
@@ -92,7 +91,7 @@ class GrowingFileDetector:
     async def stop_monitoring(self):
         """Stop the background monitoring"""
         self._monitoring_active = False
-        self.logger.info("Stopping growing file monitoring")
+        logging.info("Stopping growing file monitoring")
     
     async def check_file_growth_status(self, file_path: str) -> Tuple[FileStatus, Optional[FileGrowthInfo]]:
         """
@@ -121,7 +120,7 @@ class GrowingFileDetector:
                     first_seen_size=current_size,
                     first_seen_time=current_time
                 )
-                self.logger.debug(f"Started tracking growth for {file_path} (size: {current_size / 1024 / 1024:.1f}MB)")
+                logging.debug(f"Started tracking growth for {file_path} (size: {current_size / 1024 / 1024:.1f}MB)")
                 return FileStatus.DISCOVERED, self._growth_tracking[file_path]
             
             # Update growth info (but save last_size before updating)
@@ -141,11 +140,11 @@ class GrowingFileDetector:
                 
                 # Check if it's large enough for growing copy
                 if current_size >= self.min_size_bytes:
-                    self.logger.debug(f"File {file_path} ready for growing copy "
+                    logging.debug(f"File {file_path} ready for growing copy "
                                     f"(size: {growth_info.size_mb:.1f}MB, rate: {growth_info.growth_rate_mbps:.2f}MB/s)")
                     return FileStatus.READY_TO_START_GROWING, growth_info
                 else:
-                    self.logger.debug(f"File {file_path} still growing but too small "
+                    logging.debug(f"File {file_path} still growing but too small "
                                     f"(size: {growth_info.size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB)")
                     return FileStatus.GROWING, growth_info
             else:
@@ -159,11 +158,11 @@ class GrowingFileDetector:
                     
                     stable_duration = (current_time - growth_info.stable_since).total_seconds()
                     if stable_duration >= self.growth_timeout:
-                        self.logger.debug(f"File {file_path} is static and stable, ready for normal copy "
+                        logging.debug(f"File {file_path} is static and stable, ready for normal copy "
                                         f"(size: {growth_info.size_mb:.1f}MB)")
                         return FileStatus.READY, growth_info
                     else:
-                        self.logger.debug(f"File {file_path} checking stability for normal copy "
+                        logging.debug(f"File {file_path} checking stability for normal copy "
                                         f"({stable_duration:.1f}s/{self.growth_timeout}s)")
                         return FileStatus.DISCOVERED, growth_info
                 
@@ -177,27 +176,27 @@ class GrowingFileDetector:
                     # File is stable - decide between normal copy or growing copy
                     if has_grown and current_size >= self.min_size_bytes:
                         # File grew in the past and is now stable and large enough - use growing copy
-                        self.logger.debug(f"File {file_path} finished growing, ready for growing copy "
+                        logging.debug(f"File {file_path} finished growing, ready for growing copy "
                                         f"(size: {growth_info.size_mb:.1f}MB)")
                         return FileStatus.READY_TO_START_GROWING, growth_info
                     else:
                         # File never grew or is too small - use normal copy
-                        self.logger.debug(f"File {file_path} is stable, ready for normal copy "
+                        logging.debug(f"File {file_path} is stable, ready for normal copy "
                                         f"(size: {growth_info.size_mb:.1f}MB)")
                         return FileStatus.READY, growth_info
                 else:
                     # Still in stability check period - use GROWING if it has grown, DISCOVERED if not
                     if has_grown:
-                        self.logger.debug(f"File {file_path} previously grew, checking post-growth stability "
+                        logging.debug(f"File {file_path} previously grew, checking post-growth stability "
                                         f"({stable_duration:.1f}s/{self.growth_timeout}s)")
                         return FileStatus.GROWING, growth_info
                     else:
-                        self.logger.debug(f"File {file_path} checking initial stability "
+                        logging.debug(f"File {file_path} checking initial stability "
                                         f"({stable_duration:.1f}s/{self.growth_timeout}s)")
                         return FileStatus.DISCOVERED, growth_info
                     
         except Exception as e:
-            self.logger.error(f"Error checking growth status for {file_path}: {e}")
+            logging.error(f"Error checking growth status for {file_path}: {e}")
             return FileStatus.FAILED, None
     
     async def update_file_growth_info(self, file_path: str, new_size: int) -> None:
@@ -230,7 +229,7 @@ class GrowingFileDetector:
         """Remove growth tracking for a completed/failed file"""
         if file_path in self._growth_tracking:
             del self._growth_tracking[file_path]
-            self.logger.debug(f"Cleaned up growth tracking for {file_path}")
+            logging.debug(f"Cleaned up growth tracking for {file_path}")
     
     async def get_growth_info(self, file_path: str) -> Optional[FileGrowthInfo]:
         """Get current growth info for a file"""
@@ -238,7 +237,7 @@ class GrowingFileDetector:
     
     async def _monitor_growing_files_loop(self):
         """Background loop to monitor all tracked growing files"""
-        self.logger.info("Starting growing file monitoring loop")
+        logging.info("Starting growing file monitoring loop")
         
         while self._monitoring_active:
             try:
@@ -286,16 +285,16 @@ class GrowingFileDetector:
                             )
                             
                     except Exception as e:
-                        self.logger.error(f"Error monitoring growth for {file_path}: {e}")
+                        logging.error(f"Error monitoring growth for {file_path}: {e}")
                 
                 # Wait before next check
                 await asyncio.sleep(self.poll_interval)
                 
             except Exception as e:
-                self.logger.error(f"Error in growing file monitoring loop: {e}")
+                logging.error(f"Error in growing file monitoring loop: {e}")
                 await asyncio.sleep(self.poll_interval)
         
-        self.logger.info("Growing file monitoring loop stopped")
+        logging.info("Growing file monitoring loop stopped")
     
     def get_monitoring_stats(self) -> Dict:
         """Get statistics about current monitoring state"""

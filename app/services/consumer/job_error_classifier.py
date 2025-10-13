@@ -36,7 +36,7 @@ class JobErrorClassifier:
             storage_monitor: Storage monitor for destination status checks
         """
         self.storage_monitor = storage_monitor
-        self._logger = logging.getLogger("app.job_error_classifier")
+        
         
     def classify_copy_error(self, error: Exception, file_path: str) -> Tuple[bool, str]:
         """
@@ -79,7 +79,7 @@ class JobErrorClassifier:
         
         for indicator in network_error_indicators:
             if indicator in error_str:
-                self._logger.warning(
+                logging.warning(
                     f"🔍 NETWORK ERROR DETECTED: {file_path} - {indicator} → PAUSE for resume"
                 )
                 return True, f"Network error detected: {indicator}"
@@ -100,7 +100,7 @@ class JobErrorClassifier:
                 errno.ENOTCONN,     # 107: Transport endpoint not connected
                 errno.ECONNRESET,   # 104: Connection reset by peer
             ]:
-                self._logger.warning(
+                logging.warning(
                     f"🔍 NETWORK ERRNO DETECTED: {file_path} - errno {errno_code} → PAUSE for resume"
                 )
                 return True, f"Network errno {errno_code}: {os.strerror(errno_code)}"
@@ -116,7 +116,7 @@ class JobErrorClassifier:
         
         for indicator in source_error_indicators:
             if indicator in error_str:
-                self._logger.info(
+                logging.info(
                     f"📁 SOURCE ERROR DETECTED: {file_path} - {indicator} → FAIL immediately"
                 )
                 return False, f"Source error: {indicator}"
@@ -125,15 +125,15 @@ class JobErrorClassifier:
         try:
             source_path = Path(file_path)
             if not source_path.exists():
-                self._logger.info(
+                logging.info(
                     f"📁 SOURCE MISSING: {file_path} - source file deleted → FAIL immediately"
                 )
                 return False, "Source file no longer exists"
         except Exception as check_error:
-            self._logger.warning(f"Could not check source file existence: {check_error}")
+            logging.warning(f"Could not check source file existence: {check_error}")
         
         # Default: If unsure and destination seems OK, treat as local error
-        self._logger.warning(
+        logging.warning(
             f"❓ UNKNOWN ERROR TYPE: {file_path} - {error_str} → defaulting to PAUSE for safety"
         )
         return True, f"Unknown error (defaulting to pause): {str(error)}"
@@ -148,4 +148,4 @@ class JobErrorClassifier:
             reason: Reason for the decision
         """
         action = "PAUSE" if should_pause else "FAIL"
-        self._logger.info(f"🎯 ERROR CLASSIFICATION: {Path(file_path).name} → {action} ({reason})")
+        logging.info(f"🎯 ERROR CLASSIFICATION: {Path(file_path).name} → {action} ({reason})")

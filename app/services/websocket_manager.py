@@ -39,13 +39,12 @@ class WebSocketManager:
         self.state_manager = state_manager
         self._storage_monitor = storage_monitor
         self._connections: List[WebSocket] = []
-        self._logger = logging.getLogger("app.websocket_manager")
         
         # Subscribe to StateManager events
         self.state_manager.subscribe(self._handle_state_change)
         
-        self._logger.info("WebSocketManager initialiseret")
-        self._logger.info("Subscribed til StateManager events for real-time updates")
+        logging.info("WebSocketManager initialiseret")
+        logging.info("Subscribed til StateManager events for real-time updates")
     
     async def connect(self, websocket: WebSocket) -> None:
         """
@@ -60,7 +59,7 @@ class WebSocketManager:
         # Send initial state dump
         await self._send_initial_state(websocket)
         
-        self._logger.info(f"WebSocket client connected. Total connections: {len(self._connections)}")
+        logging.info(f"WebSocket client connected. Total connections: {len(self._connections)}")
     
     def disconnect(self, websocket: WebSocket) -> None:
         """
@@ -72,7 +71,7 @@ class WebSocketManager:
         if websocket in self._connections:
             self._connections.remove(websocket)
             
-        self._logger.info(f"WebSocket client disconnected. Total connections: {len(self._connections)}")
+        logging.info(f"WebSocket client disconnected. Total connections: {len(self._connections)}")
     
     async def _send_initial_state(self, websocket: WebSocket) -> None:
         """
@@ -111,10 +110,10 @@ class WebSocketManager:
             }
             
             await websocket.send_text(json.dumps(initial_data))
-            self._logger.debug(f"Sent initial state to client: {len(all_files)} files, storage: {storage_data is not None}")
+            logging.debug(f"Sent initial state to client: {len(all_files)} files, storage: {storage_data is not None}")
             
         except Exception as e:
-            self._logger.error(f"Fejl ved sending af initial state: {e}")
+            logging.error(f"Fejl ved sending af initial state: {e}")
     
     async def _handle_state_change(self, update: FileStateUpdate) -> None:
         """
@@ -142,10 +141,10 @@ class WebSocketManager:
             # Broadcast til alle klienter
             await self._broadcast_message(message_data)
             
-            self._logger.debug(f"Broadcasted state change: {update.file_path} -> {update.new_status}")
+            logging.debug(f"Broadcasted state change: {update.file_path} -> {update.new_status}")
             
         except Exception as e:
-            self._logger.error(f"Fejl ved broadcasting af state change: {e}")
+            logging.error(f"Fejl ved broadcasting af state change: {e}")
     
     async def _broadcast_message(self, message_data: Dict[str, Any]) -> None:
         """
@@ -167,11 +166,11 @@ class WebSocketManager:
                 
             except WebSocketDisconnect:
                 disconnected_clients.append(websocket)
-                self._logger.debug("Client disconnected during broadcast")
+                logging.debug("Client disconnected during broadcast")
                 
             except Exception as e:
                 disconnected_clients.append(websocket)
-                self._logger.warning(f"Fejl ved sending til client: {e}")
+                logging.warning(f"Fejl ved sending til client: {e}")
         
         # Fjern disconnected klienter
         for websocket in disconnected_clients:
@@ -241,7 +240,7 @@ class WebSocketManager:
             await self._broadcast_message(message_data)
             
         except Exception as e:
-            self._logger.error(f"Fejl ved sending af statistics: {e}")
+            logging.error(f"Fejl ved sending af statistics: {e}")
     
     async def broadcast_storage_update(self, update: StorageUpdate) -> None:
         """
@@ -267,12 +266,12 @@ class WebSocketManager:
             
             await self._broadcast_message(message_data)
             
-            self._logger.debug(
+            logging.debug(
                 f"Broadcasted storage update: {update.storage_type} -> {update.new_status.value}"
             )
             
         except Exception as e:
-            self._logger.error(f"Error broadcasting storage update: {e}")
+            logging.error(f"Error broadcasting storage update: {e}")
     
     async def broadcast_mount_status(self, update: MountStatusUpdate) -> None:
         """
@@ -300,12 +299,12 @@ class WebSocketManager:
             
             await self._broadcast_message(message_data)
             
-            self._logger.debug(
+            logging.debug(
                 f"Broadcasted mount status: {update.storage_type} -> {update.mount_status.value}"
             )
             
         except Exception as e:
-            self._logger.error(f"Error broadcasting mount status: {e}")
+            logging.error(f"Error broadcasting mount status: {e}")
     
     def _serialize_storage_info(self, storage_info) -> dict:
         """

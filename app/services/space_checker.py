@@ -6,9 +6,9 @@ Follows Single Responsibility Principle - only checks space availability.
 """
 
 from typing import Optional
-
+import logging
 from ..config import Settings
-from ..logging_config import get_app_logger
+
 from ..models import SpaceCheckResult
 from ..services.storage_monitor import StorageMonitorService
 
@@ -43,9 +43,9 @@ class SpaceChecker:
         """
         self._settings = settings
         self._storage_monitor = storage_monitor
-        self._logger = get_app_logger()
         
-        self._logger.debug("SpaceChecker initialized")
+        
+        logging.debug("SpaceChecker initialized")
     
     def check_space_for_file(self, file_size_bytes: int) -> SpaceCheckResult:
         """
@@ -62,7 +62,7 @@ class SpaceChecker:
         Returns:
             SpaceCheckResult with detailed space analysis
         """
-        self._logger.debug(f"Checking space for file of {file_size_bytes} bytes")
+        logging.debug(f"Checking space for file of {file_size_bytes} bytes")
         
         # Get current destination storage info
         storage_info = self._storage_monitor.get_destination_info()

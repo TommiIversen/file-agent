@@ -1,11 +1,12 @@
 """macOS Network Mounter - SRP compliant."""
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Tuple
 
 from .base_mounter import BaseMounter
-from ...logging_config import get_app_logger
+
 
 
 class MacOSMounter(BaseMounter):
@@ -13,7 +14,7 @@ class MacOSMounter(BaseMounter):
     
     def __init__(self):
         super().__init__()
-        self._logger = get_app_logger()
+        
     
     async def attempt_mount(self, share_url: str) -> bool:
         """
@@ -28,7 +29,7 @@ class MacOSMounter(BaseMounter):
             True if mount successful, False otherwise
         """
         try:
-            self._logger.info(f"Attempting macOS mount: {share_url}")
+            logging.info(f"Attempting macOS mount: {share_url}")
             
             # Use osascript for AppleScript mounting
             cmd = ['osascript', '-e', f'mount volume "{share_url}"']
@@ -42,15 +43,15 @@ class MacOSMounter(BaseMounter):
             stdout, stderr = await process.communicate()
             
             if process.returncode == 0:
-                self._logger.info(f"Successfully mounted {share_url}")
+                logging.info(f"Successfully mounted {share_url}")
                 return True
             else:
                 error_msg = stderr.decode() if stderr else "Unknown error"
-                self._logger.error(f"Mount failed for {share_url}: {error_msg}")
+                logging.error(f"Mount failed for {share_url}: {error_msg}")
                 return False
                 
         except Exception as e:
-            self._logger.error(f"Exception during macOS mount attempt: {e}")
+            logging.error(f"Exception during macOS mount attempt: {e}")
             return False
     
     async def verify_mount_accessible(self, local_path: str) -> Tuple[bool, bool]:
@@ -68,12 +69,12 @@ class MacOSMounter(BaseMounter):
             
             # Check if mount point exists
             if not path_obj.exists():
-                self._logger.debug(f"Mount point does not exist: {local_path}")
+                logging.debug(f"Mount point does not exist: {local_path}")
                 return False, False
             
             # Check if it's a directory
             if not path_obj.is_dir():
-                self._logger.debug(f"Mount point is not a directory: {local_path}")
+                logging.debug(f"Mount point is not a directory: {local_path}")
                 return True, False
             
             # Test accessibility by trying to list directory
@@ -88,19 +89,19 @@ class MacOSMounter(BaseMounter):
                 stdout, stderr = await process.communicate()
                 
                 if process.returncode == 0:
-                    self._logger.debug(f"Mount point accessible: {local_path}")
+                    logging.debug(f"Mount point accessible: {local_path}")
                     return True, True
                 else:
                     error_msg = stderr.decode() if stderr else "Unknown error"
-                    self._logger.debug(f"Mount point not accessible: {local_path} - {error_msg}")
+                    logging.debug(f"Mount point not accessible: {local_path} - {error_msg}")
                     return True, False
                     
             except Exception as e:
-                self._logger.debug(f"Error testing mount accessibility: {e}")
+                logging.debug(f"Error testing mount accessibility: {e}")
                 return True, False
             
         except Exception as e:
-            self._logger.error(f"Exception during mount verification: {e}")
+            logging.error(f"Exception during mount verification: {e}")
             return False, False
     
     def get_platform_name(self) -> str:
@@ -129,10 +130,10 @@ class MacOSMounter(BaseMounter):
             
             # macOS typically mounts under /Volumes/
             mount_point = f"/Volumes/{share_name}"
-            self._logger.debug(f"Derived mount point: {mount_point} from URL: {share_url}")
+            logging.debug(f"Derived mount point: {mount_point} from URL: {share_url}")
             return mount_point
             
         except Exception as e:
-            self._logger.error(f"Error deriving mount point from URL {share_url}: {e}")
+            logging.error(f"Error deriving mount point from URL {share_url}: {e}")
             # Fallback to a default
             return "/Volumes/NetworkShare"

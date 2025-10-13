@@ -6,9 +6,10 @@ and coordination, adhering to SRP.
 """
 
 from typing import Optional
+import logging
 
 from ...models import MountStatus, MountStatusUpdate
-from ...logging_config import get_app_logger
+
 
 
 class MountStatusBroadcaster:
@@ -30,7 +31,7 @@ class MountStatusBroadcaster:
         """
         # This class is responsible solely for mount status broadcasting, adhering to SRP
         self._notification_handler = notification_handler
-        self._logger = get_app_logger()
+        
     
     async def broadcast_mount_attempt(
         self, 
@@ -156,4 +157,4 @@ class MountStatusBroadcaster:
             await self._notification_handler.handle_mount_status(mount_update)
             
         except Exception as e:
-            self._logger.error(f"Error broadcasting mount status: {e}")
+            logging.error(f"Error broadcasting mount status: {e}")

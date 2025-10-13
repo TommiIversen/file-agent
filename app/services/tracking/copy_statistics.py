@@ -124,7 +124,7 @@ class CopyStatisticsTracker:
         """
         self.settings = settings
         self.enable_session_tracking = enable_session_tracking
-        self._logger = logging.getLogger("app.copy_statistics_tracker")
+        
         
         # Thread safety
         self._lock = Lock()
@@ -147,9 +147,9 @@ class CopyStatisticsTracker:
         # Rate calculation window (last 10 sessions for current rate)
         self._recent_sessions_window = 10
         
-        self._logger.info("CopyStatisticsTracker initialiseret")
-        self._logger.info(f"Session tracking enabled: {self.enable_session_tracking}")
-        self._logger.info(f"Max completed sessions: {self._max_completed_sessions}")
+        logging.info("CopyStatisticsTracker initialiseret")
+        logging.info(f"Session tracking enabled: {self.enable_session_tracking}")
+        logging.info(f"Max completed sessions: {self._max_completed_sessions}")
     
     def start_copy_session(self, file_path: str, file_size: int, copy_strategy: str = "") -> None:
         """
@@ -174,7 +174,7 @@ class CopyStatisticsTracker:
             self._active_sessions[file_path] = session
             self._last_activity_time = datetime.now()
             
-            self._logger.debug(f"Started copy session: {file_path} ({file_size} bytes)")
+            logging.debug(f"Started copy session: {file_path} ({file_size} bytes)")
     
     def update_session_progress(self, file_path: str, bytes_transferred: int) -> None:
         """
@@ -234,10 +234,10 @@ class CopyStatisticsTracker:
                         # Remove oldest sessions to prevent memory leaks
                         self._completed_sessions = self._completed_sessions[-self._max_completed_sessions:]
                     
-                    self._logger.debug(f"Completed copy session: {file_path} (success: {success})")
+                    logging.debug(f"Completed copy session: {file_path} (success: {success})")
                 else:
                     # Session not found - this can happen if session tracking was started after the copy began
-                    self._logger.debug(f"Completed copy session without active session: {file_path} (success: {success})")
+                    logging.debug(f"Completed copy session without active session: {file_path} (success: {success})")
     
     def increment_retry_count(self, file_path: str) -> None:
         """
@@ -408,7 +408,7 @@ class CopyStatisticsTracker:
                 self._active_sessions.clear()
                 self._completed_sessions.clear()
             
-            self._logger.info("Statistics reset completed")
+            logging.info("Statistics reset completed")
     
     def get_active_sessions(self) -> List[Dict[str, Any]]:
         """
@@ -456,10 +456,10 @@ class CopyStatisticsTracker:
             
             for file_path in stale_paths:
                 session = self._active_sessions.pop(file_path)
-                self._logger.warning(f"Cleaned up stale session: {file_path} (age: {(now - session.started_at).total_seconds() / 3600:.1f}h)")
+                logging.warning(f"Cleaned up stale session: {file_path} (age: {(now - session.started_at).total_seconds() / 3600:.1f}h)")
                 cleaned_count += 1
         
         if cleaned_count > 0:
-            self._logger.info(f"Cleaned up {cleaned_count} stale sessions")
+            logging.info(f"Cleaned up {cleaned_count} stale sessions")
         
         return cleaned_count

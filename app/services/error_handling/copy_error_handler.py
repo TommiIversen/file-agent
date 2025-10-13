@@ -84,7 +84,7 @@ class CopyErrorHandler:
             settings: Application settings med retry configuration
         """
         self.settings = settings
-        self._logger = logging.getLogger("app.copy_error_handler")
+        
         
         # Error statistics
         self._local_errors_count = 0
@@ -96,10 +96,10 @@ class CopyErrorHandler:
         self._in_global_error_state = False
         self._last_global_error_time: Optional[datetime] = None
         
-        self._logger.info("CopyErrorHandler initialiseret")
-        self._logger.info(f"Max retry attempts: {self.settings.max_retry_attempts}")
-        self._logger.info(f"Local retry delay: {self.settings.retry_delay_seconds}s")
-        self._logger.info(f"Global retry delay: {self.settings.global_retry_delay_seconds}s")
+        logging.info("CopyErrorHandler initialiseret")
+        logging.info(f"Max retry attempts: {self.settings.max_retry_attempts}")
+        logging.info(f"Local retry delay: {self.settings.retry_delay_seconds}s")
+        logging.info(f"Global retry delay: {self.settings.global_retry_delay_seconds}s")
     
     async def handle_local_error(self, error: Exception, file_path: str, 
                                 attempt: int, max_attempts: int) -> ErrorHandlingResult:
@@ -121,7 +121,7 @@ class CopyErrorHandler:
         error_type = self.classify_error(error)
         
         # Log error details
-        self._logger.warning(
+        logging.warning(
             f"Local error handling: {error.__class__.__name__}: {error}",
             extra={
                 "operation": "local_error_handling",
@@ -198,8 +198,8 @@ class CopyErrorHandler:
             error_message: Beskrivelse af global fejl
         """
         if not self._in_global_error_state:
-            self._logger.warning(f"Global fejl detekteret: {error_message}")
-            self._logger.warning(f"Pauser alle operationer i {self.settings.global_retry_delay_seconds} sekunder")
+            logging.warning(f"Global fejl detekteret: {error_message}")
+            logging.warning(f"Pauser alle operationer i {self.settings.global_retry_delay_seconds} sekunder")
             
             self._in_global_error_state = True
             self._last_global_error_time = datetime.now()
@@ -301,7 +301,7 @@ class CopyErrorHandler:
         Bruges når destination checker rapporterer at destination er available igen.
         """
         if self._in_global_error_state:
-            self._logger.info("Clearing global error state - destination available again")
+            logging.info("Clearing global error state - destination available again")
             self._in_global_error_state = False
             self._last_global_error_time = None
     
@@ -361,4 +361,4 @@ class CopyErrorHandler:
         self._in_global_error_state = False
         self._last_global_error_time = None
         
-        self._logger.info("Error statistics reset")
+        logging.info("Error statistics reset")

@@ -31,9 +31,8 @@ class StateManager:
         self._files: Dict[str, TrackedFile] = {}
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
-        self._logger = logging.getLogger("app.state_manager")
         
-        self._logger.info("StateManager initialiseret")
+        logging.info("StateManager initialiseret")
     
     async def add_file(self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None) -> TrackedFile:
         """
@@ -49,7 +48,7 @@ class StateManager:
         """
         async with self._lock:
             if file_path in self._files:
-                self._logger.debug(f"Fil allerede tracked: {file_path}")
+                logging.debug(f"Fil allerede tracked: {file_path}")
                 return self._files[file_path]
             
             tracked_file = TrackedFile(
@@ -61,7 +60,7 @@ class StateManager:
             
             self._files[file_path] = tracked_file
             
-            self._logger.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
+            logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
         
         # Notify subscribers EFTER lock er frigivet for at undgå deadlock
         await self._notify(FileStateUpdate(
@@ -92,7 +91,7 @@ class StateManager:
         """
         async with self._lock:
             if file_path not in self._files:
-                self._logger.warning(f"Forsøg på at opdatere ukendt fil: {file_path}")
+                logging.warning(f"Forsøg på at opdatere ukendt fil: {file_path}")
                 return None
             
             tracked_file = self._files[file_path]
@@ -115,7 +114,7 @@ class StateManager:
                 if hasattr(tracked_file, key):
                     setattr(tracked_file, key, value)
                 else:
-                    self._logger.warning(f"Ukendt attribut ignored: {key}")
+                    logging.warning(f"Ukendt attribut ignored: {key}")
             
             # Sæt tidsstempler baseret på status
             if status == FileStatus.COPYING and not tracked_file.started_copying_at:
@@ -125,13 +124,13 @@ class StateManager:
             
             # Only log when status actually changes (not for progress updates)
             if old_status != status:
-                self._logger.info(f"Status opdateret: {file_path} {old_status} -> {status}")
+                logging.info(f"Status opdateret: {file_path} {old_status} -> {status}")
             else:
                 # Log progress updates at debug level only
                 if 'copy_progress' in kwargs:
-                    self._logger.debug(f"Progress opdateret: {file_path} {kwargs['copy_progress']:.1f}%")
+                    logging.debug(f"Progress opdateret: {file_path} {kwargs['copy_progress']:.1f}%")
                 else:
-                    self._logger.debug(f"Attributes opdateret: {file_path} {list(kwargs.keys())}")
+                    logging.debug(f"Attributes opdateret: {file_path} {list(kwargs.keys())}")
         
         # Notify subscribers EFTER lock er frigivet for at undgå deadlock
         await self._notify(FileStateUpdate(
@@ -159,7 +158,7 @@ class StateManager:
             
             self._files.pop(file_path)
             
-            self._logger.info(f"Fil fjernet fra tracking: {file_path}")
+            logging.info(f"Fil fjernet fra tracking: {file_path}")
             
             # Note: Vi notificerer ikke subscribers for remove events
             # da det typisk sker ved cleanup og ikke er interessant for UI
@@ -237,13 +236,13 @@ class StateManager:
                 if file_path not in existing_paths:
                     # Bevar COMPLETED filer i memory
                     if tracked_file.status == FileStatus.COMPLETED:
-                        self._logger.debug(f"Bevarer completed fil i memory: {file_path}")
+                        logging.debug(f"Bevarer completed fil i memory: {file_path}")
                         continue
                     
                     # Bevar filer der er under processing (COPYING, IN_QUEUE, etc.)
                     if tracked_file.status in [FileStatus.COPYING, FileStatus.IN_QUEUE, 
                                              FileStatus.GROWING_COPY]:
-                        self._logger.debug(f"Bevarer fil under processing: {file_path} (status: {tracked_file.status})")
+                        logging.debug(f"Bevarer fil under processing: {file_path} (status: {tracked_file.status})")
                         continue
                     
                     # Alle andre statuses fjernes når source fil ikke eksisterer
@@ -253,10 +252,10 @@ class StateManager:
             for file_path in to_remove:
                 self._files.pop(file_path, None)
                 removed_count += 1
-                self._logger.debug(f"Cleanup: Fjernet {file_path}")
+                logging.debug(f"Cleanup: Fjernet {file_path}")
         
         if removed_count > 0:
-            self._logger.info(f"Cleanup: Fjernede {removed_count} filer der ikke længere eksisterer")
+            logging.info(f"Cleanup: Fjernede {removed_count} filer der ikke længere eksisterer")
         
         return removed_count
     
@@ -314,10 +313,10 @@ class StateManager:
             for file_path in to_remove:
                 self._files.pop(file_path, None)
                 removed_count += 1
-                self._logger.debug(f"Cleanup: Fjernet gammel completed fil: {file_path}")
+                logging.debug(f"Cleanup: Fjernet gammel completed fil: {file_path}")
         
         if removed_count > 0:
-            self._logger.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
+            logging.info(f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory")
         
         return removed_count
     
@@ -329,7 +328,7 @@ class StateManager:
             callback: Async function der kaldes ved state changes
         """
         self._subscribers.append(callback)
-        self._logger.debug(f"Ny subscriber tilmeldt. Total: {len(self._subscribers)}")
+        logging.debug(f"Ny subscriber tilmeldt. Total: {len(self._subscribers)}")
     
     def unsubscribe(self, callback: Callable[[FileStateUpdate], Awaitable[None]]) -> bool:
         """
@@ -343,7 +342,7 @@ class StateManager:
         """
         try:
             self._subscribers.remove(callback)
-            self._logger.debug(f"Subscriber afmeldt. Total: {len(self._subscribers)}")
+            logging.debug(f"Subscriber afmeldt. Total: {len(self._subscribers)}")
             return True
         except ValueError:
             return False
@@ -365,14 +364,14 @@ class StateManager:
                 task = asyncio.create_task(callback(update))
                 tasks.append(task)
             except Exception as e:
-                self._logger.error(f"Fejl ved oprettelse af subscriber task: {e}")
+                logging.error(f"Fejl ved oprettelse af subscriber task: {e}")
         
         # Vent på alle callbacks, men log fejl hvis nogen fejler
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    self._logger.error(f"Subscriber {i} fejlede: {result}")
+                    logging.error(f"Subscriber {i} fejlede: {result}")
     
     async def get_statistics(self) -> Dict:
         """

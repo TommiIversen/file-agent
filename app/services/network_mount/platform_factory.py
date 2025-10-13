@@ -2,7 +2,7 @@
 
 import platform
 from .base_mounter import BaseMounter
-from ...logging_config import get_app_logger
+
 
 
 class UnsupportedPlatformError(Exception):
@@ -14,7 +14,7 @@ class PlatformFactory:
     """Factory for creating platform-specific mount implementations. SRP: Platform detection/creation ONLY."""
     
     def __init__(self):
-        self._logger = get_app_logger()
+        pass
     
     def detect_platform(self) -> str:
         """Detect current platform. Returns: macos, windows, or linux."""

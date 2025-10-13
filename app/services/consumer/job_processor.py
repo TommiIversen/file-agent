@@ -100,7 +100,7 @@ class JobProcessor:
         self.state_manager = state_manager
         self.job_queue = job_queue
         self.copy_strategy_factory = copy_strategy_factory
-        self._logger = logging.getLogger("app.job_processor")
+        
         
         # Initialize JobSpaceManager for space-related operations
         self.space_manager = JobSpaceManager(
@@ -137,9 +137,9 @@ class JobProcessor:
             error_classifier=None  # Will be injected later by dependencies
         )
         
-        self._logger.debug("JobProcessor initialized")
+        logging.debug("JobProcessor initialized")
         if self.template_engine.is_enabled():
-            self._logger.info(f"Output folder template system enabled with {len(self.template_engine.rules)} rules")
+            logging.info(f"Output folder template system enabled with {len(self.template_engine.rules)} rules")
     
     async def process_job(self, job: Dict) -> ProcessResult:
         """
@@ -160,7 +160,7 @@ class JobProcessor:
         file_path = job["file_path"]
         
         try:
-            self._logger.info(f"Processing job: {file_path}")
+            logging.info(f"Processing job: {file_path}")
             
             # Step 1: Pre-flight space check (if enabled)
             if self.space_manager.should_check_space():
@@ -190,7 +190,7 @@ class JobProcessor:
                     return ProcessResult(success=True, file_path=file_path)
                 else:
                     # Copy failed during execution
-                    self._logger.warning(f"Copy execution returned failure: {file_path}")
+                    logging.warning(f"Copy execution returned failure: {file_path}")
                     return ProcessResult(
                         success=False,
                         file_path=file_path,
@@ -199,7 +199,7 @@ class JobProcessor:
                     
             except Exception as copy_error:
                 # Copy threw exception - use intelligent error handling
-                self._logger.warning(f"Copy exception for {file_path}: {copy_error}")
+                logging.warning(f"Copy exception for {file_path}: {copy_error}")
                 
                 # Use intelligent error classification
                 was_paused = await self.copy_executor.handle_copy_failure(prepared_file, copy_error)
@@ -221,7 +221,7 @@ class JobProcessor:
                     )
             
         except Exception as e:
-            self._logger.error(f"Unexpected error processing job {file_path}: {e}")
+            logging.error(f"Unexpected error processing job {file_path}: {e}")
             return ProcessResult(
                 success=False,
                 file_path=file_path,

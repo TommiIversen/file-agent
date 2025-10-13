@@ -7,6 +7,7 @@ No state, no dependencies - pure function-like behavior.
 
 import os
 import shutil
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -14,7 +15,7 @@ from uuid import uuid4
 
 import aiofiles
 
-from ..logging_config import get_app_logger
+
 from ..models import StorageInfo, StorageStatus
 
 
@@ -47,7 +48,7 @@ class StorageChecker:
             test_file_prefix: Prefix for test files during write checks
         """
         self._test_file_prefix = test_file_prefix
-        self._logger = get_app_logger()
+        
     
     async def check_path(self, path: str, warning_threshold_gb: float, 
                         critical_threshold_gb: float) -> StorageInfo:
@@ -65,7 +66,7 @@ class StorageChecker:
         Raises:
             StorageAccessError: For unrecoverable access issues
         """
-        self._logger.debug(f"Checking storage path: {path}")
+        logging.debug(f"Checking storage path: {path}")
         
         # Initialize defaults
         is_accessible = False
@@ -90,7 +91,7 @@ class StorageChecker:
                 
         except Exception as e:
             error_message = f"Storage check error: {str(e)}"
-            self._logger.error(f"Storage check failed for {path}: {e}")
+            logging.error(f"Storage check failed for {path}: {e}")
         
         # Evaluate overall status
         status = self._evaluate_status(
@@ -126,7 +127,7 @@ class StorageChecker:
             path_obj = Path(path)
             return path_obj.exists() and path_obj.is_dir()
         except Exception as e:
-            self._logger.debug(f"Accessibility check failed for {path}: {e}")
+            logging.debug(f"Accessibility check failed for {path}: {e}")
             return False
     
     async def _get_disk_usage(self, path: str) -> Tuple[float, float, float]:
@@ -152,14 +153,14 @@ class StorageChecker:
             used_gb = used_bytes / gb_divisor
             free_gb = free_bytes / gb_divisor
             
-            self._logger.debug(
+            logging.debug(
                 f"Disk usage for {path}: {free_gb:.1f}GB free of {total_gb:.1f}GB total"
             )
             
             return free_gb, total_gb, used_gb
             
         except Exception as e:
-            self._logger.error(f"Cannot get disk usage for {path}: {e}")
+            logging.error(f"Cannot get disk usage for {path}: {e}")
             raise StorageAccessError(f"Disk usage check failed: {e}")
     
     async def _check_write_access(self, path: str) -> bool:
@@ -181,11 +182,11 @@ class StorageChecker:
             # Clean up test file
             await self._cleanup_test_file(test_file_path)
             
-            self._logger.debug(f"Write access verified for {path}")
+            logging.debug(f"Write access verified for {path}")
             return True
             
         except Exception as e:
-            self._logger.debug(f"Write access check failed for {path}: {e}")
+            logging.debug(f"Write access check failed for {path}: {e}")
             
             # Ensure cleanup even on failure
             if test_file_path:
@@ -215,7 +216,7 @@ class StorageChecker:
             async with aiofiles.open(test_file_path, 'w') as f:
                 await f.write("storage_write_test")
             
-            self._logger.debug(f"Test file created: {test_file_path}")
+            logging.debug(f"Test file created: {test_file_path}")
             return test_file_path
             
         except Exception as e:
@@ -231,10 +232,10 @@ class StorageChecker:
         try:
             if os.path.exists(test_file_path):
                 os.remove(test_file_path)
-                self._logger.debug(f"Test file cleaned up: {test_file_path}")
+                logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
             # Log warning but don't fail - cleanup is best effort
-            self._logger.warning(f"Could not clean up test file {test_file_path}: {e}")
+            logging.warning(f"Could not clean up test file {test_file_path}: {e}")
     
     def _evaluate_status(self, free_gb: float, warning_threshold_gb: float,
                         critical_threshold_gb: float, is_accessible: bool,
