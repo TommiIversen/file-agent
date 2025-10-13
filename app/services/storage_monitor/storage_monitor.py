@@ -229,8 +229,10 @@ class StorageMonitorService:
             # Handle status changes via NotificationHandler
             await self._notification_handler.handle_status_change(storage_type, old_info, new_info)
             
-            # 🔄 UNIVERSAL RECOVERY: Detect and handle destination recovery
-            if self._is_destination_recovery(storage_type, old_info, new_info):
+            # 🔄 INTELLIGENT PAUSE/RESUME: Handle destination state changes
+            if self._is_destination_unavailable(storage_type, old_info, new_info):
+                await self._handle_destination_unavailable(storage_type, old_info, new_info)
+            elif self._is_destination_recovery(storage_type, old_info, new_info):
                 await self._handle_destination_recovery(storage_type, old_info, new_info)
             
         except Exception as e:
@@ -344,6 +346,74 @@ class StorageMonitorService:
         
         return is_recovery
     
+    def _is_destination_unavailable(self, storage_type: str, old_info: Optional[StorageInfo], 
+                                   new_info: StorageInfo) -> bool:
+        """
+        Detect destination unavailability scenarios.
+        
+        Unavailable happens when destination transitions from OK to problematic state:
+        - OK → ERROR (network offline, mount failure)
+        - OK → CRITICAL (disk full, no write access)
+        
+        Args:
+            storage_type: Type of storage being checked
+            old_info: Previous storage info (can be None on first check)
+            new_info: Current storage info
+            
+        Returns:
+            True if this is a destination unavailability event
+        """
+        # Only handle destination unavailability
+        if storage_type != "destination":
+            return False
+            
+        # No unavailability if no previous state
+        if not old_info:
+            return False
+            
+        # Unavailable = transition from OK to problematic state
+        problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
+        is_unavailable = (old_info.status == StorageStatus.OK and 
+                         new_info.status in problematic_states)
+        
+        if is_unavailable:
+            self._logger.warning(
+                f"⏸️ DESTINATION UNAVAILABLE: {old_info.status} → {new_info.status} "
+                f"(path: {new_info.path})"
+            )
+        
+        return is_unavailable
+    
+    async def _handle_destination_unavailable(self, storage_type: str, old_info: StorageInfo, 
+                                            new_info: StorageInfo) -> None:
+        """
+        Handle destination unavailability by pausing active operations.
+        
+        Args:
+            storage_type: Type of storage that became unavailable
+            old_info: Previous storage state
+            new_info: Current unavailable storage state
+        """
+        if not self._job_queue:
+            self._logger.warning("⚠️ Job queue not available - cannot pause operations")
+            return
+            
+        try:
+            unavailable_reason = f"{old_info.status} → {new_info.status}"
+            
+            self._logger.warning(
+                f"⏸️ PAUSING OPERATIONS: {unavailable_reason} "
+                f"(Reason: {new_info.error_message or 'Unknown'})"
+            )
+            
+            # Trigger intelligent pause via job queue
+            await self._job_queue.handle_destination_unavailable()
+            
+            self._logger.info("⏸️ Operations paused successfully - awaiting recovery")
+            
+        except Exception as e:
+            self._logger.error(f"❌ Error during destination pause handling: {e}")
+    
     async def _handle_destination_recovery(self, storage_type: str, old_info: StorageInfo, 
                                          new_info: StorageInfo) -> None:
         """
@@ -366,10 +436,10 @@ class StorageMonitorService:
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
             )
             
-            # Trigger universal recovery via job queue
+            # Trigger intelligent resume via job queue
             await self._job_queue.handle_destination_recovery()
             
-            self._logger.info("✅ Universal recovery initiated successfully")
+            self._logger.info("✅ Intelligent resume initiated successfully")
             
         except Exception as e:
             self._logger.error(f"❌ Error during universal recovery: {e}")

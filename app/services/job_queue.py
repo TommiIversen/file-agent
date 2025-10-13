@@ -365,72 +365,131 @@ class JobQueueService:
             "subscribed_to_state_manager": True  # Vi subscriber i start_producer
         }
     
+    async def handle_destination_unavailable(self) -> None:
+        """
+        Håndter destination unavailability - pause aktive operations.
+        
+        Når destination bliver unavailable, skal vi:
+        1. Pause alle aktive copy operations (de får I/O errors) 
+        2. Pause alle jobs i queue (de kan ikke starte)
+        3. Bevare interrupt context for seamless resume
+        """
+        self._logger.info("⏸️ DESTINATION UNAVAILABLE: Pausing active operations")
+        
+        # Få alle aktive operations der skal pauses
+        paused_count = await self._pause_active_operations()
+        
+        if paused_count > 0:
+            self._logger.info(f"⏸️ PAUSED: {paused_count} active operations until destination recovery")
+        else:
+            self._logger.info("ℹ️ No active operations to pause")
+
     async def handle_destination_recovery(self) -> None:
         """
-        Håndter destination recovery - requeue alle interrupted/failed files.
+        Håndter destination recovery - resume paused operations med preserved context.
         
-        Dette er det universelle recovery system der håndterer:
-        - Network share offline recovery
-        - Disk space recovery (fuld disk -> plads igen)
-        - Mount failure recovery  
-        - Andre destination problemer
+        Dette er det intelligente recovery system der:
+        - Resumer paused operations med preserved bytes offset
+        - Bruger existing resumable strategies  
+        - Fortsætter seamless fra hvor det slap
         """
-        self._logger.info("🔄 DESTINATION RECOVERY: Starting universal file recovery process")
+        self._logger.info("� DESTINATION RECOVERY: Starting intelligent resume process")
         
-        # Få alle filer der kan resumes
-        failed_files = await self.state_manager.get_failed_files()
-        interrupted_files = await self.state_manager.get_interrupted_copy_files()
+        # Få alle paused operations der kan resumes
+        paused_files = await self.state_manager.get_paused_files()
         
-        total_recovered = 0
+        total_resumed = 0
         
-        # Requeue failed files (inkluderer growing files)
-        if failed_files:
-            self._logger.info(f"📂 Requeuing {len(failed_files)} failed files")
-            for tracked_file in failed_files:
-                await self._reset_and_requeue_file(tracked_file, "FAILED recovery")
-                total_recovered += 1
+        # Resume paused files med preserved context
+        if paused_files:
+            self._logger.info(f"▶️ Resuming {len(paused_files)} paused operations")
+            for tracked_file in paused_files:
+                await self._resume_paused_file(tracked_file)
+                total_resumed += 1
         
-        # Requeue interrupted files (var i gang med kopiering)  
-        if interrupted_files:
-            self._logger.info(f"⏸️ Requeuing {len(interrupted_files)} interrupted files")
-            for tracked_file in interrupted_files:
-                await self._reset_and_requeue_file(tracked_file, "Interrupted recovery")
-                total_recovered += 1
-        
-        if total_recovered > 0:
-            self._logger.info(
-                f"✅ DESTINATION RECOVERY COMPLETE: Successfully requeued {total_recovered} files "
-                f"({len(failed_files)} failed + {len(interrupted_files)} interrupted)"
-            )
+        if total_resumed > 0:
+            self._logger.info(f"✅ DESTINATION RECOVERY COMPLETE: Successfully resumed {total_resumed} operations")
         else:
-            self._logger.info("ℹ️ DESTINATION RECOVERY: No files needed recovery")
+            self._logger.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
     
-    async def _reset_and_requeue_file(self, tracked_file: TrackedFile, recovery_reason: str) -> None:
+    async def _pause_active_operations(self) -> int:
         """
-        Reset file status og requeue til fresh start med resume capabilities.
+        Pause alle aktive copy operations og jobs i queue.
+        
+        Returns:
+            Antal operations der blev paused
+        """
+        paused_count = 0
+        
+        # Få alle aktive operations
+        active_files = await self.state_manager.get_active_copy_files()
+        
+        for tracked_file in active_files:
+            current_status = tracked_file.status
+            file_path = tracked_file.file_path
+            
+            try:
+                # Map current status to appropriate paused status
+                if current_status == FileStatus.IN_QUEUE:
+                    new_status = FileStatus.PAUSED_IN_QUEUE
+                elif current_status == FileStatus.COPYING:
+                    new_status = FileStatus.PAUSED_COPYING
+                elif current_status == FileStatus.GROWING_COPY:
+                    new_status = FileStatus.PAUSED_GROWING_COPY
+                else:
+                    continue  # Skip files not in active copy states
+                
+                # Pause med preserved context (bytes_copied, copy_progress bevares)
+                await self.state_manager.update_file_status(
+                    file_path,
+                    new_status,
+                    error_message="Paused - destination unavailable"
+                    # Note: bytes_copied og copy_progress IKKE reset - bevares for resume
+                )
+                
+                paused_count += 1
+                self._logger.info(f"⏸️ PAUSED: {file_path} ({current_status} → {new_status})")
+                
+            except Exception as e:
+                self._logger.error(f"❌ Error pausing {file_path}: {e}")
+        
+        return paused_count
+
+    async def _resume_paused_file(self, tracked_file: TrackedFile) -> None:
+        """
+        Resume en paused file med preserved context.
         
         Args:
-            tracked_file: File der skal requeues
-            recovery_reason: Årsag til recovery (for logging)
+            tracked_file: File der skal resumes
         """
         file_path = tracked_file.file_path
+        current_status = tracked_file.status
         
         try:
-            # Reset file status til READY (bevarer is_growing_file flag)
+            # Map paused status tilbage til active status  
+            if current_status == FileStatus.PAUSED_IN_QUEUE:
+                new_status = FileStatus.IN_QUEUE
+            elif current_status == FileStatus.PAUSED_COPYING:
+                new_status = FileStatus.READY  # Will be requeued and resume via checksum
+            elif current_status == FileStatus.PAUSED_GROWING_COPY:
+                new_status = FileStatus.READY  # Will be requeued and resume via checksum
+            else:
+                self._logger.warning(f"⚠️ Unknown paused status for {file_path}: {current_status}")
+                return
+            
+            # Resume med preserved context (bytes_copied bevares)
             await self.state_manager.update_file_status(
                 file_path,
-                FileStatus.READY,
+                new_status,
                 error_message=None,
-                copy_progress=0.0,
-                retry_count=0,  # Reset retry count for fresh start
-                # Bevar is_growing_file flag hvis det var sat
-                is_growing_file=tracked_file.is_growing_file
+                retry_count=0  # Reset retry count for fresh resume attempt
+                # Note: bytes_copied og copy_progress bevares fra pause
             )
             
             self._logger.info(
-                f"🔄 {recovery_reason}: Reset {file_path} to READY "
-                f"(growing: {tracked_file.is_growing_file})"
+                f"▶️ RESUMED: {file_path} ({current_status} → {new_status}) "
+                f"- preserved {tracked_file.bytes_copied:,} bytes"
             )
             
         except Exception as e:
-            self._logger.error(f"❌ Error resetting file {file_path} during recovery: {e}")
+            self._logger.error(f"❌ Error resuming {file_path}: {e}")

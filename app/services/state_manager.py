@@ -445,3 +445,33 @@ class StateManager:
                         FileStatus.GROWING_COPY, 
                         FileStatus.IN_QUEUE
                     ]]
+    
+    async def get_active_copy_files(self) -> List[TrackedFile]:
+        """
+        Hent alle filer der er aktive i copy pipeline.
+        
+        Returns:
+            Liste af TrackedFile objekter der er aktive
+        """
+        async with self._lock:
+            return [tracked_file for tracked_file in self._files.values()
+                    if tracked_file.status in [
+                        FileStatus.IN_QUEUE,
+                        FileStatus.COPYING, 
+                        FileStatus.GROWING_COPY
+                    ]]
+    
+    async def get_paused_files(self) -> List[TrackedFile]:
+        """
+        Hent alle paused filer der venter på resume.
+        
+        Returns:
+            Liste af TrackedFile objekter der er paused
+        """
+        async with self._lock:
+            return [tracked_file for tracked_file in self._files.values()
+                    if tracked_file.status in [
+                        FileStatus.PAUSED_IN_QUEUE,
+                        FileStatus.PAUSED_COPYING, 
+                        FileStatus.PAUSED_GROWING_COPY
+                    ]]

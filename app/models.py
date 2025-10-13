@@ -35,6 +35,11 @@ class FileStatus(str, Enum):
     # Space management states
     WAITING_FOR_SPACE = "WaitingForSpace"   # Midlertidig plads mangel, venter på retry
     SPACE_ERROR = "SpaceError"              # Permanent plads problem, kræver indgriben
+    
+    # Pause/Resume states for destination issues
+    PAUSED_IN_QUEUE = "PausedInQueue"       # Job var i queue da destination blev unavailable
+    PAUSED_COPYING = "PausedCopying"        # Copy var i gang da destination blev unavailable  
+    PAUSED_GROWING_COPY = "PausedGrowingCopy" # Growing copy var i gang da destination blev unavailable
 
 
 class StorageStatus(str, Enum):

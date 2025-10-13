@@ -57,6 +57,11 @@ class UIHelpers {
             case 'Copying':
             case 'GrowingCopy':
                 return `width: ${file.copy_progress || 0}%`;
+            case 'PausedInQueue':
+                return 'width: 0%';
+            case 'PausedCopying':
+            case 'PausedGrowingCopy':
+                return `width: ${file.copy_progress || 0}%`;
             case 'Completed':
                 return 'width: 100%';
             case 'Failed':
@@ -85,6 +90,10 @@ class UIHelpers {
                 return 'bg-blue-600';
             case 'GrowingCopy':
                 return 'bg-purple-600';
+            case 'PausedInQueue':
+            case 'PausedCopying':
+            case 'PausedGrowingCopy':
+                return 'bg-yellow-600';  // Distinct color for paused operations
             case 'Completed':
                 return 'bg-green-600';
             case 'Failed':
@@ -138,6 +147,9 @@ class UIHelpers {
             case 'InQueue': return 'bg-yellow-600';
             case 'Copying': return 'bg-blue-700';
             case 'GrowingCopy': return 'bg-purple-600';
+            case 'PausedInQueue': return 'bg-yellow-500 animate-pulse';
+            case 'PausedCopying': return 'bg-blue-500 animate-pulse';
+            case 'PausedGrowingCopy': return 'bg-purple-500 animate-pulse';
             case 'Completed': return 'bg-green-700';
             case 'Failed': return 'bg-red-600';
             case 'WaitingForSpace': return 'bg-orange-600';
@@ -170,11 +182,34 @@ class UIHelpers {
     }
 
     /**
+     * Get user-friendly status text
+     */
+    static getFriendlyStatus(status) {
+        switch (status) {
+            case 'Discovered': return 'Discovered';
+            case 'Growing': return 'Growing';
+            case 'ReadyToStartGrowing': return 'Ready (Growing)';
+            case 'Ready': return 'Ready';
+            case 'InQueue': return 'In Queue';
+            case 'Copying': return 'Copying';
+            case 'GrowingCopy': return 'Growing Copy';
+            case 'PausedInQueue': return '⏸️ Paused (Queue)';
+            case 'PausedCopying': return '⏸️ Paused (Copy)';
+            case 'PausedGrowingCopy': return '⏸️ Paused (Growing)';
+            case 'Completed': return 'Completed';
+            case 'Failed': return 'Failed';
+            case 'WaitingForSpace': return 'Waiting (Space)';
+            case 'SpaceError': return 'Space Error';
+            default: return status;
+        }
+    }
+
+    /**
      * Check if file is a growing file
      */
     static isGrowingFile(file) {
         return file && (file.is_growing_file === true || 
-                       ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status));
+                       ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status));
     }
     
     /**
