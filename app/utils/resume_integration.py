@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 from ..models import TrackedFile
+from ..services.copy.file_copy_executor import FileCopyExecutor
 from ..utils.resumable_copy_strategies import (
     ResumableNormalFileCopyStrategy, 
     ResumableGrowingFileCopyStrategy,
@@ -131,11 +132,14 @@ class ResumableStrategyFactory:
             # Brug traditional strategies
             from ..services.copy_strategies import NormalFileCopyStrategy, GrowingFileCopyStrategy
             
+            # Create FileCopyExecutor instance for traditional strategies
+            file_copy_executor = FileCopyExecutor(self.settings)
+
             if strategy_type == "growing":
-                strategy = GrowingFileCopyStrategy(self.settings, self.state_manager)
+                strategy = GrowingFileCopyStrategy(self.settings, self.state_manager, file_copy_executor)
             else:
-                strategy = NormalFileCopyStrategy(self.settings, self.state_manager)
-                
+                strategy = NormalFileCopyStrategy(self.settings, self.state_manager, file_copy_executor)
+
         else:
             # Brug resumable strategies
             from ..utils.resumable_copy_strategies import CONSERVATIVE_CONFIG
