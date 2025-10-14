@@ -144,16 +144,29 @@ class StateManager:
 
     async def get_all_files(self) -> List[TrackedFile]:
         """
-        Get all files - returns current entries only, not historical ones.
+        Get ALL current file entries - no grouping, no filtering.
+        
+        Returns every tracked file entry as separate items, allowing full visibility
+        into file history including multiple entries for same path.
+        Perfect for UI debugging and audit trails.
+        """
+        async with self._lock:
+            # Return ALL files - no grouping, no filtering
+            # Each UUID is a separate entry, even for same file_path
+            return list(self._files_by_id.values())
+
+    async def get_current_files_only(self) -> List[TrackedFile]:
+        """
+        Get current files only - one entry per file_path (grouped).
         
         For each file_path, only the most recent/active entry is returned.
-        Excludes REMOVED files as they are considered historical.
+        This is the old behavior if you need it for specific use cases.
         """
         async with self._lock:
             # Group by file_path and return only current entries
             current_files = {}
             for tracked_file in self._files_by_id.values():
-                # Skip REMOVED files - they're historical
+                # Skip REMOVED files for this method
                 if tracked_file.status == FileStatus.REMOVED:
                     continue
                     
@@ -360,21 +373,6 @@ class StateManager:
         except ValueError:
             return False
 
-    # NEW: History and ID-based APIs for future migration
-    async def get_file_history(self, file_path: str) -> List[TrackedFile]:
-        """
-        Get ALL file entries (current + historical) for a given path.
-        
-        Returns list sorted by discovery time (newest first).
-        """
-        async with self._lock:
-            history = self._get_all_files_for_path(file_path)
-            # Sort by discovery time (newest first)
-            return sorted(
-                history, 
-                key=lambda f: f.discovered_at or datetime.min, 
-                reverse=True
-            )
     
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         """
