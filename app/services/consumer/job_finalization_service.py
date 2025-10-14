@@ -63,14 +63,16 @@ class JobFinalizationService:
             # Mark job as completed in queue
             await self.job_queue.mark_job_completed(job)
 
-            # Update file status to completed
-            await self.state_manager.update_file_status(
-                file_path,
-                FileStatus.COMPLETED,
-                copy_progress=100.0,
-                error_message=None,
-                retry_count=0,
-            )
+            # Update file status to completed - UUID precision
+            tracked_file = await self.state_manager.get_file(file_path)
+            if tracked_file:
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id,
+                    FileStatus.COMPLETED,
+                    copy_progress=100.0,
+                    error_message=None,
+                    retry_count=0,
+                )
 
             logging.info(f"Job completed successfully: {file_path}")
 
@@ -92,10 +94,12 @@ class JobFinalizationService:
             # Mark job as failed in queue
             await self.job_queue.mark_job_failed(job, error_message)
 
-            # Update file status to failed
-            await self.state_manager.update_file_status(
-                file_path, FileStatus.FAILED, error_message=error_message
-            )
+            # Update file status to failed - UUID precision
+            tracked_file = await self.state_manager.get_file(file_path)
+            if tracked_file:
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id, FileStatus.FAILED, error_message=error_message
+                )
 
             logging.error(f"Job failed permanently: {file_path} - {error_message}")
 
@@ -118,10 +122,12 @@ class JobFinalizationService:
             # Mark job as failed in queue
             await self.job_queue.mark_job_failed(job, "Max retry attempts reached")
 
-            # Update file status to failed
-            await self.state_manager.update_file_status(
-                file_path, FileStatus.FAILED, error_message=error_message
-            )
+            # Update file status to failed - UUID precision
+            tracked_file = await self.state_manager.get_file(file_path)
+            if tracked_file:
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id, FileStatus.FAILED, error_message=error_message
+                )
 
             logging.error(f"Job failed after max retries: {file_path}")
 

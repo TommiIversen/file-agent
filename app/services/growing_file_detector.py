@@ -299,7 +299,7 @@ class GrowingFileDetector:
                             growth_info,
                         ) = await self.check_file_growth_status(file_path)
 
-                        # Update file status if it changed
+                        # Update file status if it changed - USE UUID for precision!
                         if recommended_status != tracked_file.status:
                             update_kwargs = {}
 
@@ -317,9 +317,13 @@ class GrowingFileDetector:
                                     }
                                 )
 
-                            await self.state_manager.update_file_status(
-                                file_path, recommended_status, **update_kwargs
+                            # Use UUID-based update for precise file reference
+                            await self.state_manager.update_file_status_by_id(
+                                file_id=tracked_file.id,  # Precise UUID reference
+                                status=recommended_status, 
+                                **update_kwargs
                             )
+                            logging.debug(f"GROWING UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]")
 
                     except Exception as e:
                         logging.error(f"Error monitoring growth for {file_path}: {e}")

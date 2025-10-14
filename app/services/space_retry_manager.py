@@ -74,34 +74,46 @@ class SpaceRetryManager:
         else:
             await self._schedule_long_retry(file_path, space_check)
 
-    async def _schedule_temporary_retry(
+    async def _schedule_short_retry(
         self, file_path: str, space_check: SpaceCheckResult
     ) -> None:
-        """Schedule retry for temporary space shortage (shorter delay)"""
+        """Schedule retry for temporary space shortage (shorter delay) - UUID precision"""
         # Shorter delay for temporary shortages (space might free up soon)
         delay_seconds = (
             self._settings.space_retry_delay_seconds // 2
         )  # Half normal delay
 
-        await self._state_manager.update_file_status(
-            file_path,
-            FileStatus.WAITING_FOR_SPACE,
-            error_message=f"Temporary space shortage: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
-        )
+        # Get tracked file for UUID-based update
+        tracked_file = await self._state_manager.get_file(file_path)
+        if tracked_file:
+            await self._state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=FileStatus.WAITING_FOR_SPACE,
+                error_message=f"Temporary space shortage: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
+            )
+            logging.debug(f"SPACE RETRY SHORT: {file_path} [UUID: {tracked_file.id[:8]}...]")
+        else:
+            logging.warning(f"Cannot schedule retry - file not tracked: {file_path}")
 
         await self._schedule_retry_task(file_path, delay_seconds, "temporary shortage")
 
     async def _schedule_long_retry(
         self, file_path: str, space_check: SpaceCheckResult
     ) -> None:
-        """Schedule retry for significant space shortage (longer delay)"""
+        """Schedule retry for significant space shortage (longer delay) - UUID precision"""
         delay_seconds = self._settings.space_retry_delay_seconds
 
-        await self._state_manager.update_file_status(
-            file_path,
-            FileStatus.WAITING_FOR_SPACE,
-            error_message=f"Insufficient space: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
-        )
+        # Get tracked file for UUID-based update  
+        tracked_file = await self._state_manager.get_file(file_path)
+        if tracked_file:
+            await self._state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=FileStatus.WAITING_FOR_SPACE,
+                error_message=f"Insufficient space: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
+            )
+            logging.debug(f"SPACE RETRY LONG: {file_path} [UUID: {tracked_file.id[:8]}...]")
+        else:
+            logging.warning(f"Cannot schedule retry - file not tracked: {file_path}")
 
         await self._schedule_retry_task(file_path, delay_seconds, "space shortage")
 
@@ -148,9 +160,11 @@ class SpaceRetryManager:
                 logging.debug(f"File {file_path} no longer needs space retry")
                 return
 
-            # Reset to READY status so FileCopyService will pick it up again
-            await self._state_manager.update_file_status(
-                file_path, FileStatus.READY, error_message=None
+            # Reset to READY status so FileCopyService will pick it up again - UUID precision
+            await self._state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=FileStatus.READY, 
+                error_message=None
             )
 
             logging.info(
@@ -170,12 +184,18 @@ class SpaceRetryManager:
     async def _mark_as_permanent_space_error(
         self, file_path: str, space_check: SpaceCheckResult
     ) -> None:
-        """Mark file as permanent space error after max retries"""
-        await self._state_manager.update_file_status(
-            file_path,
-            FileStatus.SPACE_ERROR,
-            error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}",
-        )
+        """Mark file as permanent space error after max retries - UUID precision"""
+        # Get tracked file for UUID-based update
+        tracked_file = await self._state_manager.get_file(file_path)
+        if tracked_file:
+            await self._state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=FileStatus.SPACE_ERROR,
+                error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}",
+            )
+            logging.debug(f"PERMANENT SPACE ERROR: {file_path} [UUID: {tracked_file.id[:8]}...]")
+        else:
+            logging.warning(f"Cannot mark space error - file not tracked: {file_path}")
 
         logging.warning(
             f"File {file_path} marked as permanent space error after max retries",

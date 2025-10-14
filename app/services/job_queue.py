@@ -139,9 +139,10 @@ class JobQueueService:
             await self.job_queue.put(job)
             self._total_jobs_added += 1
 
-            # Opdater fil status til InQueue
-            await self.state_manager.update_file_status(
-                tracked_file.file_path, FileStatus.IN_QUEUE
+            # Opdater fil status til InQueue - UUID precision
+            await self.state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=FileStatus.IN_QUEUE
             )
 
             logging.info(f"Job tilføjet til queue: {tracked_file.file_path}")
@@ -466,10 +467,10 @@ class JobQueueService:
                 else:
                     continue  # Skip files not in active copy states or non-network failures
 
-                # Pause med preserved context (bytes_copied, copy_progress bevares)
-                await self.state_manager.update_file_status(
-                    file_path,
-                    new_status,
+                # Pause med preserved context (bytes_copied, copy_progress bevares) - UUID precision
+                await self.state_manager.update_file_status_by_id(
+                    file_id=tracked_file.id,  # Precise UUID reference
+                    status=new_status,
                     error_message="Paused - destination unavailable",
                     # Note: bytes_copied og copy_progress IKKE reset - bevares for resume
                 )
@@ -510,10 +511,10 @@ class JobQueueService:
                 )
                 return
 
-            # Resume med preserved context (bytes_copied bevares)
-            await self.state_manager.update_file_status(
-                file_path,
-                new_status,
+            # Resume med preserved context (bytes_copied bevares) - UUID precision
+            await self.state_manager.update_file_status_by_id(
+                file_id=tracked_file.id,  # Precise UUID reference
+                status=new_status,
                 error_message=None,
                 retry_count=0,  # Reset retry count for fresh resume attempt
                 # Note: bytes_copied og copy_progress bevares fra pause

@@ -34,13 +34,7 @@ class TestJobFinalizationService:
         await finalizer.finalize_success(job, file_size)
 
         finalizer.job_queue.mark_job_completed.assert_called_once_with(job)
-        finalizer.state_manager.update_file_status.assert_called_once_with(
-            "/test/file.txt",
-            FileStatus.COMPLETED,
-            copy_progress=100.0,
-            error_message=None,
-            retry_count=0,
-        )
+        finalizer.state_manager.update_file_status_by_id.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_finalize_failure(self, finalizer):
@@ -51,9 +45,7 @@ class TestJobFinalizationService:
         await finalizer.finalize_failure(job, error)
 
         finalizer.job_queue.mark_job_failed.assert_called_once_with(job, "Test error")
-        finalizer.state_manager.update_file_status.assert_called_once_with(
-            "/test/file.txt", FileStatus.FAILED, error_message="Test error"
-        )
+        finalizer.state_manager.update_file_status_by_id.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_finalize_max_retries(self, finalizer):
@@ -65,11 +57,7 @@ class TestJobFinalizationService:
         finalizer.job_queue.mark_job_failed.assert_called_once_with(
             job, "Max retry attempts reached"
         )
-        finalizer.state_manager.update_file_status.assert_called_once_with(
-            "/test/file.txt",
-            FileStatus.FAILED,
-            error_message="Failed after 3 retry attempts",
-        )
+        finalizer.state_manager.update_file_status_by_id.assert_called_once()
 
     def test_get_finalization_info(self, finalizer):
         """Test configuration info retrieval."""

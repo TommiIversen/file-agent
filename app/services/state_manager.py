@@ -127,81 +127,6 @@ class StateManager:
 
         return tracked_file
 
-    async def update_file_status(
-        self, file_path: str, status: FileStatus, **kwargs
-    ) -> Optional[TrackedFile]:
-        """
-        Opdater status og andre attributter for en tracked fil.
-        
-        Updates the current (most recent) file entry for the given path.
-
-        Args:
-            file_path: Sti til filen der skal opdateres
-            status: Ny status for filen
-            **kwargs: Andre attributter der skal opdateres
-
-        Returns:
-            Det opdaterede TrackedFile objekt eller None hvis ikke fundet
-        """
-        async with self._lock:
-            tracked_file = self._get_current_file_for_path(file_path)
-            if not tracked_file:
-                logging.warning(f"Forsøg på at opdatere ukendt fil: {file_path}")
-                return None
-
-            old_status = tracked_file.status
-
-            # Opdater status
-            tracked_file.status = status
-
-            # Automatisk sæt is_growing_file flag baseret på status
-            if status == FileStatus.READY_TO_START_GROWING:
-                tracked_file.is_growing_file = True
-            elif status in [FileStatus.READY, FileStatus.COMPLETED]:
-                # Reset growing flag for stable files ONLY if not explicitly set
-                if "is_growing_file" not in kwargs:
-                    tracked_file.is_growing_file = False
-            # Preserve is_growing_file for COPYING, IN_QUEUE, etc. (don't reset)
-
-            # Opdater andre attributter
-            for key, value in kwargs.items():
-                if hasattr(tracked_file, key):
-                    setattr(tracked_file, key, value)
-                else:
-                    logging.warning(f"Ukendt attribut ignored: {key}")
-
-            # Sæt tidsstempler baseret på status
-            if status == FileStatus.COPYING and not tracked_file.started_copying_at:
-                tracked_file.started_copying_at = datetime.now()
-            elif status == FileStatus.COMPLETED and not tracked_file.completed_at:
-                tracked_file.completed_at = datetime.now()
-
-            # Only log when status actually changes (not for progress updates)
-            if old_status != status:
-                logging.info(f"Status opdateret: {file_path} {old_status} -> {status}")
-            else:
-                # Log progress updates at debug level only
-                if "copy_progress" in kwargs:
-                    logging.debug(
-                        f"Progress opdateret: {file_path} {kwargs['copy_progress']:.1f}%"
-                    )
-                else:
-                    logging.debug(
-                        f"Attributes opdateret: {file_path} {list(kwargs.keys())}"
-                    )
-
-        # Notify subscribers EFTER lock er frigivet for at undgå deadlock
-        await self._notify(
-            FileStateUpdate(
-                file_path=file_path,
-                old_status=old_status,
-                new_status=status,
-                tracked_file=tracked_file,
-            )
-        )
-
-        return tracked_file
-
     async def remove_file(self, file_path: str) -> bool:
         """
         Remove the current file entry for the given path.
@@ -227,9 +152,14 @@ class StateManager:
         Get the current (most recent/active) file for the given path.
         
         This maintains backward compatibility while supporting automatic history.
+        Excludes REMOVED files as they are considered historical.
         """
         async with self._lock:
-            return self._get_current_file_for_path(file_path)
+            current_file = self._get_current_file_for_path(file_path)
+            # Filter out REMOVED files - they're historical
+            if current_file and current_file.status == FileStatus.REMOVED:
+                return None
+            return current_file
 
     async def get_all_files(self) -> List[TrackedFile]:
         """

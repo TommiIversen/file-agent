@@ -289,14 +289,16 @@ class CopyStrategyFactory:
                 # Calculate transfer rate in MB/s
                 copy_speed_mbps = progress.current_rate_bytes_per_sec / (1024 * 1024)
 
-                # Update file status with standard copying status
-                await self.state_manager.update_file_status(
-                    file_path,
-                    FileStatus.COPYING,
-                    copy_progress=progress.progress_percent,
-                    bytes_copied=progress.bytes_copied,
-                    copy_speed_mbps=copy_speed_mbps,
-                )
+                # Update file status with standard copying status - UUID precision
+                tracked_file = await self.state_manager.get_file(file_path)
+                if tracked_file:
+                    await self.state_manager.update_file_status_by_id(
+                        tracked_file.id,
+                        FileStatus.COPYING,
+                        copy_progress=progress.progress_percent,
+                        bytes_copied=progress.bytes_copied,
+                        copy_speed_mbps=copy_speed_mbps,
+                    )
 
                 logging.debug(
                     f"Normal copy progress: {Path(file_path).name} - "
@@ -320,12 +322,14 @@ class CopyStrategyFactory:
                 # Calculate transfer rate in MB/s
                 copy_speed_mbps = progress.current_rate_bytes_per_sec / (1024 * 1024)
 
-                # Use growing copy status to indicate streaming operation
-                await self.state_manager.update_file_status(
-                    file_path,
-                    FileStatus.GROWING_COPY,
-                    copy_progress=progress.progress_percent,
-                    bytes_copied=progress.bytes_copied,
+                # Use growing copy status to indicate streaming operation - UUID precision
+                tracked_file = await self.state_manager.get_file(file_path)
+                if tracked_file:
+                    await self.state_manager.update_file_status_by_id(
+                        tracked_file.id,
+                        FileStatus.GROWING_COPY,
+                        copy_progress=progress.progress_percent,
+                        bytes_copied=progress.bytes_copied,
                     file_size=progress.total_bytes,  # May be growing
                     copy_speed_mbps=copy_speed_mbps,
                 )

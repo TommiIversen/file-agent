@@ -203,7 +203,7 @@ class TestJobSpaceManager:
         assert result.success is False
         assert result.space_shortage is True
         assert result.retry_scheduled is False
-        job_space_manager.state_manager.update_file_status.assert_called_once()
+        job_space_manager.state_manager.update_file_status_by_id.assert_called_once()
         job_space_manager.job_queue.mark_job_failed.assert_called_once()
 
     def test_get_space_manager_info(self, job_space_manager):

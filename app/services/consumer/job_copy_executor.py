@@ -63,8 +63,8 @@ class JobCopyExecutor:
         Args:
             prepared_file: Prepared file information
         """
-        await self.state_manager.update_file_status(
-            prepared_file.tracked_file.file_path,
+        await self.state_manager.update_file_status_by_id(
+            prepared_file.tracked_file.id,
             prepared_file.initial_status,
             copy_progress=0.0,
             started_copying_at=datetime.now(),
@@ -221,9 +221,9 @@ class JobCopyExecutor:
             else:
                 paused_status = FileStatus.PAUSED_COPYING  # Default
 
-            # Pause with preserved progress (don't reset bytes_copied or copy_progress)
-            await self.state_manager.update_file_status(
-                file_path,
+            # Pause with preserved progress (don't reset bytes_copied or copy_progress) - UUID precision
+            await self.state_manager.update_file_status_by_id(
+                current_tracked.id,
                 paused_status,
                 error_message=f"Paused: {reason}",
                 # Note: bytes_copied and copy_progress are preserved automatically
@@ -252,8 +252,8 @@ class JobCopyExecutor:
         """
         file_path = prepared_file.tracked_file.file_path
 
-        await self.state_manager.update_file_status(
-            file_path,
+        await self.state_manager.update_file_status_by_id(
+            prepared_file.tracked_file.id,
             FileStatus.FAILED,
             copy_progress=0.0,
             bytes_copied=0,

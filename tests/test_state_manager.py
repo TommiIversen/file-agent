@@ -68,11 +68,11 @@ class TestStateManager:
     ):
         """Test at update_file_status korrekt ændrer status og andre attributter."""
         # Tilføj fil
-        await state_manager.add_file(sample_file_path, 1024)
+        tracked_file = await state_manager.add_file(sample_file_path, 1024)
 
         # Opdater status til READY
-        updated_file = await state_manager.update_file_status(
-            sample_file_path, FileStatus.READY, copy_progress=50.0
+        updated_file = await state_manager.update_file_status_by_id(
+            tracked_file.id, FileStatus.READY, copy_progress=50.0
         )
 
         assert updated_file is not None
@@ -81,8 +81,8 @@ class TestStateManager:
 
     async def test_update_nonexistent_file_returns_none(self, state_manager):
         """Test at opdatering af ikke-eksisterende fil returnerer None."""
-        result = await state_manager.update_file_status(
-            "/nonexistent/file.mxf", FileStatus.READY
+        result = await state_manager.update_file_status_by_id(
+            "nonexistent-uuid", FileStatus.READY
         )
 
         assert result is None
@@ -119,8 +119,10 @@ class TestStateManager:
         await state_manager.add_file("/test/file3.mxf", 4096)
 
         # Opdater nogen til READY
-        await state_manager.update_file_status("/test/file1.mxf", FileStatus.READY)
-        await state_manager.update_file_status("/test/file2.mxf", FileStatus.READY)
+        file1 = await state_manager.get_file("/test/file1.mxf")
+        file2 = await state_manager.get_file("/test/file2.mxf")
+        await state_manager.update_file_status_by_id(file1.id, FileStatus.READY)
+        await state_manager.update_file_status_by_id(file2.id, FileStatus.READY)
 
         # Test get_files_by_status
         discovered_files = await state_manager.get_files_by_status(
@@ -162,10 +164,10 @@ class TestStateManager:
         state_manager.subscribe(test_subscriber)
 
         # Tilføj fil (skal trigger notification)
-        await state_manager.add_file(sample_file_path, 1024)
+        tracked_file = await state_manager.add_file(sample_file_path, 1024)
 
         # Opdater status (skal trigger notification)
-        await state_manager.update_file_status(sample_file_path, FileStatus.READY)
+        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
 
         # Give asyncio lidt tid til at process callbacks
         await asyncio.sleep(0.01)
@@ -197,10 +199,12 @@ class TestStateManager:
         async def update_files():
             """Update alle filer concurrent."""
             await asyncio.sleep(0.01)  # Lille delay så add_files kan starte
-            tasks = [
-                state_manager.update_file_status(path, FileStatus.READY)
-                for path in file_paths
-            ]
+            # Get files first, then update by ID
+            tasks = []
+            for path in file_paths:
+                file = await state_manager.get_file(path)
+                if file:
+                    tasks.append(state_manager.update_file_status_by_id(file.id, FileStatus.READY))
             await asyncio.gather(*tasks, return_exceptions=True)
 
         # Kør begge operationer samtidigt
@@ -224,9 +228,9 @@ class TestStateManager:
         assert stats["active_copies"] == 0
 
         # Tilføj nogle filer
-        await state_manager.add_file("/test/file1.mxf", 1024)
+        file1 = await state_manager.add_file("/test/file1.mxf", 1024)
         await state_manager.add_file("/test/file2.mxf", 2048)
-        await state_manager.update_file_status("/test/file1.mxf", FileStatus.COPYING)
+        await state_manager.update_file_status_by_id(file1.id, FileStatus.COPYING)
 
         stats = await state_manager.get_statistics()
         assert stats["total_files"] == 2

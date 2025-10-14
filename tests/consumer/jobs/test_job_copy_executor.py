@@ -50,8 +50,8 @@ class TestJobCopyExecutor:
 
             await executor.initialize_copy_status(prepared_file)
 
-        executor.state_manager.update_file_status.assert_called_once_with(
-            "/src/test.mxf",
+        executor.state_manager.update_file_status_by_id.assert_called_once_with(
+            prepared_file.tracked_file.id,
             FileStatus.COPYING,
             copy_progress=0.0,
             started_copying_at=datetime(2025, 10, 12, 12, 0, 0),
@@ -89,8 +89,8 @@ class TestJobCopyExecutor:
         """Test copy failure handling."""
         await executor.handle_copy_failure(prepared_file, "Test error")
 
-        executor.state_manager.update_file_status.assert_called_once_with(
-            "/src/test.mxf",
+        executor.state_manager.update_file_status_by_id.assert_called_once_with(
+            prepared_file.tracked_file.id,
             FileStatus.FAILED,
             copy_progress=0.0,
             bytes_copied=0,

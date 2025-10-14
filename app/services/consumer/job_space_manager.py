@@ -141,13 +141,15 @@ class JobSpaceManager:
             except Exception as e:
                 logging.error(f"Error scheduling space retry for {file_path}: {e}")
 
-        # Fallback: mark as failed if no retry manager or retry scheduling failed
+        # Fallback: mark as failed if no retry manager or retry scheduling failed - UUID precision
         try:
-            await self.state_manager.update_file_status(
-                file_path,
-                FileStatus.FAILED,
-                error_message=f"Insufficient space: {space_check.reason}",
-            )
+            tracked_file = await self.state_manager.get_file(file_path)
+            if tracked_file:
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id,
+                    FileStatus.FAILED,
+                    error_message=f"Insufficient space: {space_check.reason}",
+                )
             await self.job_queue.mark_job_failed(job, "Insufficient disk space")
         except Exception as e:
             logging.error(
