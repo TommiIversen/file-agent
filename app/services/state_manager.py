@@ -286,27 +286,12 @@ class StateManager:
         return removed_count
 
     def subscribe(self, callback: Callable[[FileStateUpdate], Awaitable[None]]) -> None:
-        """
-        Tilmeld til state change events.
-
-        Args:
-            callback: Async function der kaldes ved state changes
-        """
         self._subscribers.append(callback)
         logging.debug(f"Ny subscriber tilmeldt. Total: {len(self._subscribers)}")
 
     def unsubscribe(
         self, callback: Callable[[FileStateUpdate], Awaitable[None]]
     ) -> bool:
-        """
-        Afmeld fra state change events.
-
-        Args:
-            callback: Callback function der skal afmeldes
-
-        Returns:
-            True hvis callback blev fjernet, False hvis ikke fundet
-        """
         try:
             self._subscribers.remove(callback)
             logging.debug(f"Subscriber afmeldt. Total: {len(self._subscribers)}")
@@ -315,12 +300,6 @@ class StateManager:
             return False
 
     async def _notify(self, update: FileStateUpdate) -> None:
-        """
-        Notificer alle subscribers om en state change.
-
-        Args:
-            update: FileStateUpdate med event data
-        """
         if not self._subscribers:
             return
 
@@ -341,12 +320,6 @@ class StateManager:
                     logging.error(f"Subscriber {i} fejlede: {result}")
 
     async def get_statistics(self) -> Dict:
-        """
-        Hent statistik om systemets tilstand.
-
-        Returns:
-            Dictionary med forskellige statistikker
-        """
         async with self._lock:
             total_files = len(self._files)
             status_counts = {}
@@ -387,12 +360,6 @@ class StateManager:
             }
 
     async def get_active_copy_files(self) -> List[TrackedFile]:
-        """
-        Hent alle filer der er aktive i copy pipeline.
-
-        Returns:
-            Liste af TrackedFile objekter der er aktive
-        """
         async with self._lock:
             return [
                 tracked_file
@@ -402,12 +369,6 @@ class StateManager:
             ]
 
     async def get_paused_files(self) -> List[TrackedFile]:
-        """
-        Hent alle paused filer der venter på resume.
-
-        Returns:
-            Liste af TrackedFile objekter der er paused
-        """
         async with self._lock:
             return [
                 tracked_file
