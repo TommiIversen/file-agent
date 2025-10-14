@@ -1,12 +1,3 @@
-"""
-Central State Manager for File Transfer Agent.
-
-StateManager er "hjernen" i hele systemet - den centrale "single source of truth"
-der holder styr på alle filer og deres status på en trådsikker måde.
-
-Implementerer pub/sub pattern så andre services kan reagere på status ændringer.
-"""
-
 import asyncio
 import logging
 from typing import Dict, List, Optional, Set, Callable, Awaitable
@@ -123,9 +114,6 @@ class StateManager:
             elif status == FileStatus.COMPLETED and not tracked_file.completed_at:
                 tracked_file.completed_at = datetime.now()
 
-            # Only log when status actually changes (not for progress updates)
-            if old_status != status:
-                logging.info(f"Status opdateret: {file_path} {old_status} -> {status}")
             else:
                 # Log progress updates at debug level only
                 if "copy_progress" in kwargs:
@@ -150,15 +138,6 @@ class StateManager:
         return tracked_file
 
     async def remove_file(self, file_path: str) -> bool:
-        """
-        Fjern en fil fra tracking systemet.
-
-        Args:
-            file_path: Sti til filen der skal fjernes
-
-        Returns:
-            True hvis filen blev fjernet, False hvis den ikke eksisterede
-        """
         async with self._lock:
             if file_path not in self._files:
                 return False
@@ -173,55 +152,17 @@ class StateManager:
             return True
 
     async def get_file(self, file_path: str) -> Optional[TrackedFile]:
-        """
-        Hent en specifik tracked fil.
-
-        Args:
-            file_path: Sti til filen
-
-        Returns:
-            TrackedFile objekt eller None hvis ikke fundet
-        """
         async with self._lock:
             return self._files.get(file_path)
 
     async def get_all_files(self) -> List[TrackedFile]:
-        """
-        Hent alle tracked filer.
-
-        Returns:
-            Liste af alle TrackedFile objekter
-        """
         async with self._lock:
             return list(self._files.values())
 
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
-        """
-        Hent alle filer med en specifik status.
-
-        Args:
-            status: Den ønskede status
-
-        Returns:
-            Liste af TrackedFile objekter med den givne status
-        """
         async with self._lock:
             return [f for f in self._files.values() if f.status == status]
 
-    async def get_file_count_by_status(self) -> Dict[FileStatus, int]:
-        """
-        Hent antal filer for hver status.
-
-        Returns:
-            Dictionary med status -> antal mapping
-        """
-        async with self._lock:
-            counts = {}
-            for status in FileStatus:
-                counts[status] = len(
-                    [f for f in self._files.values() if f.status == status]
-                )
-            return counts
 
     async def cleanup_missing_files(self, existing_paths: Set[str]) -> int:
         """
@@ -444,53 +385,6 @@ class StateManager:
                 "growing_files": len(growing_files),
                 "subscribers": len(self._subscribers),
             }
-
-    async def get_failed_files(self) -> List[TrackedFile]:
-        """
-        Hent alle filer med FAILED status.
-
-        Returns:
-            Liste af TrackedFile objekter med FAILED status
-        """
-        async with self._lock:
-            return [
-                tracked_file
-                for tracked_file in self._files.values()
-                if tracked_file.status == FileStatus.FAILED
-            ]
-
-    async def get_failed_growing_files(self) -> List[TrackedFile]:
-        """
-        Hent alle failed growing files der kan retries.
-
-        Returns:
-            Liste af TrackedFile objekter der er growing files og FAILED
-        """
-        async with self._lock:
-            return [
-                tracked_file
-                for tracked_file in self._files.values()
-                if (
-                    tracked_file.status == FileStatus.FAILED
-                    and tracked_file.is_growing_file
-                )
-            ]
-
-    async def get_interrupted_copy_files(self) -> List[TrackedFile]:
-        """
-        Hent alle filer der var i gang med kopiering da system stoppede.
-        Dette inkluderer files i COPYING, GROWING_COPY, og IN_QUEUE status.
-
-        Returns:
-            Liste af TrackedFile objekter der kan resumes
-        """
-        async with self._lock:
-            return [
-                tracked_file
-                for tracked_file in self._files.values()
-                if tracked_file.status
-                in [FileStatus.COPYING, FileStatus.GROWING_COPY, FileStatus.IN_QUEUE]
-            ]
 
     async def get_active_copy_files(self) -> List[TrackedFile]:
         """
