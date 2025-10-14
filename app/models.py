@@ -8,6 +8,7 @@ systemets grundlæggende datastrukturer.
 from datetime import datetime
 from enum import Enum
 from typing import Optional
+from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -27,6 +28,7 @@ class FileStatus(str, Enum):
     COPYING = "Copying"  # Fil er ved at blive kopieret
     COMPLETED = "Completed"  # Fil er succesfuldt kopieret og slettet
     FAILED = "Failed"  # Fil kunne ikke kopieres (permanent fejl)
+    REMOVED = "Removed"  # Fil er forsvundet fra source (bevares som history)
 
     # Growing file states
     GROWING = "Growing"  # Fil er aktiv growing, størrelse ændres
@@ -72,6 +74,9 @@ class TrackedFile(BaseModel):
     Bruges af StateManager til at holde styr på alle filer og deres tilstand.
     Indeholder både metadata og progress information.
     """
+    
+    # Auto-generated unique identifier for internal tracking
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique identifier for this file entry")
 
     file_path: str = Field(..., description="Absolut sti til kildefilen")
 
