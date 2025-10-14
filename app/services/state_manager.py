@@ -127,25 +127,6 @@ class StateManager:
 
         return tracked_file
 
-    async def remove_file(self, file_path: str) -> bool:
-        """
-        Remove the current file entry for the given path.
-        
-        Note: This only removes the current entry, history is preserved.
-        """
-        async with self._lock:
-            current_file = self._get_current_file_for_path(file_path)
-            if not current_file:
-                return False
-
-            self._files_by_id.pop(current_file.id, None)
-
-            logging.info(f"Fil fjernet fra tracking: {file_path} (ID: {current_file.id})")
-
-            # Note: Vi notificerer ikke subscribers for remove events
-            # da det typisk sker ved cleanup og ikke er interessant for UI
-
-            return True
 
     async def get_file(self, file_path: str) -> Optional[TrackedFile]:
         """
