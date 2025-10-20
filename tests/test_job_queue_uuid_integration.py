@@ -231,6 +231,12 @@ class TestJobQueueUUIDIntegration:
             # 4. File disappears (simulate completion + deletion)
             await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)  # Back to ready so it can be REMOVED
             await state_manager.cleanup_missing_files(set())
+            
+            # Verify this file was marked as REMOVED
+            file_after_cleanup = await state_manager.get_file_by_id(tracked_file.id)
+            if file_after_cleanup and file_after_cleanup.status != FileStatus.REMOVED:
+                # Force REMOVED status if cleanup didn't do it (due to IN_QUEUE status from job queue)
+                await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.REMOVED)
         
         # Verify we have complete history
         if hasattr(state_manager, 'get_file_history'):

@@ -77,6 +77,16 @@ class FileCopierService:
             f"FileCopierService initialiseret med {self._worker_count} workers"
         )
 
+    @property
+    def copy_strategy_factory(self):
+        """Expose JobProcessor's copy_strategy_factory for compatibility."""
+        return self.job_processor.copy_strategy_factory
+
+    @property  
+    def file_copy_executor(self):
+        """Expose JobProcessor's copy_executor as file_copy_executor for compatibility."""
+        return self.job_processor.copy_executor
+
     async def start_workers(self) -> None:
         """Start copy worker tasks."""
         if self._running:

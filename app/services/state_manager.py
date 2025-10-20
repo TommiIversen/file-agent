@@ -383,6 +383,36 @@ class StateManager:
         async with self._lock:
             return self._files_by_id.get(file_id)
     
+    async def get_file_history(self, file_path: str) -> List[TrackedFile]:
+        """
+        Get all historical entries for a given file path.
+        
+        Returns all TrackedFile entries (including REMOVED ones) for the specified path,
+        providing a complete history of the file's lifecycle.
+        Sorted by discovered_at descending (newest first).
+        """
+        async with self._lock:
+            files = self._get_all_files_for_path(file_path)
+            # Sort by discovered_at descending (newest first)
+            return sorted(files, key=lambda f: f.discovered_at, reverse=True)
+    
+    async def remove_file_by_id(self, file_id: str) -> bool:
+        """
+        Completely remove a file entry by UUID.
+        
+        This permanently deletes the file from the state manager.
+        Use with caution - typically only for testing or cleanup.
+        
+        Returns:
+            True if file was removed, False if not found
+        """
+        async with self._lock:
+            if file_id in self._files_by_id:
+                self._files_by_id.pop(file_id)
+                logging.debug(f"Permanently removed file by ID: {file_id}")
+                return True
+            return False
+    
     async def update_file_status_by_id(
         self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:

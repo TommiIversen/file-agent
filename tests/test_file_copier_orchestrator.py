@@ -46,21 +46,23 @@ class TestFileCopierServiceOrchestrator:
 
     @pytest.fixture
     def orchestrator(self, mock_settings, mock_state_manager, mock_job_queue):
-        """Create FileCopierService orchestrator instance with required attributes for legacy tests."""
+        """Mock orchestrator for testing with legacy compatibility."""
+        # Create properly mocked JobProcessor with all needed attributes
         job_processor = MagicMock()
+        job_processor.copy_strategy_factory = MagicMock()
+        job_processor.copy_executor = MagicMock()
+        
         orchestrator = FileCopierService(
             settings=mock_settings,
             state_manager=mock_state_manager,
             job_queue=mock_job_queue,
             job_processor=job_processor,
         )
-        # Patch legacy attributes for test compatibility
-        orchestrator.copy_strategy_factory = MagicMock()
+        
+        # Add legacy attributes as direct properties (not via setters)
         orchestrator.statistics_tracker = MagicMock()
         orchestrator.error_handler = MagicMock()
         orchestrator.destination_checker = MagicMock()
-        orchestrator.file_copy_executor = MagicMock()
-        orchestrator.job_processor = job_processor
         async def async_get_copy_statistics():
             return {
                 "total_files_copied": 0,

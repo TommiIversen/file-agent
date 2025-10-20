@@ -41,7 +41,7 @@ class TestStateManager:
         tracked_file = await state_manager.add_file(sample_file_path, file_size)
         assert tracked_file.status == FileStatus.DISCOVERED
         assert tracked_file.file_path == sample_file_path
-        assert tracked_file.size == file_size
+        assert tracked_file.file_size == file_size
         assert tracked_file.id is not None
 
     async def test_add_existing_file_returns_existing(

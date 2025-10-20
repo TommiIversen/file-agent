@@ -284,9 +284,13 @@ class TestScannerUUIDIntegration:
         await state_manager.update_file_status_by_id(completed.id, FileStatus.COMPLETED)
         # Simulate old completion
         from datetime import datetime, timedelta
-        async with state_manager._lock:
-            file = await state_manager.get_file_by_id(completed.id)
+        
+        # Get file reference OUTSIDE the lock, then modify it
+        file = await state_manager.get_file_by_id(completed.id)
+        if file:
+            # Now manually set the completed_at time without holding the lock
             file.completed_at = datetime.now() - timedelta(hours=3)
+        
         # Add recent
         recent = await state_manager.add_file("/test/recent.mxf", 100)
         await state_manager.update_file_status_by_id(recent.id, FileStatus.COMPLETED)
