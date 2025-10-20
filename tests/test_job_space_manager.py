@@ -87,7 +87,14 @@ class TestJobSpaceManager:
     async def test_check_space_for_job_with_checker(self, job_space_manager):
         """Test space checking with available space checker."""
         # Arrange
-        job = {"file_path": "/test/file.txt", "file_size": 1000}
+        class DummyJob:
+            def __init__(self, tracked_file):
+                self.tracked_file = tracked_file
+
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
+        )
+        job = DummyJob(tracked_file)
         expected_result = SpaceCheckResult(
             has_space=True,
             available_bytes=5000,
@@ -114,7 +121,12 @@ class TestJobSpaceManager:
         """Test space checking without space checker."""
         # Arrange
         job_space_manager.space_checker = None
-        job = {"file_path": "/test/file.txt", "file_size": 1000}
+        class DummyJob:
+            def __init__(self):
+                self.file_size = 1000
+                self.file_path = "/test/file.txt"
+
+        job = DummyJob()
 
         # Act
         result = await job_space_manager.check_space_for_job(job)
@@ -130,12 +142,25 @@ class TestJobSpaceManager:
     ):
         """Test space checking with fallback to tracked file for size."""
         # Arrange
-        job = {"file_path": "/test/file.txt"}  # No file_size in job
-        tracked_file = TrackedFile(
-            file_path="/test/file.txt", file_size=2000, status=FileStatus.DISCOVERED
-        )
-        job_space_manager.state_manager.get_file_by_path.return_value = tracked_file
+        class DummyJob:
+            def __init__(self):
+                self.file_path = "/test/file.txt"
+                # Instead of setting tracked_file to None, create a proper TrackedFile
+                # without file_size and patch job_space_manager to simulate getting size
+                # from the tracked file
+                self.tracked_file = TrackedFile(
+                    file_path="/test/file.txt", status=FileStatus.DISCOVERED, id="test-uuid"
+                )
+                # Add file_size attribute directly to job to handle cases where code checks there first
+                self.file_size = 0  # Will be ignored if tracked_file.file_size is present
 
+        job = DummyJob()
+
+        # Mock file_size directly on the tracked_file property
+        # This avoids AttributeError when job_space_manager tries to access job.tracked_file.file_size
+        job.tracked_file.file_size = 2000
+
+        # Mock the space_checker call to avoid actual file system checks
         expected_result = SpaceCheckResult(
             has_space=True,
             available_bytes=5000,
@@ -144,23 +169,32 @@ class TestJobSpaceManager:
             safety_margin_bytes=100,
             reason="Sufficient space",
         )
-        job_space_manager.space_checker.check_space_for_file.return_value = (
-            expected_result
-        )
+        job_space_manager.space_checker.check_space_for_file.return_value = expected_result
 
         # Act
-        await job_space_manager.check_space_for_job(job)
+        result = await job_space_manager.check_space_for_job(job)
 
         # Assert
-        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(
-            2000
-        )
+        assert result == expected_result
+        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(2000)
 
     @pytest.mark.asyncio
     async def test_handle_space_shortage_with_retry_manager(self, job_space_manager):
         """Test space shortage handling with retry manager available."""
         # Arrange
-        job = {"file_path": "/test/file.txt"}
+        class DummyJob:
+            def __init__(self):
+                self.file_path = "/test/file.txt"
+                self.file_size = 1000
+                self.id = "test-job-id"
+                self.tracked_file = TrackedFile(
+                    file_path="/test/file.txt",
+                    file_size=1000,
+                    status=FileStatus.READY,
+                    id="tracked-file-uuid"
+                )
+
+        job = DummyJob()
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,
@@ -185,7 +219,19 @@ class TestJobSpaceManager:
         """Test space shortage handling without retry manager."""
         # Arrange
         job_space_manager.space_retry_manager = None
-        job = {"file_path": "/test/file.txt"}
+        class DummyJob:
+            def __init__(self):
+                self.file_path = "/test/file.txt"
+                self.file_size = 1000
+                self.file_id = "tracked-file-uuid"  # Add file_id field that matches tracked_file.id
+                self.tracked_file = TrackedFile(
+                    file_path="/test/file.txt",
+                    file_size=1000,
+                    status=FileStatus.READY,
+                    id="tracked-file-uuid"
+                )
+
+        job = DummyJob()
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,
@@ -203,7 +249,11 @@ class TestJobSpaceManager:
         assert result.success is False
         assert result.space_shortage is True
         assert result.retry_scheduled is False
-        job_space_manager.state_manager.update_file_status_by_id.assert_called_once()
+        job_space_manager.state_manager.update_file_status_by_id.assert_called_once_with(
+            "tracked-file-uuid",  # Verify the correct ID is used
+            FileStatus.FAILED,
+            error_message="Insufficient space: Insufficient space"
+        )
         job_space_manager.job_queue.mark_job_failed.assert_called_once()
 
     def test_get_space_manager_info(self, job_space_manager):

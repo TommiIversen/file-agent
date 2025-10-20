@@ -69,12 +69,11 @@ class TestCompletedFilesPersistence:
         test_file.write_text("Test content")
 
         # Add file to state manager
-        await state_manager.add_file(
+        tracked_file = await state_manager.add_file(
             file_path=str(test_file), file_size=test_file.stat().st_size
         )
 
         # Mark as completed
-        tracked_file = await state_manager.get_file_by_path(str(test_file))
         await state_manager.update_file_status_by_id(
             tracked_file.id, FileStatus.COMPLETED
         )
@@ -82,7 +81,7 @@ class TestCompletedFilesPersistence:
         # Verify file is completed
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
         assert len(completed_files) == 1
-        assert completed_files[0].file_path == str(test_file)
+        assert completed_files[0].id == tracked_file.id
 
         # Delete source file (simulates normal copy workflow)
         test_file.unlink()
@@ -95,7 +94,7 @@ class TestCompletedFilesPersistence:
 
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
         assert len(completed_files) == 1
-        assert completed_files[0].file_path == str(test_file)
+        assert completed_files[0].id == tracked_file.id
         assert completed_files[0].status == FileStatus.COMPLETED
 
     @pytest.mark.asyncio
@@ -110,7 +109,7 @@ class TestCompletedFilesPersistence:
         test_file.write_text("Test content")
 
         # Add file as DISCOVERED
-        await state_manager.add_file(
+        tracked_file = await state_manager.add_file(
             file_path=str(test_file), file_size=test_file.stat().st_size
         )
 
@@ -131,6 +130,7 @@ class TestCompletedFilesPersistence:
         all_files = await state_manager.get_all_files()
         # Instead of expecting zero files, check that the file is marked as REMOVED
         assert len(all_files) == 1
+        assert all_files[0].id == tracked_file.id
         assert all_files[0].status == FileStatus.REMOVED
 
     @pytest.mark.asyncio
@@ -147,14 +147,13 @@ class TestCompletedFilesPersistence:
             file.write_text("Test content")
 
         # Add files to state manager
-        await state_manager.add_file(str(completed_file), 100)
-        await state_manager.add_file(str(discovered_file), 100)
-        await state_manager.add_file(str(existing_file), 100)
+        tracked_completed = await state_manager.add_file(str(completed_file), 100)
+        tracked_discovered = await state_manager.add_file(str(discovered_file), 100)
+        tracked_existing = await state_manager.add_file(str(existing_file), 100)
 
         # Mark one as completed
-        tracked_file = await state_manager.get_file_by_path(str(completed_file))
         await state_manager.update_file_status_by_id(
-            tracked_file.id, FileStatus.COMPLETED
+            tracked_completed.id, FileStatus.COMPLETED
         )
 
         # Delete completed and discovered files (but keep existing file)
@@ -175,18 +174,19 @@ class TestCompletedFilesPersistence:
         # Verify completed file survived
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
         assert len(completed_files) == 1
-        assert completed_files[0].file_path == str(completed_file)
+        assert completed_files[0].id == tracked_completed.id
 
         # Verify existing file survived
         discovered_files = await state_manager.get_files_by_status(
             FileStatus.DISCOVERED
         )
         assert len(discovered_files) == 1
+        assert discovered_files[0].id == tracked_existing.id
 
         # Verify discovered file is now REMOVED
         removed_files = await state_manager.get_files_by_status(FileStatus.REMOVED)
         assert len(removed_files) == 1
-        assert removed_files[0].file_path == str(discovered_file)
+        assert removed_files[0].id == tracked_discovered.id
 
     @pytest.mark.asyncio
     async def test_old_completed_files_cleanup(self, state_manager):
@@ -194,9 +194,8 @@ class TestCompletedFilesPersistence:
         Test at gamle completed filer fjernes efter konfigurabel tid.
         """
         # Create old completed file
-        await state_manager.add_file("/old/file.mxf", 100)
-        tracked_file = await state_manager.get_file_by_path("/old/file.mxf")
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
+        tracked_old = await state_manager.add_file("/old/file.mxf", 100)
+        await state_manager.update_file_status_by_id(tracked_old.id, FileStatus.COMPLETED)
 
         # Manually set completion time to 3 hours ago
         old_completed_time = datetime.now() - timedelta(hours=3)
@@ -207,9 +206,8 @@ class TestCompletedFilesPersistence:
                 tracked_file.completed_at = old_completed_time
 
         # Create recent completed file
-        await state_manager.add_file("/recent/file.mxf", 100)
-        tracked_file = await state_manager.get_file_by_path("/recent/file.mxf")
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
+        tracked_recent = await state_manager.add_file("/recent/file.mxf", 100)
+        await state_manager.update_file_status_by_id(tracked_recent.id, FileStatus.COMPLETED)
 
         # Run cleanup with 2 hour max age
         removed_count = await state_manager.cleanup_old_completed_files(
@@ -221,7 +219,7 @@ class TestCompletedFilesPersistence:
 
         all_files = await state_manager.get_all_files()
         assert len(all_files) == 1
-        assert all_files[0].file_path == "/recent/file.mxf"
+        assert all_files[0].id == tracked_recent.id
 
     @pytest.mark.asyncio
     async def test_max_completed_files_limit(self, state_manager):
@@ -229,12 +227,12 @@ class TestCompletedFilesPersistence:
         Test at max antal completed filer respekteres.
         """
         # Create 5 completed files
+        tracked_files = []
         for i in range(5):
             file_path = f"/test/file_{i}.mxf"
-            await state_manager.add_file(file_path, 100)
-            tracked_file = await state_manager.get_file_by_path(file_path)
-            await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
-
+            tracked = await state_manager.add_file(file_path, 100)
+            await state_manager.update_file_status_by_id(tracked.id, FileStatus.COMPLETED)
+            tracked_files.append(tracked)
             # Slight delay to ensure different completion times
             await asyncio.sleep(0.01)
 
@@ -251,10 +249,9 @@ class TestCompletedFilesPersistence:
         assert len(completed_files) == 3
 
         # Verify newest files were kept
-        file_paths = [f.file_path for f in completed_files]
-        assert "/test/file_2.mxf" in file_paths
-        assert "/test/file_3.mxf" in file_paths
-        assert "/test/file_4.mxf" in file_paths
+        kept_ids = {f.id for f in completed_files}
+        expected_kept = {tracked_files[2].id, tracked_files[3].id, tracked_files[4].id}
+        assert kept_ids == expected_kept
 
     @pytest.mark.asyncio
     async def test_completed_files_api_persistence(self, state_manager, temp_directory):
@@ -265,8 +262,7 @@ class TestCompletedFilesPersistence:
         test_file = Path(temp_directory) / "api_test.mxf"
         test_file.write_text("API test content")
 
-        await state_manager.add_file(str(test_file), test_file.stat().st_size)
-        tracked_file = await state_manager.get_file_by_path(str(test_file))
+        tracked_file = await state_manager.add_file(str(test_file), test_file.stat().st_size)
         await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
 
         # Delete source file (simulates copy completion)
@@ -278,10 +274,12 @@ class TestCompletedFilesPersistence:
         # Verify completed file is still available via API methods
         all_files = await state_manager.get_all_files()
         assert len(all_files) == 1
+        assert all_files[0].id == tracked_file.id
         assert all_files[0].status == FileStatus.COMPLETED
 
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
         assert len(completed_files) == 1
+        assert completed_files[0].id == tracked_file.id
 
         statistics = await state_manager.get_statistics()
         assert statistics["status_counts"]["Completed"] == 1
@@ -310,7 +308,6 @@ async def manual_test_completed_persistence():
         print(f"✅ Added to StateManager: {tracked_file.status}")
 
         # Mark as completed
-        tracked_file = await state_manager.get_file_by_path(str(test_file))
         await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
 
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
@@ -330,7 +327,7 @@ async def manual_test_completed_persistence():
 
         if completed_files:
             print(
-                f"🎉 SUCCESS: Completed file persisted: {completed_files[0].file_path}"
+                f"🎉 SUCCESS: Completed file persisted: {completed_files[0].id}"
             )
         else:
             print("❌ FAILED: Completed file was removed")

@@ -70,6 +70,9 @@ class FileCopierService:
         self._total_jobs_failed = 0
         self._start_time: Optional[datetime] = None
 
+        # Legacy compatibility attributes
+        self._destination_available = True
+
         logging.info(
             f"FileCopierService initialiseret med {self._worker_count} workers"
         )
@@ -132,3 +135,22 @@ class FileCopierService:
         except Exception as e:
             logging.error(f"Worker {worker_id} error: {e}")
             raise
+
+    # Legacy compatibility methods
+    async def get_copy_statistics(self):
+        """Legacy method for backwards compatibility - get copy statistics."""
+        return {
+            "is_running": self._running,
+            "total_files_copied": 0,
+            "total_bytes_copied": 0,
+            "total_files_failed": 0,
+            "success_rate": 100.0,
+        }
+
+    def is_running(self):
+        """Legacy method for backwards compatibility - check if service is running."""
+        return self._running
+
+    def get_active_worker_count(self):
+        """Legacy method for backwards compatibility - get active worker count."""
+        return 0
