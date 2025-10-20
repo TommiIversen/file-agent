@@ -1,4 +1,3 @@
-# Domain objects to eliminate primitive obsession and data clumps
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
