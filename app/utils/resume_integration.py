@@ -110,7 +110,6 @@ class ResumableStrategyAdapter:
             return True
 
 
-
 def get_resume_config_for_mode(mode: str):
     """
     Get resume configuration baseret på mode setting.

@@ -74,9 +74,12 @@ class TrackedFile(BaseModel):
     Bruges af StateManager til at holde styr på alle filer og deres tilstand.
     Indeholder både metadata og progress information.
     """
-    
+
     # Auto-generated unique identifier for internal tracking
-    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique identifier for this file entry")
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Unique identifier for this file entry",
+    )
 
     file_path: str = Field(..., description="Absolut sti til kildefilen")
 

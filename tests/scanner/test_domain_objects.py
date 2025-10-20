@@ -2,10 +2,15 @@
 Tests for domain objects used in the scanner module.
 Testing the domain objects ensures our primitive obsession fixes work correctly.
 """
+
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, AsyncMock
-from app.services.scanner.domain_objects import FilePath, FileMetadata, ScanConfiguration
+from app.services.scanner.domain_objects import (
+    FilePath,
+    FileMetadata,
+    ScanConfiguration,
+)
 
 
 class TestFilePath:
@@ -39,7 +44,7 @@ class TestFilePath:
     async def test_exists(self):
         path = FilePath("/nonexistent/file.mxf")
 
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists:
+        with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             mock_exists.return_value = True
             assert await path.exists()
 
@@ -52,14 +57,10 @@ class TestFileMetadata:
 
     def test_is_empty(self):
         empty_meta = FileMetadata(
-            path=FilePath("/test.mxf"),
-            size=0,
-            last_write_time=datetime.now()
+            path=FilePath("/test.mxf"), size=0, last_write_time=datetime.now()
         )
         normal_meta = FileMetadata(
-            path=FilePath("/test.mxf"),
-            size=1024,
-            last_write_time=datetime.now()
+            path=FilePath("/test.mxf"), size=1024, last_write_time=datetime.now()
         )
 
         assert empty_meta.is_empty()
@@ -69,7 +70,7 @@ class TestFileMetadata:
         meta = FileMetadata(
             path=FilePath("/test.mxf"),
             size=2 * 1024 * 1024,  # 2MB
-            last_write_time=datetime.now()
+            last_write_time=datetime.now(),
         )
 
         assert meta.size_mb() == 2.0
@@ -78,11 +79,7 @@ class TestFileMetadata:
         now = datetime.now()
         stable_time = now - timedelta(seconds=30)
 
-        meta = FileMetadata(
-            path=FilePath("/test.mxf"),
-            size=1024,
-            last_write_time=now
-        )
+        meta = FileMetadata(path=FilePath("/test.mxf"), size=1024, last_write_time=now)
 
         # File should be stable if last seen time is old enough
         assert meta.is_stable(timedelta(seconds=20), stable_time)
@@ -93,9 +90,10 @@ class TestFileMetadata:
 
     @pytest.mark.asyncio
     async def test_from_path_success(self):
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             mock_exists.return_value = True
             mock_stat.return_value.st_size = 1024
             mock_stat.return_value.st_mtime = 1609459200  # 2021-01-01
@@ -108,7 +106,7 @@ class TestFileMetadata:
 
     @pytest.mark.asyncio
     async def test_from_path_file_not_exists(self):
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists:
+        with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             mock_exists.return_value = False
 
             metadata = await FileMetadata.from_path("/nonexistent.mxf")
@@ -126,7 +124,7 @@ class TestScanConfiguration:
             enable_growing_file_support=True,
             growing_file_min_size_mb=100,
             keep_completed_files_hours=24,
-            max_completed_files_in_memory=1000
+            max_completed_files_in_memory=1000,
         )
 
         assert config.source_directory == "/source"

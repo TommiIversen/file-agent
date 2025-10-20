@@ -13,7 +13,6 @@ This service handles:
 """
 
 import logging
-from typing import Dict
 
 from app.config import Settings
 from app.models import FileStatus
@@ -97,7 +96,7 @@ class JobFinalizationService:
             await self.state_manager.update_file_status_by_id(
                 job.file_id,  # Direct UUID access
                 FileStatus.FAILED,
-                error_message=error_message
+                error_message=error_message,
             )
 
             logging.error(f"Job failed permanently: {file_path} - {error_message}")
@@ -125,7 +124,7 @@ class JobFinalizationService:
             await self.state_manager.update_file_status_by_id(
                 job.file_id,  # Direct UUID access
                 FileStatus.FAILED,
-                error_message=error_message
+                error_message=error_message,
             )
 
             logging.error(f"Job failed after max retries: {file_path}")

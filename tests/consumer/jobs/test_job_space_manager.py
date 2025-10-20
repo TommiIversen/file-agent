@@ -43,7 +43,9 @@ class TestJobSpaceManager:
     @pytest.mark.asyncio
     async def test_check_space_sufficient(self, space_manager):
         """Test space check with sufficient space."""
-        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
+        )
         job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         expected = SpaceCheckResult(
             has_space=True,
@@ -63,7 +65,9 @@ class TestJobSpaceManager:
     @pytest.mark.asyncio
     async def test_handle_space_shortage_with_retry(self, space_manager):
         """Test space shortage handling with retry manager."""
-        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
+        )
         job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         space_check = SpaceCheckResult(
             has_space=False,
@@ -85,7 +89,9 @@ class TestJobSpaceManager:
     async def test_handle_space_shortage_no_retry_manager(self, space_manager):
         """Test space shortage handling without retry manager."""
         space_manager.space_retry_manager = None
-        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
+        )
         job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         space_check = SpaceCheckResult(
             has_space=False,

@@ -29,16 +29,13 @@ class StateManager:
     def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
         """
         Get the most recent (current) file for a given path.
-        
+
         Returns the newest file entry for this path, prioritizing active statuses.
         """
-        candidates = [
-            f for f in self._files_by_id.values() 
-            if f.file_path == file_path
-        ]
+        candidates = [f for f in self._files_by_id.values() if f.file_path == file_path]
         if not candidates:
             return None
-        
+
         # Sort by priority: Active statuses first, then by discovered_at (newest first)
         def sort_key(f: TrackedFile):
             # Active statuses get highest priority (lower number = higher priority)
@@ -59,27 +56,24 @@ class StateManager:
                 FileStatus.REMOVED: 14,  # Lowest priority
                 FileStatus.SPACE_ERROR: 15,
             }
-            
+
             priority = active_statuses.get(f.status, 99)
             # Use discovered_at as secondary sort (newer = higher priority)
             time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
             return (priority, time_priority)
-        
+
         return min(candidates, key=sort_key)
-    
+
     def _get_all_files_for_path(self, file_path: str) -> List[TrackedFile]:
         """Get ALL files (including history) for a given path."""
-        return [
-            f for f in self._files_by_id.values() 
-            if f.file_path == file_path
-        ]
+        return [f for f in self._files_by_id.values() if f.file_path == file_path]
 
     async def add_file(
         self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
         """
         Tilføj en ny fil til tracking systemet.
-        
+
         Automatic history management: If file with same path exists as REMOVED,
         it will be preserved as history and a new entry created.
 
@@ -110,8 +104,12 @@ class StateManager:
             self._files_by_id[tracked_file.id] = tracked_file
 
             if existing and existing.status == FileStatus.REMOVED:
-                logging.info(f"File returned after REMOVED - creating new entry: {file_path}")
-                logging.info(f"Previous REMOVED entry preserved as history: {existing.id}")
+                logging.info(
+                    f"File returned after REMOVED - creating new entry: {file_path}"
+                )
+                logging.info(
+                    f"Previous REMOVED entry preserved as history: {existing.id}"
+                )
             else:
                 logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
 
@@ -127,11 +125,10 @@ class StateManager:
 
         return tracked_file
 
-
     async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         """
         Get the current (most recent/active) file for the given path.
-        
+
         This maintains backward compatibility while supporting automatic history.
         Excludes REMOVED files as they are considered historical.
         """
@@ -145,7 +142,7 @@ class StateManager:
     async def get_all_files(self) -> List[TrackedFile]:
         """
         Get ALL current file entries - no grouping, no filtering.
-        
+
         Returns every tracked file entry as separate items, allowing full visibility
         into file history including multiple entries for same path.
         Perfect for UI debugging and audit trails.
@@ -158,7 +155,7 @@ class StateManager:
     async def get_current_files_only(self) -> List[TrackedFile]:
         """
         Get current files only - one entry per file_path (grouped).
-        
+
         For each file_path, only the most recent/active entry is returned.
         This is the old behavior if you need it for specific use cases.
         """
@@ -169,13 +166,13 @@ class StateManager:
                 # Skip REMOVED files for this method
                 if tracked_file.status == FileStatus.REMOVED:
                     continue
-                    
+
                 current = current_files.get(tracked_file.file_path)
                 if not current or self._is_more_current(tracked_file, current):
                     current_files[tracked_file.file_path] = tracked_file
-            
+
             return list(current_files.values())
-    
+
     def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
         """Check if file1 is more current than file2 (for same file_path)."""
         # Same logic as _get_current_file_for_path sort key
@@ -196,13 +193,13 @@ class StateManager:
             FileStatus.REMOVED: 14,
             FileStatus.SPACE_ERROR: 15,
         }
-        
+
         priority1 = active_statuses.get(file1.status, 99)
         priority2 = active_statuses.get(file2.status, 99)
-        
+
         if priority1 != priority2:
             return priority1 < priority2
-            
+
         # Same priority - use discovery time
         time1 = file1.discovered_at.timestamp() if file1.discovered_at else 0
         time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
@@ -211,7 +208,7 @@ class StateManager:
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
         """
         Get files by status - returns current entries only.
-        
+
         For each file_path, only the most recent entry is considered.
         """
         async with self._lock:
@@ -222,9 +219,8 @@ class StateManager:
                     current = current_files.get(tracked_file.file_path)
                     if not current or self._is_more_current(tracked_file, current):
                         current_files[tracked_file.file_path] = tracked_file
-            
-            return list(current_files.values())
 
+            return list(current_files.values())
 
     async def cleanup_missing_files(self, existing_paths: Set[str]) -> int:
         """
@@ -273,7 +269,9 @@ class StateManager:
                         old_status = tracked_file.status
                         tracked_file.status = FileStatus.REMOVED
                         removed_count += 1
-                        logging.info(f"Marked missing file as REMOVED: {file_path} (was {old_status})")
+                        logging.info(
+                            f"Marked missing file as REMOVED: {file_path} (was {old_status})"
+                        )
 
         if removed_count > 0:
             logging.info(
@@ -309,10 +307,9 @@ class StateManager:
                     current = current_files.get(tracked_file.file_path)
                     if not current or self._is_more_current(tracked_file, current):
                         current_files[tracked_file.file_path] = tracked_file
-            
+
             completed_files = [
-                (file.file_path, file)
-                for file in current_files.values()
+                (file.file_path, file) for file in current_files.values()
             ]
 
             # Sort by completion time (newest first)
@@ -373,20 +370,19 @@ class StateManager:
         except ValueError:
             return False
 
-    
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         """
         Get a specific file by its UUID.
-        
+
         Useful for direct access to historical entries.
         """
         async with self._lock:
             return self._files_by_id.get(file_id)
-    
+
     async def get_file_history(self, file_path: str) -> List[TrackedFile]:
         """
         Get all historical entries for a given file path.
-        
+
         Returns all TrackedFile entries (including REMOVED ones) for the specified path,
         providing a complete history of the file's lifecycle.
         Sorted by discovered_at descending (newest first).
@@ -395,14 +391,14 @@ class StateManager:
             files = self._get_all_files_for_path(file_path)
             # Sort by discovered_at descending (newest first)
             return sorted(files, key=lambda f: f.discovered_at, reverse=True)
-    
+
     async def remove_file_by_id(self, file_id: str) -> bool:
         """
         Completely remove a file entry by UUID.
-        
+
         This permanently deletes the file from the state manager.
         Use with caution - typically only for testing or cleanup.
-        
+
         Returns:
             True if file was removed, False if not found
         """
@@ -412,13 +408,13 @@ class StateManager:
                 logging.debug(f"Permanently removed file by ID: {file_id}")
                 return True
             return False
-    
+
     async def update_file_status_by_id(
         self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:
         """
         Update a specific file by UUID (for future migration).
-        
+
         Allows precise control over which file entry to update.
         """
         async with self._lock:
@@ -451,7 +447,9 @@ class StateManager:
                 tracked_file.completed_at = datetime.now()
 
             if old_status != status:
-                logging.info(f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}")
+                logging.info(
+                    f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
+                )
 
         # Notify subscribers
         await self._notify(
@@ -493,7 +491,7 @@ class StateManager:
                 current = current_files.get(tracked_file.file_path)
                 if not current or self._is_more_current(tracked_file, current):
                     current_files[tracked_file.file_path] = tracked_file
-            
+
             current_files_list = list(current_files.values())
             total_files = len(current_files_list)
             status_counts = {}
@@ -534,33 +532,37 @@ class StateManager:
             }
 
     async def get_active_copy_files(self) -> List[TrackedFile]:
-        """Get all files that are currently active in copy pipeline (current entries only).""" 
+        """Get all files that are currently active in copy pipeline (current entries only)."""
         async with self._lock:
             # Get current files directly
             current_files = {}
             for tracked_file in self._files_by_id.values():
-                if tracked_file.status in [FileStatus.IN_QUEUE, FileStatus.COPYING, FileStatus.GROWING_COPY]:
+                if tracked_file.status in [
+                    FileStatus.IN_QUEUE,
+                    FileStatus.COPYING,
+                    FileStatus.GROWING_COPY,
+                ]:
                     current = current_files.get(tracked_file.file_path)
                     if not current or self._is_more_current(tracked_file, current):
                         current_files[tracked_file.file_path] = tracked_file
-            
+
             return list(current_files.values())
 
     async def get_paused_files(self) -> List[TrackedFile]:
         """Get all paused files (current entries only)."""
         async with self._lock:
-            # Get current paused files directly  
+            # Get current paused files directly
             current_files = {}
             paused_statuses = [
                 FileStatus.PAUSED_IN_QUEUE,
                 FileStatus.PAUSED_COPYING,
                 FileStatus.PAUSED_GROWING_COPY,
             ]
-            
+
             for tracked_file in self._files_by_id.values():
                 if tracked_file.status in paused_statuses:
                     current = current_files.get(tracked_file.file_path)
                     if not current or self._is_more_current(tracked_file, current):
                         current_files[tracked_file.file_path] = tracked_file
-            
+
             return list(current_files.values())

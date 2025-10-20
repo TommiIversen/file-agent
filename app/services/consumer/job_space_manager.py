@@ -12,7 +12,6 @@ This service handles:
 """
 
 import logging
-from typing import Dict
 
 from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult

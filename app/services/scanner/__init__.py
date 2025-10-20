@@ -8,5 +8,5 @@ __all__ = [
     "FileDiscoveryService",
     "FileStabilityTracker",
     "FileCleanupService",
-    "FileScanOrchestrator"
+    "FileScanOrchestrator",
 ]

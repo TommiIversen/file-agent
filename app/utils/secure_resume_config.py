@@ -72,8 +72,6 @@ class SecureResumeConfig(BaseModel):
         le=50,
     )
 
-
-
     # Safety margins
     safety_margin_kb: int = Field(
         default=1024,  # 1MB safety margin

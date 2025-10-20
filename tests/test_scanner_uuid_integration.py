@@ -53,7 +53,7 @@ class TestScannerUUIDIntegration:
         self, state_manager, scan_config, mock_settings
     ):
         """Test at en fil der forsvinder og kommer tilbage får korrekt historie tracking."""
-        
+
         # file_id is now just a path, but all operations must use UUIDs
         file_path = "/test/source/video_001.mxf"
 
@@ -62,13 +62,15 @@ class TestScannerUUIDIntegration:
         assert tracked_file1.status == FileStatus.DISCOVERED
         assert tracked_file1.file_path == file_path
         original_uuid = tracked_file1.id
-        
+
         # 2. Simulate file becomes ready
         await state_manager.update_file_status_by_id(tracked_file1.id, FileStatus.READY)
-        
+
         # 4. Simulate file disappears (marked as REMOVED by cleanup)
-        await state_manager.cleanup_missing_files(set())  # Empty set = all files missing
-        
+        await state_manager.cleanup_missing_files(
+            set()
+        )  # Empty set = all files missing
+
         # Verify file is marked as REMOVED
         removed_file = await state_manager.get_file_by_id(tracked_file1.id)
         # Updated: The new implementation returns a TrackedFile with status=REMOVED, not None
@@ -76,7 +78,7 @@ class TestScannerUUIDIntegration:
         assert removed_file.status == FileStatus.REMOVED
 
         # Check history if the method exists
-        if hasattr(state_manager, 'get_file_history'):
+        if hasattr(state_manager, "get_file_history"):
             # But history should exist (history is still accessed by file_path)
             history = await state_manager.get_file_history(file_path)
             assert len(history) == 1
@@ -91,9 +93,9 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.file_path == file_path
         assert tracked_file2.file_size == 2048
         assert tracked_file2.id != original_uuid  # NEW UUID!
-        
+
         # 6. Verify we have history if method exists
-        if hasattr(state_manager, 'get_file_history'):
+        if hasattr(state_manager, "get_file_history"):
             history = await state_manager.get_file_history(file_path)
             assert len(history) == 2
             # Most recent first (sorted by discovered_at descending)
@@ -104,15 +106,17 @@ class TestScannerUUIDIntegration:
         self, state_manager, scan_config, mock_settings
     ):
         """Test at scanner korrekt håndterer filer der allerede er REMOVED."""
-        
+
         # file_path = "/test/source/video_002.mxf"
         file_id = "/test/source/video_002.mxf"
 
         # 1. Add file and mark as REMOVED (simulate previous cycle)
         tracked_file1 = await state_manager.add_file(file_id, 1024)
-        await state_manager.update_file_status_by_id(tracked_file1.id, FileStatus.READY)  # Not COMPLETED, so it can be REMOVED
+        await state_manager.update_file_status_by_id(
+            tracked_file1.id, FileStatus.READY
+        )  # Not COMPLETED, so it can be REMOVED
         await state_manager.cleanup_missing_files(set())  # Mark as REMOVED
-        
+
         # 2. Simulate scanner discovers same file again (mocking the discovery logic)
         existing_file = await state_manager.get_file_by_id(tracked_file1.id)
         # Updated: The new implementation returns a file with REMOVED status, not None
@@ -126,9 +130,9 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.status == FileStatus.DISCOVERED
         assert tracked_file2.file_size == 1500
         assert tracked_file2.id != tracked_file1.id
-        
+
         # 4. Verify history preserved if method exists
-        if hasattr(state_manager, 'get_file_history'):
+        if hasattr(state_manager, "get_file_history"):
             history = await state_manager.get_file_history(file_id)
             assert len(history) == 2
 
@@ -140,38 +144,44 @@ class TestScannerUUIDIntegration:
         self, state_manager, scan_config, mock_settings
     ):
         """Test scenario hvor samme fil kommer og går flere gange."""
-        
+
         file_id = "/test/source/temp_render.mxf"
 
         # Simulate multiple cycles of same filename
         file_uuids = []
-        
+
         for cycle in range(3):
             # 1. File appears
             tracked_file = await state_manager.add_file(file_id, 1000 + cycle * 100)
             file_uuids.append(tracked_file.id)
-            
+
             # 2. File processed (but not COMPLETED so it can be marked REMOVED)
-            await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
-            await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COPYING)
-            
+            await state_manager.update_file_status_by_id(
+                tracked_file.id, FileStatus.READY
+            )
+            await state_manager.update_file_status_by_id(
+                tracked_file.id, FileStatus.COPYING
+            )
+
             # 3. File disappears (back to READY state so cleanup can mark as REMOVED)
-            await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
+            await state_manager.update_file_status_by_id(
+                tracked_file.id, FileStatus.READY
+            )
             await state_manager.cleanup_missing_files(set())
-            
+
         # Verify we have full history
         history = await state_manager.get_file_history(file_id)
         assert len(history) == 3
-        
+
         # All should be REMOVED status now
         for entry in history:
             assert entry.status == FileStatus.REMOVED
-        
+
         # All should have unique UUIDs
         history_uuids = [entry.id for entry in history]
         assert len(set(history_uuids)) == 3
         assert set(history_uuids) == set(file_uuids)
-        
+
         # Different file sizes
         file_sizes = [entry.file_size for entry in history]
         expected_sizes = [1200, 1100, 1000]  # Most recent first
@@ -181,34 +191,32 @@ class TestScannerUUIDIntegration:
         self, state_manager, scan_config, mock_settings
     ):
         """Test at de nye UUID-baserede APIs virker sammen med scanner workflow."""
-        
+
         file_id = "/test/source/video_003.mxf"
 
         # 1. Scanner adds file
         tracked_file = await state_manager.add_file(file_id, 2048)
         original_uuid = tracked_file.id
-        
+
         # 2. Use UUID-based update (new method)
         await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
-        
+
         # 3. Use UUID-based update with progress (demonstration)
         result = await state_manager.update_file_status_by_id(
-            original_uuid, 
-            FileStatus.COPYING,
-            copy_progress=25.0
+            original_uuid, FileStatus.COPYING, copy_progress=25.0
         )
-        
+
         assert result is not None
         assert result.status == FileStatus.COPYING
         assert result.copy_progress == 25.0
         assert result.id == original_uuid
-        
+
         # 4. Verify both methods updated same file
         current_file = await state_manager.get_file_by_path(file_id)
         assert current_file.id == original_uuid
         assert current_file.status == FileStatus.COPYING
         assert current_file.copy_progress == 25.0
-        
+
         # 5. Verify by ID lookup works
         by_id_file = await state_manager.get_file_by_id(original_uuid)
         assert by_id_file.id == original_uuid
@@ -219,18 +227,17 @@ class TestScannerUUIDIntegration:
         self, state_manager, scan_config, mock_settings
     ):
         """Test at scanner automatisk får benefit af historie logging."""
-        
+
         file_id = "/test/source/project_final.mxf"
 
         # Simulate realistic scanner workflow med historie
-        with patch('app.services.state_manager.logging') as mock_logging:
-            
+        with patch("app.services.state_manager.logging") as mock_logging:
             # 1. Initial discovery
             tracked_file1 = await state_manager.add_file(file_id, 5000)
 
             # 2. File disappears
             await state_manager.cleanup_missing_files(set())
-            
+
             # 3. File returns
             tracked_file2 = await state_manager.add_file(file_id, 5000)
 
@@ -238,16 +245,16 @@ class TestScannerUUIDIntegration:
             mock_logging.info.assert_any_call(
                 f"File returned after REMOVED - creating new entry: {file_id}"
             )
-            
+
             # Should also log preservation of history
             assert any(
                 "Previous REMOVED entry preserved as history" in str(call)
                 for call in mock_logging.info.call_args_list
             )
-        
+
         # Verify two distinct entries exist
         assert tracked_file1.id != tracked_file2.id
-        
+
         # Verify history
         history = await state_manager.get_file_history(file_id)
         assert len(history) == 2
@@ -264,13 +271,15 @@ class TestScannerUUIDIntegration:
 
     async def test_status_update_by_id(self, state_manager):
         tracked_file = await state_manager.add_file("/test/file2.mxf", 100)
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COPYING)
+        await state_manager.update_file_status_by_id(
+            tracked_file.id, FileStatus.COPYING
+        )
         file = await state_manager.get_file_by_id(tracked_file.id)
         assert file.status == FileStatus.COPYING
 
     async def test_cleanup_removes_only_non_completed(self, state_manager):
         completed = await state_manager.add_file("/test/comp.mxf", 100)
-        discovered = await state_manager.add_file("/test/disc.mxf", 100)
+        await state_manager.add_file("/test/disc.mxf", 100)
         await state_manager.update_file_status_by_id(completed.id, FileStatus.COMPLETED)
         removed_count = await state_manager.cleanup_missing_files(set())
         assert removed_count == 1
@@ -284,13 +293,13 @@ class TestScannerUUIDIntegration:
         await state_manager.update_file_status_by_id(completed.id, FileStatus.COMPLETED)
         # Simulate old completion
         from datetime import datetime, timedelta
-        
+
         # Get file reference OUTSIDE the lock, then modify it
         file = await state_manager.get_file_by_id(completed.id)
         if file:
             # Now manually set the completed_at time without holding the lock
             file.completed_at = datetime.now() - timedelta(hours=3)
-        
+
         # Add recent
         recent = await state_manager.add_file("/test/recent.mxf", 100)
         await state_manager.update_file_status_by_id(recent.id, FileStatus.COMPLETED)
@@ -298,4 +307,3 @@ class TestScannerUUIDIntegration:
         assert removed_count == 1
         all_files = await state_manager.get_all_files()
         assert all_files[0].id == recent.id
-

@@ -225,7 +225,9 @@ def get_copy_strategy_factory() -> CopyStrategyFactory:
     if "copy_strategy_factory" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
-        _singletons["copy_strategy_factory"] = CopyStrategyFactory(settings, state_manager)
+        _singletons["copy_strategy_factory"] = CopyStrategyFactory(
+            settings, state_manager
+        )
 
     return _singletons["copy_strategy_factory"]
 

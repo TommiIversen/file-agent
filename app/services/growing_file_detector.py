@@ -13,7 +13,6 @@ from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
 
 
-
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
@@ -68,7 +67,9 @@ class GrowingFileDetector:
         self.state_manager = state_manager
 
         # File growth tracking
-        self._growth_tracking: Dict[str, FileGrowthInfo] = {}  # use TrackedFile.is as key
+        self._growth_tracking: Dict[
+            str, FileGrowthInfo
+        ] = {}  # use TrackedFile.is as key
         self._monitoring_active = False
 
         # Configuration shortcuts
@@ -101,7 +102,6 @@ class GrowingFileDetector:
     async def check_file_growth_status(
         self, tracked_file: TrackedFile
     ) -> Tuple[FileStatus, Optional[FileGrowthInfo]]:
-
         try:
             # Get current file info
             if not os.path.exists(tracked_file.file_path):
@@ -217,10 +217,14 @@ class GrowingFileDetector:
                         return FileStatus.DISCOVERED, growth_info
 
         except Exception as e:
-            logging.error(f"Error checking growth status for {tracked_file.file_path}: {e}")
+            logging.error(
+                f"Error checking growth status for {tracked_file.file_path}: {e}"
+            )
             return FileStatus.FAILED, None
 
-    async def update_file_growth_info(self, tracked_file: TrackedFile, new_size: int) -> None:
+    async def update_file_growth_info(
+        self, tracked_file: TrackedFile, new_size: int
+    ) -> None:
         """
         Update growth tracking info when we get external size updates.
 
@@ -267,7 +271,9 @@ class GrowingFileDetector:
 
                     try:
                         # Get current tracked file from state manager
-                        tracked_file = await self.state_manager.get_file_by_id(tracked_file_id)
+                        tracked_file = await self.state_manager.get_file_by_id(
+                            tracked_file_id
+                        )
                         if not tracked_file:
                             # File no longer tracked, clean up
                             await self._cleanup_tracking(tracked_file_id)
@@ -310,13 +316,17 @@ class GrowingFileDetector:
                             # Use UUID-based update for precise file reference
                             await self.state_manager.update_file_status_by_id(
                                 file_id=tracked_file.id,  # Precise UUID reference
-                                status=recommended_status, 
-                                **update_kwargs
+                                status=recommended_status,
+                                **update_kwargs,
                             )
-                            logging.debug(f"GROWING UPDATE: {tracked_file.file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]")
+                            logging.debug(
+                                f"GROWING UPDATE: {tracked_file.file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
+                            )
 
                     except Exception as e:
-                        logging.error(f"Error monitoring growth for {tracked_file_id}: {e}")
+                        logging.error(
+                            f"Error monitoring growth for {tracked_file_id}: {e}"
+                        )
 
                 # Wait before next check
                 await asyncio.sleep(self.poll_interval)

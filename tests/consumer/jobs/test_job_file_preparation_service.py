@@ -38,10 +38,7 @@ class TestJobFilePreparationService:
         tracked_file = TrackedFile(
             file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(
-            tracked_file=tracked_file,
-            added_to_queue_at=datetime.now()
-        )
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         strategy = MagicMock(__class__=MagicMock(__name__="StandardCopyStrategy"))
 
         preparer.state_manager.get_file_by_path.return_value = tracked_file
@@ -70,6 +67,7 @@ class TestJobFilePreparationService:
     @pytest.mark.asyncio
     async def test_prepare_file_not_found(self, preparer):
         """Test file preparation when file not found."""
+
         # Simulate a job with a tracked_file that is None
         class DummyJob:
             tracked_file = None

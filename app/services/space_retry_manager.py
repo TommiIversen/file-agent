@@ -18,7 +18,6 @@ from ..services.state_manager import StateManager
 
 
 class SpaceRetryManager:
-
     def __init__(self, settings: Settings, state_manager: StateManager):
         """
         Initialize SpaceRetryManager.
@@ -31,16 +30,14 @@ class SpaceRetryManager:
         self._state_manager = state_manager
 
         # Track files waiting for space retry
-        self._retry_tracking: Dict[str, RetryInfo] = {}  #use TrackedFile.id as key
-        self._retry_tasks: Dict[str, asyncio.Task] = {}  #use TrackedFile.id as key
+        self._retry_tracking: Dict[str, RetryInfo] = {}  # use TrackedFile.id as key
+        self._retry_tasks: Dict[str, asyncio.Task] = {}  # use TrackedFile.id as key
 
         logging.debug("SpaceRetryManager initialized")
 
     async def schedule_space_retry(
-            self,
-            tracked_file: TrackedFile,
-            space_check: SpaceCheckResult) -> None:
-
+        self, tracked_file: TrackedFile, space_check: SpaceCheckResult
+    ) -> None:
         # Check if we should retry or give up
         if self._should_give_up_retry(tracked_file.retry_count):
             await self._mark_as_permanent_space_error(tracked_file, space_check)
@@ -68,11 +65,17 @@ class SpaceRetryManager:
                 status=FileStatus.WAITING_FOR_SPACE,
                 error_message=f"Temporary space shortage: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
             )
-            logging.debug(f"SPACE RETRY SHORT: {tracked_file.file_path} [UUID: {tracked_file.id}")
+            logging.debug(
+                f"SPACE RETRY SHORT: {tracked_file.file_path} [UUID: {tracked_file.id}"
+            )
         else:
-            logging.warning(f"Cannot schedule retry - file not tracked: {tracked_file.file_path}")
+            logging.warning(
+                f"Cannot schedule retry - file not tracked: {tracked_file.file_path}"
+            )
 
-        await self._schedule_retry_task(tracked_file, delay_seconds, "temporary shortage")
+        await self._schedule_retry_task(
+            tracked_file, delay_seconds, "temporary shortage"
+        )
 
     async def _schedule_long_retry(
         self, tracked_file: TrackedFile, space_check: SpaceCheckResult
@@ -86,9 +89,13 @@ class SpaceRetryManager:
                 status=FileStatus.WAITING_FOR_SPACE,
                 error_message=f"Insufficient space: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
             )
-            logging.debug(f"SPACE RETRY LONG: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]")
+            logging.debug(
+                f"SPACE RETRY LONG: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]"
+            )
         else:
-            logging.warning(f"Cannot schedule retry - file not tracked: {tracked_file.file_path}")
+            logging.warning(
+                f"Cannot schedule retry - file not tracked: {tracked_file.file_path}"
+            )
 
         await self._schedule_retry_task(tracked_file, delay_seconds, "space shortage")
 
@@ -124,7 +131,9 @@ class SpaceRetryManager:
             },
         )
 
-    async def _execute_delayed_retry(self, tracked_file: TrackedFile, delay_seconds: int) -> None:
+    async def _execute_delayed_retry(
+        self, tracked_file: TrackedFile, delay_seconds: int
+    ) -> None:
         """Execute the delayed retry after waiting"""
         try:
             await asyncio.sleep(delay_seconds)
@@ -132,19 +141,24 @@ class SpaceRetryManager:
             # Check if file still exists and needs retry
 
             if not tracked_file or tracked_file.status != FileStatus.WAITING_FOR_SPACE:
-                logging.debug(f"File {tracked_file.file_path} no longer needs space retry")
+                logging.debug(
+                    f"File {tracked_file.file_path} no longer needs space retry"
+                )
                 return
 
             # Reset to READY status so FileCopyService will pick it up again - UUID precision
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference
-                status=FileStatus.READY, 
-                error_message=None
+                status=FileStatus.READY,
+                error_message=None,
             )
 
             logging.info(
                 f"Space retry executed for {tracked_file.file_path} - reset to READY",
-                extra={"operation": "space_retry_executed", "file_path": tracked_file.file_path},
+                extra={
+                    "operation": "space_retry_executed",
+                    "file_path": tracked_file.file_path,
+                },
             )
 
         except asyncio.CancelledError:
@@ -159,16 +173,19 @@ class SpaceRetryManager:
     async def _mark_as_permanent_space_error(
         self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
-
         if tracked_file:
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=FileStatus.SPACE_ERROR,
                 error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}",
             )
-            logging.debug(f"PERMANENT SPACE ERROR: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]")
+            logging.debug(
+                f"PERMANENT SPACE ERROR: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]"
+            )
         else:
-            logging.warning(f"Cannot mark space error - file not tracked: {tracked_file.file_path}")
+            logging.warning(
+                f"Cannot mark space error - file not tracked: {tracked_file.file_path}"
+            )
 
         logging.warning(
             f"File {tracked_file.file_path} marked as permanent space error after max retries",
@@ -202,6 +219,7 @@ class SpaceRetryManager:
 
         for file_path in list(self._retry_tasks.keys()):
             await self._cancel_existing_retry_by_id(file_path)
+
 
 class RetryInfo:
     """Information about a scheduled space retry"""

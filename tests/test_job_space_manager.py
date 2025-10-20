@@ -86,6 +86,7 @@ class TestJobSpaceManager:
     @pytest.mark.asyncio
     async def test_check_space_for_job_with_checker(self, job_space_manager):
         """Test space checking with available space checker."""
+
         # Arrange
         class DummyJob:
             def __init__(self, tracked_file):
@@ -121,6 +122,7 @@ class TestJobSpaceManager:
         """Test space checking without space checker."""
         # Arrange
         job_space_manager.space_checker = None
+
         class DummyJob:
             def __init__(self):
                 self.file_size = 1000
@@ -141,6 +143,7 @@ class TestJobSpaceManager:
         self, job_space_manager
     ):
         """Test space checking with fallback to tracked file for size."""
+
         # Arrange
         class DummyJob:
             def __init__(self):
@@ -149,10 +152,14 @@ class TestJobSpaceManager:
                 # without file_size and patch job_space_manager to simulate getting size
                 # from the tracked file
                 self.tracked_file = TrackedFile(
-                    file_path="/test/file.txt", status=FileStatus.DISCOVERED, id="test-uuid"
+                    file_path="/test/file.txt",
+                    status=FileStatus.DISCOVERED,
+                    id="test-uuid",
                 )
                 # Add file_size attribute directly to job to handle cases where code checks there first
-                self.file_size = 0  # Will be ignored if tracked_file.file_size is present
+                self.file_size = (
+                    0  # Will be ignored if tracked_file.file_size is present
+                )
 
         job = DummyJob()
 
@@ -169,18 +176,23 @@ class TestJobSpaceManager:
             safety_margin_bytes=100,
             reason="Sufficient space",
         )
-        job_space_manager.space_checker.check_space_for_file.return_value = expected_result
+        job_space_manager.space_checker.check_space_for_file.return_value = (
+            expected_result
+        )
 
         # Act
         result = await job_space_manager.check_space_for_job(job)
 
         # Assert
         assert result == expected_result
-        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(2000)
+        job_space_manager.space_checker.check_space_for_file.assert_called_once_with(
+            2000
+        )
 
     @pytest.mark.asyncio
     async def test_handle_space_shortage_with_retry_manager(self, job_space_manager):
         """Test space shortage handling with retry manager available."""
+
         # Arrange
         class DummyJob:
             def __init__(self):
@@ -191,7 +203,7 @@ class TestJobSpaceManager:
                     file_path="/test/file.txt",
                     file_size=1000,
                     status=FileStatus.READY,
-                    id="tracked-file-uuid"
+                    id="tracked-file-uuid",
                 )
 
         job = DummyJob()
@@ -219,6 +231,7 @@ class TestJobSpaceManager:
         """Test space shortage handling without retry manager."""
         # Arrange
         job_space_manager.space_retry_manager = None
+
         class DummyJob:
             def __init__(self):
                 self.file_path = "/test/file.txt"
@@ -228,7 +241,7 @@ class TestJobSpaceManager:
                     file_path="/test/file.txt",
                     file_size=1000,
                     status=FileStatus.READY,
-                    id="tracked-file-uuid"
+                    id="tracked-file-uuid",
                 )
 
         job = DummyJob()
@@ -252,7 +265,7 @@ class TestJobSpaceManager:
         job_space_manager.state_manager.update_file_status_by_id.assert_called_once_with(
             "tracked-file-uuid",  # Verify the correct ID is used
             FileStatus.FAILED,
-            error_message="Insufficient space: Insufficient space"
+            error_message="Insufficient space: Insufficient space",
         )
         job_space_manager.job_queue.mark_job_failed.assert_called_once()
 

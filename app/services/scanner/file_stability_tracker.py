@@ -1,9 +1,8 @@
 # This class is responsible solely for tracking file stability, adhering to SRP.
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional
-from app.models import FileStatus
-from .domain_objects import FilePath, FileMetadata, ScanConfiguration
+from typing import Dict
+from .domain_objects import FileMetadata, ScanConfiguration
 
 
 class FileStabilityTracker:
@@ -19,7 +18,9 @@ class FileStabilityTracker:
         self._file_last_seen: Dict[str, datetime] = {}
         self._file_last_write_times: Dict[str, datetime] = {}
 
-    def initialize_file_tracking(self, file_path: str, last_write_time: datetime) -> None:
+    def initialize_file_tracking(
+        self, file_path: str, last_write_time: datetime
+    ) -> None:
         """Initialize tracking for a new file."""
         self._file_last_seen[file_path] = datetime.now()
         self._file_last_write_times[file_path] = last_write_time
@@ -68,10 +69,7 @@ class FileStabilityTracker:
         self._file_last_seen[file_path] = datetime.now()
 
     async def update_file_growth_tracking(
-        self,
-        file_path: str,
-        current_metadata: FileMetadata,
-        previous_size: int
+        self, file_path: str, current_metadata: FileMetadata, previous_size: int
     ) -> bool:
         """
         Update tracking for a growing file.

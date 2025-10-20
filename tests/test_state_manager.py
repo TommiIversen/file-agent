@@ -92,7 +92,9 @@ class TestStateManager:
         await state_manager.update_file_status_by_id(file1.id, FileStatus.READY)
         await state_manager.update_file_status_by_id(file2.id, FileStatus.READY)
         # Test get_files_by_status
-        discovered_files = await state_manager.get_files_by_status(FileStatus.DISCOVERED)
+        discovered_files = await state_manager.get_files_by_status(
+            FileStatus.DISCOVERED
+        )
         ready_files = await state_manager.get_files_by_status(FileStatus.READY)
         assert all(f.status == FileStatus.DISCOVERED for f in discovered_files)
         assert all(f.status == FileStatus.READY for f in ready_files)
@@ -163,7 +165,11 @@ class TestStateManager:
             for path in file_paths:
                 tracked_file = tracked_files.get(path)
                 if tracked_file:
-                    tasks.append(state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY))
+                    tasks.append(
+                        state_manager.update_file_status_by_id(
+                            tracked_file.id, FileStatus.READY
+                        )
+                    )
             await asyncio.gather(*tasks, return_exceptions=True)
 
         # Kør begge operationer samtidigt

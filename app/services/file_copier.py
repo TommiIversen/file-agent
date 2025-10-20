@@ -13,11 +13,10 @@ ARCHITECTURE FOCUS:
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 
 from app.config import Settings
-from app.models import FileStatus
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
 from app.services.consumer.job_processor import JobProcessor
@@ -82,7 +81,7 @@ class FileCopierService:
         """Expose JobProcessor's copy_strategy_factory for compatibility."""
         return self.job_processor.copy_strategy_factory
 
-    @property  
+    @property
     def file_copy_executor(self):
         """Expose JobProcessor's copy_executor as file_copy_executor for compatibility."""
         return self.job_processor.copy_executor
@@ -99,7 +98,7 @@ class FileCopierService:
         # Start worker tasks
         for i in range(self._worker_count):
             worker_task = asyncio.create_task(
-                self._worker_loop(f"worker-{i+1}"), name=f"copy-worker-{i+1}"
+                self._worker_loop(f"worker-{i + 1}"), name=f"copy-worker-{i + 1}"
             )
             self._workers.append(worker_task)
 

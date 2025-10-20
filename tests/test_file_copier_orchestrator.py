@@ -8,14 +8,9 @@ than the detailed copy logic (which is tested in individual service tests).
 
 import pytest
 from unittest.mock import Mock, AsyncMock, MagicMock
-import asyncio
 
 from app.services.file_copier import FileCopierService
 from app.services.job_queue import JobQueueService
-from app.services.copy_strategies import CopyStrategyFactory
-from app.services.tracking.copy_statistics import CopyStatisticsTracker
-from app.services.error_handling.copy_error_handler import CopyErrorHandler
-from app.services.destination.destination_checker import DestinationChecker
 from app.config import Settings
 
 
@@ -51,18 +46,19 @@ class TestFileCopierServiceOrchestrator:
         job_processor = MagicMock()
         job_processor.copy_strategy_factory = MagicMock()
         job_processor.copy_executor = MagicMock()
-        
+
         orchestrator = FileCopierService(
             settings=mock_settings,
             state_manager=mock_state_manager,
             job_queue=mock_job_queue,
             job_processor=job_processor,
         )
-        
+
         # Add legacy attributes as direct properties (not via setters)
         orchestrator.statistics_tracker = MagicMock()
         orchestrator.error_handler = MagicMock()
         orchestrator.destination_checker = MagicMock()
+
         async def async_get_copy_statistics():
             return {
                 "total_files_copied": 0,
@@ -71,6 +67,7 @@ class TestFileCopierServiceOrchestrator:
                 "active_workers": 0,
                 "destination_available": True,
             }
+
         orchestrator.get_copy_statistics = async_get_copy_statistics
         orchestrator._consumer_tasks = []
         orchestrator._running = False
@@ -123,9 +120,11 @@ class TestFileCopierServiceOrchestrator:
         assert orchestrator.get_active_worker_count() == 0
 
         # Patch in a dummy stop_consumer for compatibility
-        if not hasattr(orchestrator, 'stop_consumer'):
+        if not hasattr(orchestrator, "stop_consumer"):
+
             async def dummy_stop_consumer():
                 orchestrator._running = False
+
             orchestrator.stop_consumer = dummy_stop_consumer
 
         # Test stop when not running
@@ -184,9 +183,11 @@ class TestFileCopierServiceOrchestrator:
         assert len(orchestrator._consumer_tasks) == 0
 
         # Patch in a dummy stop_consumer for compatibility
-        if not hasattr(orchestrator, 'stop_consumer'):
+        if not hasattr(orchestrator, "stop_consumer"):
+
             async def dummy_stop_consumer():
                 orchestrator._running = False
+
             orchestrator.stop_consumer = dummy_stop_consumer
 
         # Test stop consumer when already stopped
@@ -259,7 +260,9 @@ class TestFileCopierServiceLegacyCompatibility:
     ):
         """Test that the legacy constructor signature still works."""
         # This should not raise an exception
-        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue, mock_job_processor)
+        service = FileCopierService(
+            mock_settings, mock_state_manager, mock_job_queue, mock_job_processor
+        )
 
         assert service.settings == mock_settings
         assert isinstance(service, FileCopierService)
@@ -269,7 +272,9 @@ class TestFileCopierServiceLegacyCompatibility:
         self, mock_settings, mock_state_manager, mock_job_queue, mock_job_processor
     ):
         """Test that statistics still return expected format for legacy code."""
-        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue, mock_job_processor)
+        service = FileCopierService(
+            mock_settings, mock_state_manager, mock_job_queue, mock_job_processor
+        )
 
         stats = await service.get_copy_statistics()
 
@@ -289,7 +294,9 @@ class TestFileCopierServiceLegacyCompatibility:
         self, mock_settings, mock_state_manager, mock_job_queue, mock_job_processor
     ):
         """Test legacy status methods."""
-        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue, mock_job_processor)
+        service = FileCopierService(
+            mock_settings, mock_state_manager, mock_job_queue, mock_job_processor
+        )
 
         # These methods should exist and return sensible values
         assert isinstance(service.is_running(), bool)

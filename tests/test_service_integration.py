@@ -66,12 +66,13 @@ def mock_job_queue():
     return job_queue
 
 
-@pytest.fixture  
+@pytest.fixture
 def mock_job_processor():
     """Mock JobProcessor for testing."""
     from unittest.mock import Mock, AsyncMock
+
     job_processor = Mock()
-    
+
     # Make async methods awaitable - return mock object with all expected attributes
     mock_result = Mock()
     mock_result.success = True
@@ -80,14 +81,13 @@ def mock_job_processor():
     mock_result.retry_scheduled = False
     mock_result.space_shortage = False
     job_processor.process_job = AsyncMock(return_value=mock_result)
-    
+
     # Add mock sub-components that the properties expect
     job_processor.copy_strategy_factory = Mock()
-    job_processor.copy_strategy_factory.get_available_strategies = Mock(return_value={
-        'temp': 'temp file strategy',
-        'direct': 'direct copy strategy'
-    })
-    
+    job_processor.copy_strategy_factory.get_available_strategies = Mock(
+        return_value={"temp": "temp file strategy", "direct": "direct copy strategy"}
+    )
+
     job_processor.copy_executor = Mock()
     mock_copy_result = Mock()
     mock_copy_result.success = True
@@ -95,12 +95,14 @@ def mock_job_processor():
     mock_copy_result.bytes_copied = 1024  # Fake some bytes copied
     mock_copy_result.elapsed_seconds = 0.5  # Fake elapsed time
     job_processor.copy_executor.copy_file = AsyncMock(return_value=mock_copy_result)
-    
+
     return job_processor
 
 
 @pytest.fixture
-def file_copier_service(test_settings, mock_state_manager, mock_job_queue, mock_job_processor):
+def file_copier_service(
+    test_settings, mock_state_manager, mock_job_queue, mock_job_processor
+):
     """Create FileCopierService with new integrated architecture."""
     return FileCopierService(
         settings=test_settings,
@@ -165,10 +167,10 @@ class TestServiceIntegration:
         assert result.success is True
         assert result.bytes_copied > 0
         assert result.elapsed_seconds > 0
-        
+
         # Verify the copy_file method was called with correct arguments
         executor.copy_file.assert_called_once_with(source_file, dest_file)
-        
+
         # Note: This is a mock-based test, so no actual file operations occur
         # The real integration testing happens at higher levels
 
@@ -222,11 +224,11 @@ class TestServiceIntegration:
         assert "total_bytes_copied" in stats
         assert "total_files_failed" in stats
         assert "success_rate" in stats
-        
+
         # Verify data types
         assert isinstance(stats["is_running"], bool)
         assert isinstance(stats["success_rate"], (int, float))
-        
+
         # Note: This is the legacy format for backwards compatibility
         # More detailed statistics are available through JobProcessor components
 

@@ -10,6 +10,7 @@ import aiofiles.os
 @dataclass(frozen=True)
 class FilePath:
     """Domain object representing a file path with its operations."""
+
     path: str
 
     @property
@@ -47,12 +48,13 @@ class FilePath:
 @dataclass
 class FileMetadata:
     """Domain object encapsulating file metadata and operations."""
+
     path: FilePath
     size: int
     last_write_time: datetime
 
     @classmethod
-    async def from_path(cls, file_path: str) -> Optional['FileMetadata']:
+    async def from_path(cls, file_path: str) -> Optional["FileMetadata"]:
         """Create FileMetadata from a file path."""
         try:
             path_obj = FilePath(file_path)
@@ -63,7 +65,7 @@ class FileMetadata:
             return cls(
                 path=path_obj,
                 size=stat_result.st_size,
-                last_write_time=datetime.fromtimestamp(stat_result.st_mtime)
+                last_write_time=datetime.fromtimestamp(stat_result.st_mtime),
             )
         except (OSError, IOError):
             return None
@@ -83,6 +85,7 @@ class FileMetadata:
 @dataclass
 class ScanConfiguration:
     """Configuration object to eliminate long parameter lists."""
+
     source_directory: str
     polling_interval_seconds: int
     file_stable_time_seconds: int

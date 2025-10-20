@@ -132,7 +132,7 @@ class JobQueueService:
             job = QueueJob(
                 tracked_file=tracked_file,
                 added_to_queue_at=datetime.now(),
-                retry_count=0
+                retry_count=0,
             )
 
             # Tilføj til queue (non-blocking)
@@ -142,7 +142,7 @@ class JobQueueService:
             # Opdater fil status til InQueue - UUID precision via job object
             await self.state_manager.update_file_status_by_id(
                 file_id=job.file_id,  # UUID from job object
-                status=FileStatus.IN_QUEUE
+                status=FileStatus.IN_QUEUE,
             )
 
             logging.info(f"Typed job tilføjet til queue: {job}")
@@ -181,7 +181,9 @@ class JobQueueService:
             logging.error(f"Fejl ved hentning fra queue: {e}")
             return None
 
-    async def mark_job_completed(self, job: QueueJob, processing_time: float = 0.0) -> None:
+    async def mark_job_completed(
+        self, job: QueueJob, processing_time: float = 0.0
+    ) -> None:
         """
         Marker job som completed (kaldt af FileCopyService).
 
@@ -198,9 +200,7 @@ class JobQueueService:
 
             # Create success result for metrics
             result = JobResult(
-                job=job,
-                success=True,
-                processing_time_seconds=processing_time
+                job=job, success=True, processing_time_seconds=processing_time
             )
 
             logging.info(f"Job completed successfully: {result}")
@@ -208,7 +208,9 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Fejl ved marking job completed: {e}")
 
-    async def mark_job_failed(self, job: QueueJob, error_message: str, processing_time: float = 0.0) -> None:
+    async def mark_job_failed(
+        self, job: QueueJob, error_message: str, processing_time: float = 0.0
+    ) -> None:
         """
         Marker job som failed og håndter retry logic.
 
@@ -232,7 +234,7 @@ class JobQueueService:
                 job=job,
                 success=False,
                 processing_time_seconds=processing_time,
-                error_message=error_message
+                error_message=error_message,
             )
 
             # Log failure with structured information

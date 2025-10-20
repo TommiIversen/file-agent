@@ -15,7 +15,7 @@ import logging
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Any, Awaitable
+from typing import Callable, Dict, Any
 
 from app.config import Settings
 from app.models import TrackedFile, FileStatus
@@ -250,7 +250,9 @@ class CopyStrategyFactory:
                 )
 
             except Exception as e:
-                logging.warning(f"Progress callback error for {tracked_file.file_path}: {e}")
+                logging.warning(
+                    f"Progress callback error for {tracked_file.file_path}: {e}"
+                )
 
         return normal_progress_callback
 

@@ -24,8 +24,6 @@ class VerificationTimeout(Exception):
     pass
 
 
-
-
 class SecureVerificationEngine:
     """
     Ultra-sikker verification engine til resume operationer.

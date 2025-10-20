@@ -195,7 +195,9 @@ class TestCompletedFilesPersistence:
         """
         # Create old completed file
         tracked_old = await state_manager.add_file("/old/file.mxf", 100)
-        await state_manager.update_file_status_by_id(tracked_old.id, FileStatus.COMPLETED)
+        await state_manager.update_file_status_by_id(
+            tracked_old.id, FileStatus.COMPLETED
+        )
 
         # Manually set completion time to 3 hours ago
         old_completed_time = datetime.now() - timedelta(hours=3)
@@ -207,7 +209,9 @@ class TestCompletedFilesPersistence:
 
         # Create recent completed file
         tracked_recent = await state_manager.add_file("/recent/file.mxf", 100)
-        await state_manager.update_file_status_by_id(tracked_recent.id, FileStatus.COMPLETED)
+        await state_manager.update_file_status_by_id(
+            tracked_recent.id, FileStatus.COMPLETED
+        )
 
         # Run cleanup with 2 hour max age
         removed_count = await state_manager.cleanup_old_completed_files(
@@ -231,7 +235,9 @@ class TestCompletedFilesPersistence:
         for i in range(5):
             file_path = f"/test/file_{i}.mxf"
             tracked = await state_manager.add_file(file_path, 100)
-            await state_manager.update_file_status_by_id(tracked.id, FileStatus.COMPLETED)
+            await state_manager.update_file_status_by_id(
+                tracked.id, FileStatus.COMPLETED
+            )
             tracked_files.append(tracked)
             # Slight delay to ensure different completion times
             await asyncio.sleep(0.01)
@@ -262,8 +268,12 @@ class TestCompletedFilesPersistence:
         test_file = Path(temp_directory) / "api_test.mxf"
         test_file.write_text("API test content")
 
-        tracked_file = await state_manager.add_file(str(test_file), test_file.stat().st_size)
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
+        tracked_file = await state_manager.add_file(
+            str(test_file), test_file.stat().st_size
+        )
+        await state_manager.update_file_status_by_id(
+            tracked_file.id, FileStatus.COMPLETED
+        )
 
         # Delete source file (simulates copy completion)
         test_file.unlink()
@@ -308,7 +318,9 @@ async def manual_test_completed_persistence():
         print(f"✅ Added to StateManager: {tracked_file.status}")
 
         # Mark as completed
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.COMPLETED)
+        await state_manager.update_file_status_by_id(
+            tracked_file.id, FileStatus.COMPLETED
+        )
 
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
         print(f"🎯 Completed files before cleanup: {len(completed_files)}")
@@ -326,9 +338,7 @@ async def manual_test_completed_persistence():
         print(f"✨ Completed files after cleanup: {len(completed_files)}")
 
         if completed_files:
-            print(
-                f"🎉 SUCCESS: Completed file persisted: {completed_files[0].id}"
-            )
+            print(f"🎉 SUCCESS: Completed file persisted: {completed_files[0].id}")
         else:
             print("❌ FAILED: Completed file was removed")
 

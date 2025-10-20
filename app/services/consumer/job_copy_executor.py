@@ -209,7 +209,9 @@ class JobCopyExecutor:
             error: Original exception
         """
         # Use UUID directly - more precise than path-based lookup
-        current_tracked = await self.state_manager.get_file_by_id(prepared_file.tracked_file.id)
+        current_tracked = await self.state_manager.get_file_by_id(
+            prepared_file.tracked_file.id
+        )
 
         if current_tracked:
             # Determine appropriate paused status based on current status

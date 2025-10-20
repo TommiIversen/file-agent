@@ -40,7 +40,9 @@ class FileScannerService:
         )
 
         # Delegate all operations to the orchestrator
-        self.orchestrator = FileScanOrchestrator(config, state_manager, storage_monitor, settings)
+        self.orchestrator = FileScanOrchestrator(
+            config, state_manager, storage_monitor, settings
+        )
 
         logging.info("FileScannerService initialized with refactored architecture")
 

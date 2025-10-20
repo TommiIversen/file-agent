@@ -1,18 +1,18 @@
-filter#!/usr/bin/env python3
+#!/usr/bin/env python3
+import asyncio
+import argparse
+import logging
+import random
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List
+
 """
 File Growth Simulator
 Simulerer videoptager der skriver til 8 streams kontinuerligt,
 og "clipper" dem efter en time med _1, _2 osv. bagefter.
 Skriver direkte til .mxf filer som en rigtig videoptager.
 """
-
-import asyncio
-import argparse
-import random
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import List
-import logging
 
 
 # Konfiguration variabler

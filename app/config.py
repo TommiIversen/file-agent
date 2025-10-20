@@ -38,7 +38,6 @@ class Settings(BaseSettings):
     log_file_path: str = "logs/file_agent.log"
     log_retention_days: int = 30
 
-
     # Storage monitoring
     storage_check_interval_seconds: int = 60
     source_warning_threshold_gb: float = 10.0

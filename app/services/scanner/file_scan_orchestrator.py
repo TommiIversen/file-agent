@@ -48,7 +48,7 @@ class FileScanOrchestrator:
             # Use the REAL settings object - no more mock bullshit!
             self.growing_file_detector = GrowingFileDetector(
                 settings,  # Real settings object
-                state_manager
+                state_manager,
             )
             logging.info("Growing file support enabled")
 
@@ -137,7 +137,7 @@ class FileScanOrchestrator:
                 # Use StateManager as SINGLE source of truth
                 existing_file = await self.state_manager.get_file_by_path(file_path)
                 if existing_file is not None:
-                    # File exists - check for changes using UUID precision  
+                    # File exists - check for changes using UUID precision
                     await self._check_existing_file_changes(existing_file, file_path)
                     continue  # Skip to next file
 
@@ -186,13 +186,13 @@ class FileScanOrchestrator:
                 f"({tracked_file.file_size} → {metadata.size} bytes) "
                 f"[UUID: {tracked_file.id[:8]}...]"
             )
-            
+
             # Use UUID-based update for precision - NO extra tracking needed!
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=tracked_file.status,  # Keep current status
                 file_size=metadata.size,
-                last_write_time=metadata.last_write_time
+                last_write_time=metadata.last_write_time,
             )
 
     async def _check_file_stability(self) -> None:
@@ -222,12 +222,16 @@ class FileScanOrchestrator:
                 if self.growing_file_detector:
                     await self._handle_growing_file_logic(metadata, tracked_file)
                 else:
-                    await self._handle_traditional_stability_logic(metadata, tracked_file)
+                    await self._handle_traditional_stability_logic(
+                        metadata, tracked_file
+                    )
 
         except Exception as e:
             logging.error(f"Error in stability check: {e}")
 
-    async def _handle_growing_file_logic(self, metadata: FileMetadata, tracked_file: TrackedFile) -> None:
+    async def _handle_growing_file_logic(
+        self, metadata: FileMetadata, tracked_file: TrackedFile
+    ) -> None:
         """Handle file using growing file detection logic with UUID precision - StateManager as single source of truth."""
         file_path = metadata.path.path
 
@@ -237,18 +241,25 @@ class FileScanOrchestrator:
         )
 
         # Check growth status
-        recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(tracked_file)
+        (
+            recommended_status,
+            growth_info,
+        ) = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
         # Update file status if it changed - USE UUID for precision!
         if recommended_status != tracked_file.status:
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference
-                status=recommended_status, 
-                file_size=metadata.size
+                status=recommended_status,
+                file_size=metadata.size,
             )
-            logging.info(f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]")
+            logging.info(
+                f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
+            )
 
-    async def _handle_traditional_stability_logic(self, metadata: FileMetadata, tracked_file) -> None:
+    async def _handle_traditional_stability_logic(
+        self, metadata: FileMetadata, tracked_file
+    ) -> None:
         """Handle file using traditional stability logic with UUID precision - StateManager as single source of truth."""
         file_path = metadata.path.path
 
@@ -260,7 +271,9 @@ class FileScanOrchestrator:
                 status=FileStatus.DISCOVERED,  # Reset due to change
                 file_size=metadata.size,
             )
-            logging.debug(f"SIZE UPDATE: {file_path} -> {metadata.size} bytes [UUID: {tracked_file.id[:8]}...]")
+            logging.debug(
+                f"SIZE UPDATE: {file_path} -> {metadata.size} bytes [UUID: {tracked_file.id[:8]}...]"
+            )
 
         # Check stability
         is_stable = await self.stability_tracker.check_file_stability(metadata)
@@ -268,6 +281,8 @@ class FileScanOrchestrator:
             # Use UUID-based update for precision
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference
-                status=FileStatus.READY
+                status=FileStatus.READY,
             )
-            logging.info(f"STABLE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]")
+            logging.info(
+                f"STABLE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]"
+            )
