@@ -9,7 +9,7 @@ from .base_mounter import BaseMounter
 
 
 class WindowsMounter(BaseMounter):
-    """Windows-specific network mount implementation. SRP: Windows mount operations ONLY."""
+    """Windows-specific network mount implementation."""
 
     def __init__(self, drive_letter: Optional[str] = None):
         super().__init__()
@@ -18,12 +18,10 @@ class WindowsMounter(BaseMounter):
     async def attempt_mount(self, share_url: str) -> bool:
         """Mount network share using Windows net use command."""
         try:
-            # Convert smb:// URL to UNC path format
             unc_path = self._convert_url_to_unc(share_url)
             logging.info(f"Attempting Windows mount: {unc_path}")
 
             if self._drive_letter:
-                # Mount to specific drive letter
                 cmd = [
                     "net",
                     "use",
@@ -33,7 +31,6 @@ class WindowsMounter(BaseMounter):
                 ]
                 logging.debug(f"Using drive letter {self._drive_letter}: for mount")
             else:
-                # Mount without drive letter (UNC access)
                 cmd = ["net", "use", unc_path]
                 logging.debug("Using UNC path access (no drive letter)")
 
@@ -111,13 +108,11 @@ class WindowsMounter(BaseMounter):
     def _convert_url_to_unc(self, share_url: str) -> str:
         """Convert SMB URL to Windows UNC path format."""
         try:
-            # Remove smb:// prefix
             if share_url.startswith("smb://"):
-                path_part = share_url[6:]  # Remove 'smb://'
+                path_part = share_url[6:]
             else:
                 path_part = share_url
 
-            # Convert forward slashes to backslashes and add UNC prefix
             unc_path = "\\\\" + path_part.replace("/", "\\")
 
             logging.debug(f"Converted {share_url} to UNC path: {unc_path}")
@@ -125,7 +120,6 @@ class WindowsMounter(BaseMounter):
 
         except Exception as e:
             logging.error(f"Error converting URL to UNC path: {e}")
-            # Return as-is if conversion fails
             return share_url
 
     def get_mount_point_from_url(self, share_url: str) -> str:

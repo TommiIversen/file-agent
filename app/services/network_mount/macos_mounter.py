@@ -9,27 +9,16 @@ from .base_mounter import BaseMounter
 
 
 class MacOSMounter(BaseMounter):
-    """macOS-specific network mount implementation. SRP: macOS mount operations ONLY."""
+    """macOS-specific network mount implementation."""
 
     def __init__(self):
         super().__init__()
 
     async def attempt_mount(self, share_url: str) -> bool:
-        """
-        Attempt to mount network share using macOS osascript.
-
-        Uses AppleScript 'mount volume' command for reliable mounting.
-
-        Args:
-            share_url: Network share URL (e.g., smb://server/share)
-
-        Returns:
-            True if mount successful, False otherwise
-        """
+        """Attempt to mount network share using macOS osascript."""
         try:
             logging.info(f"Attempting macOS mount: {share_url}")
 
-            # Use osascript for AppleScript mounting
             cmd = ["osascript", "-e", f'mount volume "{share_url}"']
 
             process = await asyncio.create_subprocess_exec(
@@ -51,31 +40,19 @@ class MacOSMounter(BaseMounter):
             return False
 
     async def verify_mount_accessible(self, local_path: str) -> Tuple[bool, bool]:
-        """
-        Verify if mount point is accessible and writable on macOS.
-
-        Args:
-            local_path: Local mount point path (e.g., /Volumes/share-name)
-
-        Returns:
-            Tuple of (is_mounted, is_accessible)
-        """
+        """Verify if mount point is accessible and writable on macOS."""
         try:
             path_obj = Path(local_path)
 
-            # Check if mount point exists
             if not path_obj.exists():
                 logging.debug(f"Mount point does not exist: {local_path}")
                 return False, False
 
-            # Check if it's a directory
             if not path_obj.is_dir():
                 logging.debug(f"Mount point is not a directory: {local_path}")
                 return True, False
 
-            # Test accessibility by trying to list directory
             try:
-                # Use asyncio to run directory listing
                 process = await asyncio.create_subprocess_exec(
                     "ls",
                     local_path,
@@ -108,31 +85,17 @@ class MacOSMounter(BaseMounter):
         return "macOS"
 
     def get_mount_point_from_url(self, share_url: str) -> str:
-        """
-        Derive expected mount point from share URL.
-
-        macOS typically mounts network shares under /Volumes/
-
-        Args:
-            share_url: Network share URL
-
-        Returns:
-            Expected mount point path
-        """
+        """Derive expected mount point from share URL."""
         try:
-            # Extract share name from URL (last component)
-            # e.g., smb://server/share -> share
             if "/" in share_url:
                 share_name = share_url.split("/")[-1]
             else:
                 share_name = share_url
 
-            # macOS typically mounts under /Volumes/
             mount_point = f"/Volumes/{share_name}"
             logging.debug(f"Derived mount point: {mount_point} from URL: {share_url}")
             return mount_point
 
         except Exception as e:
             logging.error(f"Error deriving mount point from URL {share_url}: {e}")
-            # Fallback to a default
             return "/Volumes/NetworkShare"

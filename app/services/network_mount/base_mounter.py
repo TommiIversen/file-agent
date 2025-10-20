@@ -5,7 +5,7 @@ from typing import Tuple
 
 
 class BaseMounter(ABC):
-    """Abstract base class for platform-specific mount operations. SRP: Interface definition ONLY."""
+    """Abstract base class for platform-specific mount operations."""
 
     def __init__(self):
         pass

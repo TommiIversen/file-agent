@@ -9,7 +9,7 @@ from ...config import Settings
 
 
 class NetworkMountService:
-    """Orchestrates network mount operations across platforms. SRP: Mount orchestration ONLY."""
+    """Orchestrates network mount operations across platforms."""
 
     def __init__(self, settings: Settings):
         self._config = MountConfigHandler(settings)
@@ -39,7 +39,7 @@ class NetworkMountService:
             self._mounter = None
 
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
-        """Ensure network mount is available and accessible. Called by StorageMonitorService every 30 seconds."""
+        """Ensure network mount is available and accessible."""
         if (
             not self._config.is_auto_mount_enabled()
             or not self._mounter
@@ -57,7 +57,6 @@ class NetworkMountService:
             if is_mounted and not is_accessible:
                 return False
 
-            # Attempt mounting
             if await self._mounter.attempt_mount(share_url):
                 is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
                     local_path

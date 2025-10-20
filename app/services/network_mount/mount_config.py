@@ -5,7 +5,7 @@ from ...config import Settings
 
 
 class MountConfigHandler:
-    """Handles network mount configuration validation and access. SRP: Configuration management ONLY."""
+    """Handles network mount configuration validation and access."""
 
     def __init__(self, settings: Settings):
         self._settings = settings

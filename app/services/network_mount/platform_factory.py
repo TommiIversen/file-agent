@@ -11,7 +11,7 @@ class UnsupportedPlatformError(Exception):
 
 
 class PlatformFactory:
-    """Factory for creating platform-specific mount implementations. SRP: Platform detection/creation ONLY."""
+    """Factory for creating platform-specific mount implementations."""
 
     def __init__(self):
         pass
