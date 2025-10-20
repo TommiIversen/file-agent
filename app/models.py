@@ -122,6 +122,10 @@ class TrackedFile(BaseModel):
         default=None, description="Tidspunkt hvor kopiering blev færdig"
     )
 
+    failed_at: Optional[datetime] = Field(
+        default=None, description="Tidspunkt hvor filen fejlede permanent"
+    )
+
     destination_path: Optional[str] = Field(
         default=None,
         description="Sti til destination filen (med evt. navnekonflikt suffix)",

@@ -91,8 +91,7 @@ class ScanConfiguration:
     file_stable_time_seconds: int
     enable_growing_file_support: bool
     growing_file_min_size_mb: int
-    keep_completed_files_hours: int
-    max_completed_files_in_memory: int
+    keep_files_hours: int  # Renamed: now applies to ALL file types, not just completed
     # Add missing growing file settings
     growing_file_poll_interval_seconds: int = 5
     growing_file_safety_margin_mb: int = 50

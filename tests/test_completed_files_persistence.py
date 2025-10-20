@@ -214,8 +214,8 @@ class TestCompletedFilesPersistence:
         )
 
         # Run cleanup with 2 hour max age
-        removed_count = await state_manager.cleanup_old_completed_files(
-            max_age_hours=2, max_count=100
+        removed_count = await state_manager.cleanup_old_files(
+            max_age_hours=2
         )
 
         # Should remove old file but keep recent one
@@ -226,38 +226,41 @@ class TestCompletedFilesPersistence:
         assert all_files[0].id == tracked_recent.id
 
     @pytest.mark.asyncio
-    async def test_max_completed_files_limit(self, state_manager):
+    async def test_simple_age_based_cleanup(self, state_manager):
         """
-        Test at max antal completed filer respekteres.
+        Test simple age-based cleanup of all files.
         """
-        # Create 5 completed files
+        from datetime import datetime, timedelta
+        
+        # Create files with different completion times
         tracked_files = []
-        for i in range(5):
+        for i in range(3):
             file_path = f"/test/file_{i}.mxf"
             tracked = await state_manager.add_file(file_path, 100)
             await state_manager.update_file_status_by_id(
                 tracked.id, FileStatus.COMPLETED
             )
+            
+            # Make some files old
+            if i < 2:  # First 2 files are old
+                tracked.completed_at = datetime.now() - timedelta(hours=25)
+            # Last file is recent (current time)
+            
             tracked_files.append(tracked)
-            # Slight delay to ensure different completion times
-            await asyncio.sleep(0.01)
 
-        # Run cleanup with max 3 files
-        removed_count = await state_manager.cleanup_old_completed_files(
-            max_age_hours=24,  # Don't remove by age
-            max_count=3,
+        # Run cleanup with 24 hour cutoff
+        removed_count = await state_manager.cleanup_old_files(
+            max_age_hours=24
         )
 
-        # Should remove 2 oldest files
+        # Should remove 2 old files, keep 1 recent
         assert removed_count == 2
 
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
-        assert len(completed_files) == 3
+        assert len(completed_files) == 1
 
-        # Verify newest files were kept
-        kept_ids = {f.id for f in completed_files}
-        expected_kept = {tracked_files[2].id, tracked_files[3].id, tracked_files[4].id}
-        assert kept_ids == expected_kept
+        # Verify the recent file was kept
+        assert completed_files[0].id == tracked_files[2].id
 
     @pytest.mark.asyncio
     async def test_completed_files_api_persistence(self, state_manager, temp_directory):

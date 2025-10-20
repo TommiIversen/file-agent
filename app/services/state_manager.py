@@ -232,18 +232,18 @@ class StateManager:
 
         return removed_count
 
-    async def cleanup_old_completed_files(
-        self, max_age_hours: int, max_count: int
-    ) -> int:
+    async def cleanup_old_files(self, max_age_hours: int) -> int:
         """
-        Fjern gamle COMPLETED filer fra memory for at holde memory usage nede.
+        Fjern ALLE gamle filer fra memory for at holde memory usage nede.
+        
+        Simpel regel: Alle filer ældre end max_age_hours fjernes permanent.
+        Ingen undtagelser, ingen særlogik - bare simpel cleanup.
 
         Args:
-            max_age_hours: Max alder i timer for completed files
-            max_count: Max antal completed files at holde i memory
+            max_age_hours: Max alder i timer for alle filer (f.eks. 14*24 = 336 timer for 14 dage)
 
         Returns:
-            Antal completed files der blev fjernet
+            Antal filer der blev fjernet permanent fra memory
         """
         from datetime import timedelta
 
@@ -252,58 +252,34 @@ class StateManager:
         cutoff_time = now - timedelta(hours=max_age_hours)
 
         async with self._lock:
-            # Find completed files der skal fjernes (current entries only)
-            current_files = {}
-            for tracked_file in self._files_by_id.values():
-                if tracked_file.status == FileStatus.COMPLETED:
-                    current = current_files.get(tracked_file.file_path)
-                    if not current or self._is_more_current(tracked_file, current):
-                        current_files[tracked_file.file_path] = tracked_file
+            to_remove_ids = []
+            
+            for file_id, tracked_file in self._files_by_id.items():
+                # Find relevant timestamp for age check
+                file_age_timestamp = (
+                    tracked_file.completed_at or 
+                    tracked_file.failed_at or 
+                    tracked_file.discovered_at
+                )
+                
+                # Remove file if older than cutoff
+                if file_age_timestamp and file_age_timestamp < cutoff_time:
+                    to_remove_ids.append(file_id)
 
-            completed_files = [
-                (file.file_path, file) for file in current_files.values()
-            ]
-
-            # Sort by completion time (newest first)
-            completed_files.sort(
-                key=lambda x: x[1].completed_at or datetime.min, reverse=True
-            )
-
-            to_remove = []
-
-            # Remove files older than cutoff_time
-            for file_path, tracked_file in completed_files:
-                if (
-                    tracked_file.completed_at
-                    and tracked_file.completed_at < cutoff_time
-                ):
-                    to_remove.append(file_path)
-
-            # If still too many, remove oldest ones to stay under max_count
-            if len(completed_files) - len(to_remove) > max_count:
-                remaining_files = [
-                    (path, file)
-                    for path, file in completed_files
-                    if path not in to_remove
-                ]
-                excess_count = len(remaining_files) - max_count
-
-                # Remove oldest files beyond max_count
-                for i in range(excess_count):
-                    file_path, _ = remaining_files[-(i + 1)]  # Start from oldest
-                    to_remove.append(file_path)
-
-            # Remove the files by finding their current IDs
-            for file_path in to_remove:
-                current_file = self._get_current_file_for_path(file_path)
-                if current_file:
-                    self._files_by_id.pop(current_file.id, None)
+            # Remove old files permanently
+            for file_id in to_remove_ids:
+                if file_id in self._files_by_id:
+                    removed_file = self._files_by_id.pop(file_id)
                     removed_count += 1
-                    logging.debug(f"Cleanup: Fjernet gammel completed fil: {file_path}")
+                    logging.debug(
+                        f"Cleanup: Removed old file: {removed_file.file_path} "
+                        f"(status: {removed_file.status})"
+                    )
 
         if removed_count > 0:
             logging.info(
-                f"Cleanup: Fjernede {removed_count} gamle completed filer fra memory"
+                f"Cleanup: Fjernede {removed_count} gamle filer fra memory "
+                f"(ældre end {max_age_hours} timer)"
             )
 
         return removed_count
@@ -397,6 +373,8 @@ class StateManager:
                 tracked_file.started_copying_at = datetime.now()
             elif status == FileStatus.COMPLETED and not tracked_file.completed_at:
                 tracked_file.completed_at = datetime.now()
+            elif status == FileStatus.FAILED and not getattr(tracked_file, 'failed_at', None):
+                tracked_file.failed_at = datetime.now()
 
             if old_status != status:
                 logging.info(

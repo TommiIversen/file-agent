@@ -30,8 +30,7 @@ class FileScannerService:
             file_stable_time_seconds=settings.file_stable_time_seconds,
             enable_growing_file_support=settings.enable_growing_file_support,
             growing_file_min_size_mb=settings.growing_file_min_size_mb,
-            keep_completed_files_hours=settings.keep_completed_files_hours,
-            max_completed_files_in_memory=settings.max_completed_files_in_memory,
+            keep_files_hours=settings.keep_files_hours,
             # Add all growing file settings
             growing_file_poll_interval_seconds=settings.growing_file_poll_interval_seconds,
             growing_file_safety_margin_mb=settings.growing_file_safety_margin_mb,

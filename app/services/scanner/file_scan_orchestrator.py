@@ -120,7 +120,7 @@ class FileScanOrchestrator:
 
         current_file_paths = {fp.path for fp in current_files}
         self.stability_tracker.cleanup_tracking_for_missing_files(current_file_paths)
-        await self.cleanup_service.cleanup_old_completed_files()
+        await self.cleanup_service.cleanup_old_files()
 
     async def _process_and_stabilize_files(self) -> None:
         """Handle file processing and stability checking."""

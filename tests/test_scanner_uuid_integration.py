@@ -36,8 +36,7 @@ class TestScannerUUIDIntegration:
             polling_interval_seconds=5,
             enable_growing_file_support=False,
             growing_file_min_size_mb=100,
-            keep_completed_files_hours=24,
-            max_completed_files_in_memory=1000,
+            keep_files_hours=336,
         )
 
     @pytest.fixture
@@ -288,7 +287,7 @@ class TestScannerUUIDIntegration:
         assert FileStatus.COMPLETED in statuses
         assert FileStatus.REMOVED in statuses
 
-    async def test_cleanup_old_completed_files_by_id(self, state_manager):
+    async def test_cleanup_old_files_by_age(self, state_manager):
         completed = await state_manager.add_file("/test/old.mxf", 100)
         await state_manager.update_file_status_by_id(completed.id, FileStatus.COMPLETED)
         # Simulate old completion
@@ -303,7 +302,7 @@ class TestScannerUUIDIntegration:
         # Add recent
         recent = await state_manager.add_file("/test/recent.mxf", 100)
         await state_manager.update_file_status_by_id(recent.id, FileStatus.COMPLETED)
-        removed_count = await state_manager.cleanup_old_completed_files(2, 100)
+        removed_count = await state_manager.cleanup_old_files(max_age_hours=2)
         assert removed_count == 1
         all_files = await state_manager.get_all_files()
         assert all_files[0].id == recent.id

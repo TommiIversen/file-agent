@@ -14,13 +14,12 @@ class TestFileDiscoveryService:
     @pytest.fixture
     def config(self):
         return ScanConfiguration(
-            source_directory="/test/source",
-            polling_interval_seconds=5,
-            file_stable_time_seconds=30,
+            source_directory="test_source",
+            polling_interval_seconds=10,
+            file_stable_time_seconds=120,
             enable_growing_file_support=False,
             growing_file_min_size_mb=100,
-            keep_completed_files_hours=24,
-            max_completed_files_in_memory=1000,
+            keep_files_hours=336,
         )
 
     @pytest.fixture
