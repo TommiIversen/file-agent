@@ -1,15 +1,3 @@
-"""
-FastAPI application for File Transfer Agent.
-
-Central entry point der samler alle komponenter:
-- API endpoints
-- StateManager
-- FileScannerService
-- Background services
-- Logging setup
-- Dependency injection
-"""
-
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -29,7 +17,6 @@ from .dependencies import (
     get_storage_monitor,
 )
 
-# Load settings
 settings = Settings()
 
 # Global reference til background tasks

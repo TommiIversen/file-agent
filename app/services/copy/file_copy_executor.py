@@ -1,15 +1,3 @@
-"""
-File Copy Executor Service for File Transfer Agent.
-
-FileCopyExecutor håndterer den faktiske filkopiering med forskellige strategier:
-- Direct copy: Direkte kopiering fra source til destination
-- Temporary file copy: Kopiering til temp fil, derefter rename
-- Progress tracking: Real-time progress callbacks
-- Verification: Filstørrelse validering efter kopiering
-
-Dette er en core service der extractes fra FileCopyService for at følge SOLID principper.
-"""
-
 import aiofiles
 import logging
 from datetime import datetime
@@ -24,13 +12,6 @@ from app.utils.progress_utils import should_report_progress_with_bytes
 
 @dataclass
 class CopyResult:
-    """
-    Result of a file copy operation.
-
-    Provides comprehensive information about the copy operation including
-    success status, performance metrics, and any error information.
-    """
-
     success: bool
     source_path: Path
     destination_path: Path

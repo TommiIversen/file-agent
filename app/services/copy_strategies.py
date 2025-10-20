@@ -1,10 +1,3 @@
-"""
-File Copy Strategy Framework
-
-Defines abstract strategy interface and concrete implementations for different
-file copying approaches: normal stable files vs growing files.
-"""
-
 import asyncio
 import aiofiles
 import logging
@@ -22,14 +15,6 @@ from app.utils.progress_utils import calculate_transfer_rate
 
 
 class FileCopyStrategy(ABC):
-    """
-    Abstract base class for file copying strategies.
-
-    Implements the Strategy pattern to allow different copying approaches:
-    - NormalFileCopyStrategy: Traditional stable file copying
-    - GrowingFileCopyStrategy: Streaming copy for files being written
-    """
-
     def __init__(
         self,
         settings: Settings,
