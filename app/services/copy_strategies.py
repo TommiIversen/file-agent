@@ -270,11 +270,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     f"Growing copy phase complete. Finishing final part for: {os.path.basename(source_path)}"
                 )
 
-                tracked_file = await self.state_manager.get_file_by_path(source_path)
-                if tracked_file:
-                    await self.state_manager.update_file_status_by_id(
-                        tracked_file.id, FileStatus.COPYING
-                    )
+                # Switch to normal copy mode for final data - use existing tracked_file parameter
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id, FileStatus.COPYING
+                )
 
                 # Finish copying any remaining data using the executor for consistency
                 final_success = await self._finish_normal_copy(
@@ -305,14 +304,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                             )
                             # This is OK for growing files that may still be open by the writer
 
-                        tracked_file = await self.state_manager.get_file_by_path(source_path)
-                        if tracked_file:
-                            await self.state_manager.update_file_status_by_id(
-                                tracked_file.id,
-                                FileStatus.COMPLETED,
-                                copy_progress=100.0,
-                                destination_path=dest_path,
-                            )
+                        # Update status to completed - use existing tracked_file parameter
+                        await self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.COMPLETED,
+                            copy_progress=100.0,
+                            destination_path=dest_path,
+                        )
 
                         logging.info(
                             f"Growing copy completed: {os.path.basename(source_path)}"
@@ -439,13 +437,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                     1024 * 1024
                                 )  # Convert to MB/s
 
-                                # Standard update for alle copy modes - ingen special growing fields - UUID precision
-                                tracked_file = await self.state_manager.get_file_by_path(source_path)
-                                if tracked_file:
-                                    await self.state_manager.update_file_status_by_id(
-                                        tracked_file.id,
-                                        FileStatus.GROWING_COPY,
-                                        copy_progress=copy_ratio,
+                                # Standard update for alle copy modes - use existing tracked_file parameter - UUID precision
+                                await self.state_manager.update_file_status_by_id(
+                                    tracked_file.id,
+                                    FileStatus.GROWING_COPY,
+                                    copy_progress=copy_ratio,
                                     bytes_copied=bytes_copied,
                                     file_size=current_file_size,
                                     copy_speed_mbps=copy_speed_mbps,
@@ -455,22 +451,20 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                 if pause_ms > 0:
                                     await asyncio.sleep(pause_ms / 1000)
                     else:
-                        # No new data to copy, but update progress
+                        # No new data to copy, but update progress - use existing tracked_file parameter
                         copy_ratio = (
                             (bytes_copied / current_file_size) * 100
                             if current_file_size > 0
                             else 0
                         )
 
-                        tracked_file = await self.state_manager.get_file_by_path(source_path)
-                        if tracked_file:
-                            await self.state_manager.update_file_status_by_id(
-                                tracked_file.id,
-                                FileStatus.GROWING_COPY,
-                                copy_progress=copy_ratio,
-                                bytes_copied=bytes_copied,
-                                file_size=current_file_size,
-                            )
+                        await self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.GROWING_COPY,
+                            copy_progress=copy_ratio,
+                            bytes_copied=bytes_copied,
+                            file_size=current_file_size,
+                        )
 
                     # Wait before next growth check
                     await asyncio.sleep(poll_interval)
@@ -528,14 +522,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                             else 100
                         )
 
-                        tracked_file = await self.state_manager.get_file_by_path(source_path)
-                        if tracked_file:
-                            await self.state_manager.update_file_status_by_id(
-                                tracked_file.id,
-                                FileStatus.COPYING,
-                                copy_progress=progress,
-                                bytes_copied=bytes_already_copied,
-                            )
+                        await self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.COPYING,
+                            copy_progress=progress,
+                            bytes_copied=bytes_already_copied,
+                        )
 
             return True
 
