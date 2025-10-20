@@ -3,7 +3,7 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, Set
-from app.models import FileStatus
+from app.models import FileStatus, TrackedFile
 from app.config import Settings  # Add proper Settings import
 from app.services.state_manager import StateManager
 from app.services.growing_file_detector import GrowingFileDetector
@@ -229,7 +229,7 @@ class FileScanOrchestrator:
         except Exception as e:
             logging.error(f"Error in stability check: {e}")
 
-    async def _handle_growing_file_logic(self, metadata: FileMetadata, tracked_file) -> None:
+    async def _handle_growing_file_logic(self, metadata: FileMetadata, tracked_file: TrackedFile) -> None:
         """Handle file using growing file detection logic with UUID precision - StateManager as single source of truth."""
         file_path = metadata.path.path
 
@@ -239,7 +239,7 @@ class FileScanOrchestrator:
         )
 
         # Check growth status
-        recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(file_path)
+        recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
         # Update file status if it changed - USE UUID for precision!
         if recommended_status != tracked_file.status:

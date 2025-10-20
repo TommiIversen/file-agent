@@ -12,8 +12,10 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
 
+
+
 from app.config import Settings
-from app.models import FileStatus
+from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
 import logging
 
@@ -66,7 +68,7 @@ class GrowingFileDetector:
         self.state_manager = state_manager
 
         # File growth tracking
-        self._growth_tracking: Dict[str, FileGrowthInfo] = {}
+        self._growth_tracking: Dict[str, FileGrowthInfo] = {}  # use TrackedFile.is as key
         self._monitoring_active = False
 
         # Configuration shortcuts
@@ -97,28 +99,20 @@ class GrowingFileDetector:
         logging.info("Stopping growing file monitoring")
 
     async def check_file_growth_status(
-        self, file_path: str
+        self, tracked_file: TrackedFile
     ) -> Tuple[FileStatus, Optional[FileGrowthInfo]]:
-        """
-        Check a single file's growth status and return appropriate status.
 
-        Args:
-            file_path: Path to the file to check
-
-        Returns:
-            Tuple of (recommended_status, growth_info)
-        """
         try:
             # Get current file info
-            if not os.path.exists(file_path):
+            if not os.path.exists(tracked_file.file_path):
                 return FileStatus.FAILED, None
 
-            current_size = os.path.getsize(file_path)
+            current_size = os.path.getsize(tracked_file.file_path)
             current_time = datetime.now()
 
             # Get or create growth tracking info
-            if file_path not in self._growth_tracking:
-                self._growth_tracking[file_path] = FileGrowthInfo(
+            if tracked_file.id not in self._growth_tracking:
+                self._growth_tracking[tracked_file.id] = FileGrowthInfo(
                     current_size=current_size,
                     last_size=current_size,
                     last_check_time=current_time,
@@ -126,12 +120,12 @@ class GrowingFileDetector:
                     first_seen_time=current_time,
                 )
                 logging.debug(
-                    f"Started tracking growth for {file_path} (size: {current_size / 1024 / 1024:.1f}MB)"
+                    f"Started tracking growth for {tracked_file.file_path} (size: {current_size / 1024 / 1024:.1f}MB)"
                 )
-                return FileStatus.DISCOVERED, self._growth_tracking[file_path]
+                return FileStatus.DISCOVERED, self._growth_tracking[tracked_file.id]
 
             # Update growth info (but save last_size before updating)
-            growth_info = self._growth_tracking[file_path]
+            growth_info = self._growth_tracking[tracked_file.id]
             previous_size = growth_info.current_size
             growth_info.last_size = previous_size  # Keep track of previous size
             growth_info.current_size = current_size
@@ -148,13 +142,13 @@ class GrowingFileDetector:
                 # Check if it's large enough for growing copy
                 if current_size >= self.min_size_bytes:
                     logging.debug(
-                        f"File {file_path} ready for growing copy "
+                        f"File {tracked_file.file_path} ready for growing copy "
                         f"(size: {growth_info.size_mb:.1f}MB, rate: {growth_info.growth_rate_mbps:.2f}MB/s)"
                     )
                     return FileStatus.READY_TO_START_GROWING, growth_info
                 else:
                     logging.debug(
-                        f"File {file_path} still growing but too small "
+                        f"File {tracked_file.file_path} still growing but too small "
                         f"(size: {growth_info.size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB)"
                     )
                     return FileStatus.GROWING, growth_info
@@ -172,13 +166,13 @@ class GrowingFileDetector:
                     ).total_seconds()
                     if stable_duration >= self.growth_timeout:
                         logging.debug(
-                            f"File {file_path} is static and stable, ready for normal copy "
+                            f"File {tracked_file.file_path} is static and stable, ready for normal copy "
                             f"(size: {growth_info.size_mb:.1f}MB)"
                         )
                         return FileStatus.READY, growth_info
                     else:
                         logging.debug(
-                            f"File {file_path} checking stability for normal copy "
+                            f"File {tracked_file.file_path} checking stability for normal copy "
                             f"({stable_duration:.1f}s/{self.growth_timeout}s)"
                         )
                         return FileStatus.DISCOVERED, growth_info
@@ -196,14 +190,14 @@ class GrowingFileDetector:
                     if has_grown and current_size >= self.min_size_bytes:
                         # File grew in the past and is now stable and large enough - use growing copy
                         logging.debug(
-                            f"File {file_path} finished growing, ready for growing copy "
+                            f"File {tracked_file.file_path} finished growing, ready for growing copy "
                             f"(size: {growth_info.size_mb:.1f}MB)"
                         )
                         return FileStatus.READY_TO_START_GROWING, growth_info
                     else:
                         # File never grew or is too small - use normal copy
                         logging.debug(
-                            f"File {file_path} is stable, ready for normal copy "
+                            f"File {tracked_file.file_path} is stable, ready for normal copy "
                             f"(size: {growth_info.size_mb:.1f}MB)"
                         )
                         return FileStatus.READY, growth_info
@@ -211,22 +205,22 @@ class GrowingFileDetector:
                     # Still in stability check period - use GROWING if it has grown, DISCOVERED if not
                     if has_grown:
                         logging.debug(
-                            f"File {file_path} previously grew, checking post-growth stability "
+                            f"File {tracked_file.file_path} previously grew, checking post-growth stability "
                             f"({stable_duration:.1f}s/{self.growth_timeout}s)"
                         )
                         return FileStatus.GROWING, growth_info
                     else:
                         logging.debug(
-                            f"File {file_path} checking initial stability "
+                            f"File {tracked_file.file_path} checking initial stability "
                             f"({stable_duration:.1f}s/{self.growth_timeout}s)"
                         )
                         return FileStatus.DISCOVERED, growth_info
 
         except Exception as e:
-            logging.error(f"Error checking growth status for {file_path}: {e}")
+            logging.error(f"Error checking growth status for {tracked_file.file_path}: {e}")
             return FileStatus.FAILED, None
 
-    async def update_file_growth_info(self, file_path: str, new_size: int) -> None:
+    async def update_file_growth_info(self, tracked_file: TrackedFile, new_size: int) -> None:
         """
         Update growth tracking info when we get external size updates.
 
@@ -234,8 +228,8 @@ class GrowingFileDetector:
         """
         current_time = datetime.now()
 
-        if file_path not in self._growth_tracking:
-            self._growth_tracking[file_path] = FileGrowthInfo(
+        if tracked_file.id not in self._growth_tracking:
+            self._growth_tracking[tracked_file.id] = FileGrowthInfo(
                 current_size=new_size,
                 last_size=new_size,
                 last_check_time=current_time,
@@ -243,7 +237,7 @@ class GrowingFileDetector:
                 first_seen_time=current_time,
             )
         else:
-            growth_info = self._growth_tracking[file_path]
+            growth_info = self._growth_tracking[tracked_file.id]
             growth_info.last_size = growth_info.current_size
             growth_info.current_size = new_size
             growth_info.last_check_time = current_time
@@ -252,15 +246,11 @@ class GrowingFileDetector:
             if new_size > growth_info.last_size:
                 growth_info.stable_since = None
 
-    async def cleanup_tracking(self, file_path: str) -> None:
+    async def _cleanup_tracking(self, tracked_file_id: str) -> None:
         """Remove growth tracking for a completed/failed file"""
-        if file_path in self._growth_tracking:
-            del self._growth_tracking[file_path]
-            logging.debug(f"Cleaned up growth tracking for {file_path}")
-
-    async def get_growth_info(self, file_path: str) -> Optional[FileGrowthInfo]:
-        """Get current growth info for a file"""
-        return self._growth_tracking.get(file_path)
+        if tracked_file_id in self._growth_tracking:
+            del self._growth_tracking[tracked_file_id]
+            logging.debug(f"Cleaned up growth tracking for {tracked_file_id}")
 
     async def _monitor_growing_files_loop(self):
         """Background loop to monitor all tracked growing files"""
@@ -269,18 +259,18 @@ class GrowingFileDetector:
         while self._monitoring_active:
             try:
                 # Get all files currently being tracked for growth
-                files_to_check = list(self._growth_tracking.keys())
+                tracked_file_id_to_check = list(self._growth_tracking.keys())
 
-                for file_path in files_to_check:
+                for tracked_file_id in tracked_file_id_to_check:
                     if not self._monitoring_active:
                         break
 
                     try:
                         # Get current tracked file from state manager
-                        tracked_file = await self.state_manager.get_file_by_path(file_path)
+                        tracked_file = await self.state_manager.get_file_by_id(tracked_file_id)
                         if not tracked_file:
                             # File no longer tracked, clean up
-                            await self.cleanup_tracking(file_path)
+                            await self._cleanup_tracking(tracked_file_id)
                             continue
 
                         # Skip files that are already in copy phase
@@ -297,7 +287,7 @@ class GrowingFileDetector:
                         (
                             recommended_status,
                             growth_info,
-                        ) = await self.check_file_growth_status(file_path)
+                        ) = await self.check_file_growth_status(tracked_file)
 
                         # Update file status if it changed - USE UUID for precision!
                         if recommended_status != tracked_file.status:
@@ -323,10 +313,10 @@ class GrowingFileDetector:
                                 status=recommended_status, 
                                 **update_kwargs
                             )
-                            logging.debug(f"GROWING UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]")
+                            logging.debug(f"GROWING UPDATE: {tracked_file.file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]")
 
                     except Exception as e:
-                        logging.error(f"Error monitoring growth for {file_path}: {e}")
+                        logging.error(f"Error monitoring growth for {tracked_file_id}: {e}")
 
                 # Wait before next check
                 await asyncio.sleep(self.poll_interval)
@@ -336,24 +326,3 @@ class GrowingFileDetector:
                 await asyncio.sleep(self.poll_interval)
 
         logging.info("Growing file monitoring loop stopped")
-
-    def get_monitoring_stats(self) -> Dict:
-        """Get statistics about current monitoring state"""
-        growing_count = sum(
-            1 for info in self._growth_tracking.values() if info.is_growing
-        )
-        stable_count = len(self._growth_tracking) - growing_count
-
-        total_growth_rate = sum(
-            info.growth_rate_mbps for info in self._growth_tracking.values()
-        )
-
-        return {
-            "monitoring_active": self._monitoring_active,
-            "tracked_files": len(self._growth_tracking),
-            "growing_files": growing_count,
-            "stable_files": stable_count,
-            "total_growth_rate_mbps": round(total_growth_rate, 2),
-            "poll_interval_seconds": self.poll_interval,
-            "min_size_mb": self.settings.growing_file_min_size_mb,
-        }

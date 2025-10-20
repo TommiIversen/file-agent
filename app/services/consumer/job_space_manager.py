@@ -123,7 +123,7 @@ class JobSpaceManager:
         if self.space_retry_manager:
             try:
                 await self.space_retry_manager.schedule_space_retry(
-                    file_path, space_check
+                    job.tracked_file, space_check
                 )
                 return ProcessResult(
                     success=False,

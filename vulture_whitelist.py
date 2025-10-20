@@ -35,7 +35,6 @@ get_executor_config  # Config diagnostic in copy_strategy_factory.py
 should_use_temp_file  # Strategy diagnostic method
 get_progress_callback  # Progress monitoring method
 get_factory_info  # Factory diagnostic method
-get_growth_info  # File growth monitoring
 requeue_job  # Job management method
 wait_for_queue_empty  # Queue monitoring
 peek_next_job  # Queue inspection
@@ -45,7 +44,6 @@ get_platform_info  # Platform diagnostic
 is_space_check_enabled  # Space monitoring config
 get_space_settings_info  # Space diagnostic
 cancel_all_retries  # Retry management
-get_retry_status  # Retry monitoring
 get_file_count_by_status  # State statistics
 get_failed_files  # Error reporting
 get_failed_growing_files  # Growth error reporting
