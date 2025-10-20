@@ -208,8 +208,8 @@ class JobCopyExecutor:
             reason: Reason for pause classification
             error: Original exception
         """
-        file_path = prepared_file.tracked_file.file_path
-        current_tracked = await self.state_manager.get_file(file_path)
+        # Use UUID directly - more precise than path-based lookup
+        current_tracked = await self.state_manager.get_file_by_id(prepared_file.tracked_file.id)
 
         if current_tracked:
             # Determine appropriate paused status based on current status
@@ -230,13 +230,13 @@ class JobCopyExecutor:
             )
 
             logging.warning(
-                f"⏸️ COPY PAUSED: {Path(file_path).name} - {reason} "
+                f"⏸️ COPY PAUSED: {Path(current_tracked.file_path).name} - {reason} "
                 f"(preserved {current_tracked.bytes_copied or 0:,} bytes)"
             )
         else:
-            # Fallback to failure if we can't get current state
+            # Fallback to failure if we can't get current state by UUID
             await self._handle_fail_error(
-                prepared_file, f"Pause failed - {reason}", error
+                prepared_file, f"Pause failed - file not found by UUID: {reason}", error
             )
 
     async def _handle_fail_error(

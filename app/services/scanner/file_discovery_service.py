@@ -1,5 +1,3 @@
-# This class is responsible solely for discovering files in the source directory, adhering to SRP.
-import asyncio
 import logging
 import os
 from typing import Set
@@ -10,22 +8,10 @@ from .domain_objects import FilePath, ScanConfiguration
 
 
 class FileDiscoveryService:
-    """
-    Focused service responsible only for discovering MXF files in the source directory.
-
-    Single Responsibility: File discovery and filtering
-    """
-
     def __init__(self, config: ScanConfiguration):
         self.config = config
 
     async def discover_all_files(self) -> Set[FilePath]:
-        """
-        Find all MXF files in source directory recursively.
-
-        Returns:
-            Set of FilePath objects for all discovered files
-        """
         discovered_files: Set[FilePath] = set()
 
         try:
