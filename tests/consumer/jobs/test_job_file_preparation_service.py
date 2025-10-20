@@ -39,7 +39,7 @@ class TestJobFilePreparationService:
         )
         strategy = MagicMock(__class__=MagicMock(__name__="StandardCopyStrategy"))
 
-        preparer.state_manager.get_file.return_value = tracked_file
+        preparer.state_manager.get_file_by_path.return_value = tracked_file
         preparer.copy_strategy_factory.get_strategy.return_value = strategy
 
         # Mock the utils functions
@@ -66,7 +66,7 @@ class TestJobFilePreparationService:
     async def test_prepare_file_not_found(self, preparer):
         """Test file preparation when file not found."""
         job = {"file_path": "/src/missing.mxf"}
-        preparer.state_manager.get_file.return_value = None
+        preparer.state_manager.get_file_by_path.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)
 

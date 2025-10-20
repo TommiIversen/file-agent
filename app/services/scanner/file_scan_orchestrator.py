@@ -135,7 +135,7 @@ class FileScanOrchestrator:
                 file_path = file_path_obj.path
 
                 # Use StateManager as SINGLE source of truth
-                existing_file = await self.state_manager.get_file(file_path)
+                existing_file = await self.state_manager.get_file_by_path(file_path)
                 if existing_file is not None:
                     # File exists - check for changes using UUID precision  
                     await self._check_existing_file_changes(existing_file, file_path)

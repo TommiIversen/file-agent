@@ -64,7 +64,7 @@ class JobFinalizationService:
             await self.job_queue.mark_job_completed(job)
 
             # Update file status to completed - UUID precision
-            tracked_file = await self.state_manager.get_file(file_path)
+            tracked_file = await self.state_manager.get_file_by_path(file_path)
             if tracked_file:
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,
@@ -95,7 +95,7 @@ class JobFinalizationService:
             await self.job_queue.mark_job_failed(job, error_message)
 
             # Update file status to failed - UUID precision
-            tracked_file = await self.state_manager.get_file(file_path)
+            tracked_file = await self.state_manager.get_file_by_path(file_path)
             if tracked_file:
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id, FileStatus.FAILED, error_message=error_message
@@ -123,7 +123,7 @@ class JobFinalizationService:
             await self.job_queue.mark_job_failed(job, "Max retry attempts reached")
 
             # Update file status to failed - UUID precision
-            tracked_file = await self.state_manager.get_file(file_path)
+            tracked_file = await self.state_manager.get_file_by_path(file_path)
             if tracked_file:
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id, FileStatus.FAILED, error_message=error_message

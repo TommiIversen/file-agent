@@ -277,7 +277,7 @@ class GrowingFileDetector:
 
                     try:
                         # Get current tracked file from state manager
-                        tracked_file = await self.state_manager.get_file(file_path)
+                        tracked_file = await self.state_manager.get_file_by_path(file_path)
                         if not tracked_file:
                             # File no longer tracked, clean up
                             await self.cleanup_tracking(file_path)

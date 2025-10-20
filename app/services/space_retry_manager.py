@@ -58,7 +58,7 @@ class SpaceRetryManager:
             file_path: Path to file that needs retry
             space_check: Result of space check that failed
         """
-        tracked_file = await self._state_manager.get_file(file_path)
+        tracked_file = await self._state_manager.get_file_by_path(file_path)
         if not tracked_file:
             logging.warning(f"Cannot schedule retry for unknown file: {file_path}")
             return
@@ -84,7 +84,7 @@ class SpaceRetryManager:
         )  # Half normal delay
 
         # Get tracked file for UUID-based update
-        tracked_file = await self._state_manager.get_file(file_path)
+        tracked_file = await self._state_manager.get_file_by_path(file_path)
         if tracked_file:
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference
@@ -104,7 +104,7 @@ class SpaceRetryManager:
         delay_seconds = self._settings.space_retry_delay_seconds
 
         # Get tracked file for UUID-based update  
-        tracked_file = await self._state_manager.get_file(file_path)
+        tracked_file = await self._state_manager.get_file_by_path(file_path)
         if tracked_file:
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference
@@ -155,7 +155,7 @@ class SpaceRetryManager:
             await asyncio.sleep(delay_seconds)
 
             # Check if file still exists and needs retry
-            tracked_file = await self._state_manager.get_file(file_path)
+            tracked_file = await self._state_manager.get_file_by_path(file_path)
             if not tracked_file or tracked_file.status != FileStatus.WAITING_FOR_SPACE:
                 logging.debug(f"File {file_path} no longer needs space retry")
                 return
@@ -186,7 +186,7 @@ class SpaceRetryManager:
     ) -> None:
         """Mark file as permanent space error after max retries - UUID precision"""
         # Get tracked file for UUID-based update
-        tracked_file = await self._state_manager.get_file(file_path)
+        tracked_file = await self._state_manager.get_file_by_path(file_path)
         if tracked_file:
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,  # Precise UUID reference

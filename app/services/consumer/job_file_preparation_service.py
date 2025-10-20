@@ -72,7 +72,7 @@ class JobFilePreparationService:
         file_path = job["file_path"]
 
         # Get tracked file from state manager
-        tracked_file = await self.state_manager.get_file(file_path)
+        tracked_file = await self.state_manager.get_file_by_path(file_path)
         if not tracked_file:
             logging.error(f"File not found in state manager: {file_path}")
             return None

@@ -64,7 +64,7 @@ class TestJobQueueUUIDIntegration:
         await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
         
         # 5. Verify file status updated to IN_QUEUE
-        current_file = await state_manager.get_file(file_path)
+        current_file = await state_manager.get_file_by_path(file_path)
         assert current_file is not None
         assert current_file.status == FileStatus.IN_QUEUE
         assert current_file.id == original_uuid  # Same UUID maintained
@@ -91,7 +91,7 @@ class TestJobQueueUUIDIntegration:
         
         # 2. File disappears (marked as REMOVED)
         await state_manager.cleanup_missing_files(set())
-        removed_file = await state_manager.get_file(file_path)
+        removed_file = await state_manager.get_file_by_path(file_path)
         assert removed_file is None  # REMOVED files excluded from get_file
         
         # 3. Same file returns (new UUID)
@@ -108,7 +108,7 @@ class TestJobQueueUUIDIntegration:
         # File is already READY from previous call
         
         # 5. Verify correct file is in queue (new UUID, new size)
-        current_file = await state_manager.get_file(file_path)
+        current_file = await state_manager.get_file_by_path(file_path)
         assert current_file.id == tracked_file2.id
         assert current_file.id != tracked_file1.id  # Different UUID
         assert current_file.file_size == 1500
@@ -140,7 +140,7 @@ class TestJobQueueUUIDIntegration:
         await job_queue_service.handle_destination_unavailable()
         
         # 3. Verify file is paused with preserved context
-        paused_file = await state_manager.get_file(file_path)
+        paused_file = await state_manager.get_file_by_path(file_path)
         assert paused_file is not None
         assert paused_file.id == original_uuid  # Same UUID
         assert paused_file.status == FileStatus.PAUSED_COPYING
@@ -151,7 +151,7 @@ class TestJobQueueUUIDIntegration:
         await job_queue_service.handle_destination_recovery()
         
         # 5. Verify file resumed with preserved context
-        resumed_file = await state_manager.get_file(file_path)
+        resumed_file = await state_manager.get_file_by_path(file_path)
         assert resumed_file is not None
         assert resumed_file.id == original_uuid  # Same UUID
         assert resumed_file.status == FileStatus.COPYING  # Resumed
@@ -186,7 +186,7 @@ class TestJobQueueUUIDIntegration:
         state_manager.subscribe(job_queue_service._handle_state_change)
         
         # 4. Verify both path-based and UUID-based access work
-        by_path = await state_manager.get_file(file_path)
+        by_path = await state_manager.get_file_by_path(file_path)
         by_uuid = await state_manager.get_file_by_id(original_uuid)
         
         assert by_path.id == original_uuid
@@ -203,7 +203,7 @@ class TestJobQueueUUIDIntegration:
         )
         
         # 6. Verify updates applied correctly
-        updated_file = await state_manager.get_file(file_path)
+        updated_file = await state_manager.get_file_by_path(file_path)
         assert updated_file.status == FileStatus.COPYING
         assert updated_file.copy_progress == 50.0
         assert updated_file.copy_speed_mbps == 12.5

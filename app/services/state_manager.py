@@ -128,7 +128,7 @@ class StateManager:
         return tracked_file
 
 
-    async def get_file(self, file_path: str) -> Optional[TrackedFile]:
+    async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         """
         Get the current (most recent/active) file for the given path.
         

@@ -95,7 +95,7 @@ class TestStateManager:
         await state_manager.add_file(sample_file_path, 1024)
 
         # Verificer fil eksisterer
-        tracked_file = await state_manager.get_file(sample_file_path)
+        tracked_file = await state_manager.get_file_by_path(sample_file_path)
         assert tracked_file is not None
 
         # Fjern fil
@@ -103,7 +103,7 @@ class TestStateManager:
         assert success is True
 
         # Verificer fil er fjernet
-        tracked_file = await state_manager.get_file(sample_file_path)
+        tracked_file = await state_manager.get_file_by_path(sample_file_path)
         assert tracked_file is None
 
     async def test_remove_nonexistent_file_returns_false(self, state_manager):
@@ -119,8 +119,8 @@ class TestStateManager:
         await state_manager.add_file("/test/file3.mxf", 4096)
 
         # Opdater nogen til READY
-        file1 = await state_manager.get_file("/test/file1.mxf")
-        file2 = await state_manager.get_file("/test/file2.mxf")
+        file1 = await state_manager.get_file_by_path("/test/file1.mxf")
+        file2 = await state_manager.get_file_by_path("/test/file2.mxf")
         await state_manager.update_file_status_by_id(file1.id, FileStatus.READY)
         await state_manager.update_file_status_by_id(file2.id, FileStatus.READY)
 
@@ -202,7 +202,7 @@ class TestStateManager:
             # Get files first, then update by ID
             tasks = []
             for path in file_paths:
-                file = await state_manager.get_file(path)
+                file = await state_manager.get_file_by_path(path)
                 if file:
                     tasks.append(state_manager.update_file_status_by_id(file.id, FileStatus.READY))
             await asyncio.gather(*tasks, return_exceptions=True)

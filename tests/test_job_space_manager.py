@@ -134,7 +134,7 @@ class TestJobSpaceManager:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=2000, status=FileStatus.DISCOVERED
         )
-        job_space_manager.state_manager.get_file.return_value = tracked_file
+        job_space_manager.state_manager.get_file_by_path.return_value = tracked_file
 
         expected_result = SpaceCheckResult(
             has_space=True,

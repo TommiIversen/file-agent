@@ -93,7 +93,7 @@ class JobSpaceManager:
 
         if file_size == 0:
             # Fallback: get from tracked file
-            tracked_file = await self.state_manager.get_file(job["file_path"])
+            tracked_file = await self.state_manager.get_file_by_path(job["file_path"])
             if tracked_file:
                 file_size = tracked_file.file_size
 
@@ -143,7 +143,7 @@ class JobSpaceManager:
 
         # Fallback: mark as failed if no retry manager or retry scheduling failed - UUID precision
         try:
-            tracked_file = await self.state_manager.get_file(file_path)
+            tracked_file = await self.state_manager.get_file_by_path(file_path)
             if tracked_file:
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,
