@@ -1,10 +1,3 @@
-"""
-Space Checker Service for File Transfer Agent.
-
-Clean utility service for pre-flight disk space checking.
-Follows Single Responsibility Principle - only checks space availability.
-"""
-
 from typing import Optional
 import logging
 from ..config import Settings
@@ -15,13 +8,6 @@ from ..services.storage_monitor import StorageMonitorService
 
 class SpaceChecker:
     def __init__(self, settings: Settings, storage_monitor: StorageMonitorService):
-        """
-        Initialize SpaceChecker with dependencies.
-
-        Args:
-            settings: Application configuration with space thresholds
-            storage_monitor: Service providing real-time storage information
-        """
         self._settings = settings
         self._storage_monitor = storage_monitor
 
@@ -30,7 +16,6 @@ class SpaceChecker:
     def check_space_for_file(self, file_size_bytes: int) -> SpaceCheckResult:
         logging.debug(f"Checking space for file of {file_size_bytes} bytes")
 
-        # Get current destination storage info
         storage_info = self._storage_monitor.get_destination_info()
 
         if not storage_info:
@@ -41,22 +26,18 @@ class SpaceChecker:
                 file_size_bytes, storage_info.error_message
             )
 
-        # Calculate space requirements
         available_bytes = int(storage_info.free_space_gb * (1024**3))
         safety_margin_bytes = int(self._settings.copy_safety_margin_gb * (1024**3))
         minimum_after_copy_bytes = int(
             self._settings.minimum_free_space_after_copy_gb * (1024**3)
         )
 
-        # Total required = file size + safety margin + minimum remaining
         required_bytes = (
             file_size_bytes + safety_margin_bytes + minimum_after_copy_bytes
         )
 
-        # Check if we have sufficient space
         has_space = available_bytes >= required_bytes
 
-        # Create detailed reason
         reason = self._create_space_reason(
             has_space=has_space,
             available_bytes=available_bytes,
@@ -76,7 +57,6 @@ class SpaceChecker:
         )
 
     def _create_unavailable_result(self, file_size_bytes: int) -> SpaceCheckResult:
-        """Create result when storage info is unavailable"""
         return SpaceCheckResult(
             has_space=False,
             available_bytes=0,
@@ -89,7 +69,6 @@ class SpaceChecker:
     def _create_inaccessible_result(
         self, file_size_bytes: int, error_message: Optional[str]
     ) -> SpaceCheckResult:
-        """Create result when destination is not accessible"""
         reason = f"Destination not accessible: {error_message or 'Unknown error'}"
 
         return SpaceCheckResult(
