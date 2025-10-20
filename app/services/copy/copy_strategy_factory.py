@@ -12,9 +12,10 @@ logic fra FileCopyService for at følge SOLID principper.
 """
 
 import logging
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Awaitable
 
 from app.config import Settings
 from app.models import TrackedFile, FileStatus
@@ -94,34 +95,11 @@ class CopyStrategyFactory:
         )
 
     def get_executor_config(self, tracked_file: TrackedFile) -> ExecutorConfig:
-        """
-        Generate optimal executor configuration for the given file.
-
-        Analyzes file characteristics and creates configuration for
-        FileCopyExecutor with optimal settings.
-
-        Args:
-            tracked_file: File to be copied
-
-        Returns:
-            ExecutorConfig with optimized settings for the file
-        """
-        # Determine if this is a growing file
         is_growing = self._is_growing_file(tracked_file)
-
-        # Determine copy strategy
         strategy_name = self._select_strategy_name(tracked_file, is_growing)
-
-        # Determine if we should use temporary file
         use_temp_file = self._should_use_temp_file(tracked_file, is_growing)
-
-        # Determine optimal chunk size
         chunk_size = self._get_optimal_chunk_size(tracked_file, is_growing)
-
-        # Determine progress update interval
         progress_interval = self._get_progress_update_interval(tracked_file, is_growing)
-
-        # Determine copy mode
         copy_mode = self._get_copy_mode(tracked_file, is_growing)
 
         config = ExecutorConfig(
@@ -130,7 +108,6 @@ class CopyStrategyFactory:
             progress_update_interval=progress_interval,
             strategy_name=strategy_name,
             is_growing_file=is_growing,
-            expected_file_size=tracked_file.file_size,
             copy_mode=copy_mode,
         )
 
@@ -142,15 +119,6 @@ class CopyStrategyFactory:
         return config
 
     def should_use_temp_file(self, tracked_file: TrackedFile) -> bool:
-        """
-        Determine if temporary file strategy should be used.
-
-        Args:
-            tracked_file: File to analyze
-
-        Returns:
-            True if temporary file should be used
-        """
         return self._should_use_temp_file(
             tracked_file, self._is_growing_file(tracked_file)
         )
@@ -158,35 +126,15 @@ class CopyStrategyFactory:
     def get_progress_callback(
         self, tracked_file: TrackedFile
     ) -> Callable[[CopyProgress], None]:
-        """
-        Create optimized progress callback for the given file.
-
-        Creates a progress callback function that updates file status
-        with appropriate frequency and detail level for the file type.
-
-        Args:
-            tracked_file: File being copied
-
-        Returns:
-            Progress callback function optimized for the file
-        """
-        file_path = tracked_file.file_path
         is_growing = self._is_growing_file(tracked_file)
-        strategy_name = self._select_strategy_name(tracked_file, is_growing)
 
         # For growing files, use more frequent updates
         if is_growing:
-            return self._create_growing_file_callback(file_path, strategy_name)
+            return self._create_growing_file_callback(tracked_file)
         else:
-            return self._create_normal_file_callback(file_path, strategy_name)
+            return self._create_normal_file_callback(tracked_file)
 
     def get_available_strategies(self) -> Dict[str, str]:
-        """
-        Get information about available copy strategies.
-
-        Returns:
-            Dictionary mapping strategy names to descriptions
-        """
         strategies = {
             "normal_temp": "Normal file copy with temporary file",
             "normal_direct": "Normal file copy direct to destination",
@@ -199,12 +147,6 @@ class CopyStrategyFactory:
         return strategies
 
     def get_factory_info(self) -> Dict[str, Any]:
-        """
-        Get information about factory configuration and capabilities.
-
-        Returns:
-            Dictionary with factory configuration details
-        """
         return {
             "normal_chunk_size_kb": self.normal_chunk_size // 1024,
             "large_file_chunk_size_kb": self.large_file_chunk_size // 1024,
@@ -279,63 +221,65 @@ class CopyStrategyFactory:
             return "normal"
 
     def _create_normal_file_callback(
-        self, file_path: str, strategy_name: str
+        self, tracked_file: TrackedFile
     ) -> Callable[[CopyProgress], None]:
         """Create progress callback for normal files."""
 
-        async def normal_progress_callback(progress: CopyProgress) -> None:
+        def normal_progress_callback(progress: CopyProgress) -> None:
             """Progress callback for normal file copy operations."""
             try:
                 # Calculate transfer rate in MB/s
                 copy_speed_mbps = progress.current_rate_bytes_per_sec / (1024 * 1024)
 
-                # Update file status with standard copying status - UUID precision
-                tracked_file = await self.state_manager.get_file(file_path)
+                # Schedule async state update without awaiting - UUID precision
                 if tracked_file:
-                    await self.state_manager.update_file_status_by_id(
-                        tracked_file.id,
-                        FileStatus.COPYING,
-                        copy_progress=progress.progress_percent,
-                        bytes_copied=progress.bytes_copied,
-                        copy_speed_mbps=copy_speed_mbps,
+                    asyncio.create_task(
+                        self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.COPYING,
+                            copy_progress=progress.progress_percent,
+                            bytes_copied=progress.bytes_copied,
+                            copy_speed_mbps=copy_speed_mbps,
+                        )
                     )
 
                 logging.debug(
-                    f"Normal copy progress: {Path(file_path).name} - "
+                    f"Normal copy progress: {Path(tracked_file.file_path).name} - "
                     f"{progress.progress_percent:.1f}% "
                     f"({copy_speed_mbps:.2f} MB/s)"
                 )
 
             except Exception as e:
-                logging.warning(f"Progress callback error for {file_path}: {e}")
+                logging.warning(f"Progress callback error for {tracked_file.file_path}: {e}")
 
         return normal_progress_callback
 
     def _create_growing_file_callback(
-        self, file_path: str, strategy_name: str
+        self, tracked_file: TrackedFile
     ) -> Callable[[CopyProgress], None]:
         """Create progress callback for growing files."""
 
-        async def growing_progress_callback(progress: CopyProgress) -> None:
+        def growing_progress_callback(progress: CopyProgress) -> None:
             """Progress callback for growing file copy operations."""
             try:
                 # Calculate transfer rate in MB/s
                 copy_speed_mbps = progress.current_rate_bytes_per_sec / (1024 * 1024)
 
-                # Use growing copy status to indicate streaming operation - UUID precision
-                tracked_file = await self.state_manager.get_file(file_path)
+                # Schedule async state update without awaiting - UUID precision
                 if tracked_file:
-                    await self.state_manager.update_file_status_by_id(
-                        tracked_file.id,
-                        FileStatus.GROWING_COPY,
-                        copy_progress=progress.progress_percent,
-                        bytes_copied=progress.bytes_copied,
-                    file_size=progress.total_bytes,  # May be growing
-                    copy_speed_mbps=copy_speed_mbps,
-                )
+                    asyncio.create_task(
+                        self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.GROWING_COPY,
+                            copy_progress=progress.progress_percent,
+                            bytes_copied=progress.bytes_copied,
+                            file_size=progress.total_bytes,  # May be growing
+                            copy_speed_mbps=copy_speed_mbps,
+                        )
+                    )
 
                 logging.debug(
-                    f"Growing copy progress: {Path(file_path).name} - "
+                    f"Growing copy progress: {Path(tracked_file.file_path).name} - "
                     f"{progress.progress_percent:.1f}% "
                     f"({progress.bytes_copied} / {progress.total_bytes} bytes, "
                     f"{copy_speed_mbps:.2f} MB/s)"
@@ -343,7 +287,7 @@ class CopyStrategyFactory:
 
             except Exception as e:
                 logging.warning(
-                    f"Growing file progress callback error for {file_path}: {e}"
+                    f"Growing file progress callback error for {tracked_file.file_path}: {e}"
                 )
 
         return growing_progress_callback
