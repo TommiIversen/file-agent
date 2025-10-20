@@ -42,12 +42,7 @@ class CopyResult:
         return self.bytes_copied / (1024 * 1024)
 
     def get_summary(self) -> str:
-        """
-        Get a human-readable summary of the copy operation.
-
-        Returns:
-            Formatted string with copy operation details
-        """
+        """Get a human-readable summary of the copy operation."""
         if self.success:
             return (
                 f"Copy successful: {self.source_path.name} "
@@ -63,11 +58,7 @@ class CopyResult:
 
 @dataclass
 class CopyProgress:
-    """
-    Progress information for an ongoing copy operation.
-
-    Used for progress callbacks during file copying.
-    """
+    """Progress information for an ongoing copy operation."""
 
     bytes_copied: int
     total_bytes: int
@@ -100,27 +91,11 @@ class CopyProgress:
 
 
 class FileCopyExecutor:
-    """
-    Responsible for executing file copy operations with different strategies.
-
-    Provides both direct and temporary file copy methods with:
-    - Progress tracking through callbacks
-    - File verification after copy
-    - Detailed result reporting
-    - Error handling and cleanup
-    """
+    """Executes file copy operations with progress tracking and verification."""
 
     def __init__(self, settings: Settings):
-        """
-        Initialize FileCopyExecutor with configuration.
-
-        Args:
-            settings: Application settings for copy configuration
-        """
         self.settings = settings
-
-        # Simple, optimal chunk size for all files
-        self.chunk_size = settings.chunk_size_kb * 1024  # Convert to bytes
+        self.chunk_size = settings.chunk_size_kb * 1024
         self.progress_update_interval = getattr(
             settings, "copy_progress_update_interval", 1
         )
@@ -136,17 +111,7 @@ class FileCopyExecutor:
         dest: Path,
         progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
-        """
-        Copy file using the configured strategy (temp file or direct).
-
-        Args:
-            source: Source file path
-            dest: Destination file path
-            progress_callback: Optional callback for progress updates
-
-        Returns:
-            CopyResult with operation details and performance metrics
-        """
+        """Copy file using the configured strategy (temp file or direct)."""
         if self.settings.use_temporary_file:
             return await self.copy_with_temp_file(source, dest, progress_callback)
         else:
@@ -158,30 +123,15 @@ class FileCopyExecutor:
         dest: Path,
         progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
-        """
-        Copy file to a temporary location, then rename to final destination.
-
-        This strategy provides atomic copy operations - the destination file
-        either appears complete or not at all.
-
-        Args:
-            source: Source file path
-            dest: Destination file path
-            progress_callback: Optional callback for progress updates
-
-        Returns:
-            CopyResult with operation details
-        """
+        """Copy file to temporary location, then rename to final destination."""
         start_time = datetime.now()
         temp_path = create_temp_file_path(dest)
 
         try:
             logging.debug(f"Starting temp file copy: {source} -> {temp_path} -> {dest}")
 
-            # Ensure destination directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
 
-            # Copy to temporary file
             result = await self._perform_copy(
                 source, temp_path, progress_callback, start_time
             )
@@ -189,9 +139,7 @@ class FileCopyExecutor:
             if not result.success:
                 return result
 
-            # Verify the temporary file
             if not await self.verify_copy(source, temp_path):
-                # Cleanup temp file on verification failure
                 if temp_path.exists():
                     temp_path.unlink()
 
@@ -210,10 +158,8 @@ class FileCopyExecutor:
                     temp_file_path=temp_path,
                 )
 
-            # Rename temporary file to final destination
             temp_path.rename(dest)
 
-            # Update result with final destination
             end_time = datetime.now()
             result.destination_path = dest
             result.end_time = end_time
@@ -225,7 +171,6 @@ class FileCopyExecutor:
             return result
 
         except Exception as e:
-            # Cleanup temp file on any error
             if temp_path.exists():
                 try:
                     temp_path.unlink()
@@ -256,37 +201,20 @@ class FileCopyExecutor:
         dest: Path,
         progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
-        """
-        Copy file directly to the destination path.
-
-        This strategy writes directly to the final destination.
-        Use with caution as partial files may be visible during copy.
-
-        Args:
-            source: Source file path
-            dest: Destination file path
-            progress_callback: Optional callback for progress updates
-
-        Returns:
-            CopyResult with operation details
-        """
+        """Copy file directly to the destination path."""
         start_time = datetime.now()
 
         try:
             logging.debug(f"Starting direct copy: {source} -> {dest}")
 
-            # Ensure destination directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
 
-            # Perform direct copy
             result = await self._perform_copy(
                 source, dest, progress_callback, start_time
             )
 
             if result.success:
-                # Verify the copied file
                 if not await self.verify_copy(source, dest):
-                    # Delete incomplete destination file
                     if dest.exists():
                         dest.unlink()
 
@@ -304,7 +232,6 @@ class FileCopyExecutor:
             return result
 
         except Exception as e:
-            # Cleanup destination file on error
             if dest.exists():
                 try:
                     dest.unlink()
@@ -334,23 +261,10 @@ class FileCopyExecutor:
         progress_callback: Optional[Callable[[CopyProgress], None]],
         start_time: datetime,
     ) -> CopyResult:
-        """
-        Perform the actual file copy with progress tracking.
-
-        Args:
-            source: Source file path
-            dest: Destination file path
-            progress_callback: Optional progress callback
-            start_time: Copy operation start time
-
-        Returns:
-            CopyResult with copy details
-        """
+        """Perform the actual file copy with progress tracking."""
         file_size = source.stat().st_size
         bytes_copied = 0
         last_progress_reported = -1
-
-        # Use simple, optimal chunk size for all files
         chunk_size = self.chunk_size
         
         logging.debug(
@@ -370,7 +284,6 @@ class FileCopyExecutor:
                     await dst.write(chunk)
                     bytes_copied += len(chunk)
 
-                    # Report progress if callback provided
                     if progress_callback:
                         current_time = datetime.now()
                         elapsed = (current_time - start_time).total_seconds()
@@ -428,16 +341,7 @@ class FileCopyExecutor:
             )
 
     async def verify_copy(self, source: Path, dest: Path) -> bool:
-        """
-        Verify that the file was copied correctly by comparing file sizes.
-
-        Args:
-            source: Source file path
-            dest: Destination file path
-
-        Returns:
-            True if verification successful, False otherwise
-        """
+        """Verify that the file was copied correctly by comparing file sizes."""
         try:
             if not dest.exists():
                 logging.warning(f"Destination file does not exist: {dest}")
@@ -462,12 +366,7 @@ class FileCopyExecutor:
             return False
 
     def get_executor_info(self) -> dict:
-        """
-        Get information about the executor configuration.
-
-        Returns:
-            Dictionary with executor configuration details
-        """
+        """Get information about the executor configuration."""
         return {
             "chunk_size_kb": self.settings.chunk_size_kb,
             "progress_update_interval": self.progress_update_interval,
