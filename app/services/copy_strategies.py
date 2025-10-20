@@ -98,11 +98,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
         try:
             logging.info(f"Starting normal copy via executor: {source.name}")
 
-            # Update status to copying - UUID precision
-            tracked_file = await self.state_manager.get_file_by_path(source_path)
-            if not tracked_file:
-                raise RuntimeError(f"File not tracked: {source_path}")
-                
+            # Update status to copying - UUID precision (use existing tracked_file parameter)
             await self.state_manager.update_file_status_by_id(
                 tracked_file.id, FileStatus.COPYING, copy_progress=0.0
             )
