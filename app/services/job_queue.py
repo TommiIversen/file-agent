@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -332,8 +332,6 @@ class JobQueueService:
             logging.error(f"❌ Error resuming {file_path}: {e}")
 
     async def _get_recent_network_failed_files(self) -> List[TrackedFile]:
-        from datetime import datetime, timedelta
-
         cutoff_time = datetime.now() - timedelta(minutes=5)
 
         recent_failed = []

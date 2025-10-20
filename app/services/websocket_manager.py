@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import List, Dict, Any
+from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
@@ -158,8 +159,6 @@ class WebSocketManager:
         }
 
     def _get_timestamp(self) -> str:
-        from datetime import datetime
-
         return datetime.now().isoformat()
 
     async def send_system_statistics(self) -> None:

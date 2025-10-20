@@ -7,6 +7,11 @@ from ..models import TrackedFile
 from ..utils.resumable_copy_strategies import (
     ResumeCapableMixin,
 )
+from ..utils.secure_resume_config import (
+    CONSERVATIVE_CONFIG,
+    PERFORMANCE_CONFIG,
+    PARANOID_CONFIG,
+)
 
 logger = logging.getLogger("app.utils.resume_integration")
 
@@ -87,12 +92,6 @@ class ResumableStrategyAdapter:
 
 
 def get_resume_config_for_mode(mode: str):
-    from ..utils.secure_resume_config import (
-        CONSERVATIVE_CONFIG,
-        PERFORMANCE_CONFIG,
-        PARANOID_CONFIG,
-    )
-
     mode_map = {
         "conservative": CONSERVATIVE_CONFIG,
         "performance": PERFORMANCE_CONFIG,

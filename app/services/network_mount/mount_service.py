@@ -5,6 +5,7 @@ import logging
 from .platform_factory import PlatformFactory, UnsupportedPlatformError
 from .base_mounter import BaseMounter
 from .mount_config import MountConfigHandler
+from .windows_mounter import WindowsMounter
 from ...config import Settings
 
 
@@ -24,8 +25,6 @@ class NetworkMountService:
             logging.info(f"Detected platform: {platform_name}")
 
             if platform_name == "windows":
-                from .windows_mounter import WindowsMounter
-
                 self._mounter = WindowsMounter(
                     drive_letter=self._config.get_windows_drive_letter()
                 )

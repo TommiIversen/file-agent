@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Dict, List, Optional, Set, Callable, Awaitable
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.models import TrackedFile, FileStatus, FileStateUpdate
 
@@ -192,8 +192,6 @@ class StateManager:
         return removed_count
 
     async def cleanup_old_files(self, max_age_hours: int) -> int:
-        from datetime import timedelta
-
         removed_count = 0
         now = datetime.now()
         cutoff_time = now - timedelta(hours=max_age_hours)

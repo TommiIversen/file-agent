@@ -2,6 +2,8 @@
 
 import platform
 from .base_mounter import BaseMounter
+from .macos_mounter import MacOSMounter
+from .windows_mounter import WindowsMounter
 
 
 class UnsupportedPlatformError(Exception):
@@ -36,12 +38,8 @@ class PlatformFactory:
         platform_name = self.detect_platform()
 
         if platform_name == "macos":
-            from .macos_mounter import MacOSMounter
-
             return MacOSMounter()
         elif platform_name == "windows":
-            from .windows_mounter import WindowsMounter
-
             return WindowsMounter()
         else:
             raise UnsupportedPlatformError(

@@ -7,7 +7,7 @@ from typing import Optional, Callable
 import logging
 
 from ..services.copy_strategies import NormalFileCopyStrategy, GrowingFileCopyStrategy
-from ..models import TrackedFile
+from ..models import TrackedFile, FileStatus
 from .secure_resume_config import (
     SecureResumeConfig,
     ResumeOperationMetrics,
@@ -393,8 +393,6 @@ class ResumeCapableMixin:
                 return False
 
         # Create a dummy TrackedFile for parent method
-        from ..models import TrackedFile, FileStatus
-
         dummy_tracked_file = TrackedFile(
             file_path=str(source_path),
             status=FileStatus.COPYING,
@@ -425,8 +423,6 @@ class ResumeCapableMixin:
                 # Continue anyway - måske kan vi overwrite
 
         # Create a dummy TrackedFile for parent method
-        from ..models import TrackedFile, FileStatus
-
         dummy_tracked_file = TrackedFile(
             file_path=str(source_path),
             status=FileStatus.COPYING,

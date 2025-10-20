@@ -5,6 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict
+from datetime import datetime
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -323,8 +324,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                     if current_file_size > 0
                                     else 0
                                 )
-
-                                from datetime import datetime
 
                                 current_time = datetime.now()
                                 if not hasattr(self, "_copy_start_time"):
