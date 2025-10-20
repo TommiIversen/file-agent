@@ -1,10 +1,4 @@
-"""
-Resumable Copy Strategies
-
-Ultra-sikre copy strategier med built-in resume funktionalitet.
-Disse strategier integrerer seamlessly med existing copy system
-og tilføjer robust resume capabilities med byte-level verification.
-"""
+"""Resumable Copy Strategies"""
 
 import asyncio
 import time
@@ -29,9 +23,6 @@ logger = logging.getLogger("app.utils.resumable_copy_strategies")
 
 
 class ResumeCapableMixin:
-    """
-    Mixin class der tilføjer resume capabilities til existing copy strategies.
-    """
 
     def __init__(self, *args, resume_config=None, file_copy_executor=None, **kwargs):
         # Extract resume_config before passing to super()
@@ -43,16 +34,6 @@ class ResumeCapableMixin:
         super().__init__(*args, file_copy_executor=file_copy_executor, **kwargs)
 
     async def should_attempt_resume(self, source_path: Path, dest_path: Path) -> bool:
-        """
-        Afgør om vi skal forsøge resume for denne fil.
-
-        Args:
-            source_path: Source fil path
-            dest_path: Destination fil path
-
-        Returns:
-            True hvis resume skal forsøges, False for fresh copy
-        """
         # Check om destination fil eksisterer
         if not dest_path.exists():
             logger.info(
@@ -153,17 +134,6 @@ class ResumeCapableMixin:
         dest_path: Path,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
-        """
-        Udfør resume copy med fuld verification.
-
-        Args:
-            source_path: Source fil path
-            dest_path: Destination fil path
-            progress_callback: Progress callback function
-
-        Returns:
-            True hvis copy succeeded, False ellers
-        """
         operation_start = time.time()
 
         try:
@@ -276,9 +246,6 @@ class ResumeCapableMixin:
             )
 
     async def _truncate_destination(self, dest_path: Path, position: int):
-        """
-        Truncate destination fil til specificeret position.
-        """
         if position < 0:
             raise ValueError(f"Invalid truncate position: {position}")
 
@@ -346,9 +313,6 @@ class ResumeCapableMixin:
         start_position: int,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
-        """
-        Fortsæt copy fra specificeret position.
-        """
         try:
             source_size = source_path.stat().st_size
             remaining_bytes = source_size - start_position
@@ -416,9 +380,6 @@ class ResumeCapableMixin:
         dest_path: Path,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
-        """
-        Fallback til fresh copy ved problemer.
-        """
         logger.info(f"Fallback til fresh copy: {source_path.name}")
 
         # Cleanup existing destination
@@ -452,9 +413,6 @@ class ResumeCapableMixin:
         dest_path: Path,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
-        """
-        Fresh copy med cleanup af existing destination.
-        """
         logger.info(f"Fresh copy med cleanup: {source_path.name}")
 
         # Cleanup existing destination
@@ -482,31 +440,14 @@ class ResumeCapableMixin:
         )
 
     def get_resume_metrics(self) -> Optional[ResumeOperationMetrics]:
-        """
-        Get metrics fra sidste resume operation.
-        """
         return self._resume_metrics
 
 
 class ResumableNormalFileCopyStrategy(ResumeCapableMixin, NormalFileCopyStrategy):
-    """
-    Normal fil copy strategy med resume capabilities.
-    """
 
     async def copy_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
-        """
-        Copy file med automatisk resume detection - FileCopyStrategy interface.
-
-        Args:
-            source_path: Source fil path som string
-            dest_path: Destination fil path som string
-            tracked_file: TrackedFile object for progress tracking
-
-        Returns:
-            True hvis copy succeeded, False ellers
-        """
         source = Path(source_path)
         dest = Path(dest_path)
 
@@ -526,9 +467,6 @@ class ResumableNormalFileCopyStrategy(ResumeCapableMixin, NormalFileCopyStrategy
 
 
 class ResumableGrowingFileCopyStrategy(ResumeCapableMixin, GrowingFileCopyStrategy):
-    """
-    Growing fil copy strategy med resume capabilities.
-    """
 
     async def copy_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile
@@ -586,9 +524,6 @@ class ResumableGrowingFileCopyStrategy(ResumeCapableMixin, GrowingFileCopyStrate
 
 
 class ResumeStrategyFactory:
-    """
-    Factory til at oprette resumable copy strategies.
-    """
 
     @staticmethod
     def create_normal_strategy(

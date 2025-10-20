@@ -1,10 +1,4 @@
-"""
-Secure Resume Verification Engine
-
-Ultra-sikker byte-level verification engine til resume operationer.
-Denne engine prioriterer data integritet over alt andet og bruger
-progressive algoritmer til at finde præcise corruption points.
-"""
+"""Secure Resume Verification Engine"""
 
 import asyncio
 import time
@@ -19,21 +13,10 @@ logger = logging.getLogger("app.utils.secure_resume_verification")
 
 
 class VerificationTimeout(Exception):
-    """Raised når verification tager for lang tid"""
-
     pass
 
 
 class SecureVerificationEngine:
-    """
-    Ultra-sikker verification engine til resume operationer.
-
-    Denne engine bruger progressive algoritmer til at:
-    1. Verificere existing data byte-for-byte
-    2. Finde præcise corruption points med binary search
-    3. Optimere verification baseret på fil størrelse
-    4. Håndtere timeouts og performance gracefully
-    """
 
     def __init__(self, config: SecureResumeConfig):
         self.config = config
@@ -42,20 +25,6 @@ class SecureVerificationEngine:
     async def find_safe_resume_position(
         self, source_path: Path, dest_path: Path
     ) -> Tuple[int, ResumeOperationMetrics]:
-        """
-        Find den sikreste position at resume fra.
-
-        Args:
-            source_path: Source fil path
-            dest_path: Destination fil path
-
-        Returns:
-            Tuple af (resume_position, metrics)
-
-        Raises:
-            VerificationTimeout: Hvis verification tager for lang tid
-            FileNotFoundError: Hvis filer ikke eksisterer
-        """
         start_time = time.time()
         self._verification_start_time = start_time
 
@@ -176,9 +145,6 @@ class SecureVerificationEngine:
     async def _verify_region_with_timeout(
         self, source_path: Path, dest_path: Path, offset: int, size: int
     ) -> bool:
-        """
-        Verificer en region med timeout protection.
-        """
         timeout = self.config.max_verification_time_seconds
 
         try:
@@ -193,18 +159,6 @@ class SecureVerificationEngine:
     async def _verify_region_exact(
         self, source_path: Path, dest_path: Path, offset: int, size: int
     ) -> bool:
-        """
-        Verificer en region byte-for-byte med optimal performance.
-
-        Args:
-            source_path: Source fil
-            dest_path: Destination fil
-            offset: Start offset i bytes
-            size: Antal bytes at verificere
-
-        Returns:
-            True hvis regionen matcher perfekt, False ellers
-        """
         if size <= 0:
             return True
 
@@ -284,9 +238,6 @@ class SecureVerificationEngine:
 
     @asynccontextmanager
     async def _open_files_for_verification(self, source_path: Path, dest_path: Path):
-        """
-        Async context manager for at åbne filer til verification.
-        """
         src_file = None
         dst_file = None
         try:
@@ -304,18 +255,6 @@ class SecureVerificationEngine:
     async def _binary_search_corruption_point(
         self, source_path: Path, dest_path: Path, start_offset: int, end_offset: int
     ) -> Tuple[int, int]:
-        """
-        Binary search for at finde præcist corruption point.
-
-        Args:
-            source_path: Source fil
-            dest_path: Destination fil
-            start_offset: Start af region at søge i
-            end_offset: Slut af region at søge i
-
-        Returns:
-            Tuple af (sidste_gode_position, antal_iterationer)
-        """
         chunk_size = self.config.get_binary_search_chunk_size()
         iterations = 0
         max_iterations = self.config.max_corruption_search_attempts
@@ -387,12 +326,6 @@ class SecureVerificationEngine:
         return last_good_position, iterations
 
     def _check_verification_timeout(self):
-        """
-        Check om verification har taget for lang tid.
-
-        Raises:
-            VerificationTimeout: Hvis timeout er overskredet
-        """
         if self._verification_start_time is None:
             return
 
@@ -404,9 +337,6 @@ class SecureVerificationEngine:
 
 
 class QuickIntegrityChecker:
-    """
-    Hurtig integrity checker til simple validations.
-    """
 
     @staticmethod
     async def quick_size_check(source_path: Path, dest_path: Path) -> bool:

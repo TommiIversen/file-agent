@@ -1,10 +1,4 @@
-"""
-Secure Resume Configuration
-
-Konfiguration for ultra-sikker resume funktionalitet med byte-level verification.
-Dette system prioriterer data integritet over performance og giver maksimal
-kontrol over hvordan resume operationer udføres.
-"""
+"""Secure Resume Configuration"""
 
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
@@ -14,12 +8,6 @@ logger = logging.getLogger("app.utils.secure_resume_config")
 
 
 class SecureResumeConfig(BaseModel):
-    """
-    Konfiguration for sikker resume funktionalitet.
-
-    Denne klasse definerer alle parametre for hvordan resume operationer
-    skal udføres med maksimal sikkerhed og data integritet.
-    """
 
     # Verification sizes
     min_verify_bytes: int = Field(
@@ -101,7 +89,6 @@ class SecureResumeConfig(BaseModel):
     @field_validator("max_verify_mb")
     @classmethod
     def max_verify_reasonable(cls, v, info):
-        """Sørg for at max verification størrelse er rimelig"""
         if info.data and "large_file_verification_mb" in info.data:
             large_file_value = info.data["large_file_verification_mb"]
             if v < large_file_value:
@@ -114,7 +101,6 @@ class SecureResumeConfig(BaseModel):
     @field_validator("binary_search_chunk_mb")
     @classmethod
     def binary_search_chunk_reasonable(cls, v, info):
-        """Sørg for at binary search chunk er mindre end max verification"""
         if info.data and "max_verify_mb" in info.data:
             max_verify_value = info.data["max_verify_mb"]
             if v > max_verify_value:
@@ -125,15 +111,6 @@ class SecureResumeConfig(BaseModel):
         return v
 
     def get_verification_size_for_file(self, file_size_bytes: int) -> int:
-        """
-        Beregn optimal verification størrelse baseret på fil størrelse.
-
-        Args:
-            file_size_bytes: Størrelse af filen der skal verificeres
-
-        Returns:
-            Antal bytes der skal verificeres
-        """
         file_size_mb = file_size_bytes / (1024 * 1024)
 
         if file_size_mb > self.large_file_threshold_mb:
@@ -148,19 +125,15 @@ class SecureResumeConfig(BaseModel):
         return max(self.min_verify_bytes, verify_bytes)
 
     def get_binary_search_chunk_size(self) -> int:
-        """Get binary search chunk størrelse i bytes"""
         return self.binary_search_chunk_mb * 1024 * 1024
 
     def get_verification_buffer_size(self) -> int:
-        """Get verification buffer størrelse i bytes"""
         return self.verification_buffer_kb * 1024
 
     def get_safety_margin_bytes(self) -> int:
-        """Get safety margin i bytes"""
         return self.safety_margin_kb * 1024
 
     def log_config(self):
-        """Log den aktuelle konfiguration"""
         logger.info("SecureResumeConfig indlæst:")
         logger.info(
             f"  Verification: {self.min_verify_bytes} bytes - {self.max_verify_mb} MB"
@@ -175,9 +148,6 @@ class SecureResumeConfig(BaseModel):
 
 
 class ResumeOperationMetrics(BaseModel):
-    """
-    Metrics for resume operationer til monitoring og optimering.
-    """
 
     file_size_bytes: int
     dest_size_bytes: int
@@ -191,20 +161,17 @@ class ResumeOperationMetrics(BaseModel):
 
     @property
     def preservation_percentage(self) -> float:
-        """Beregn hvor meget af filen der blev bevaret"""
         if self.dest_size_bytes == 0:
             return 0.0
         return (self.bytes_preserved / self.dest_size_bytes) * 100.0
 
     @property
     def verification_percentage(self) -> float:
-        """Beregn hvor meget af filen der blev verificeret"""
         if self.dest_size_bytes == 0:
             return 0.0
         return (self.verification_bytes / self.dest_size_bytes) * 100.0
 
     def log_metrics(self):
-        """Log resumé operation metrics"""
         logger.info("Resume Operation Metrics:")
         logger.info(f"  Fil størrelse: {self.file_size_bytes:,} bytes")
         logger.info(f"  Dest størrelse: {self.dest_size_bytes:,} bytes")

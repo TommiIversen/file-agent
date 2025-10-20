@@ -1,14 +1,4 @@
-"""
-Output Folder Template Engine for File Transfer Agent.
-
-Provides flexible template-based output folder generation based on input file names.
-Supports pattern matching and variable substitution for organized file destinations.
-
-Example usage:
-    Input: 200305_1344_Ingest_Cam1.mxf
-    Rule: pattern:*Cam*;folder:KAMERA\\{date}
-    Output: DESTINATION_DIRECTORY\\KAMERA\\200305\\200305_1344_Ingest_Cam1.mxf
-"""
+"""Output Folder Template Engine for File Transfer Agent."""
 
 import re
 import json
@@ -22,14 +12,6 @@ from app.config import Settings
 
 @dataclass
 class TemplateRule:
-    """
-    Represents a single template rule for output folder generation.
-
-    Attributes:
-        pattern: Glob or regex pattern to match against filename
-        folder_template: Template string for output folder structure
-        priority: Rule priority (lower number = higher priority)
-    """
 
     pattern: str
     folder_template: str
@@ -37,7 +19,6 @@ class TemplateRule:
     is_regex: bool = False
 
     def matches(self, filename: str) -> bool:
-        """Check if this rule matches the given filename."""
         if self.is_regex:
             return bool(re.search(self.pattern, filename, re.IGNORECASE))
         else:
@@ -48,23 +29,8 @@ class TemplateRule:
 
 
 class OutputFolderTemplateEngine:
-    """
-    Template engine for generating organized output folder structures.
-
-    Features:
-    - Pattern-based file categorization
-    - Variable extraction from filenames (date, content type, etc.)
-    - Flexible template substitution
-    - Fallback to default categorization
-    """
 
     def __init__(self, settings: Settings):
-        """
-        Initialize template engine with configuration.
-
-        Args:
-            settings: Application settings containing template configuration
-        """
         self.settings = settings
         self.logger = logging.getLogger("app.template_engine")
 
@@ -86,24 +52,9 @@ class OutputFolderTemplateEngine:
                 )
 
     def is_enabled(self) -> bool:
-        """Check if template engine is enabled."""
         return self.settings.output_folder_template_enabled
 
     def generate_output_path(self, filename: str, source_path: str = "") -> str:
-        """
-        Generate complete output path for a given filename.
-
-        Args:
-            filename: Input filename to process
-            source_path: Optional source path for relative path calculations
-
-        Returns:
-            Complete output path including destination directory and template-generated subfolder
-
-        Example:
-            filename="200305_1344_Ingest_Cam1.mxf"
-            Returns: "C:\\temp_output\\KAMERA\\200305\\200305_1344_Ingest_Cam1.mxf"
-        """
         if not self.is_enabled():
             # Template system disabled - use destination directory directly
             return str(Path(self.settings.destination_directory) / filename)
@@ -137,15 +88,6 @@ class OutputFolderTemplateEngine:
         return str(output_path)
 
     def get_output_subfolder(self, filename: str) -> str:
-        """
-        Get just the subfolder part of the output path (without filename).
-
-        Args:
-            filename: Input filename to process
-
-        Returns:
-            Subfolder path (e.g., "KAMERA\\200305")
-        """
         if not self.is_enabled():
             return ""
 
@@ -160,13 +102,6 @@ class OutputFolderTemplateEngine:
         return self._substitute_template(folder_template, variables)
 
     def _parse_template_rules(self) -> List[TemplateRule]:
-        """
-        Parse template rules from settings configuration.
-
-        Supports multiple formats:
-        1. Simple format: "pattern:*Cam*;folder:KAMERA\\{date}"
-        2. JSON format: [{"pattern": "*Cam*", "folder": "KAMERA\\{date}"}]
-        """
         rules = []
 
         if not self.settings.output_folder_rules:
@@ -222,21 +157,12 @@ class OutputFolderTemplateEngine:
         return rules
 
     def _find_matching_rule(self, filename: str) -> Optional[TemplateRule]:
-        """Find the first rule that matches the given filename."""
         for rule in self.rules:
             if rule.matches(filename):
                 return rule
         return None
 
     def _extract_variables(self, filename: str) -> Dict[str, str]:
-        """
-        Extract variables from filename for template substitution.
-
-        Currently supports:
-        - date: Extracted based on date_format setting
-        - filename: Full filename
-        - name_no_ext: Filename without extension
-        """
         variables = {"filename": filename, "name_no_ext": Path(filename).stem}
 
         # Extract date based on format specification
@@ -266,11 +192,6 @@ class OutputFolderTemplateEngine:
         return variables
 
     def _substitute_template(self, template: str, variables: Dict[str, str]) -> str:
-        """
-        Substitute template variables in the template string.
-
-        Supports {variable_name} format substitution.
-        """
         result = template
 
         for var_name, var_value in variables.items():
@@ -280,12 +201,6 @@ class OutputFolderTemplateEngine:
         return result
 
     def get_template_info(self) -> Dict:
-        """
-        Get information about the current template configuration.
-
-        Returns:
-            Dictionary with template engine status and configuration
-        """
         return {
             "enabled": self.is_enabled(),
             "rules_count": len(self.rules),
@@ -301,46 +216,3 @@ class OutputFolderTemplateEngine:
                 for rule in self.rules
             ],
         }
-
-
-# Utility functions for testing and validation
-
-
-def test_template_engine():
-    """Test the template engine with sample data."""
-    from app.config import Settings
-
-    # Create test settings
-    settings = Settings(
-        source_directory="c:\\temp_input",
-        destination_directory="c:\\temp_output",
-        output_folder_template_enabled=True,
-        output_folder_rules="pattern:*Cam*;folder:KAMERA\\{date},pattern:*PGM*;folder:PROGRAM_CLEAN\\{date},pattern:*CLN*;folder:PROGRAM_CLEAN\\{date}",
-        output_folder_default_category="OTHER",
-        output_folder_date_format="filename[0:6]",
-    )
-
-    engine = OutputFolderTemplateEngine(settings)
-
-    # Test cases
-    test_files = [
-        "200305_1344_Ingest_Cam1.mxf",
-        "200305_1344_Ingest_PGM.mxf",
-        "200305_1344_Ingest_CLN.mxf",
-        "200305_1344_Something_Else.mxv",
-    ]
-
-    print("Template Engine Test Results:")
-    print("=" * 50)
-
-    for filename in test_files:
-        output_path = engine.generate_output_path(filename)
-        subfolder = engine.get_output_subfolder(filename)
-        print(f"Input:  {filename}")
-        print(f"Output: {output_path}")
-        print(f"Folder: {subfolder}")
-        print("-" * 30)
-
-
-if __name__ == "__main__":
-    test_template_engine()
