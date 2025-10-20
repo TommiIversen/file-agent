@@ -1,15 +1,5 @@
 """
-Job Copy Executor Service for File Transfer Agent.
-
-Responsible solely for copy execution operations and status initialization.
-Extracted from JobProcessor to complete the transformation into a pure orchestrator.
-
-This service handles:
-- Copy status initialization for operations
-- Copy strategy execution with progress tracking
-- Resume scenario detection and logging
-- Copy operation logging and metrics
-- Intelligent error handling with pause vs fail classification
+Job Copy Executor - handles copy execution and status management.
 """
 
 import logging
@@ -26,12 +16,7 @@ from app.services.consumer.job_error_classifier import JobErrorClassifier
 
 
 class JobCopyExecutor:
-    """
-    Responsible solely for copy execution and status management.
-
-    This class adheres to SRP by handling only copy execution concerns
-    including status initialization and copy strategy execution.
-    """
+    """Executes copy operations with status management and intelligent error handling."""
 
     def __init__(
         self,
@@ -40,29 +25,13 @@ class JobCopyExecutor:
         copy_strategy_factory: CopyStrategyFactory,
         error_classifier: Optional[JobErrorClassifier] = None,
     ):
-        """
-        Initialize JobCopyExecutor with required dependencies.
-
-        Args:
-            settings: Application settings
-            state_manager: Central state manager for status updates
-            copy_strategy_factory: Factory for copy strategy selection
-            error_classifier: Optional error classifier for intelligent handling
-        """
         self.settings = settings
         self.state_manager = state_manager
         self.copy_strategy_factory = copy_strategy_factory
         self.error_classifier = error_classifier
 
-        logging.debug("JobCopyExecutor initialized")
-
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
-        """
-        Initialize file status for copying operation.
-
-        Args:
-            prepared_file: Prepared file information
-        """
+        """Initialize file status for copying operation."""
         await self.state_manager.update_file_status_by_id(
             prepared_file.tracked_file.id,
             prepared_file.initial_status,
@@ -70,60 +39,15 @@ class JobCopyExecutor:
             started_copying_at=datetime.now(),
         )
 
-        logging.debug(
-            f"Initialized copy status for {prepared_file.tracked_file.file_path} "
-            f"with strategy {prepared_file.strategy_name}"
-        )
-
     async def execute_copy(self, prepared_file: PreparedFile) -> bool:
-        """
-        Execute the actual copy operation using the selected strategy.
-
-        Args:
-            prepared_file: Prepared file information with strategy
-
-        Returns:
-            True if copy was successful, False otherwise
-        """
+        """Execute copy operation using the selected strategy."""
         try:
-            # Get the copy strategy for this file
-            strategy = self.copy_strategy_factory.get_strategy(
-                prepared_file.tracked_file
-            )
-
-            # Check if destination exists for resume detection logging
+            strategy = self.copy_strategy_factory.get_strategy(prepared_file.tracked_file)
             dest_path = Path(str(prepared_file.destination_path))
             source_path = Path(prepared_file.tracked_file.file_path)
 
-            dest_exists = dest_path.exists()
-            if dest_exists:
-                dest_size = dest_path.stat().st_size
-                source_size = source_path.stat().st_size
-                completion_pct = (
-                    (dest_size / source_size) * 100 if source_size > 0 else 0
-                )
-
-                logging.info(
-                    f"RESUME SCENARIO DETECTED: {dest_path.name} "
-                    f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}% complete)"
-                )
-
-                # Check if strategy has resume capabilities
-                strategy_name = strategy.__class__.__name__
-                if "Resumable" in strategy_name:
-                    logging.info(f"Using RESUME-CAPABLE strategy: {strategy_name}")
-                else:
-                    logging.warning(
-                        f"Using NON-RESUMABLE strategy: {strategy_name} - will restart from beginning!"
-                    )
-            else:
-                logging.info("FRESH COPY: No existing destination file")
-
-            # Execute the copy operation with progress tracking
-            logging.info(
-                f"Starting copy with {strategy.__class__.__name__}: "
-                f"{prepared_file.tracked_file.file_path} -> {prepared_file.destination_path}"
-            )
+            # Log resume scenario if destination exists
+            self._log_resume_scenario(source_path, dest_path, strategy)
 
             copy_success = await strategy.copy_file(
                 prepared_file.tracked_file.file_path,
@@ -131,129 +55,91 @@ class JobCopyExecutor:
                 prepared_file.tracked_file,
             )
 
-            if copy_success:
-                logging.info(
-                    f"Copy completed successfully: {prepared_file.tracked_file.file_path}"
-                )
-
-                # Log resume metrics if available
-                if hasattr(strategy, "get_resume_metrics") and dest_exists:
-                    metrics = strategy.get_resume_metrics()
-                    if metrics:
-                        logging.info(
-                            f"RESUME METRICS: {dest_path.name} - "
-                            f"preserved {metrics.preservation_percentage:.1f}% of data, "
-                            f"verification took {metrics.verification_time_seconds:.2f}s"
-                        )
-            else:
-                logging.error(f"Copy failed: {prepared_file.tracked_file.file_path}")
-
-                # Log resume failure context if applicable
-                if dest_exists:
-                    logging.error(
-                        f"RESUME FAILURE: Could not resume {dest_path.name} - may need fresh copy"
-                    )
-
+            self._log_copy_result(prepared_file, copy_success, strategy, dest_path.exists())
             return copy_success
 
         except Exception as e:
-            logging.error(
-                f"Error executing copy for {prepared_file.tracked_file.file_path}: {e}"
-            )
+            logging.error(f"Copy execution error: {prepared_file.tracked_file.file_path}: {e}")
             return False
 
-    async def handle_copy_failure(
-        self, prepared_file: PreparedFile, error: Exception
-    ) -> bool:
-        """
-        Handle copy failure with intelligent error classification.
+    def _log_resume_scenario(self, source_path: Path, dest_path: Path, strategy):
+        """Log resume scenario details."""
+        if not dest_path.exists():
+            logging.info(f"Fresh copy: {dest_path.name}")
+            return
 
-        Args:
-            prepared_file: Prepared file information
-            error: The original exception that caused the failure
+        dest_size = dest_path.stat().st_size
+        source_size = source_path.stat().st_size
+        completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
 
-        Returns:
-            True if error was classified for pause (should retry later)
-            False if error was classified for immediate failure
-        """
-        file_path = prepared_file.tracked_file.file_path
+        strategy_name = strategy.__class__.__name__
+        is_resumable = "Resumable" in strategy_name
+        
+        logging.info(
+            f"Resume scenario: {dest_path.name} "
+            f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}%) "
+            f"using {'resumable' if is_resumable else 'non-resumable'} strategy"
+        )
 
-        # Use intelligent error classification if available
+    def _log_copy_result(self, prepared_file, success: bool, strategy, dest_existed: bool):
+        """Log copy operation result with resume metrics if applicable."""
+        file_name = Path(prepared_file.tracked_file.file_path).name
+        
+        if success:
+            logging.info(f"Copy completed: {file_name}")
+            if hasattr(strategy, "get_resume_metrics") and dest_existed:
+                metrics = strategy.get_resume_metrics()
+                if metrics:
+                    logging.info(
+                        f"Resume metrics: {file_name} - "
+                        f"preserved {metrics.preservation_percentage:.1f}% of data"
+                    )
+        else:
+            logging.error(f"Copy failed: {file_name}")
+
+    async def handle_copy_failure(self, prepared_file: PreparedFile, error: Exception) -> bool:
+        """Handle copy failure with intelligent error classification."""
         if self.error_classifier:
             should_pause, reason = self.error_classifier.classify_copy_error(
-                error, file_path
+                error, prepared_file.tracked_file.file_path
             )
-
+            
             if should_pause:
-                # Network/destination error - pause for later resume
                 await self._handle_pause_error(prepared_file, reason, error)
                 return True
             else:
-                # Local/source error - fail immediately
                 await self._handle_fail_error(prepared_file, reason, error)
                 return False
         else:
-            # Fallback: treat all errors as failures (original behavior)
             await self._handle_fail_error(prepared_file, "Copy operation failed", error)
             return False
 
-    async def _handle_pause_error(
-        self, prepared_file: PreparedFile, reason: str, error: Exception
-    ) -> None:
-        """
-        Handle errors that should trigger pause instead of failure.
-
-        Args:
-            prepared_file: Prepared file information
-            reason: Reason for pause classification
-            error: Original exception
-        """
-        # Use UUID directly - more precise than path-based lookup
-        current_tracked = await self.state_manager.get_file_by_id(
-            prepared_file.tracked_file.id
-        )
-
+    async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+        """Handle errors that should trigger pause instead of failure."""
+        current_tracked = await self.state_manager.get_file_by_id(prepared_file.tracked_file.id)
+        
         if current_tracked:
-            # Determine appropriate paused status based on current status
-            current_status = current_tracked.status
-            if current_status == FileStatus.COPYING:
-                paused_status = FileStatus.PAUSED_COPYING
-            elif current_status == FileStatus.GROWING_COPY:
-                paused_status = FileStatus.PAUSED_GROWING_COPY
-            else:
-                paused_status = FileStatus.PAUSED_COPYING  # Default
+            # Determine appropriate paused status
+            paused_status = {
+                FileStatus.COPYING: FileStatus.PAUSED_COPYING,
+                FileStatus.GROWING_COPY: FileStatus.PAUSED_GROWING_COPY,
+            }.get(current_tracked.status, FileStatus.PAUSED_COPYING)
 
-            # Pause with preserved progress (don't reset bytes_copied or copy_progress) - UUID precision
             await self.state_manager.update_file_status_by_id(
                 current_tracked.id,
                 paused_status,
                 error_message=f"Paused: {reason}",
-                # Note: bytes_copied and copy_progress are preserved automatically
             )
 
             logging.warning(
-                f"⏸️ COPY PAUSED: {Path(current_tracked.file_path).name} - {reason} "
+                f"Copy paused: {Path(current_tracked.file_path).name} - {reason} "
                 f"(preserved {current_tracked.bytes_copied or 0:,} bytes)"
             )
         else:
-            # Fallback to failure if we can't get current state by UUID
-            await self._handle_fail_error(
-                prepared_file, f"Pause failed - file not found by UUID: {reason}", error
-            )
+            await self._handle_fail_error(prepared_file, f"Pause failed - file not found: {reason}", error)
 
-    async def _handle_fail_error(
-        self, prepared_file: PreparedFile, reason: str, error: Exception
-    ) -> None:
-        """
-        Handle errors that should result in immediate failure.
-
-        Args:
-            prepared_file: Prepared file information
-            reason: Reason for failure classification
-            error: Original exception
-        """
-        file_path = prepared_file.tracked_file.file_path
-
+    async def _handle_fail_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+        """Handle errors that should result in immediate failure."""
         await self.state_manager.update_file_status_by_id(
             prepared_file.tracked_file.id,
             FileStatus.FAILED,
@@ -262,21 +148,13 @@ class JobCopyExecutor:
             error_message=f"Failed: {reason}",
         )
 
-        logging.error(
-            f"❌ COPY FAILED: {Path(file_path).name} - {reason} (Original error: {error})"
-        )
+        file_name = Path(prepared_file.tracked_file.file_path).name
+        logging.error(f"Copy failed: {file_name} - {reason}")
 
     def get_copy_executor_info(self) -> dict:
-        """
-        Get information about the copy executor configuration.
-
-        Returns:
-            Dictionary with copy executor configuration details
-        """
+        """Get copy executor configuration details."""
         return {
-            "copy_strategies_available": len(
-                self.copy_strategy_factory.get_available_strategies()
-            ),
+            "copy_strategies_available": len(self.copy_strategy_factory.get_available_strategies()),
             "state_manager_available": self.state_manager is not None,
             "copy_strategy_factory_available": self.copy_strategy_factory is not None,
         }
