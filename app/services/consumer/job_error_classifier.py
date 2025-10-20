@@ -1,11 +1,5 @@
 """
-Job Error Classifier for File Transfer Agent.
-
-Intelligently classifies copy errors to determine if they should trigger:
-- Immediate FAILED status (local/source errors)
-- Pause for resume (destination/network errors)
-
-This service adheres to SRP by focusing solely on error classification logic.
+Job Error Classifier - determines if copy errors should pause or fail immediately.
 """
 
 import logging
@@ -19,126 +13,109 @@ from app.models import StorageStatus
 
 
 class JobErrorClassifier:
-    """
-    Classifies copy errors to determine appropriate handling strategy.
+    """Classifies copy errors to determine pause vs fail strategy."""
 
-    Responsible for:
-    1. Network/destination error detection
-    2. Source/local error detection
-    3. Error classification for pause vs fail decision
-    """
+    # Network/destination error indicators
+    NETWORK_ERROR_STRINGS = {
+        "input/output error", "errno 5", "connection refused", "network is unreachable",
+        "no route to host", "connection timed out", "broken pipe", "errno 32", "errno 110", 
+        "errno 111", "smb error", "cifs error", "mount_smbfs", "network mount", "permission denied"
+    }
+    
+    # Source file error indicators  
+    SOURCE_ERROR_STRINGS = {
+        "no such file or directory", "errno 2", "file not found", "source file", "input file"
+    }
+    
+    # Network-related errno codes
+    NETWORK_ERRNO_CODES = {
+        errno.EIO, errno.ECONNREFUSED, errno.ETIMEDOUT, errno.ENETUNREACH,
+        errno.EHOSTUNREACH, errno.EPIPE, errno.EACCES, errno.ENOTCONN, errno.ECONNRESET
+    }
 
     def __init__(self, storage_monitor: StorageMonitorService):
-        """
-        Initialize error classifier.
-
-        Args:
-            storage_monitor: Storage monitor for destination status checks
-        """
         self.storage_monitor = storage_monitor
 
     def classify_copy_error(self, error: Exception, file_path: str) -> Tuple[bool, str]:
-        """
-        Classify copy error to determine if it should pause or fail.
-
-        Args:
-            error: The exception that occurred during copy
-            file_path: Path to the file being copied
-
-        Returns:
-            Tuple of (should_pause, reason):
-            - should_pause: True if error should trigger pause, False for immediate fail
-            - reason: Human-readable reason for the classification
-        """
+        """Classify copy error to determine if it should pause or fail."""
+        # Check destination status first
+        if self._is_destination_unavailable():
+            return True, f"Destination unavailable (status: {self._get_destination_status()})"
+        
         error_str = str(error).lower()
+        
+        # Check for network errors (should pause)
+        if self._is_network_error(error, error_str):
+            return True, self._get_network_error_reason(error, error_str)
+        
+        # Check for source errors (should fail)
+        if self._is_source_error(error_str, file_path):
+            return False, self._get_source_error_reason(error_str, file_path)
+        
+        # Default to pause for unknown errors (safer)
+        logging.warning(f"Unknown error type for {Path(file_path).name}: {error_str} → defaulting to PAUSE")
+        return True, f"Unknown error (defaulting to pause): {str(error)}"
 
-        # Check if destination is currently having issues
+    def _is_destination_unavailable(self) -> bool:
+        """Check if destination is currently unavailable."""
         destination_info = self.storage_monitor.get_destination_info()
-        if destination_info and destination_info.status in [
-            StorageStatus.ERROR,
-            StorageStatus.CRITICAL,
-        ]:
-            return (
-                True,
-                f"Destination unavailable (status: {destination_info.status.value})",
-            )
+        return (destination_info and 
+                destination_info.status in [StorageStatus.ERROR, StorageStatus.CRITICAL])
+    
+    def _get_destination_status(self) -> str:
+        """Get current destination status."""
+        destination_info = self.storage_monitor.get_destination_info()
+        return destination_info.status.value if destination_info else "unknown"
 
-        # Check for network/I/O errors that typically indicate destination issues
-        network_error_indicators = [
-            "input/output error",
-            "errno 5",
-            "connection refused",
-            "network is unreachable",
-            "no route to host",
-            "connection timed out",
-            "broken pipe",
-            "errno 32",  # Broken pipe
-            "errno 110",  # Connection timed out
-            "errno 111",  # Connection refused
-            "smb error",
-            "cifs error",
-            "mount_smbfs",
-            "network mount",
-            "permission denied",  # Often network auth issues
-        ]
+    def _is_network_error(self, error: Exception, error_str: str) -> bool:
+        """Check if error indicates network/destination issues."""
+        # Check string indicators
+        if any(indicator in error_str for indicator in self.NETWORK_ERROR_STRINGS):
+            return True
+        
+        # Check errno codes
+        if hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES:
+            return True
+            
+        return False
 
-        for indicator in network_error_indicators:
+    def _get_network_error_reason(self, error: Exception, error_str: str) -> str:
+        """Get reason for network error classification."""
+        # Check string match first
+        for indicator in self.NETWORK_ERROR_STRINGS:
             if indicator in error_str:
-                logging.warning(
-                    f"🔍 NETWORK ERROR DETECTED: {file_path} - {indicator} → PAUSE for resume"
-                )
-                return True, f"Network error detected: {indicator}"
+                return f"Network error detected: {indicator}"
+        
+        # Check errno
+        if hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES:
+            return f"Network errno {error.errno}: {os.strerror(error.errno)}"
+        
+        return "Network error detected"
 
-        # Check for specific OS errno codes
-        if hasattr(error, "errno"):
-            errno_code = error.errno
-
-            # Network/destination related errno codes
-            if errno_code in [
-                errno.EIO,  # 5: Input/output error
-                errno.ECONNREFUSED,  # 111: Connection refused
-                errno.ETIMEDOUT,  # 110: Connection timed out
-                errno.ENETUNREACH,  # 101: Network is unreachable
-                errno.EHOSTUNREACH,  # 113: No route to host
-                errno.EPIPE,  # 32: Broken pipe
-                errno.EACCES,  # 13: Permission denied (often network auth)
-                errno.ENOTCONN,  # 107: Transport endpoint not connected
-                errno.ECONNRESET,  # 104: Connection reset by peer
-            ]:
-                logging.warning(
-                    f"🔍 NETWORK ERRNO DETECTED: {file_path} - errno {errno_code} → PAUSE for resume"
-                )
-                return True, f"Network errno {errno_code}: {os.strerror(errno_code)}"
-
-        # Source file issues - these should fail immediately
-        source_error_indicators = [
-            "no such file or directory",
-            "errno 2",  # ENOENT
-            "file not found",
-            "source file",
-            "input file",
-        ]
-
-        for indicator in source_error_indicators:
-            if indicator in error_str:
-                logging.info(
-                    f"📁 SOURCE ERROR DETECTED: {file_path} - {indicator} → FAIL immediately"
-                )
-                return False, f"Source error: {indicator}"
-
+    def _is_source_error(self, error_str: str, file_path: str) -> bool:
+        """Check if error indicates source file issues."""
+        # Check string indicators
+        if any(indicator in error_str for indicator in self.SOURCE_ERROR_STRINGS):
+            return True
+        
         # Check if source file still exists
         try:
-            source_path = Path(file_path)
-            if not source_path.exists():
-                logging.info(
-                    f"📁 SOURCE MISSING: {file_path} - source file deleted → FAIL immediately"
-                )
-                return False, "Source file no longer exists"
-        except Exception as check_error:
-            logging.warning(f"Could not check source file existence: {check_error}")
+            return not Path(file_path).exists()
+        except Exception:
+            return False
 
-        # Default: If unsure and destination seems OK, treat as local error
-        logging.warning(
-            f"❓ UNKNOWN ERROR TYPE: {file_path} - {error_str} → defaulting to PAUSE for safety"
-        )
-        return True, f"Unknown error (defaulting to pause): {str(error)}"
+    def _get_source_error_reason(self, error_str: str, file_path: str) -> str:
+        """Get reason for source error classification."""
+        # Check string match first
+        for indicator in self.SOURCE_ERROR_STRINGS:
+            if indicator in error_str:
+                return f"Source error: {indicator}"
+        
+        # Check file existence
+        try:
+            if not Path(file_path).exists():
+                return "Source file no longer exists"
+        except Exception:
+            pass
+            
+        return "Source file error"

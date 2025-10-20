@@ -43,15 +43,14 @@ class JobCopyExecutor:
         """Execute copy operation using the selected strategy."""
         try:
             strategy = self.copy_strategy_factory.get_strategy(prepared_file.tracked_file)
-            dest_path = Path(str(prepared_file.destination_path))
             source_path = Path(prepared_file.tracked_file.file_path)
+            dest_path = Path(str(prepared_file.destination_path))
 
-            # Log resume scenario if destination exists
             self._log_resume_scenario(source_path, dest_path, strategy)
 
             copy_success = await strategy.copy_file(
-                prepared_file.tracked_file.file_path,
-                str(prepared_file.destination_path),
+                str(source_path),
+                str(dest_path),
                 prepared_file.tracked_file,
             )
 
@@ -59,7 +58,7 @@ class JobCopyExecutor:
             return copy_success
 
         except Exception as e:
-            logging.error(f"Copy execution error: {prepared_file.tracked_file.file_path}: {e}")
+            logging.error(f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}")
             return False
 
     def _log_resume_scenario(self, source_path: Path, dest_path: Path, strategy):
@@ -99,19 +98,19 @@ class JobCopyExecutor:
 
     async def handle_copy_failure(self, prepared_file: PreparedFile, error: Exception) -> bool:
         """Handle copy failure with intelligent error classification."""
-        if self.error_classifier:
-            should_pause, reason = self.error_classifier.classify_copy_error(
-                error, prepared_file.tracked_file.file_path
-            )
-            
-            if should_pause:
-                await self._handle_pause_error(prepared_file, reason, error)
-                return True
-            else:
-                await self._handle_fail_error(prepared_file, reason, error)
-                return False
-        else:
+        if not self.error_classifier:
             await self._handle_fail_error(prepared_file, "Copy operation failed", error)
+            return False
+            
+        should_pause, reason = self.error_classifier.classify_copy_error(
+            error, prepared_file.tracked_file.file_path
+        )
+        
+        if should_pause:
+            await self._handle_pause_error(prepared_file, reason, error)
+            return True
+        else:
+            await self._handle_fail_error(prepared_file, reason, error)
             return False
 
     async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
