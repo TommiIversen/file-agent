@@ -11,12 +11,13 @@ metrics tracking og graceful shutdown capabilities.
 
 import asyncio
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, List
 from datetime import datetime
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
+from app.services.consumer.job_models import QueueJob, JobResult
 
 
 class JobQueueService:
@@ -40,12 +41,12 @@ class JobQueueService:
         """
         self.settings = settings
         self.state_manager = state_manager
-        self.job_queue: Optional[asyncio.Queue] = None  # Will be created when needed
+        self.job_queue: Optional[asyncio.Queue[QueueJob]] = None  # Typed queue
 
         # Queue statistics
         self._total_jobs_added = 0
         self._total_jobs_processed = 0
-        self._failed_jobs: List[Dict] = []
+        self._failed_jobs: List[JobResult] = []  # Now stores typed results
 
         # Queue management
         self._running = False
@@ -65,10 +66,10 @@ class JobQueueService:
             logging.warning("Producer task er allerede startet")
             return
 
-        # Create queue if not exists
+        # Create typed queue if not exists
         if self.job_queue is None:
-            self.job_queue = asyncio.Queue()
-            logging.info("Queue oprettet med kapacitet: unlimited")
+            self.job_queue = asyncio.Queue[QueueJob]()
+            logging.info("Typed Queue oprettet med kapacitet: unlimited")
 
         self._running = True
 
@@ -115,7 +116,7 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Fejl ved håndtering af state change: {e}")
 
-    async def _add_job_to_queue(self, tracked_file) -> None:
+    async def _add_job_to_queue(self, tracked_file: TrackedFile) -> None:
         """
         Tilføj fil job til queue og opdater status til InQueue.
 
@@ -127,25 +128,24 @@ class JobQueueService:
             return
 
         try:
-            # Opret job objekt
-            job = {
-                "file_path": tracked_file.file_path,
-                "file_size": tracked_file.file_size,
-                "added_to_queue_at": datetime.now(),
-                "retry_count": 0,
-            }
+            # Opret typed job objekt med TrackedFile reference
+            job = QueueJob(
+                tracked_file=tracked_file,
+                added_to_queue_at=datetime.now(),
+                retry_count=0
+            )
 
             # Tilføj til queue (non-blocking)
             await self.job_queue.put(job)
             self._total_jobs_added += 1
 
-            # Opdater fil status til InQueue - UUID precision
+            # Opdater fil status til InQueue - UUID precision via job object
             await self.state_manager.update_file_status_by_id(
-                file_id=tracked_file.id,  # Precise UUID reference
+                file_id=job.file_id,  # UUID from job object
                 status=FileStatus.IN_QUEUE
             )
 
-            logging.info(f"Job tilføjet til queue: {tracked_file.file_path}")
+            logging.info(f"Typed job tilføjet til queue: {job}")
             logging.debug(f"Queue size nu: {self.job_queue.qsize()}")
 
         except asyncio.QueueFull:
@@ -155,12 +155,12 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Fejl ved tilføjelse til queue: {e}")
 
-    async def get_next_job(self) -> Optional[Dict]:
+    async def get_next_job(self) -> Optional[QueueJob]:
         """
         Hent næste job fra queue (til brug af FileCopyService).
 
         Returns:
-            Job dictionary eller None hvis queue er tom
+            QueueJob object eller None hvis queue er tom
         """
         if self.job_queue is None:
             return None
@@ -170,7 +170,7 @@ class JobQueueService:
             job = await asyncio.wait_for(self.job_queue.get(), timeout=1.0)
             self._total_jobs_processed += 1
 
-            logging.debug(f"Job hentet fra queue: {job['file_path']}")
+            logging.debug(f"Typed job hentet fra queue: {job}")
             return job
 
         except asyncio.TimeoutError:
@@ -181,12 +181,13 @@ class JobQueueService:
             logging.error(f"Fejl ved hentning fra queue: {e}")
             return None
 
-    async def mark_job_completed(self, job: Dict) -> None:
+    async def mark_job_completed(self, job: QueueJob, processing_time: float = 0.0) -> None:
         """
         Marker job som completed (kaldt af FileCopyService).
 
         Args:
-            job: Job dictionary der blev completed
+            job: QueueJob object der blev completed
+            processing_time: Processing time in seconds for metrics
         """
         if self.job_queue is None:
             return
@@ -195,18 +196,26 @@ class JobQueueService:
             # Marker task som done i asyncio.Queue
             self.job_queue.task_done()
 
-            logging.debug(f"Job markeret som completed: {job['file_path']}")
+            # Create success result for metrics
+            result = JobResult(
+                job=job,
+                success=True,
+                processing_time_seconds=processing_time
+            )
+
+            logging.info(f"Job completed successfully: {result}")
 
         except Exception as e:
             logging.error(f"Fejl ved marking job completed: {e}")
 
-    async def mark_job_failed(self, job: Dict, error_message: str) -> None:
+    async def mark_job_failed(self, job: QueueJob, error_message: str, processing_time: float = 0.0) -> None:
         """
         Marker job som failed og håndter retry logic.
 
         Args:
-            job: Job dictionary der fejlede
+            job: QueueJob object der fejlede
             error_message: Fejlbesked
+            processing_time: Processing time before failure
         """
         if self.job_queue is None:
             return
@@ -215,17 +224,22 @@ class JobQueueService:
             # Marker task som done i asyncio.Queue
             self.job_queue.task_done()
 
-            # Log failure
-            logging.warning(f"Job failed: {job['file_path']} - {error_message}")
+            # Mark retry information on job object
+            job.mark_retry(error_message)
 
-            # Tilføj til failed jobs liste (kunne implementere dead letter queue)
-            failed_job = {
-                **job,
-                "failed_at": datetime.now(),
-                "error_message": error_message,
-                "retry_count": job.get("retry_count", 0) + 1,
-            }
-            self._failed_jobs.append(failed_job)
+            # Create failure result for metrics
+            result = JobResult(
+                job=job,
+                success=False,
+                processing_time_seconds=processing_time,
+                error_message=error_message
+            )
+
+            # Log failure with structured information
+            logging.warning(f"Job failed: {result}")
+
+            # Tilføj til failed jobs liste for metrics tracking
+            self._failed_jobs.append(result)
 
             # Keep only last 100 failed jobs for memory management
             if len(self._failed_jobs) > 100:
@@ -234,28 +248,25 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Fejl ved marking job failed: {e}")
 
-    async def requeue_job(self, job: Dict) -> None:
+    async def requeue_job(self, job: QueueJob) -> None:
         """
         Put job tilbage i queue for retry.
 
         Args:
-            job: Job dictionary der skal requeues
+            job: QueueJob object der skal requeues
         """
         if self.job_queue is None:
             logging.error("Queue er ikke oprettet endnu!")
             return
 
         try:
-            # Increment retry count
-            job["retry_count"] = job.get("retry_count", 0) + 1
-            job["requeued_at"] = datetime.now()
+            # Mark requeue information on job object
+            job.mark_requeued()
 
-            # Put tilbage i queue
+            # Put job tilbage i queue
             await self.job_queue.put(job)
 
-            logging.info(
-                f"Job requeued (retry {job['retry_count']}): {job['file_path']}"
-            )
+            logging.info(f"Job requeued: {job}")
 
         except Exception as e:
             logging.error(f"Fejl ved requeue af job: {e}")
@@ -301,7 +312,7 @@ class JobQueueService:
         except asyncio.TimeoutError:
             return False
 
-    async def get_queue_statistics(self) -> Dict:
+    async def get_queue_statistics(self) -> dict:
         """
         Hent detaljerede queue statistikker.
 
@@ -320,7 +331,7 @@ class JobQueueService:
             else "unlimited",
         }
 
-    async def get_failed_jobs(self) -> List[Dict]:
+    async def get_failed_jobs(self) -> List[JobResult]:
         """
         Hent liste af failed jobs.
 
@@ -341,7 +352,7 @@ class JobQueueService:
         logging.info(f"Cleared {count} failed jobs")
         return count
 
-    async def peek_next_job(self) -> Optional[Dict]:
+    async def peek_next_job(self) -> Optional[QueueJob]:
         """
         Se næste job i queue uden at fjerne det.
 
@@ -355,7 +366,7 @@ class JobQueueService:
         # Men vi kan returnere en kopi af job statistikker
         return {"queue_size": self.get_queue_size(), "estimated_next_available": True}
 
-    def get_producer_status(self) -> Dict:
+    def get_producer_status(self) -> dict:
         """
         Hent producer task status.
 

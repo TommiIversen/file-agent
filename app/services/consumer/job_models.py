@@ -1,52 +1,121 @@
 """
-Shared models for job processing services.
+Job Models for File Transfer Agent Consumer.
 
-Contains data classes and models that are shared between job processing services
-to avoid circular import dependencies.
+Defines typed data structures for the job queue system to replace
+simple dictionary objects with proper type safety and validation.
 """
 
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
-from pathlib import Path
+from datetime import datetime
+from typing import Optional
 
-if TYPE_CHECKING:
-    from app.models import TrackedFile, FileStatus
+from app.models import TrackedFile
 
 
 @dataclass
-class ProcessResult:
+class QueueJob:
     """
-    Result of a job processing operation.
+    Typed job object for the job queue system.
 
-    Provides information about job processing outcome and any errors.
+    Replaces simple dictionary objects with proper type safety,
+    validation, and direct access to TrackedFile for UUID consistency.
     """
 
+    # Core file reference - UUID-based architecture
+    tracked_file: TrackedFile
+
+    # Queue metadata
+    added_to_queue_at: datetime
+    retry_count: int = 0
+
+    # Optional retry metadata
+    last_retry_at: Optional[datetime] = None
+    requeued_at: Optional[datetime] = None
+
+    # Error tracking
+    last_error_message: Optional[str] = None
+
+    @property
+    def file_id(self) -> str:
+        """Get the UUID of the tracked file."""
+        return self.tracked_file.id
+
+    @property
+    def file_path(self) -> str:
+        """Get the file path for logging and compatibility."""
+        return self.tracked_file.file_path
+
+    @property
+    def file_size(self) -> int:
+        """Get the file size for progress tracking."""
+        return self.tracked_file.file_size
+
+    def mark_retry(self, error_message: str) -> None:
+        """Mark this job for retry with error information."""
+        self.retry_count += 1
+        self.last_retry_at = datetime.now()
+        self.last_error_message = error_message
+
+    def mark_requeued(self) -> None:
+        """Mark this job as requeued."""
+        self.requeued_at = datetime.now()
+
+    def get_age_seconds(self) -> float:
+        """Get the age of this job in seconds since it was added to queue."""
+        return (datetime.now() - self.added_to_queue_at).total_seconds()
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for backwards compatibility if needed."""
+        return {
+            "file_id": self.file_id,
+            "file_path": self.file_path,
+            "file_size": self.file_size,
+            "added_to_queue_at": self.added_to_queue_at,
+            "retry_count": self.retry_count,
+            "last_retry_at": self.last_retry_at,
+            "requeued_at": self.requeued_at,
+            "last_error_message": self.last_error_message,
+        }
+
+    def __str__(self) -> str:
+        """Human-readable representation for logging."""
+        return (
+            f"QueueJob(id={self.file_id[:8]}, "
+            f"path={self.file_path}, "
+            f"size={self.file_size:,}, "
+            f"retries={self.retry_count})"
+        )
+
+
+@dataclass
+class JobResult:
+    """
+    Result object for completed job processing.
+
+    Provides structured information about job completion
+    for metrics and error handling.
+    """
+
+    job: QueueJob
     success: bool
-    file_path: str
+    processing_time_seconds: float
     error_message: Optional[str] = None
-    retry_scheduled: bool = False
-    space_shortage: bool = False
-    should_retry: bool = False  # Indicates error should be retried (for pause/resume)
 
-    def get_summary(self) -> str:
-        """Get a human-readable summary of the processing result."""
-        if self.success:
-            return f"Job processed successfully: {Path(self.file_path).name}"
-        elif self.space_shortage:
-            return f"Space shortage, retry scheduled: {Path(self.file_path).name}"
-        else:
-            return f"Job failed: {Path(self.file_path).name} - {self.error_message or 'Unknown error'}"
+    @property
+    def file_id(self) -> str:
+        """Get the file UUID for logging."""
+        return self.job.file_id
 
+    @property
+    def file_path(self) -> str:
+        """Get the file path for logging."""
+        return self.job.file_path
 
-@dataclass
-class PreparedFile:
-    """
-    Information about a file prepared for copying.
-
-    Contains validated file information and copy strategy.
-    """
-
-    tracked_file: "TrackedFile"  # Forward reference to avoid circular import
-    strategy_name: str
-    initial_status: "FileStatus"  # Forward reference to avoid circular import
-    destination_path: Path
+    def __str__(self) -> str:
+        """Human-readable representation for logging."""
+        status = "SUCCESS" if self.success else "FAILED"
+        return (
+            f"JobResult({status}, "
+            f"file={self.job.file_path}, "
+            f"time={self.processing_time_seconds:.2f}s)"
+        )
