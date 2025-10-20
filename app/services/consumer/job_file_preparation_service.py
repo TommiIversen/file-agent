@@ -25,7 +25,7 @@ from app.utils.file_operations import (
     build_destination_path_with_template,
     generate_conflict_free_path,
 )
-from app.services.consumer.job_models import PreparedFile
+from app.services.consumer.job_models import PreparedFile, QueueJob
 
 
 class JobFilePreparationService:
@@ -59,23 +59,19 @@ class JobFilePreparationService:
 
         logging.debug("JobFilePreparationService initialized")
 
-    async def prepare_file_for_copy(self, job: dict) -> Optional[PreparedFile]:
+    async def prepare_file_for_copy(self, job: QueueJob) -> Optional[PreparedFile]:
         """
         Prepare file information for copying with strategy selection.
 
         Args:
-            job: Job dictionary containing file information
+            job: QueueJob object containing file information
 
         Returns:
             PreparedFile with validated information, or None if file not found
         """
-        file_path = job["file_path"]
-
-        # Get tracked file from state manager
-        tracked_file = await self.state_manager.get_file_by_path(file_path)
-        if not tracked_file:
-            logging.error(f"File not found in state manager: {file_path}")
-            return None
+        # Use tracked file directly from job - no path-based lookup needed
+        tracked_file = job.tracked_file
+        file_path = job.file_path
 
         # Select appropriate copy strategy
         strategy = self.copy_strategy_factory.get_strategy(tracked_file)

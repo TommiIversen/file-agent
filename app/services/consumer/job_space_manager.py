@@ -18,7 +18,7 @@ from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
-from app.services.consumer.job_models import ProcessResult
+from app.services.consumer.job_models import ProcessResult, QueueJob
 
 
 class JobSpaceManager:
@@ -66,19 +66,19 @@ class JobSpaceManager:
             self.settings.enable_pre_copy_space_check and self.space_checker is not None
         )
 
-    async def check_space_for_job(self, job: Dict) -> SpaceCheckResult:
+    async def check_space_for_job(self, job: QueueJob) -> SpaceCheckResult:
         """
         Perform space check for a job.
 
         Args:
-            job: Job dictionary containing file info
+            job: QueueJob object containing file info
 
         Returns:
             SpaceCheckResult with space availability information
         """
         if not self.space_checker:
             # If no space checker available, assume space is available
-            file_size = job.get("file_size", 0)
+            file_size = job.file_size
             return SpaceCheckResult(
                 has_space=True,
                 available_bytes=0,  # Unknown when no checker
@@ -88,31 +88,25 @@ class JobSpaceManager:
                 reason="No space checker configured",
             )
 
-        # Get file size from job or tracked file
-        file_size = job.get("file_size", 0)
-
-        if file_size == 0:
-            # Fallback: get from tracked file
-            tracked_file = await self.state_manager.get_file_by_path(job["file_path"])
-            if tracked_file:
-                file_size = tracked_file.file_size
+        # Get file size from tracked file in job - UUID precision
+        file_size = job.tracked_file.file_size
 
         return self.space_checker.check_space_for_file(file_size)
 
     async def handle_space_shortage(
-        self, job: Dict, space_check: SpaceCheckResult
+        self, job: QueueJob, space_check: SpaceCheckResult
     ) -> ProcessResult:
         """
         Handle space shortage by scheduling retry or marking as failed.
 
         Args:
-            job: Job that couldn't be processed due to space
+            job: QueueJob that couldn't be processed due to space
             space_check: Result of space check
 
         Returns:
             ProcessResult indicating space shortage handling outcome
         """
-        file_path = job["file_path"]
+        file_path = job.file_path
 
         logging.warning(
             f"Insufficient space for {file_path}: {space_check.reason}",
@@ -143,13 +137,12 @@ class JobSpaceManager:
 
         # Fallback: mark as failed if no retry manager or retry scheduling failed - UUID precision
         try:
-            tracked_file = await self.state_manager.get_file_by_path(file_path)
-            if tracked_file:
-                await self.state_manager.update_file_status_by_id(
-                    tracked_file.id,
-                    FileStatus.FAILED,
-                    error_message=f"Insufficient space: {space_check.reason}",
-                )
+            # Use job's tracked file directly - no path-based lookup needed
+            await self.state_manager.update_file_status_by_id(
+                job.file_id,  # Direct UUID access
+                FileStatus.FAILED,
+                error_message=f"Insufficient space: {space_check.reason}",
+            )
             await self.job_queue.mark_job_failed(job, "Insufficient disk space")
         except Exception as e:
             logging.error(

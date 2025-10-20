@@ -34,7 +34,7 @@ from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
 from app.services.copy_strategies import CopyStrategyFactory
 from app.utils.output_folder_template import OutputFolderTemplateEngine
-from app.services.consumer.job_models import ProcessResult
+from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.consumer.job_space_manager import JobSpaceManager
 from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
@@ -135,7 +135,7 @@ class JobProcessor:
                 f"Output folder template system enabled with {len(self.template_engine.rules)} rules"
             )
 
-    async def process_job(self, job: Dict) -> ProcessResult:
+    async def process_job(self, job: QueueJob) -> ProcessResult:
         """
         Process a single copy job with comprehensive workflow.
 
@@ -151,7 +151,7 @@ class JobProcessor:
         Returns:
             ProcessResult with job processing outcome
         """
-        file_path = job["file_path"]
+        file_path = job.file_path
 
         try:
             logging.info(f"Processing job: {file_path}")
