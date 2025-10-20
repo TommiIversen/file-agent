@@ -21,10 +21,10 @@ def calculate_progress_percent_int(bytes_copied: int, total_bytes: int) -> int:
 
 
 def should_report_progress(
-    current_percent: int,
-    last_reported_percent: int,
-    update_interval: int,
-    is_complete: bool = False,
+        current_percent: int,
+        last_reported_percent: int,
+        update_interval: int,
+        is_complete: bool = False,
 ) -> bool:
     # Always report completion
     if is_complete:
@@ -42,10 +42,10 @@ def should_report_progress(
 
 
 def should_report_progress_with_bytes(
-    bytes_copied: int,
-    total_bytes: int,
-    last_reported_percent: int,
-    update_interval: int,
+        bytes_copied: int,
+        total_bytes: int,
+        last_reported_percent: int,
+        update_interval: int,
 ) -> Tuple[bool, int]:
     current_percent = calculate_progress_percent_int(bytes_copied, total_bytes)
     is_complete = bytes_copied >= total_bytes
@@ -58,7 +58,7 @@ def should_report_progress_with_bytes(
 
 
 def format_progress_info(
-    percent: float, bytes_copied: int, total_bytes: int
+        percent: float, bytes_copied: int, total_bytes: int
 ) -> Dict[str, Any]:
     return {
         "percent": round(percent, 1),
@@ -112,7 +112,7 @@ def format_transfer_rate_human_readable(rate_bytes_per_sec: float) -> str:
 
 
 def estimate_time_remaining(
-    bytes_copied: int, total_bytes: int, rate_bytes_per_sec: float
+        bytes_copied: int, total_bytes: int, rate_bytes_per_sec: float
 ) -> float:
     if bytes_copied >= total_bytes:
         return 0.0  # Already complete

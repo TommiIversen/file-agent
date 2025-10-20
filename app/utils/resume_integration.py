@@ -22,7 +22,7 @@ class ResumableStrategyAdapter:
         self.resumable_strategy = resumable_strategy
 
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         source = Path(source_path)
         dest = Path(dest_path)

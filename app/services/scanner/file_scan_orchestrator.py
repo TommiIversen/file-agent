@@ -2,15 +2,16 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, Set
-from app.models import FileStatus, TrackedFile
+from typing import TYPE_CHECKING
+
 from app.config import Settings
-from app.services.state_manager import StateManager
+from app.models import FileStatus, TrackedFile
 from app.services.growing_file_detector import GrowingFileDetector
+from app.services.state_manager import StateManager
 from .domain_objects import FilePath, FileMetadata, ScanConfiguration
+from .file_cleanup_service import FileCleanupService
 from .file_discovery_service import FileDiscoveryService
 from .file_stability_tracker import FileStabilityTracker
-from .file_cleanup_service import FileCleanupService
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -19,11 +20,11 @@ if TYPE_CHECKING:
 class FileScanOrchestrator:
 
     def __init__(
-        self,
-        config: ScanConfiguration,
-        state_manager: StateManager,
-        storage_monitor: Optional["StorageMonitorService"] = None,
-        settings: Optional[Settings] = None,
+            self,
+            config: ScanConfiguration,
+            state_manager: StateManager,
+            storage_monitor: Optional["StorageMonitorService"] = None,
+            settings: Optional[Settings] = None,
     ):
         self.config = config
         self.state_manager = state_manager
@@ -195,7 +196,7 @@ class FileScanOrchestrator:
             logging.error(f"Error in stability check: {e}")
 
     async def _handle_growing_file_logic(
-        self, metadata: FileMetadata, tracked_file: TrackedFile
+            self, metadata: FileMetadata, tracked_file: TrackedFile
     ) -> None:
         file_path = metadata.path.path
 
@@ -219,7 +220,7 @@ class FileScanOrchestrator:
             )
 
     async def _handle_traditional_stability_logic(
-        self, metadata: FileMetadata, tracked_file
+            self, metadata: FileMetadata, tracked_file
     ) -> None:
         file_path = metadata.path.path
 

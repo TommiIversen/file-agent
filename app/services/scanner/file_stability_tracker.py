@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Dict
+
 from .domain_objects import FileMetadata, ScanConfiguration
 
 
@@ -12,7 +13,7 @@ class FileStabilityTracker:
         self._file_last_write_times: Dict[str, datetime] = {}
 
     def initialize_file_tracking(
-        self, file_path: str, last_write_time: datetime
+            self, file_path: str, last_write_time: datetime
     ) -> None:
         self._file_last_seen[file_path] = datetime.now()
         self._file_last_write_times[file_path] = last_write_time
@@ -47,14 +48,3 @@ class FileStabilityTracker:
     def _update_file_tracking(self, file_path: str, last_write_time: datetime) -> None:
         self._file_last_write_times[file_path] = last_write_time
         self._file_last_seen[file_path] = datetime.now()
-
-    async def update_file_growth_tracking(
-        self, file_path: str, current_metadata: FileMetadata, previous_size: int
-    ) -> bool:
-        if current_metadata.size != previous_size:
-            logging.info(
-                f"File size changed: {current_metadata.path.name} "
-                f"{previous_size / (1024 * 1024):.2f}MB → {current_metadata.size_mb():.2f}MB"
-            )
-            return True
-        return False

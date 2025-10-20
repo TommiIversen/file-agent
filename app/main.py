@@ -1,14 +1,14 @@
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-import uvicorn
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-import logging
-from .config import Settings
-from .logging_config import setup_logging
+
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+
 from .api import state, websockets, storage
-from .routers import views
+from .config import Settings
 from .dependencies import (
     get_file_scanner,
     get_job_queue_service,
@@ -16,6 +16,8 @@ from .dependencies import (
     get_websocket_manager,
     get_storage_monitor,
 )
+from .logging_config import setup_logging
+from .routers import views
 
 settings = Settings()
 

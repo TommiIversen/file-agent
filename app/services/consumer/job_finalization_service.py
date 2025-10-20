@@ -6,9 +6,9 @@ import logging
 
 from app.config import Settings
 from app.models import FileStatus
-from app.services.state_manager import StateManager
-from app.services.job_queue import JobQueueService
 from app.services.consumer.job_models import QueueJob
+from app.services.job_queue import JobQueueService
+from app.services.state_manager import StateManager
 
 
 class JobFinalizationService:
@@ -22,7 +22,7 @@ class JobFinalizationService:
     async def finalize_success(self, job: QueueJob, file_size: int) -> None:
         """Finalize successful job completion."""
         await self._finalize_job(
-            job, 
+            job,
             status=FileStatus.COMPLETED,
             queue_action=self.job_queue.mark_job_completed,
             progress=100.0,
@@ -54,20 +54,20 @@ class JobFinalizationService:
             is_error=True
         )
 
-    async def _finalize_job(self, job: QueueJob, status: FileStatus, queue_action, 
-                          progress: float = None, error_message: str = None, 
-                          log_message: str = None, is_error: bool = False) -> None:
+    async def _finalize_job(self, job: QueueJob, status: FileStatus, queue_action,
+                            progress: float = None, error_message: str = None,
+                            log_message: str = None, is_error: bool = False) -> None:
         """Common finalization logic for all job completion scenarios."""
         try:
             await queue_action(job)
-            
+
             update_kwargs = {"error_message": error_message}
             if progress is not None:
                 update_kwargs["copy_progress"] = progress
                 update_kwargs["retry_count"] = 0
 
             await self.state_manager.update_file_status_by_id(job.file_id, status, **update_kwargs)
-            
+
             if is_error:
                 logging.error(log_message)
             else:

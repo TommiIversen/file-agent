@@ -9,21 +9,21 @@ from typing import Optional
 
 from app.config import Settings
 from app.models import FileStatus
-from app.services.state_manager import StateManager
-from app.services.copy_strategies import CopyStrategyFactory
-from app.services.consumer.job_models import PreparedFile
 from app.services.consumer.job_error_classifier import JobErrorClassifier
+from app.services.consumer.job_models import PreparedFile
+from app.services.copy_strategies import CopyStrategyFactory
+from app.services.state_manager import StateManager
 
 
 class JobCopyExecutor:
     """Executes copy operations with status management and intelligent error handling."""
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        copy_strategy_factory: CopyStrategyFactory,
-        error_classifier: Optional[JobErrorClassifier] = None,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            copy_strategy_factory: CopyStrategyFactory,
+            error_classifier: Optional[JobErrorClassifier] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -73,7 +73,7 @@ class JobCopyExecutor:
 
         strategy_name = strategy.__class__.__name__
         is_resumable = "Resumable" in strategy_name
-        
+
         logging.info(
             f"Resume scenario: {dest_path.name} "
             f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}%) "
@@ -83,7 +83,7 @@ class JobCopyExecutor:
     def _log_copy_result(self, prepared_file, success: bool, strategy, dest_existed: bool):
         """Log copy operation result with resume metrics if applicable."""
         file_name = Path(prepared_file.tracked_file.file_path).name
-        
+
         if success:
             logging.info(f"Copy completed: {file_name}")
             if hasattr(strategy, "get_resume_metrics") and dest_existed:
@@ -101,11 +101,11 @@ class JobCopyExecutor:
         if not self.error_classifier:
             await self._handle_fail_error(prepared_file, "Copy operation failed", error)
             return False
-            
+
         should_pause, reason = self.error_classifier.classify_copy_error(
             error, prepared_file.tracked_file.file_path
         )
-        
+
         if should_pause:
             await self._handle_pause_error(prepared_file, reason, error)
             return True
@@ -116,7 +116,7 @@ class JobCopyExecutor:
     async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
         """Handle errors that should trigger pause instead of failure."""
         current_tracked = await self.state_manager.get_file_by_id(prepared_file.tracked_file.id)
-        
+
         if current_tracked:
             # Determine appropriate paused status
             paused_status = {

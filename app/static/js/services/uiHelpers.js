@@ -1,6 +1,6 @@
 /**
  * UI Helpers Service - UI Utility Functions
- * 
+ *
  * Collection of utility functions for UI formatting, calculations,
  * and common UI operations used across components.
  */
@@ -19,7 +19,7 @@ class UIHelpers {
             return '-';
         }
     }
-    
+
     /**
      * Format timestamp to custom format: 20/3 20:33:18
      */
@@ -32,20 +32,20 @@ class UIHelpers {
             const hours = date.getHours().toString().padStart(2, '0');
             const minutes = date.getMinutes().toString().padStart(2, '0');
             const seconds = date.getSeconds().toString().padStart(2, '0');
-            
+
             return `${day}/${month} ${hours}:${minutes}:${seconds}`;
         } catch (error) {
             console.warn('Invalid timestamp:', timestamp);
             return '-';
         }
     }
-    
+
     /**
      * Get progress bar width style for file
      */
     static getProgressWidth(file) {
         if (!file) return 'width: 0%';
-        
+
         switch (file.status) {
             case 'Discovered':
             case 'Growing':
@@ -71,13 +71,13 @@ class UIHelpers {
                 return 'width: 0%';
         }
     }
-    
+
     /**
      * Get progress bar color class for file status
      */
     static getProgressColor(file) {
         if (!file) return 'bg-gray-600';
-        
+
         switch (file.status) {
             case 'Discovered':
             case 'Growing':
@@ -103,13 +103,13 @@ class UIHelpers {
                 return 'bg-gray-600';
         }
     }
-    
+
     /**
      * Get progress text for file
      */
     static getProgressText(file) {
         if (!file) return '0%';
-        
+
         switch (file.status) {
             case 'Discovered':
             case 'Growing':
@@ -134,30 +134,45 @@ class UIHelpers {
                 return '0%';
         }
     }
-    
+
     /**
      * Get status badge color class for file status
      */
     static getStatusBadgeColor(status) {
         switch (status) {
-            case 'Discovered': return 'bg-blue-600';
-            case 'Growing': return 'bg-orange-600';
-            case 'ReadyToStartGrowing': return 'bg-yellow-600';
-            case 'Ready': return 'bg-green-600';
-            case 'InQueue': return 'bg-yellow-600';
-            case 'Copying': return 'bg-blue-700';
-            case 'GrowingCopy': return 'bg-purple-600';
-            case 'PausedInQueue': return 'bg-yellow-500 animate-pulse';
-            case 'PausedCopying': return 'bg-blue-500 animate-pulse';
-            case 'PausedGrowingCopy': return 'bg-purple-500 animate-pulse';
-            case 'Completed': return 'bg-green-700';
-            case 'Failed': return 'bg-red-600';
-            case 'WaitingForSpace': return 'bg-orange-600';
-            case 'SpaceError': return 'bg-purple-600';
-            default: return 'bg-gray-600';
+            case 'Discovered':
+                return 'bg-blue-600';
+            case 'Growing':
+                return 'bg-orange-600';
+            case 'ReadyToStartGrowing':
+                return 'bg-yellow-600';
+            case 'Ready':
+                return 'bg-green-600';
+            case 'InQueue':
+                return 'bg-yellow-600';
+            case 'Copying':
+                return 'bg-blue-700';
+            case 'GrowingCopy':
+                return 'bg-purple-600';
+            case 'PausedInQueue':
+                return 'bg-yellow-500 animate-pulse';
+            case 'PausedCopying':
+                return 'bg-blue-500 animate-pulse';
+            case 'PausedGrowingCopy':
+                return 'bg-purple-500 animate-pulse';
+            case 'Completed':
+                return 'bg-green-700';
+            case 'Failed':
+                return 'bg-red-600';
+            case 'WaitingForSpace':
+                return 'bg-orange-600';
+            case 'SpaceError':
+                return 'bg-purple-600';
+            default:
+                return 'bg-gray-600';
         }
     }
-    
+
     /**
      * Extract filename from full path
      */
@@ -171,7 +186,7 @@ class UIHelpers {
      */
     static formatFileSizeMB(sizeMB) {
         if (!sizeMB || sizeMB === 0) return '0 MB';
-        
+
         if (sizeMB < 1) {
             return `${(sizeMB * 1024).toFixed(1)} KB`;
         } else if (sizeMB < 1024) {
@@ -186,21 +201,36 @@ class UIHelpers {
      */
     static getFriendlyStatus(status) {
         switch (status) {
-            case 'Discovered': return 'Discovered';
-            case 'Growing': return 'Growing';
-            case 'ReadyToStartGrowing': return 'Ready (Growing)';
-            case 'Ready': return 'Ready';
-            case 'InQueue': return 'In Queue';
-            case 'Copying': return 'Copying';
-            case 'GrowingCopy': return 'Growing Copy';
-            case 'PausedInQueue': return '⏸️ Paused (Queue)';
-            case 'PausedCopying': return '⏸️ Paused (Copy)';
-            case 'PausedGrowingCopy': return '⏸️ Paused (Growing)';
-            case 'Completed': return 'Completed';
-            case 'Failed': return 'Failed';
-            case 'WaitingForSpace': return 'Waiting (Space)';
-            case 'SpaceError': return 'Space Error';
-            default: return status;
+            case 'Discovered':
+                return 'Discovered';
+            case 'Growing':
+                return 'Growing';
+            case 'ReadyToStartGrowing':
+                return 'Ready (Growing)';
+            case 'Ready':
+                return 'Ready';
+            case 'InQueue':
+                return 'In Queue';
+            case 'Copying':
+                return 'Copying';
+            case 'GrowingCopy':
+                return 'Growing Copy';
+            case 'PausedInQueue':
+                return '⏸️ Paused (Queue)';
+            case 'PausedCopying':
+                return '⏸️ Paused (Copy)';
+            case 'PausedGrowingCopy':
+                return '⏸️ Paused (Growing)';
+            case 'Completed':
+                return 'Completed';
+            case 'Failed':
+                return 'Failed';
+            case 'WaitingForSpace':
+                return 'Waiting (Space)';
+            case 'SpaceError':
+                return 'Space Error';
+            default:
+                return status;
         }
     }
 
@@ -208,16 +238,16 @@ class UIHelpers {
      * Check if file is a growing file
      */
     static isGrowingFile(file) {
-        return file && (file.is_growing_file === true || 
-                       ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status));
+        return file && (file.is_growing_file === true ||
+            ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status));
     }
-    
+
     /**
      * Get growing file indicator icon
      */
     static getGrowingFileIcon(file) {
         if (!this.isGrowingFile(file)) return '';
-        
+
         switch (file.status) {
             case 'Growing':
                 return '📈'; // Growing chart
@@ -229,16 +259,16 @@ class UIHelpers {
                 return '📊'; // Generic growing indicator
         }
     }
-    
+
     /**
      * Format bytes copied for growing files
      */
     static formatBytesCopied(bytesCopied, totalSize) {
         if (!bytesCopied || bytesCopied === 0) return '0 MB';
-        
+
         const copiedMB = bytesCopied / (1024 * 1024);
         const totalMB = totalSize ? totalSize / (1024 * 1024) : 0;
-        
+
         if (totalMB > 0) {
             return `${copiedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
         } else {

@@ -1,14 +1,14 @@
 """Secure Resume Configuration"""
 
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator
 import logging
+from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger("app.utils.secure_resume_config")
 
 
 class SecureResumeConfig(BaseModel):
-
     # Verification sizes
     min_verify_bytes: int = Field(
         default=1024,  # 1KB minimum
@@ -148,7 +148,6 @@ class SecureResumeConfig(BaseModel):
 
 
 class ResumeOperationMetrics(BaseModel):
-
     file_size_bytes: int
     dest_size_bytes: int
     verification_bytes: int

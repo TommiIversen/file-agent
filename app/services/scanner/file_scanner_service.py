@@ -1,9 +1,10 @@
 import logging
+from typing import TYPE_CHECKING
+
 from app.config import Settings
 from app.services.state_manager import StateManager
 from .domain_objects import ScanConfiguration
 from .file_scan_orchestrator import FileScanOrchestrator
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -12,10 +13,10 @@ if TYPE_CHECKING:
 class FileScannerService:
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        storage_monitor: "StorageMonitorService" = None,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            storage_monitor: "StorageMonitorService" = None,
     ):
         config = ScanConfiguration(
             source_directory=settings.source_directory,
@@ -41,7 +42,3 @@ class FileScannerService:
 
     def stop_scanning(self) -> None:
         self.orchestrator.stop_scanning()
-
-    @property
-    def is_running(self) -> bool:
-        return self.orchestrator._running

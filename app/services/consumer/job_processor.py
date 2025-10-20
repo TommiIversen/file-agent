@@ -5,28 +5,28 @@ Job Processor - pure orchestrator delegating work to specialized services.
 import logging
 
 from app.config import Settings
-from app.services.state_manager import StateManager
-from app.services.job_queue import JobQueueService
-from app.services.copy_strategies import CopyStrategyFactory
-from app.utils.output_folder_template import OutputFolderTemplateEngine
+from app.services.consumer.job_copy_executor import JobCopyExecutor
+from app.services.consumer.job_file_preparation_service import JobFilePreparationService
+from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.consumer.job_space_manager import JobSpaceManager
-from app.services.consumer.job_finalization_service import JobFinalizationService
-from app.services.consumer.job_file_preparation_service import JobFilePreparationService
-from app.services.consumer.job_copy_executor import JobCopyExecutor
+from app.services.copy_strategies import CopyStrategyFactory
+from app.services.job_queue import JobQueueService
+from app.services.state_manager import StateManager
+from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
 class JobProcessor:
     """Pure orchestrator coordinating job processing workflow across specialized services."""
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        job_queue: JobQueueService,
-        copy_strategy_factory: CopyStrategyFactory,
-        space_checker=None,
-        space_retry_manager=None,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            job_queue: JobQueueService,
+            copy_strategy_factory: CopyStrategyFactory,
+            space_checker=None,
+            space_retry_manager=None,
     ):
         self.settings = settings
         self.state_manager = state_manager

@@ -2,6 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 from uuid import uuid4
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -382,14 +383,14 @@ class SpaceCheckResult(BaseModel):
         """
         if self.has_space:
             return 0.0
-        return (self.required_bytes - self.available_bytes) / (1024**3)
+        return (self.required_bytes - self.available_bytes) / (1024 ** 3)
 
     def get_available_gb(self) -> float:
         """Get available space in GB for display"""
-        return self.available_bytes / (1024**3)
+        return self.available_bytes / (1024 ** 3)
 
     def get_required_gb(self) -> float:
         """Get required space in GB for display"""
-        return self.required_bytes / (1024**3)
+        return self.required_bytes / (1024 ** 3)
 
     model_config = ConfigDict()

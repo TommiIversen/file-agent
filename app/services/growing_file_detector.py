@@ -1,14 +1,13 @@
 import asyncio
+import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Optional, Tuple
-from dataclasses import dataclass
-
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.state_manager import StateManager
-import logging
 
 
 @dataclass
@@ -72,7 +71,7 @@ class GrowingFileDetector:
         logging.info("Stopping growing file monitoring")
 
     async def check_file_growth_status(
-        self, tracked_file: TrackedFile
+            self, tracked_file: TrackedFile
     ) -> Tuple[FileStatus, Optional[FileGrowthInfo]]:
         try:
             # Get current file info
@@ -125,7 +124,7 @@ class GrowingFileDetector:
                         growth_info.stable_since = current_time
 
                     stable_duration = (
-                        current_time - growth_info.stable_since
+                            current_time - growth_info.stable_since
                     ).total_seconds()
                     if stable_duration >= self.growth_timeout:
                         logging.debug(
@@ -144,7 +143,7 @@ class GrowingFileDetector:
                     growth_info.stable_since = current_time
 
                 stable_duration = (
-                    current_time - growth_info.stable_since
+                        current_time - growth_info.stable_since
                 ).total_seconds()
 
                 if stable_duration >= self.growth_timeout:
@@ -181,7 +180,7 @@ class GrowingFileDetector:
             return FileStatus.FAILED, None
 
     async def update_file_growth_info(
-        self, tracked_file: TrackedFile, new_size: int
+            self, tracked_file: TrackedFile, new_size: int
     ) -> None:
         current_time = datetime.now()
 
@@ -247,10 +246,10 @@ class GrowingFileDetector:
                                 update_kwargs.update(
                                     {
                                         "is_growing_file": recommended_status
-                                        in [
-                                            FileStatus.GROWING,
-                                            FileStatus.READY_TO_START_GROWING,
-                                        ],
+                                                           in [
+                                                               FileStatus.GROWING,
+                                                               FileStatus.READY_TO_START_GROWING,
+                                                           ],
                                         "growth_rate_mbps": growth_info.growth_rate_mbps,
                                         "file_size": growth_info.current_size,
                                         "last_growth_check": datetime.now(),

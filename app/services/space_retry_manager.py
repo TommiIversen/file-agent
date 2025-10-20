@@ -1,11 +1,10 @@
 import asyncio
-from typing import Dict
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+from typing import Dict
+
 from app.models import TrackedFile
-
 from ..config import Settings
-
 from ..models import FileStatus, SpaceCheckResult
 from ..services.state_manager import StateManager
 
@@ -21,7 +20,7 @@ class SpaceRetryManager:
         logging.debug("SpaceRetryManager initialized")
 
     async def schedule_space_retry(
-        self, tracked_file: TrackedFile, space_check: SpaceCheckResult
+            self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
         if self._should_give_up_retry(tracked_file.retry_count):
             await self._mark_as_permanent_space_error(tracked_file, space_check)
@@ -33,7 +32,7 @@ class SpaceRetryManager:
             await self._schedule_long_retry(tracked_file, space_check)
 
     async def _schedule_short_retry(
-        self, tracked_file: TrackedFile, space_check: SpaceCheckResult
+            self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
         delay_seconds = self._settings.space_retry_delay_seconds // 2
 
@@ -56,7 +55,7 @@ class SpaceRetryManager:
         )
 
     async def _schedule_long_retry(
-        self, tracked_file: TrackedFile, space_check: SpaceCheckResult
+            self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
         delay_seconds = self._settings.space_retry_delay_seconds
 
@@ -77,7 +76,7 @@ class SpaceRetryManager:
         await self._schedule_retry_task(tracked_file, delay_seconds, "space shortage")
 
     async def _schedule_retry_task(
-        self, tracked_file: TrackedFile, delay_seconds: int, reason: str
+            self, tracked_file: TrackedFile, delay_seconds: int, reason: str
     ) -> None:
         await self._cancel_existing_retry_by_id(tracked_file.id)
 
@@ -105,7 +104,7 @@ class SpaceRetryManager:
         )
 
     async def _execute_delayed_retry(
-        self, tracked_file: TrackedFile, delay_seconds: int
+            self, tracked_file: TrackedFile, delay_seconds: int
     ) -> None:
         try:
             await asyncio.sleep(delay_seconds)
@@ -139,7 +138,7 @@ class SpaceRetryManager:
             self._retry_tasks.pop(tracked_file.id, None)
 
     async def _mark_as_permanent_space_error(
-        self, tracked_file: TrackedFile, space_check: SpaceCheckResult
+            self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
         if tracked_file:
             await self._state_manager.update_file_status_by_id(
@@ -188,7 +187,7 @@ class SpaceRetryManager:
 
 class RetryInfo:
     def __init__(
-        self, file_path: str, scheduled_at: datetime, retry_at: datetime, reason: str
+            self, file_path: str, scheduled_at: datetime, retry_at: datetime, reason: str
     ):
         self.file_path = file_path
         self.scheduled_at = scheduled_at

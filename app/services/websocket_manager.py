@@ -1,15 +1,61 @@
 import json
 import logging
-from typing import List, Dict, Any
 from datetime import datetime
+from typing import List, Dict, Any
+
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
 
-class WebSocketManager:
+def _serialize_storage_info(storage_info) -> dict:
+    return {
+        "path": storage_info.path,
+        "is_accessible": storage_info.is_accessible,
+        "has_write_access": storage_info.has_write_access,
+        "free_space_gb": round(storage_info.free_space_gb, 2),
+        "total_space_gb": round(storage_info.total_space_gb, 2),
+        "used_space_gb": round(storage_info.used_space_gb, 2),
+        "status": storage_info.status.value,
+        "warning_threshold_gb": storage_info.warning_threshold_gb,
+        "critical_threshold_gb": storage_info.critical_threshold_gb,
+        "last_checked": storage_info.last_checked.isoformat(),
+        "error_message": storage_info.error_message,
+    }
 
+
+def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
+    return {
+        "file_path": tracked_file.file_path,
+        "status": tracked_file.status.value,
+        "file_size": tracked_file.file_size,
+        "file_size_mb": round(tracked_file.file_size / (1024 * 1024), 2),
+        "last_write_time": tracked_file.last_write_time.isoformat()
+        if tracked_file.last_write_time
+        else None,
+        "copy_progress": tracked_file.copy_progress,
+        "error_message": tracked_file.error_message,
+        "retry_count": tracked_file.retry_count,
+        "discovered_at": tracked_file.discovered_at.isoformat(),
+        "started_copying_at": tracked_file.started_copying_at.isoformat()
+        if tracked_file.started_copying_at
+        else None,
+        "completed_at": tracked_file.completed_at.isoformat()
+        if tracked_file.completed_at
+        else None,
+        "destination_path": tracked_file.destination_path,
+        "is_growing_file": tracked_file.is_growing_file,
+        "growth_rate_mbps": tracked_file.growth_rate_mbps,
+        "bytes_copied": tracked_file.bytes_copied,
+        "copy_speed_mbps": tracked_file.copy_speed_mbps,
+        "last_growth_check": tracked_file.last_growth_check.isoformat()
+        if tracked_file.last_growth_check
+        else None,
+    }
+
+
+class WebSocketManager:
     def __init__(self, state_manager: StateManager, storage_monitor=None):
         self.state_manager = state_manager
         self._storage_monitor = storage_monitor
@@ -50,10 +96,10 @@ class WebSocketManager:
                 overall_status = self._storage_monitor.get_overall_status()
 
                 storage_data = {
-                    "source": self._serialize_storage_info(source_info)
+                    "source": _serialize_storage_info(source_info)
                     if source_info
                     else None,
-                    "destination": self._serialize_storage_info(destination_info)
+                    "destination": _serialize_storage_info(destination_info)
                     if destination_info
                     else None,
                     "overall_status": overall_status.value,
@@ -65,7 +111,7 @@ class WebSocketManager:
             initial_data = {
                 "type": "initial_state",
                 "data": {
-                    "files": [self._serialize_tracked_file(f) for f in all_files],
+                    "files": [_serialize_tracked_file(f) for f in all_files],
                     "statistics": statistics,
                     "storage": storage_data,
                     "timestamp": self._get_timestamp(),
@@ -93,7 +139,7 @@ class WebSocketManager:
                     if update.old_status
                     else None,
                     "new_status": update.new_status.value,
-                    "file": self._serialize_tracked_file(update.tracked_file),
+                    "file": _serialize_tracked_file(update.tracked_file),
                     "timestamp": update.timestamp.isoformat(),
                 },
             }
@@ -129,35 +175,6 @@ class WebSocketManager:
         for websocket in disconnected_clients:
             self.disconnect(websocket)
 
-    def _serialize_tracked_file(self, tracked_file) -> Dict[str, Any]:
-        return {
-            "file_path": tracked_file.file_path,
-            "status": tracked_file.status.value,
-            "file_size": tracked_file.file_size,
-            "file_size_mb": round(tracked_file.file_size / (1024 * 1024), 2),
-            "last_write_time": tracked_file.last_write_time.isoformat()
-            if tracked_file.last_write_time
-            else None,
-            "copy_progress": tracked_file.copy_progress,
-            "error_message": tracked_file.error_message,
-            "retry_count": tracked_file.retry_count,
-            "discovered_at": tracked_file.discovered_at.isoformat(),
-            "started_copying_at": tracked_file.started_copying_at.isoformat()
-            if tracked_file.started_copying_at
-            else None,
-            "completed_at": tracked_file.completed_at.isoformat()
-            if tracked_file.completed_at
-            else None,
-            "destination_path": tracked_file.destination_path,
-            "is_growing_file": tracked_file.is_growing_file,
-            "growth_rate_mbps": tracked_file.growth_rate_mbps,
-            "bytes_copied": tracked_file.bytes_copied,
-            "copy_speed_mbps": tracked_file.copy_speed_mbps,
-            "last_growth_check": tracked_file.last_growth_check.isoformat()
-            if tracked_file.last_growth_check
-            else None,
-        }
-
     def _get_timestamp(self) -> str:
         return datetime.now().isoformat()
 
@@ -191,7 +208,7 @@ class WebSocketManager:
                     if update.old_status
                     else None,
                     "new_status": update.new_status.value,
-                    "storage_info": self._serialize_storage_info(update.storage_info),
+                    "storage_info": _serialize_storage_info(update.storage_info),
                     "timestamp": self._get_timestamp(),
                 },
             }
@@ -231,28 +248,3 @@ class WebSocketManager:
 
         except Exception as e:
             logging.error(f"Error broadcasting mount status: {e}")
-
-    def _serialize_storage_info(self, storage_info) -> dict:
-        return {
-            "path": storage_info.path,
-            "is_accessible": storage_info.is_accessible,
-            "has_write_access": storage_info.has_write_access,
-            "free_space_gb": round(storage_info.free_space_gb, 2),
-            "total_space_gb": round(storage_info.total_space_gb, 2),
-            "used_space_gb": round(storage_info.used_space_gb, 2),
-            "status": storage_info.status.value,
-            "warning_threshold_gb": storage_info.warning_threshold_gb,
-            "critical_threshold_gb": storage_info.critical_threshold_gb,
-            "last_checked": storage_info.last_checked.isoformat(),
-            "error_message": storage_info.error_message,
-        }
-
-    def get_connection_count(self) -> int:
-        return len(self._connections)
-
-    def get_manager_status(self) -> Dict[str, Any]:
-        return {
-            "active_connections": len(self._connections),
-            "subscribed_to_state_manager": True,
-            "is_ready": True,
-        }

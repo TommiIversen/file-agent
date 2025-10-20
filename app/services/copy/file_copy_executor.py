@@ -1,9 +1,10 @@
-import aiofiles
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
-from dataclasses import dataclass
+
+import aiofiles
 
 from app.config import Settings
 from app.utils.file_operations import validate_file_sizes, create_temp_file_path
@@ -106,10 +107,10 @@ class FileCopyExecutor:
         )
 
     async def copy_file(
-        self,
-        source: Path,
-        dest: Path,
-        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+            self,
+            source: Path,
+            dest: Path,
+            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file using the configured strategy (temp file or direct)."""
         if self.settings.use_temporary_file:
@@ -118,10 +119,10 @@ class FileCopyExecutor:
             return await self.copy_direct(source, dest, progress_callback)
 
     async def copy_with_temp_file(
-        self,
-        source: Path,
-        dest: Path,
-        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+            self,
+            source: Path,
+            dest: Path,
+            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file to temporary location, then rename to final destination."""
         start_time = datetime.now()
@@ -196,10 +197,10 @@ class FileCopyExecutor:
             )
 
     async def copy_direct(
-        self,
-        source: Path,
-        dest: Path,
-        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+            self,
+            source: Path,
+            dest: Path,
+            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file directly to the destination path."""
         start_time = datetime.now()
@@ -255,20 +256,20 @@ class FileCopyExecutor:
             )
 
     async def _perform_copy(
-        self,
-        source: Path,
-        dest: Path,
-        progress_callback: Optional[Callable[[CopyProgress], None]],
-        start_time: datetime,
+            self,
+            source: Path,
+            dest: Path,
+            progress_callback: Optional[Callable[[CopyProgress], None]],
+            start_time: datetime,
     ) -> CopyResult:
         """Perform the actual file copy with progress tracking."""
         file_size = source.stat().st_size
         bytes_copied = 0
         last_progress_reported = -1
         chunk_size = self.chunk_size
-        
+
         logging.debug(
-            f"Using {chunk_size // 1024}KB chunks for {file_size / (1024**2):.1f}MB file"
+            f"Using {chunk_size // 1024}KB chunks for {file_size / (1024 ** 2):.1f}MB file"
         )
 
         try:

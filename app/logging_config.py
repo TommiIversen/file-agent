@@ -10,8 +10,9 @@ Principles:
 
 import logging
 import logging.handlers
-from rich.logging import RichHandler
+
 from rich.console import Console
+from rich.logging import RichHandler
 
 from .config import Settings
 
@@ -81,7 +82,6 @@ def setup_logging(settings: Settings) -> None:
         f"Level: [yellow]{settings.log_level}[/], "
         f"Retention: [blue]{settings.log_retention_days}[/] days"
     )
-
 
 # Simple usage - just use logging directly in your code:
 #

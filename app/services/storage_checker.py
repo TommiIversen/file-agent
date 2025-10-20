@@ -1,13 +1,12 @@
+import logging
 import os
 import shutil
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 from uuid import uuid4
 
 import aiofiles
-
 
 from ..models import StorageInfo, StorageStatus
 
@@ -17,12 +16,11 @@ class StorageAccessError(Exception):
 
 
 class StorageChecker:
-
     def __init__(self, test_file_prefix: str = ".storage_test_"):
         self._test_file_prefix = test_file_prefix
 
     async def check_path(
-        self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
+            self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
     ) -> StorageInfo:
         logging.debug(f"Checking storage path: {path}")
 
@@ -35,10 +33,8 @@ class StorageChecker:
 
         try:
             is_accessible = await self._check_accessibility(path)
-
             if is_accessible:
                 free_gb, total_gb, used_gb = await self._get_disk_usage(path)
-
                 has_write_access = await self._check_write_access(path)
             else:
                 error_message = f"Path {path} is not accessible"
@@ -81,7 +77,7 @@ class StorageChecker:
         try:
             total_bytes, used_bytes, free_bytes = shutil.disk_usage(path)
 
-            gb_divisor = 1024**3
+            gb_divisor = 1024 ** 3
             total_gb = total_bytes / gb_divisor
             used_gb = used_bytes / gb_divisor
             free_gb = free_bytes / gb_divisor
@@ -89,9 +85,7 @@ class StorageChecker:
             logging.debug(
                 f"Disk usage for {path}: {free_gb:.1f}GB free of {total_gb:.1f}GB total"
             )
-
             return free_gb, total_gb, used_gb
-
         except Exception as e:
             logging.error(f"Cannot get disk usage for {path}: {e}")
             raise StorageAccessError(f"Disk usage check failed: {e}")
@@ -101,18 +95,13 @@ class StorageChecker:
 
         try:
             test_file_path = await self._create_test_file(path)
-
             await self._cleanup_test_file(test_file_path)
-
             logging.debug(f"Write access verified for {path}")
             return True
-
         except Exception as e:
             logging.debug(f"Write access check failed for {path}: {e}")
-
             if test_file_path:
                 await self._cleanup_test_file(test_file_path)
-
             return False
 
     async def _create_test_file(self, directory: str) -> str:
@@ -122,10 +111,8 @@ class StorageChecker:
         try:
             async with aiofiles.open(test_file_path, "w") as f:
                 await f.write("storage_write_test")
-
             logging.debug(f"Test file created: {test_file_path}")
             return test_file_path
-
         except Exception as e:
             raise StorageAccessError(f"Cannot create test file in {directory}: {e}")
 
@@ -138,12 +125,12 @@ class StorageChecker:
             logging.warning(f"Could not clean up test file {test_file_path}: {e}")
 
     def _evaluate_status(
-        self,
-        free_gb: float,
-        warning_threshold_gb: float,
-        critical_threshold_gb: float,
-        is_accessible: bool,
-        has_write_access: bool,
+            self,
+            free_gb: float,
+            warning_threshold_gb: float,
+            critical_threshold_gb: float,
+            is_accessible: bool,
+            has_write_access: bool,
     ) -> StorageStatus:
         if not is_accessible:
             return StorageStatus.ERROR

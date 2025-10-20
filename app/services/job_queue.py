@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from typing import Optional, List
 from datetime import datetime, timedelta
+from typing import Optional, List
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
-from app.services.state_manager import StateManager
 from app.services.consumer.job_models import QueueJob, JobResult
+from app.services.state_manager import StateManager
 
 
 class JobQueueService:
@@ -118,7 +118,7 @@ class JobQueueService:
             return None
 
     async def mark_job_completed(
-        self, job: QueueJob, processing_time: float = 0.0
+            self, job: QueueJob, processing_time: float = 0.0
     ) -> None:
         if self.job_queue is None:
             return
@@ -136,7 +136,7 @@ class JobQueueService:
             logging.error(f"Fejl ved marking job completed: {e}")
 
     async def mark_job_failed(
-        self, job: QueueJob, error_message: str, processing_time: float = 0.0
+            self, job: QueueJob, error_message: str, processing_time: float = 0.0
     ) -> None:
         if self.job_queue is None:
             return
@@ -271,8 +271,8 @@ class JobQueueService:
                 elif current_status == FileStatus.GROWING_COPY:
                     new_status = FileStatus.PAUSED_GROWING_COPY
                 elif (
-                    current_status == FileStatus.FAILED
-                    and self._is_likely_network_failure(tracked_file)
+                        current_status == FileStatus.FAILED
+                        and self._is_likely_network_failure(tracked_file)
                 ):
                     if tracked_file.bytes_copied and tracked_file.bytes_copied > 0:
                         new_status = (
@@ -339,10 +339,10 @@ class JobQueueService:
 
         for tracked_file in all_files:
             if (
-                tracked_file.status == FileStatus.FAILED
-                and tracked_file.last_error_at
-                and tracked_file.last_error_at >= cutoff_time
-                and self._is_likely_network_failure(tracked_file)
+                    tracked_file.status == FileStatus.FAILED
+                    and tracked_file.last_error_at
+                    and tracked_file.last_error_at >= cutoff_time
+                    and self._is_likely_network_failure(tracked_file)
             ):
                 recent_failed.append(tracked_file)
 

@@ -4,8 +4,8 @@ Copy Error Handler - classifies errors and manages retry logic.
 
 import asyncio
 import logging
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any
 
@@ -65,7 +65,7 @@ class CopyErrorHandler:
         logging.info(f"Global retry delay: {self.settings.global_retry_delay_seconds}s")
 
     async def handle_local_error(
-        self, error: Exception, file_path: str, attempt: int, max_attempts: int
+            self, error: Exception, file_path: str, attempt: int, max_attempts: int
     ) -> ErrorHandlingResult:
         """Handle local error with retry decision logic."""
         error_type = self.classify_error(error)
@@ -167,7 +167,7 @@ class CopyErrorHandler:
                 return ErrorType.GLOBAL
 
         if "destination" in error_str and (
-            "unavailable" in error_str or "not accessible" in error_str
+                "unavailable" in error_str or "not accessible" in error_str
         ):
             return ErrorType.GLOBAL
 

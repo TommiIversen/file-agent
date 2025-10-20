@@ -1,13 +1,11 @@
 """Resumable Copy Strategies"""
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 from typing import Optional, Callable
-import logging
 
-from ..services.copy_strategies import NormalFileCopyStrategy, GrowingFileCopyStrategy
-from ..models import TrackedFile, FileStatus
 from .secure_resume_config import (
     SecureResumeConfig,
     ResumeOperationMetrics,
@@ -18,6 +16,8 @@ from .secure_resume_verification import (
     VerificationTimeout,
     QuickIntegrityChecker,
 )
+from ..models import TrackedFile, FileStatus
+from ..services.copy_strategies import NormalFileCopyStrategy, GrowingFileCopyStrategy
 
 logger = logging.getLogger("app.utils.resumable_copy_strategies")
 
@@ -129,10 +129,10 @@ class ResumeCapableMixin:
         return True
 
     async def execute_resume_copy(
-        self,
-        source_path: Path,
-        dest_path: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+            self,
+            source_path: Path,
+            dest_path: Path,
+            progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
         operation_start = time.time()
 
@@ -307,11 +307,11 @@ class ResumeCapableMixin:
             raise RuntimeError(f"Truncation failed: {e}") from e
 
     async def _continue_copy_from_position(
-        self,
-        source_path: Path,
-        dest_path: Path,
-        start_position: int,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+            self,
+            source_path: Path,
+            dest_path: Path,
+            start_position: int,
+            progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
         try:
             source_size = source_path.stat().st_size
@@ -375,10 +375,10 @@ class ResumeCapableMixin:
             return False
 
     async def _fallback_to_fresh_copy(
-        self,
-        source_path: Path,
-        dest_path: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+            self,
+            source_path: Path,
+            dest_path: Path,
+            progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
         logger.info(f"Fallback til fresh copy: {source_path.name}")
 
@@ -406,10 +406,10 @@ class ResumeCapableMixin:
         )
 
     async def _fresh_copy_with_cleanup(
-        self,
-        source_path: Path,
-        dest_path: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+            self,
+            source_path: Path,
+            dest_path: Path,
+            progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
         logger.info(f"Fresh copy med cleanup: {source_path.name}")
 
@@ -442,7 +442,7 @@ class ResumeCapableMixin:
 class ResumableNormalFileCopyStrategy(ResumeCapableMixin, NormalFileCopyStrategy):
 
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         source = Path(source_path)
         dest = Path(dest_path)
@@ -465,7 +465,7 @@ class ResumableNormalFileCopyStrategy(ResumeCapableMixin, NormalFileCopyStrategy
 class ResumableGrowingFileCopyStrategy(ResumeCapableMixin, GrowingFileCopyStrategy):
 
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         """
         Copy file med automatisk resume detection for growing files - FileCopyStrategy interface.
@@ -523,7 +523,7 @@ class ResumeStrategyFactory:
 
     @staticmethod
     def create_normal_strategy(
-        resume_config: Optional[SecureResumeConfig] = None,
+            resume_config: Optional[SecureResumeConfig] = None,
     ) -> ResumableNormalFileCopyStrategy:
         """
         Create resumable normal file copy strategy.
@@ -533,7 +533,7 @@ class ResumeStrategyFactory:
 
     @staticmethod
     def create_growing_strategy(
-        resume_config: Optional[SecureResumeConfig] = None, **growing_params
+            resume_config: Optional[SecureResumeConfig] = None, **growing_params
     ) -> ResumableGrowingFileCopyStrategy:
         """
         Create resumable growing file copy strategy.
@@ -543,10 +543,10 @@ class ResumeStrategyFactory:
 
     @staticmethod
     def create_strategy_for_file(
-        file_path: Path,
-        is_growing: bool = False,
-        resume_config: Optional[SecureResumeConfig] = None,
-        **growing_params,
+            file_path: Path,
+            is_growing: bool = False,
+            resume_config: Optional[SecureResumeConfig] = None,
+            **growing_params,
     ):
         """
         Create appropriate strategy baseret på fil karakteristika.

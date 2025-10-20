@@ -1,18 +1,17 @@
 """Output Folder Template Engine for File Transfer Agent."""
 
-import re
 import json
 import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import dataclass
 
 from app.config import Settings
 
 
 @dataclass
 class TemplateRule:
-
     pattern: str
     folder_template: str
     priority: int = 100
@@ -80,7 +79,7 @@ class OutputFolderTemplateEngine:
 
         # Combine with destination directory
         output_path = (
-            Path(self.settings.destination_directory) / output_subfolder / filename
+                Path(self.settings.destination_directory) / output_subfolder / filename
         )
 
         self.logger.info(f"Template mapping: '{filename}' → '{output_path}'")

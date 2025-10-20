@@ -1,10 +1,11 @@
 """Network Mount Service - SRP compliant orchestrator."""
 
-from typing import Optional
 import logging
-from .platform_factory import PlatformFactory, UnsupportedPlatformError
+from typing import Optional
+
 from .base_mounter import BaseMounter
 from .mount_config import MountConfigHandler
+from .platform_factory import PlatformFactory, UnsupportedPlatformError
 from .windows_mounter import WindowsMounter
 from ...config import Settings
 
@@ -40,9 +41,9 @@ class NetworkMountService:
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
         """Ensure network mount is available and accessible."""
         if (
-            not self._config.is_auto_mount_enabled()
-            or not self._mounter
-            or not share_url
+                not self._config.is_auto_mount_enabled()
+                or not self._mounter
+                or not share_url
         ):
             return False
 

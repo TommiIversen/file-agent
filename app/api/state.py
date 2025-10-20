@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends
 
-from app.services.job_queue import JobQueueService
 from app.dependencies import get_job_queue_service
+from app.services.job_queue import JobQueueService
 
 router = APIRouter(prefix="/api/state", tags=["state"])
 
 
 @router.get("/queue/status")
 async def get_queue_status(
-    job_queue_service: JobQueueService = Depends(get_job_queue_service),
+        job_queue_service: JobQueueService = Depends(get_job_queue_service),
 ) -> dict:
     """
     Hent status for JobQueueService.
@@ -26,7 +26,7 @@ async def get_queue_status(
 
 @router.get("/queue/failed-jobs")
 async def get_failed_jobs(
-    job_queue_service: JobQueueService = Depends(get_job_queue_service),
+        job_queue_service: JobQueueService = Depends(get_job_queue_service),
 ) -> dict:
     """
     Hent failed jobs fra queue.
@@ -40,7 +40,7 @@ async def get_failed_jobs(
 
 @router.delete("/queue/failed-jobs")
 async def clear_failed_jobs(
-    job_queue_service: JobQueueService = Depends(get_job_queue_service),
+        job_queue_service: JobQueueService = Depends(get_job_queue_service),
 ) -> dict:
     """
     Ryd failed jobs liste.

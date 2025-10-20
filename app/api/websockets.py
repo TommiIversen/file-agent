@@ -1,15 +1,14 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from typing import Dict, Any
 
-from app.services.websocket_manager import WebSocketManager
 from app.dependencies import get_websocket_manager
+from app.services.websocket_manager import WebSocketManager
 
 router = APIRouter(prefix="/api/ws", tags=["websockets"])
 
 
 @router.websocket("/live")
 async def websocket_endpoint(
-    websocket: WebSocket, ws_manager: WebSocketManager = Depends(get_websocket_manager)
+        websocket: WebSocket, ws_manager: WebSocketManager = Depends(get_websocket_manager)
 ):
     await ws_manager.connect(websocket)
 
@@ -21,10 +20,3 @@ async def websocket_endpoint(
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
-
-
-@router.get("/status")
-async def get_websocket_status(
-    ws_manager: WebSocketManager = Depends(get_websocket_manager),
-) -> Dict[str, Any]:
-    return ws_manager.get_manager_status()

@@ -2,14 +2,14 @@
 Job Error Classifier - determines if copy errors should pause or fail immediately.
 """
 
-import logging
 import errno
+import logging
 import os
-from typing import Tuple
 from pathlib import Path
+from typing import Tuple
 
-from app.services.storage_monitor.storage_monitor import StorageMonitorService
 from app.models import StorageStatus
+from app.services.storage_monitor.storage_monitor import StorageMonitorService
 
 
 class JobErrorClassifier:
@@ -18,15 +18,15 @@ class JobErrorClassifier:
     # Network/destination error indicators
     NETWORK_ERROR_STRINGS = {
         "input/output error", "errno 5", "connection refused", "network is unreachable",
-        "no route to host", "connection timed out", "broken pipe", "errno 32", "errno 110", 
+        "no route to host", "connection timed out", "broken pipe", "errno 32", "errno 110",
         "errno 111", "smb error", "cifs error", "mount_smbfs", "network mount", "permission denied"
     }
-    
+
     # Source file error indicators  
     SOURCE_ERROR_STRINGS = {
         "no such file or directory", "errno 2", "file not found", "source file", "input file"
     }
-    
+
     # Network-related errno codes
     NETWORK_ERRNO_CODES = {
         errno.EIO, errno.ECONNREFUSED, errno.ETIMEDOUT, errno.ENETUNREACH,
@@ -41,17 +41,17 @@ class JobErrorClassifier:
         # Check destination status first
         if self._is_destination_unavailable():
             return True, f"Destination unavailable (status: {self._get_destination_status()})"
-        
+
         error_str = str(error).lower()
-        
+
         # Check for network errors (should pause)
         if self._is_network_error(error, error_str):
             return True, self._get_network_error_reason(error, error_str)
-        
+
         # Check for source errors (should fail)
         if self._is_source_error(error_str, file_path):
             return False, self._get_source_error_reason(error_str, file_path)
-        
+
         # Default to pause for unknown errors (safer)
         logging.warning(f"Unknown error type for {Path(file_path).name}: {error_str} → defaulting to PAUSE")
         return True, f"Unknown error (defaulting to pause): {str(error)}"
@@ -59,9 +59,9 @@ class JobErrorClassifier:
     def _is_destination_unavailable(self) -> bool:
         """Check if destination is currently unavailable."""
         destination_info = self.storage_monitor.get_destination_info()
-        return (destination_info and 
+        return (destination_info and
                 destination_info.status in [StorageStatus.ERROR, StorageStatus.CRITICAL])
-    
+
     def _get_destination_status(self) -> str:
         """Get current destination status."""
         destination_info = self.storage_monitor.get_destination_info()
@@ -72,11 +72,11 @@ class JobErrorClassifier:
         # Check string indicators
         if any(indicator in error_str for indicator in self.NETWORK_ERROR_STRINGS):
             return True
-        
+
         # Check errno codes
         if hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES:
             return True
-            
+
         return False
 
     def _get_network_error_reason(self, error: Exception, error_str: str) -> str:
@@ -85,11 +85,11 @@ class JobErrorClassifier:
         for indicator in self.NETWORK_ERROR_STRINGS:
             if indicator in error_str:
                 return f"Network error detected: {indicator}"
-        
+
         # Check errno
         if hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES:
             return f"Network errno {error.errno}: {os.strerror(error.errno)}"
-        
+
         return "Network error detected"
 
     def _is_source_error(self, error_str: str, file_path: str) -> bool:
@@ -97,7 +97,7 @@ class JobErrorClassifier:
         # Check string indicators
         if any(indicator in error_str for indicator in self.SOURCE_ERROR_STRINGS):
             return True
-        
+
         # Check if source file still exists
         try:
             return not Path(file_path).exists()
@@ -110,12 +110,12 @@ class JobErrorClassifier:
         for indicator in self.SOURCE_ERROR_STRINGS:
             if indicator in error_str:
                 return f"Source error: {indicator}"
-        
+
         # Check file existence
         try:
             if not Path(file_path).exists():
                 return "Source file no longer exists"
         except Exception:
             pass
-            
+
         return "Source file error"

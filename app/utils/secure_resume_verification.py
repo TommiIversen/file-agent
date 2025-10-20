@@ -1,11 +1,11 @@
 """Secure Resume Verification Engine"""
 
 import asyncio
+import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional, Tuple
-import logging
-from contextlib import asynccontextmanager
 
 from .secure_resume_config import SecureResumeConfig, ResumeOperationMetrics
 
@@ -23,7 +23,7 @@ class SecureVerificationEngine:
         self._verification_start_time: Optional[float] = None
 
     async def find_safe_resume_position(
-        self, source_path: Path, dest_path: Path
+            self, source_path: Path, dest_path: Path
     ) -> Tuple[int, ResumeOperationMetrics]:
         start_time = time.time()
         self._verification_start_time = start_time
@@ -143,7 +143,7 @@ class SecureVerificationEngine:
             raise VerificationTimeout(f"Verification timeout efter {elapsed:.1f}s")
 
     async def _verify_region_with_timeout(
-        self, source_path: Path, dest_path: Path, offset: int, size: int
+            self, source_path: Path, dest_path: Path, offset: int, size: int
     ) -> bool:
         timeout = self.config.max_verification_time_seconds
 
@@ -157,7 +157,7 @@ class SecureVerificationEngine:
             raise
 
     async def _verify_region_exact(
-        self, source_path: Path, dest_path: Path, offset: int, size: int
+            self, source_path: Path, dest_path: Path, offset: int, size: int
     ) -> bool:
         if size <= 0:
             return True
@@ -170,8 +170,8 @@ class SecureVerificationEngine:
 
         try:
             async with self._open_files_for_verification(source_path, dest_path) as (
-                src_file,
-                dst_file,
+                    src_file,
+                    dst_file,
             ):
                 # Seek til start position
                 src_file.seek(offset)
@@ -221,8 +221,8 @@ class SecureVerificationEngine:
 
                     # Progress logging (kun hvis enabled)
                     if (
-                        self.config.log_verification_progress
-                        and bytes_verified % (10 * 1024 * 1024) == 0
+                            self.config.log_verification_progress
+                            and bytes_verified % (10 * 1024 * 1024) == 0
                     ):
                         logger.debug(f"Verificeret {bytes_verified:,}/{size:,} bytes")
 
@@ -253,7 +253,7 @@ class SecureVerificationEngine:
                 dst_file.close()
 
     async def _binary_search_corruption_point(
-        self, source_path: Path, dest_path: Path, start_offset: int, end_offset: int
+            self, source_path: Path, dest_path: Path, start_offset: int, end_offset: int
     ) -> Tuple[int, int]:
         chunk_size = self.config.get_binary_search_chunk_size()
         iterations = 0
@@ -276,7 +276,7 @@ class SecureVerificationEngine:
             self._check_verification_timeout()
 
             mid = (
-                left + ((right - left) // chunk_size) * chunk_size
+                    left + ((right - left) // chunk_size) * chunk_size
             )  # Align til chunk boundary
             verify_size = min(chunk_size, right - mid)
 
@@ -353,7 +353,7 @@ class QuickIntegrityChecker:
 
     @staticmethod
     async def quick_tail_check(
-        source_path: Path, dest_path: Path, check_bytes: int = 1024
+            source_path: Path, dest_path: Path, check_bytes: int = 1024
     ) -> bool:
         """
         Hurtig check af de sidste N bytes.

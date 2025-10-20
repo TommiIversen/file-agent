@@ -1,8 +1,10 @@
+import logging
+
 from fastapi import APIRouter
 from fastapi import Depends
-from ..dependencies import get_settings
+
 from ..config import Settings
-import logging
+from ..dependencies import get_settings
 
 router = APIRouter()
 

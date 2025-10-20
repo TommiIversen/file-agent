@@ -3,14 +3,15 @@ Destination Checker - validates destination availability with caching.
 """
 
 import asyncio
-import aiofiles
 import logging
 import time
 import uuid
-from pathlib import Path
-from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import aiofiles
 
 
 @dataclass
@@ -27,10 +28,10 @@ class DestinationChecker:
     """Checks destination availability with TTL-based caching and concurrent access protection."""
 
     def __init__(
-        self,
-        destination_path: Path,
-        cache_ttl_seconds: float = 5.0,
-        storage_monitor=None,
+            self,
+            destination_path: Path,
+            cache_ttl_seconds: float = 5.0,
+            storage_monitor=None,
     ):
         self.destination_path = destination_path
         self.cache_ttl_seconds = cache_ttl_seconds
@@ -220,7 +221,7 @@ class DestinationChecker:
                 )
             else:
                 test_file = (
-                    self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
+                        self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 )
 
                 try:

@@ -6,20 +6,20 @@
     <title>File Transfer Agent - Real-time Monitor</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- File Transfer Agent - Modular Architecture (Load BEFORE Alpine.js) -->
     <!-- Stores -->
     <script src="/static/js/stores/connectionStore.js"></script>
     <script src="/static/js/stores/fileStore.js"></script>
     <script src="/static/js/stores/storageStore.js"></script>
-    
+
     <!-- Services -->
     <script src="/static/js/services/messageHandler.js"></script>
     <script src="/static/js/services/uiHelpers.js"></script>
-    
+
     <!-- Main Application -->
     <script src="/static/js/app.js"></script>
-    
+
     <!-- Alpine.js CDN (Load LAST) -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
@@ -27,367 +27,384 @@
         .gradientHolder {
             background: radial-gradient(ellipse at center, rgb(222, 67, 202) 0%, rgba(20, 25, 44, 0.96) 0%, rgba(10, 14, 24, 0.96) 100%);
         }
-        
+
         .status-indicator {
             width: 12px;
             height: 12px;
         }
-        
+
         .progress-animation {
             background: linear-gradient(90deg, #3b82f6, #1d4ed8, #3b82f6);
             background-size: 200% 100%;
             animation: progress-shine 2s infinite;
         }
-        
+
         @keyframes progress-shine {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
         }
     </style>
 </head>
 <body>
-<body class="gradientHolder min-h-screen" 
-      x-data="{}" 
+<body class="gradientHolder min-h-screen"
+      x-data="{}"
       x-init="() => { /* Application will auto-initialize via app.js */ }">
-    
-    <div class="container mx-auto p-4 max-w-7xl">
-        <!-- Header with Status -->
-        <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 text-white">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center mb-4">
-                <!-- Titel (venstre) -->
-                <div>
-                    <h1 class="text-3xl font-bold">Dr. Feta</h1>
-                    <p class="text-xs text-gray-300">File Egress Transfer Agent</p>
-                </div>
-                
-                <!-- File Statistics (centered) -->
-                <div class="flex justify-center">
-                    <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-                        <div class="text-center">
-                            <div class="text-blue-300">Total</div>
-                            <strong class="text-white" x-text="$store.files.statistics.totalFiles">0</strong>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-yellow-300">Aktive</div>
-                            <strong class="text-white" x-text="$store.files.statistics.activeFiles">0</strong>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-orange-300">Growing</div>
-                            <strong class="text-white" x-text="$store.files.statistics.growingFiles">0</strong>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-green-300">Færdige</div>
-                            <strong class="text-white" x-text="$store.files.statistics.completedFiles">0</strong>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-red-300">Fejlede</div>
-                            <strong class="text-white" x-text="$store.files.statistics.failedFiles">0</strong>
-                        </div>
+
+<div class="container mx-auto p-4 max-w-7xl">
+    <!-- Header with Status -->
+    <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 text-white">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center mb-4">
+            <!-- Titel (venstre) -->
+            <div>
+                <h1 class="text-3xl font-bold">Dr. Feta</h1>
+                <p class="text-xs text-gray-300">File Egress Transfer Agent</p>
+            </div>
+
+            <!-- File Statistics (centered) -->
+            <div class="flex justify-center">
+                <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
+                    <div class="text-center">
+                        <div class="text-blue-300">Total</div>
+                        <strong class="text-white" x-text="$store.files.statistics.totalFiles">0</strong>
                     </div>
-                </div>
-                
-                <!-- Connection Status (højre) -->
-                <div class="flex justify-end">
-                    <div class="text-right">
-                        <div class="flex items-center justify-end mb-1">
-                            <div class="status-indicator rounded-full mr-2"
-                                 :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
-                            <span x-text="$store.connection?.text || 'Indlæser...'" class="text-xs"></span>
-                        </div>
-                        <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
+                    <div class="text-center">
+                        <div class="text-yellow-300">Aktive</div>
+                        <strong class="text-white" x-text="$store.files.statistics.activeFiles">0</strong>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-orange-300">Growing</div>
+                        <strong class="text-white" x-text="$store.files.statistics.growingFiles">0</strong>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-green-300">Færdige</div>
+                        <strong class="text-white" x-text="$store.files.statistics.completedFiles">0</strong>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-red-300">Fejlede</div>
+                        <strong class="text-white" x-text="$store.files.statistics.failedFiles">0</strong>
                     </div>
                 </div>
             </div>
-            
-            <!-- Storage Status Panel -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
-                <!-- Source Storage -->
-                <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-lg font-semibold flex items-center">
-                            📁 Source Storage
-                        </h3>
-                        <div class="flex items-center">
-                            <div class="w-3 h-3 rounded-full mr-2"
-                                 :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
-                            <span class="text-sm font-medium"
-                                  :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
-                                  x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
-                        </div>
-                    </div>
-                    
-                    <template x-if="$store.storage?.source">
-                        <div class="space-y-2">
-                            <!-- Storage Bar -->
-                            <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
-                                <div class="h-full transition-all duration-500"
-                                     :style="`width: ${$store.storage?.sourceUsagePercentage || 0}%`"
-                                     :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
-                            </div>
-                            
-                            <!-- Storage Details -->
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'"></strong></span>
-                            </div>
-                            
-                            <!-- Access Status -->
-                            <div class="flex space-x-4 text-xs">
-                                <div class="flex items-center">
-                                    <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
-                                    </span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    
-                    <template x-if="!$store.storage?.source">
-                        <div class="text-gray-400 text-sm">Indlæser storage information...</div>
-                    </template>
-                </div>
-                
-                <!-- Destination Storage -->
-                <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-lg font-semibold flex items-center">
-                            🎯 Destination Storage
-                        </h3>
-                        <div class="flex items-center">
-                            <div class="w-3 h-3 rounded-full mr-2"
-                                 :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
-                            <span class="text-sm font-medium"
-                                  :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
-                                  x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
-                        </div>
-                    </div>
-                    
-                    <template x-if="$store.storage?.destination">
-                        <div class="space-y-2">
-                            <!-- Storage Bar -->
-                            <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
-                                <div class="h-full transition-all duration-500"
-                                     :style="`width: ${$store.storage?.destinationUsagePercentage || 0}%`"
-                                     :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
-                            </div>
-                            
-                            <!-- Storage Details -->
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-300">Ledig: <strong class="text-white" x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'"></strong></span>
-                                <span class="text-gray-300">Total: <strong class="text-white" x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'"></strong></span>
-                            </div>
-                            
-                            <!-- Access Status -->
-                            <div class="flex space-x-4 text-xs">
-                                <div class="flex items-center">
-                                    <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
-                                    </span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="w-2 h-2 rounded-full mr-1"
-                                         :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                                    <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'">
-                                        <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <!-- Mount Status -->
-                            <template x-if="$store.storage?.destinationMountStatus">
-                                <div class="mt-2 p-2 bg-gray-800 bg-opacity-50 rounded-md">
-                                    <div class="flex items-center space-x-2 text-xs">
-                                        <div class="flex items-center">
-                                            <template x-if="$store.storage?.destinationMountStatus === 'ATTEMPTING'">
-                                                <div class="w-3 h-3 mr-2">
-                                                    <svg class="animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
-                                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                </div>
-                                            </template>
-                                            <template x-if="$store.storage?.destinationMountStatus === 'SUCCESS'">
-                                                <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                            </template>
-                                            <template x-if="$store.storage?.destinationMountStatus === 'FAILED'">
-                                                <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                                            </template>
-                                            <template x-if="$store.storage?.destinationMountStatus === 'NOT_CONFIGURED'">
-                                                <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
-                                            </template>
-                                            
-                                            <span class="text-xs font-medium" 
-                                                  :class="$store.storage?.destinationMountStatusColor">
-                                                🔗 Network Mount
-                                            </span>
-                                        </div>
-                                        <span class="text-gray-300 text-xs" 
-                                              x-text="$store.storage?.destinationMountMessage"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                    
-                    <template x-if="!$store.storage?.destination">
-                        <div class="text-gray-400 text-sm">Indlæser storage information...</div>
-                    </template>
-                </div>
-            </div>
-            
-            <!-- Sort Options - flyttet fra Files List til main container -->
+
+            <!-- Connection Status (højre) -->
             <div class="flex justify-end">
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-300 text-sm">Sorter efter:</span>
-                    <select x-model="$store.files.sortBy" 
-                            @change="$store.files.setSortBy($event.target.value)"
-                            class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
-                        <option value="activity">Seneste aktivitet</option>
-                        <option value="discovered">Opdaget tidspunkt</option>
-                        <option value="started">Startet tidspunkt</option>
-                        <option value="completed">Færdig tidspunkt</option>
-                        <option value="filename">Filnavn</option>
-                        <option value="size">Filstørrelse</option>
-                    </select>
+                <div class="text-right">
+                    <div class="flex items-center justify-end mb-1">
+                        <div class="status-indicator rounded-full mr-2"
+                             :class="$store.connection?.statusColor || 'bg-gray-500'"></div>
+                        <span x-text="$store.connection?.text || 'Indlæser...'" class="text-xs"></span>
+                    </div>
+                    <div class="text-xs text-gray-300" x-text="$store.connection?.lastUpdate || 'Indlæser...'"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Files List -->
-        <div class="space-y-2">
-            
-            <template x-for="file in $store.files.allFiles" :key="file.file_path">
-                <!-- Simple File Row with Hover Tooltip -->
-                <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
-                    <div class="flex items-center space-x-4">
-                        
-                        <!-- File Name -->
-                        <div class="flex-1 min-w-0">
-                            <div class="text-white font-bold truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
+        <!-- Storage Status Panel -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+            <!-- Source Storage -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold flex items-center">
+                        📁 Source Storage
+                    </h3>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full mr-2"
+                             :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
+                        <span class="text-sm font-medium"
+                              :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
+                              x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
+                    </div>
+                </div>
+
+                <template x-if="$store.storage?.source">
+                    <div class="space-y-2">
+                        <!-- Storage Bar -->
+                        <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                            <div class="h-full transition-all duration-500"
+                                 :style="`width: ${$store.storage?.sourceUsagePercentage || 0}%`"
+                                 :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
                         </div>
 
-                        <!-- Progress Bar -->
-                        <div class="flex-1">
-                            <div class="w-full bg-gray-700 rounded overflow-hidden">
-                                <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
-                                     :style="UIHelpers.getProgressWidth(file)"
-                                     :class="UIHelpers.getProgressColor(file)"
-                                     x-text="UIHelpers.getProgressText(file)">
-                                </div>
+                        <!-- Storage Details -->
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-300">Ledig: <strong class="text-white"
+                                                                       x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'"></strong></span>
+                            <span class="text-gray-300">Total: <strong class="text-white"
+                                                                       x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'"></strong></span>
+                        </div>
+
+                        <!-- Access Status -->
+                        <div class="flex space-x-4 text-xs">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full mr-1"
+                                     :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                    </span>
                             </div>
-                        </div>
-
-
-                        <!-- Status -->
-                        <div class="w-24 text-center">
-                            <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
-                                 :class="UIHelpers.getStatusBadgeColor(file.status)"
-                                 x-text="UIHelpers.getFriendlyStatus(file.status)">
-                            </div>
-                        </div>
-
-                        <div class="w-48 text-center text-xs">
-                            <div class="text-white text-xs" x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
-                        </div>
-
-                        <!-- Bytes Copied -->
-                        <div class="w-32 text-center text-xs">
-                            <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
-                                <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full mr-1"
+                                     :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                    </span>
                             </div>
                         </div>
                     </div>
+                </template>
 
-                    <!-- Hover Tooltip with Additional Info -->
-                    <div class="absolute top-full left-0 mt-2 w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                        <div class="grid grid-cols-2 gap-6 text-sm">
-                            <!-- Left Column -->
-                            <div class="space-y-2">
-                                <div>
-                                    <span class="text-gray-400">Full Path:</span>
-                                    <div class="text-white text-xs break-all" x-text="file.file_path"></div>
-                                </div>
-                                <div>
-                                    <span class="text-gray-400">Discovered:</span>
-                                    <div class="text-white" x-text="UIHelpers.formatDateTime(file.discovered_at)"></div>
-                                </div>
-                                <div x-show="file.started_copying_at">
-                                    <span class="text-gray-400">Started:</span>
-                                    <div class="text-green-300" x-text="UIHelpers.formatDateTime(file.started_copying_at)"></div>
-                                </div>
-                                <div x-show="file.completed_at">
-                                    <span class="text-gray-400">Completed:</span>
-                                    <div class="text-blue-300" x-text="UIHelpers.formatDateTime(file.completed_at)"></div>
-                                </div>
+                <template x-if="!$store.storage?.source">
+                    <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+                </template>
+            </div>
+
+            <!-- Destination Storage -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold flex items-center">
+                        🎯 Destination Storage
+                    </h3>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full mr-2"
+                             :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
+                        <span class="text-sm font-medium"
+                              :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
+                              x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
+                    </div>
+                </div>
+
+                <template x-if="$store.storage?.destination">
+                    <div class="space-y-2">
+                        <!-- Storage Bar -->
+                        <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                            <div class="h-full transition-all duration-500"
+                                 :style="`width: ${$store.storage?.destinationUsagePercentage || 0}%`"
+                                 :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
+                        </div>
+
+                        <!-- Storage Details -->
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-300">Ledig: <strong class="text-white"
+                                                                       x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'"></strong></span>
+                            <span class="text-gray-300">Total: <strong class="text-white"
+                                                                       x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'"></strong></span>
+                        </div>
+
+                        <!-- Access Status -->
+                        <div class="flex space-x-4 text-xs">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full mr-1"
+                                     :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                                    </span>
                             </div>
-                            
-                            <!-- Right Column -->
-                            <div class="space-y-2">
-                                <div>
-                                    <span class="text-gray-400">File Size:</span>
-                                    <div class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></div>
-                                </div>
-                                <div>
-                                    <span class="text-gray-400">Retry Count:</span>
-                                    <div class="text-white font-bold" x-text="file.retry_count"></div>
-                                </div>
-                                <div x-show="UIHelpers.isGrowingFile(file)">
-                                    <span class="text-gray-400">Growing File:</span>
-                                    <div class="text-orange-300">
-                                        <span x-text="UIHelpers.getGrowingFileIcon(file)"></span>
-                                        Yes
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full mr-1"
+                                     :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
+                                <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'">
+                                        <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                                    </span>
+                            </div>
+                        </div>
+
+                        <!-- Mount Status -->
+                        <template x-if="$store.storage?.destinationMountStatus">
+                            <div class="mt-2 p-2 bg-gray-800 bg-opacity-50 rounded-md">
+                                <div class="flex items-center space-x-2 text-xs">
+                                    <div class="flex items-center">
+                                        <template x-if="$store.storage?.destinationMountStatus === 'ATTEMPTING'">
+                                            <div class="w-3 h-3 mr-2">
+                                                <svg class="animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                            stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor"
+                                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            </div>
+                                        </template>
+                                        <template x-if="$store.storage?.destinationMountStatus === 'SUCCESS'">
+                                            <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                        </template>
+                                        <template x-if="$store.storage?.destinationMountStatus === 'FAILED'">
+                                            <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                                        </template>
+                                        <template x-if="$store.storage?.destinationMountStatus === 'NOT_CONFIGURED'">
+                                            <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                                        </template>
+
+                                        <span class="text-xs font-medium"
+                                              :class="$store.storage?.destinationMountStatusColor">
+                                                🔗 Network Mount
+                                            </span>
                                     </div>
-                                </div>
-                                <div x-show="file.copy_speed_mbps && file.copy_speed_mbps > 0">
-                                    <span class="text-gray-400">Copy Speed:</span>
-                                    <div class="text-blue-300" x-text="(file.copy_speed_mbps || 0).toFixed(1) + ' MB/s'"></div>
-                                </div>
-                                <div x-show="file.bytes_copied">
-                                    <span class="text-gray-400">Progress:</span>
-                                    <div class="text-green-300" x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></div>
+                                    <span class="text-gray-300 text-xs"
+                                          x-text="$store.storage?.destinationMountMessage"></span>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <!-- Arrow pointing up -->
-                        <div class="absolute bottom-full left-8 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-gray-900"></div>
+                        </template>
                     </div>
+                </template>
 
-                    <!-- Error Message -->
-                    <div x-show="file.error_message" class="mt-2 p-2 bg-red-900 bg-opacity-50 rounded border border-red-600">
-                        <div class="flex items-center">
-                            <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                            </svg>
-                            <span class="text-red-200 text-xs" x-text="file.error_message"></span>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            
-            <!-- Empty State -->
-            <div x-show="$store.files.allFiles.length === 0" class="text-center">
-                <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
-                    <div class="text-4xl mb-4">📁</div>
-                    Ingen filer fundet
-                </div>
+                <template x-if="!$store.storage?.destination">
+                    <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Sort Options - flyttet fra Files List til main container -->
+        <div class="flex justify-end">
+            <div class="flex items-center space-x-4">
+                <span class="text-gray-300 text-sm">Sorter efter:</span>
+                <select x-model="$store.files.sortBy"
+                        @change="$store.files.setSortBy($event.target.value)"
+                        class="bg-gray-700 text-white text-sm rounded px-3 py-1 border border-gray-600">
+                    <option value="activity">Seneste aktivitet</option>
+                    <option value="discovered">Opdaget tidspunkt</option>
+                    <option value="started">Startet tidspunkt</option>
+                    <option value="completed">Færdig tidspunkt</option>
+                    <option value="filename">Filnavn</option>
+                    <option value="size">Filstørrelse</option>
+                </select>
             </div>
         </div>
     </div>
 
-    <!-- Error Container for initialization failures -->
-    <div id="error-container" style="display: none;" class="fixed top-4 right-4 max-w-md z-50"></div>
+    <!-- Files List -->
+    <div class="space-y-2">
+
+        <template x-for="file in $store.files.allFiles" :key="file.file_path">
+            <!-- Simple File Row with Hover Tooltip -->
+            <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
+                <div class="flex items-center space-x-4">
+
+                    <!-- File Name -->
+                    <div class="flex-1 min-w-0">
+                        <div class="text-white font-bold truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="flex-1">
+                        <div class="w-full bg-gray-700 rounded overflow-hidden">
+                            <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
+                                 :style="UIHelpers.getProgressWidth(file)"
+                                 :class="UIHelpers.getProgressColor(file)"
+                                 x-text="UIHelpers.getProgressText(file)">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Status -->
+                    <div class="w-24 text-center">
+                        <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
+                             :class="UIHelpers.getStatusBadgeColor(file.status)"
+                             x-text="UIHelpers.getFriendlyStatus(file.status)">
+                        </div>
+                    </div>
+
+                    <div class="w-48 text-center text-xs">
+                        <div class="text-white text-xs"
+                             x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
+                    </div>
+
+                    <!-- Bytes Copied -->
+                    <div class="w-32 text-center text-xs">
+                        <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
+                            <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hover Tooltip with Additional Info -->
+                <div class="absolute top-full left-0 mt-2 w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    <div class="grid grid-cols-2 gap-6 text-sm">
+                        <!-- Left Column -->
+                        <div class="space-y-2">
+                            <div>
+                                <span class="text-gray-400">Full Path:</span>
+                                <div class="text-white text-xs break-all" x-text="file.file_path"></div>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Discovered:</span>
+                                <div class="text-white" x-text="UIHelpers.formatDateTime(file.discovered_at)"></div>
+                            </div>
+                            <div x-show="file.started_copying_at">
+                                <span class="text-gray-400">Started:</span>
+                                <div class="text-green-300"
+                                     x-text="UIHelpers.formatDateTime(file.started_copying_at)"></div>
+                            </div>
+                            <div x-show="file.completed_at">
+                                <span class="text-gray-400">Completed:</span>
+                                <div class="text-blue-300" x-text="UIHelpers.formatDateTime(file.completed_at)"></div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="space-y-2">
+                            <div>
+                                <span class="text-gray-400">File Size:</span>
+                                <div class="text-white" x-text="UIHelpers.formatFileSizeMB(file.file_size_mb)"></div>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Retry Count:</span>
+                                <div class="text-white font-bold" x-text="file.retry_count"></div>
+                            </div>
+                            <div x-show="UIHelpers.isGrowingFile(file)">
+                                <span class="text-gray-400">Growing File:</span>
+                                <div class="text-orange-300">
+                                    <span x-text="UIHelpers.getGrowingFileIcon(file)"></span>
+                                    Yes
+                                </div>
+                            </div>
+                            <div x-show="file.copy_speed_mbps && file.copy_speed_mbps > 0">
+                                <span class="text-gray-400">Copy Speed:</span>
+                                <div class="text-blue-300"
+                                     x-text="(file.copy_speed_mbps || 0).toFixed(1) + ' MB/s'"></div>
+                            </div>
+                            <div x-show="file.bytes_copied">
+                                <span class="text-gray-400">Progress:</span>
+                                <div class="text-green-300"
+                                     x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Arrow pointing up -->
+                    <div class="absolute bottom-full left-8 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-gray-900"></div>
+                </div>
+
+                <!-- Error Message -->
+                <div x-show="file.error_message"
+                     class="mt-2 p-2 bg-red-900 bg-opacity-50 rounded border border-red-600">
+                    <div class="flex items-center">
+                        <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                  clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="text-red-200 text-xs" x-text="file.error_message"></span>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Empty State -->
+        <div x-show="$store.files.allFiles.length === 0" class="text-center">
+            <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
+                <div class="text-4xl mb-4">📁</div>
+                Ingen filer fundet
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Container for initialization failures -->
+<div id="error-container" style="display: none;" class="fixed top-4 right-4 max-w-md z-50"></div>
 
 </body>
 </html>

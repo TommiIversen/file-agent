@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from typing import Dict, List, Optional, Set, Callable, Awaitable
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Set, Callable, Awaitable
 
 from app.models import TrackedFile, FileStatus, FileStateUpdate
 
@@ -48,7 +48,7 @@ class StateManager:
         return [f for f in self._files_by_id.values() if f.file_path == file_path]
 
     async def add_file(
-        self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
+            self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
         async with self._lock:
             existing = self._get_current_file_for_path(file_path)
@@ -198,14 +198,14 @@ class StateManager:
 
         async with self._lock:
             to_remove_ids = []
-            
+
             for file_id, tracked_file in self._files_by_id.items():
                 file_age_timestamp = (
-                    tracked_file.completed_at or 
-                    tracked_file.failed_at or 
-                    tracked_file.discovered_at
+                        tracked_file.completed_at or
+                        tracked_file.failed_at or
+                        tracked_file.discovered_at
                 )
-                
+
                 if file_age_timestamp and file_age_timestamp < cutoff_time:
                     to_remove_ids.append(file_id)
 
@@ -231,7 +231,7 @@ class StateManager:
         logging.debug(f"Ny subscriber tilmeldt. Total: {len(self._subscribers)}")
 
     def unsubscribe(
-        self, callback: Callable[[FileStateUpdate], Awaitable[None]]
+            self, callback: Callable[[FileStateUpdate], Awaitable[None]]
     ) -> bool:
         try:
             self._subscribers.remove(callback)
@@ -258,7 +258,7 @@ class StateManager:
             return False
 
     async def update_file_status_by_id(
-        self, file_id: str, status: FileStatus, **kwargs
+            self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:
         async with self._lock:
             tracked_file = self._files_by_id.get(file_id)
@@ -349,12 +349,12 @@ class StateManager:
                 f
                 for f in current_files_list
                 if f.is_growing_file
-                or f.status
-                in [
-                    FileStatus.GROWING,
-                    FileStatus.READY_TO_START_GROWING,
-                    FileStatus.GROWING_COPY,
-                ]
+                   or f.status
+                   in [
+                       FileStatus.GROWING,
+                       FileStatus.READY_TO_START_GROWING,
+                       FileStatus.GROWING_COPY,
+                   ]
             ]
 
             return {

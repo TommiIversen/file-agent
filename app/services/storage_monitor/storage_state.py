@@ -70,12 +70,12 @@ class StorageState:
             if self._destination_info
             else None,
             "overall_ready": (
-                (self._source_info.is_accessible if self._source_info else False)
-                and (
-                    self._destination_info.is_accessible
-                    if self._destination_info
-                    else False
-                )
+                    (self._source_info.is_accessible if self._source_info else False)
+                    and (
+                        self._destination_info.is_accessible
+                        if self._destination_info
+                        else False
+                    )
             ),
         }
 

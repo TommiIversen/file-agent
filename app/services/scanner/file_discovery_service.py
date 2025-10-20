@@ -1,7 +1,8 @@
 import logging
 import os
-from typing import Set
 from pathlib import Path
+from typing import Set
+
 import aiofiles.os
 
 from .domain_objects import FilePath, ScanConfiguration

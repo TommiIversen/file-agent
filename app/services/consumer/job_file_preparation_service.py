@@ -2,30 +2,30 @@
 Job File Preparation Service - prepares files for copy operations.
 """
 
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 from app.config import Settings
 from app.models import FileStatus
-from app.services.state_manager import StateManager
+from app.services.consumer.job_models import PreparedFile, QueueJob
 from app.services.copy_strategies import CopyStrategyFactory
-from app.utils.output_folder_template import OutputFolderTemplateEngine
+from app.services.state_manager import StateManager
 from app.utils.file_operations import (
     build_destination_path_with_template,
     generate_conflict_free_path,
 )
-from app.services.consumer.job_models import PreparedFile, QueueJob
+from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
 class JobFilePreparationService:
     """Prepares files for copy operations with strategy selection and path calculation."""
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        copy_strategy_factory: CopyStrategyFactory,
-        template_engine: OutputFolderTemplateEngine,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            copy_strategy_factory: CopyStrategyFactory,
+            template_engine: OutputFolderTemplateEngine,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -39,7 +39,7 @@ class JobFilePreparationService:
 
         strategy = self.copy_strategy_factory.get_strategy(tracked_file)
         strategy_name = strategy.__class__.__name__
-        
+
         initial_status = self._determine_initial_status(strategy_name)
         destination_path = self._calculate_destination_path(file_path)
 

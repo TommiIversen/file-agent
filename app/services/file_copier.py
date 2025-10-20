@@ -1,23 +1,23 @@
 import asyncio
 import logging
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
 from app.config import Settings
-from app.services.state_manager import StateManager
-from app.services.job_queue import JobQueueService
-from app.services.consumer.job_processor import JobProcessor
 from app.services.consumer.job_models import QueueJob
+from app.services.consumer.job_processor import JobProcessor
+from app.services.job_queue import JobQueueService
+from app.services.state_manager import StateManager
 
 
 class FileCopierService:
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        job_queue: JobQueueService,
-        job_processor: JobProcessor,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            job_queue: JobQueueService,
+            job_processor: JobProcessor,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -110,4 +110,3 @@ class FileCopierService:
 
     def get_active_worker_count(self):
         return 0
-

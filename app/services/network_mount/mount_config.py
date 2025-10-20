@@ -1,6 +1,7 @@
 """Mount Configuration Handler - SRP compliant configuration management."""
 
 from typing import Optional
+
 from ...config import Settings
 
 

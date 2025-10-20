@@ -2,8 +2,8 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services.state_manager import StateManager
 from app.dependencies import get_state_manager
+from app.services.state_manager import StateManager
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -11,7 +11,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard_page(
-    request: Request, state_manager: StateManager = Depends(get_state_manager)
+        request: Request, state_manager: StateManager = Depends(get_state_manager)
 ):
     """
     Real-time File Transfer Agent dashboard.

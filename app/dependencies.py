@@ -10,18 +10,18 @@ from functools import lru_cache
 from typing import Dict, Any, Optional
 
 from .config import Settings
-from .services.state_manager import StateManager
-from .services.scanner.file_scanner_service import FileScannerService
-from .services.job_queue import JobQueueService
-from .services.file_copier import FileCopierService
-from .services.websocket_manager import WebSocketManager
-from .services.storage_checker import StorageChecker
-from .services.storage_monitor import StorageMonitorService
-from .services.network_mount import NetworkMountService
-from .services.space_checker import SpaceChecker
-from .services.space_retry_manager import SpaceRetryManager
 from .services.consumer.job_processor import JobProcessor
 from .services.copy_strategies import CopyStrategyFactory
+from .services.file_copier import FileCopierService
+from .services.job_queue import JobQueueService
+from .services.network_mount import NetworkMountService
+from .services.scanner.file_scanner_service import FileScannerService
+from .services.space_checker import SpaceChecker
+from .services.space_retry_manager import SpaceRetryManager
+from .services.state_manager import StateManager
+from .services.storage_checker import StorageChecker
+from .services.storage_monitor import StorageMonitorService
+from .services.websocket_manager import WebSocketManager
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}

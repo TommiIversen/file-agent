@@ -1,26 +1,27 @@
 import asyncio
-import aiofiles
 import logging
 import os
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
-from datetime import datetime
+
+import aiofiles
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
-from app.services.state_manager import StateManager
 from app.services.copy.file_copy_executor import FileCopyExecutor, CopyProgress
+from app.services.state_manager import StateManager
 from app.utils.file_operations import create_temp_file_path
 from app.utils.progress_utils import calculate_transfer_rate
 
 
 class FileCopyStrategy(ABC):
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        file_copy_executor: FileCopyExecutor,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            file_copy_executor: FileCopyExecutor,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -29,7 +30,7 @@ class FileCopyStrategy(ABC):
 
     @abstractmethod
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         pass
 
@@ -44,7 +45,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
         return not tracked_file.is_growing_file
 
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         source = Path(source_path)
         dest = Path(dest_path)
@@ -64,7 +65,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                         copy_progress=progress.progress_percent,
                         bytes_copied=progress.bytes_copied,
                         copy_speed_mbps=progress.current_rate_bytes_per_sec
-                        / (1024 * 1024),
+                                        / (1024 * 1024),
                     )
                 )
 
@@ -132,7 +133,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         return tracked_file.is_growing_file
 
     async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         temp_dest_path = None
 
@@ -208,7 +209,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                 if final_success:
                     if await self._verify_file_integrity(
-                        source_path, str(copy_dest_path)
+                            source_path, str(copy_dest_path)
                     ):
                         if self.settings.use_temporary_file and temp_dest_path:
                             os.rename(temp_dest_path, dest_path)
@@ -260,14 +261,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     )
 
     async def _copy_growing_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
             chunk_size = (
-                self.settings.growing_file_chunk_size_kb * 1024
+                    self.settings.growing_file_chunk_size_kb * 1024
             )
             safety_margin_bytes = (
-                self.settings.growing_file_safety_margin_mb * 1024 * 1024
+                    self.settings.growing_file_safety_margin_mb * 1024 * 1024
             )
             poll_interval = self.settings.growing_file_poll_interval_seconds
             pause_ms = self.settings.growing_copy_pause_ms
@@ -276,7 +277,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             last_file_size = 0
             no_growth_cycles = 0
             max_no_growth_cycles = (
-                self.settings.growing_file_growth_timeout_seconds // poll_interval
+                    self.settings.growing_file_growth_timeout_seconds // poll_interval
             )
 
             async with aiofiles.open(dest_path, "wb") as dst:
@@ -331,14 +332,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                                     self._copy_start_bytes = bytes_copied
 
                                 elapsed_seconds = (
-                                    current_time - self._copy_start_time
+                                        current_time - self._copy_start_time
                                 ).total_seconds()
                                 transfer_rate = calculate_transfer_rate(
                                     bytes_copied - self._copy_start_bytes,
                                     elapsed_seconds,
                                 )
                                 copy_speed_mbps = transfer_rate / (
-                                    1024 * 1024
+                                        1024 * 1024
                                 )
 
                                 await self.state_manager.update_file_status_by_id(
@@ -376,7 +377,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return False
 
     async def _finish_normal_copy(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+            self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
             source = Path(source_path)
@@ -449,10 +450,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 class CopyStrategyFactory:
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        enable_resume: bool = True,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            enable_resume: bool = True,
     ):
         self.settings = settings
         self.state_manager = state_manager

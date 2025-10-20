@@ -6,21 +6,21 @@ import logging
 
 from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
-from app.services.state_manager import StateManager
-from app.services.job_queue import JobQueueService
 from app.services.consumer.job_models import ProcessResult, QueueJob
+from app.services.job_queue import JobQueueService
+from app.services.state_manager import StateManager
 
 
 class JobSpaceManager:
     """Handles space checking and shortage workflows for job processing."""
 
     def __init__(
-        self,
-        settings: Settings,
-        state_manager: StateManager,
-        job_queue: JobQueueService,
-        space_checker=None,
-        space_retry_manager=None,
+            self,
+            settings: Settings,
+            state_manager: StateManager,
+            job_queue: JobQueueService,
+            space_checker=None,
+            space_retry_manager=None,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -33,7 +33,7 @@ class JobSpaceManager:
     def should_check_space(self) -> bool:
         """Check if space checking should be performed."""
         return (
-            self.settings.enable_pre_copy_space_check and self.space_checker is not None
+                self.settings.enable_pre_copy_space_check and self.space_checker is not None
         )
 
     async def check_space_for_job(self, job: QueueJob) -> SpaceCheckResult:
@@ -53,7 +53,7 @@ class JobSpaceManager:
         return self.space_checker.check_space_for_file(file_size)
 
     async def handle_space_shortage(
-        self, job: QueueJob, space_check: SpaceCheckResult
+            self, job: QueueJob, space_check: SpaceCheckResult
     ) -> ProcessResult:
         """Handle space shortage by scheduling retry or marking as failed."""
         file_path = job.file_path

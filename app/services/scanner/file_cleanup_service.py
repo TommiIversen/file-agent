@@ -1,5 +1,6 @@
 import logging
 from typing import Set
+
 from .domain_objects import FilePath, ScanConfiguration
 
 
