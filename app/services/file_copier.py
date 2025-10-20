@@ -66,7 +66,6 @@ class FileCopierService:
 
         # Statistics
         self._total_jobs_processed = 0
-        self._total_jobs_failed = 0
         self._start_time: Optional[datetime] = None
 
         # Legacy compatibility attributes

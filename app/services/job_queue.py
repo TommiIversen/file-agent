@@ -250,28 +250,6 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Fejl ved marking job failed: {e}")
 
-    async def requeue_job(self, job: QueueJob) -> None:
-        """
-        Put job tilbage i queue for retry.
-
-        Args:
-            job: QueueJob object der skal requeues
-        """
-        if self.job_queue is None:
-            logging.error("Queue er ikke oprettet endnu!")
-            return
-
-        try:
-            # Mark requeue information on job object
-            job.mark_requeued()
-
-            # Put job tilbage i queue
-            await self.job_queue.put(job)
-
-            logging.info(f"Job requeued: {job}")
-
-        except Exception as e:
-            logging.error(f"Fejl ved requeue af job: {e}")
 
     def get_queue_size(self) -> int:
         """

@@ -7,16 +7,6 @@ from app.models import TrackedFile, FileStatus, FileStateUpdate
 
 
 class StateManager:
-    """
-    Central state management for alle tracked filer.
-
-    Denne klasse er designet som en singleton og håndterer:
-    - Tilføjelse og fjernelse af filer
-    - Status opdateringer med pub/sub events
-    - Thread-safe operationer med asyncio.Lock
-    - Cleanup af filer der ikke længere eksisterer
-    """
-
     def __init__(self):
         """Initialize StateManager med tom tilstand."""
         # NEW: UUID-based storage - single source of truth
@@ -71,20 +61,6 @@ class StateManager:
     async def add_file(
         self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
-        """
-        Tilføj en ny fil til tracking systemet.
-
-        Automatic history management: If file with same path exists as REMOVED,
-        it will be preserved as history and a new entry created.
-
-        Args:
-            file_path: Absolut sti til filen
-            file_size: Filstørrelse i bytes
-            last_write_time: Sidste modificerings tidspunkt
-
-        Returns:
-            Det oprettede TrackedFile objekt
-        """
         async with self._lock:
             # Check if current file exists
             existing = self._get_current_file_for_path(file_path)
@@ -126,12 +102,6 @@ class StateManager:
         return tracked_file
 
     async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
-        """
-        Get the current (most recent/active) file for the given path.
-
-        This maintains backward compatibility while supporting automatic history.
-        Excludes REMOVED files as they are considered historical.
-        """
         async with self._lock:
             current_file = self._get_current_file_for_path(file_path)
             # Filter out REMOVED files - they're historical
@@ -140,25 +110,12 @@ class StateManager:
             return current_file
 
     async def get_all_files(self) -> List[TrackedFile]:
-        """
-        Get ALL current file entries - no grouping, no filtering.
-
-        Returns every tracked file entry as separate items, allowing full visibility
-        into file history including multiple entries for same path.
-        Perfect for UI debugging and audit trails.
-        """
         async with self._lock:
             # Return ALL files - no grouping, no filtering
             # Each UUID is a separate entry, even for same file_path
             return list(self._files_by_id.values())
 
     async def get_current_files_only(self) -> List[TrackedFile]:
-        """
-        Get current files only - one entry per file_path (grouped).
-
-        For each file_path, only the most recent/active entry is returned.
-        This is the old behavior if you need it for specific use cases.
-        """
         async with self._lock:
             # Group by file_path and return only current entries
             current_files = {}
@@ -206,11 +163,6 @@ class StateManager:
         return time1 > time2
 
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
-        """
-        Get files by status - returns current entries only.
-
-        For each file_path, only the most recent entry is considered.
-        """
         async with self._lock:
             # Group by file_path and return only current entries with matching status
             current_files = {}

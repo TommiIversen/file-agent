@@ -61,23 +61,6 @@ class QueueJob:
         """Mark this job as requeued."""
         self.requeued_at = datetime.now()
 
-    def get_age_seconds(self) -> float:
-        """Get the age of this job in seconds since it was added to queue."""
-        return (datetime.now() - self.added_to_queue_at).total_seconds()
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for backwards compatibility if needed."""
-        return {
-            "file_id": self.file_id,
-            "file_path": self.file_path,
-            "file_size": self.file_size,
-            "added_to_queue_at": self.added_to_queue_at,
-            "retry_count": self.retry_count,
-            "last_retry_at": self.last_retry_at,
-            "requeued_at": self.requeued_at,
-            "last_error_message": self.last_error_message,
-        }
-
     def __str__(self) -> str:
         """Human-readable representation for logging."""
         return (

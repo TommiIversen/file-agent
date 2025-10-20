@@ -14,25 +14,6 @@ from ..services.storage_monitor import StorageMonitorService
 
 
 class SpaceChecker:
-    """
-    Utility service for checking if destination has sufficient space for file operations.
-
-    Responsibilities:
-    - Pre-flight space checking before file copying
-    - Safety margin calculations
-    - Temporary vs permanent shortage detection
-    - Clean, reusable space validation logic
-
-    Dependencies:
-    - StorageMonitorService (for current space info)
-    - Settings (for safety margins and thresholds)
-
-    Design Principles:
-    - Single Responsibility: Only handles space checking
-    - No side effects: Pure checking logic
-    - Dependency Injection: Receives dependencies via constructor
-    """
-
     def __init__(self, settings: Settings, storage_monitor: StorageMonitorService):
         """
         Initialize SpaceChecker with dependencies.
@@ -47,20 +28,6 @@ class SpaceChecker:
         logging.debug("SpaceChecker initialized")
 
     def check_space_for_file(self, file_size_bytes: int) -> SpaceCheckResult:
-        """
-        Check if destination has sufficient space for a file.
-
-        Performs comprehensive space check including:
-        - Current available space
-        - Required space (file + safety margin)
-        - Minimum free space after copy
-
-        Args:
-            file_size_bytes: Size of file to be copied in bytes
-
-        Returns:
-            SpaceCheckResult with detailed space analysis
-        """
         logging.debug(f"Checking space for file of {file_size_bytes} bytes")
 
         # Get current destination storage info
@@ -143,20 +110,6 @@ class SpaceChecker:
         safety_margin_bytes: int,
         minimum_after_copy_bytes: int,
     ) -> str:
-        """
-        Create human-readable reason for space check result.
-
-        Args:
-            has_space: Whether space is sufficient
-            available_bytes: Available space
-            required_bytes: Required space
-            file_size_bytes: File size
-            safety_margin_bytes: Safety margin
-            minimum_after_copy_bytes: Minimum space to leave after copy
-
-        Returns:
-            Human-readable explanation
-        """
         available_gb = available_bytes / (1024**3)
         required_gb = required_bytes / (1024**3)
         file_gb = file_size_bytes / (1024**3)
@@ -175,21 +128,9 @@ class SpaceChecker:
             )
 
     def is_space_check_enabled(self) -> bool:
-        """
-        Check if pre-copy space checking is enabled.
-
-        Returns:
-            True if space checking should be performed
-        """
         return self._settings.enable_pre_copy_space_check
 
     def get_space_settings_info(self) -> dict:
-        """
-        Get current space checking configuration for debugging.
-
-        Returns:
-            Dictionary with current space checking settings
-        """
         return {
             "enabled": self._settings.enable_pre_copy_space_check,
             "safety_margin_gb": self._settings.copy_safety_margin_gb,

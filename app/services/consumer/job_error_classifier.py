@@ -142,19 +142,3 @@ class JobErrorClassifier:
             f"❓ UNKNOWN ERROR TYPE: {file_path} - {error_str} → defaulting to PAUSE for safety"
         )
         return True, f"Unknown error (defaulting to pause): {str(error)}"
-
-    def log_classification_decision(
-        self, file_path: str, should_pause: bool, reason: str
-    ) -> None:
-        """
-        Log the classification decision for debugging.
-
-        Args:
-            file_path: Path to the file
-            should_pause: Whether the error should trigger pause
-            reason: Reason for the decision
-        """
-        action = "PAUSE" if should_pause else "FAIL"
-        logging.info(
-            f"🎯 ERROR CLASSIFICATION: {Path(file_path).name} → {action} ({reason})"
-        )
