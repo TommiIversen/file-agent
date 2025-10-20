@@ -501,7 +501,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             # We will use a manual approach here to append the rest of the data,
             # as refactoring the executor for partial copies is a larger task.
 
-            chunk_size = self.settings.large_file_chunk_size_kb * 1024
+            # Use simple, optimal chunk size for the final copy
+            chunk_size = self.settings.chunk_size_kb * 1024
 
             async with aiofiles.open(source, "rb") as src:
                 async with aiofiles.open(dest, "ab") as dst:  # Append mode

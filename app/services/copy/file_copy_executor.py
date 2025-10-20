@@ -138,25 +138,15 @@ class FileCopyExecutor:
         """
         self.settings = settings
 
-        # Copy configuration - optimized for network transfers
-        self.normal_chunk_size = (
-            settings.normal_file_chunk_size_kb * 1024
-        )  # 1MB default
-        self.large_chunk_size = (
-            settings.large_file_chunk_size_kb * 1024
-        )  # 2MB for large files
-        self.large_file_threshold = settings.large_file_threshold_gb * (
-            1024**3
-        )  # Convert to bytes
+        # Simple, optimal chunk size for all files
+        self.chunk_size = settings.chunk_size_kb * 1024  # Convert to bytes
         self.progress_update_interval = getattr(
             settings, "copy_progress_update_interval", 1
         )
 
         logging.debug(
-            f"FileCopyExecutor initialized with optimized chunk sizes: "
-            f"normal={self.normal_chunk_size // 1024}KB, "
-            f"large={self.large_chunk_size // 1024}KB, "
-            f"threshold={settings.large_file_threshold_gb}GB"
+            f"FileCopyExecutor initialized with chunk size: "
+            f"{settings.chunk_size_kb}KB"
         )
 
     async def copy_file(
@@ -379,17 +369,12 @@ class FileCopyExecutor:
         bytes_copied = 0
         last_progress_reported = -1
 
-        # Select optimal chunk size based on file size
-        if file_size >= self.large_file_threshold:
-            chunk_size = self.large_chunk_size
-            logging.debug(
-                f"Using large file chunk size: {chunk_size // 1024}KB for {file_size / (1024**3):.1f}GB file"
-            )
-        else:
-            chunk_size = self.normal_chunk_size
-            logging.debug(
-                f"Using normal chunk size: {chunk_size // 1024}KB for {file_size / (1024**2):.1f}MB file"
-            )
+        # Use simple, optimal chunk size for all files
+        chunk_size = self.chunk_size
+        
+        logging.debug(
+            f"Using {chunk_size // 1024}KB chunks for {file_size / (1024**2):.1f}MB file"
+        )
 
         try:
             async with (
@@ -503,9 +488,7 @@ class FileCopyExecutor:
             Dictionary with executor configuration details
         """
         return {
-            "normal_chunk_size_kb": self.normal_chunk_size // 1024,
-            "large_chunk_size_kb": self.large_chunk_size // 1024,
-            "large_file_threshold_gb": self.settings.large_file_threshold_gb,
+            "chunk_size_kb": self.settings.chunk_size_kb,
             "progress_update_interval": self.progress_update_interval,
             "use_temporary_file": self.settings.use_temporary_file,
             "default_strategy": "temp_file"

@@ -35,6 +35,7 @@ class TestFileCopyExecutorBasics:
             destination_directory="/test/dest",
             use_temporary_file=True,
             copy_progress_update_interval=10,
+            chunk_size_kb=2048,  # Simple 2MB chunks
         )
 
     @pytest.fixture
@@ -45,8 +46,7 @@ class TestFileCopyExecutorBasics:
     def test_initialization(self, executor, settings):
         """Test FileCopyExecutor initialization."""
         assert executor.settings == settings
-        assert executor.normal_chunk_size == settings.normal_file_chunk_size_kb * 1024
-        assert executor.large_chunk_size == settings.large_file_chunk_size_kb * 1024
+        assert executor.chunk_size == settings.chunk_size_kb * 1024
         assert (
             executor.progress_update_interval == settings.copy_progress_update_interval
         )
@@ -57,6 +57,7 @@ class TestFileCopyExecutorBasics:
             source_directory="/test/source",
             destination_directory="/test/dest",
             use_temporary_file=True,
+            chunk_size_kb=2048,
         )
         executor = FileCopyExecutor(settings)
         assert executor.progress_update_interval == 1  # Default value
@@ -66,9 +67,7 @@ class TestFileCopyExecutorBasics:
         info = executor.get_executor_info()
 
         expected_info = {
-            "normal_chunk_size_kb": 1024,  # From settings
-            "large_chunk_size_kb": 2048,  # From settings
-            "large_file_threshold_gb": 1.0,  # From settings
+            "chunk_size_kb": 2048,  # Simple 2MB chunks
             "progress_update_interval": 10,  # From settings (fixed)
             "use_temporary_file": True,
             "default_strategy": "temp_file",
@@ -82,6 +81,7 @@ class TestFileCopyExecutorBasics:
             source_directory="/test/source",
             destination_directory="/test/dest",
             use_temporary_file=False,
+            chunk_size_kb=2048,
         )
         executor = FileCopyExecutor(settings)
         info = executor.get_executor_info()

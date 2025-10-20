@@ -72,26 +72,16 @@ class CopyStrategyFactory:
         self.settings = settings
         self.state_manager = state_manager
 
-        # Network-optimized copy configuration
-        self.normal_chunk_size = (
-            settings.normal_file_chunk_size_kb * 1024
-        )  # 1MB default
-        self.large_file_chunk_size = (
-            settings.large_file_chunk_size_kb * 1024
-        )  # 2MB for large files
+        # Simple chunk size configuration
+        self.chunk_size = settings.chunk_size_kb * 1024  # Convert to bytes
         self.growing_file_chunk_size = (
             settings.growing_file_chunk_size_kb * 1024
         )  # 2MB for growing files
-        self.large_file_threshold = settings.large_file_threshold_gb * (
-            1024**3
-        )  # Convert to bytes
 
         logging.debug(
-            f"CopyStrategyFactory initialized with optimized chunk sizes: "
-            f"normal={self.normal_chunk_size // 1024}KB, "
-            f"large={self.large_file_chunk_size // 1024}KB, "
-            f"growing={self.growing_file_chunk_size // 1024}KB, "
-            f"threshold={settings.large_file_threshold_gb}GB"
+            f"CopyStrategyFactory initialized with chunk sizes: "
+            f"normal={settings.chunk_size_kb}KB, "
+            f"growing={settings.growing_file_chunk_size_kb}KB"
         )
 
     def get_executor_config(self, tracked_file: TrackedFile) -> ExecutorConfig:
@@ -148,10 +138,8 @@ class CopyStrategyFactory:
 
     def get_factory_info(self) -> Dict[str, Any]:
         return {
-            "normal_chunk_size_kb": self.normal_chunk_size // 1024,
-            "large_file_chunk_size_kb": self.large_file_chunk_size // 1024,
+            "chunk_size_kb": self.settings.chunk_size_kb,
             "growing_file_chunk_size_kb": self.growing_file_chunk_size // 1024,
-            "large_file_threshold_gb": self.settings.large_file_threshold_gb,
             "growing_file_support": self.settings.enable_growing_file_support,
             "default_temp_file_usage": self.settings.use_temporary_file,
             "available_strategies": list(self.get_available_strategies().keys()),
@@ -192,10 +180,9 @@ class CopyStrategyFactory:
         """Determine optimal chunk size based on file characteristics."""
         if is_growing:
             return self.growing_file_chunk_size
-        elif tracked_file.file_size > self.large_file_threshold:
-            return self.large_file_chunk_size
         else:
-            return self.normal_chunk_size
+            # Use simple, optimal chunk size for all normal files
+            return self.chunk_size
 
     def _get_progress_update_interval(
         self, tracked_file: TrackedFile, is_growing: bool
@@ -204,9 +191,6 @@ class CopyStrategyFactory:
         if is_growing:
             # More frequent updates for growing files
             return 1  # Update every 1%
-        elif tracked_file.file_size > self.large_file_threshold:
-            # Less frequent updates for large files to avoid overhead
-            return 5  # Update every 5%
         else:
             # Standard update interval for normal files
             return getattr(self.settings, "copy_progress_update_interval", 2)
@@ -215,8 +199,6 @@ class CopyStrategyFactory:
         """Determine copy mode based on file characteristics."""
         if is_growing:
             return "growing"
-        elif tracked_file.file_size > self.large_file_threshold:
-            return "large_file"
         else:
             return "normal"
 

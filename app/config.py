@@ -26,12 +26,8 @@ class Settings(BaseSettings):
         1  # Update progress every N percent (10 = every 10%)
     )
 
-    # Chunk sizes for network copy optimization
-    normal_file_chunk_size_kb: int = (
-        1024  # 1MB chunks for normal files (network optimized)
-    )
-    large_file_chunk_size_kb: int = 2048  # 2MB chunks for files > 1GB
-    large_file_threshold_gb: float = 1.0  # Files larger than this use large chunks
+    # Simple, optimal chunk size for all file transfers
+    chunk_size_kb: int = 2048  # 2MB chunks - optimal for network transfers
 
     # Logging konfiguration
     log_level: str = "INFO"
