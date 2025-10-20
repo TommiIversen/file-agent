@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+filter#!/usr/bin/env python3
 """
 File Growth Simulator
 Simulerer videoptager der skriver til 8 streams kontinuerligt,

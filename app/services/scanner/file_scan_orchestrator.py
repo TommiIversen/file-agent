@@ -220,10 +220,8 @@ class FileScanOrchestrator:
                     continue
 
                 if self.growing_file_detector:
-                    # Use growing file detection logic - simplified for now
                     await self._handle_growing_file_logic(metadata, tracked_file)
                 else:
-                    # Use traditional stability logic
                     await self._handle_traditional_stability_logic(metadata, tracked_file)
 
         except Exception as e:
@@ -235,7 +233,7 @@ class FileScanOrchestrator:
 
         # Update growth tracking
         await self.growing_file_detector.update_file_growth_info(
-            file_path, metadata.size
+            tracked_file, metadata.size
         )
 
         # Check growth status
