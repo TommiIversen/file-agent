@@ -14,7 +14,7 @@ from unittest.mock import Mock, AsyncMock
 
 from app.config import Settings
 from app.models import TrackedFile, FileStatus
-from app.services.file_copier import FileCopyService
+from app.services.file_copier import FileCopierService
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
 
@@ -68,8 +68,8 @@ def mock_job_queue():
 
 @pytest.fixture
 def file_copier_service(test_settings, mock_state_manager, mock_job_queue):
-    """Create FileCopyService with new integrated architecture."""
-    return FileCopyService(
+    """Create FileCopierService with new integrated architecture."""
+    return FileCopierService(
         settings=test_settings,
         state_manager=mock_state_manager,
         job_queue=mock_job_queue,

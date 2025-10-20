@@ -8,9 +8,11 @@ Max 70 lines for 139-line service.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
+from datetime import datetime
 
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
 from app.models import FileStatus, TrackedFile
+from app.services.consumer.job_models import QueueJob
 
 
 @pytest.fixture
@@ -33,9 +35,12 @@ class TestJobFilePreparationService:
     @pytest.mark.asyncio
     async def test_prepare_file_success(self, preparer):
         """Test successful file preparation."""
-        job = {"file_path": "/src/test.mxf"}
         tracked_file = TrackedFile(
             file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
+        )
+        job = QueueJob(
+            tracked_file=tracked_file,
+            added_to_queue_at=datetime.now()
         )
         strategy = MagicMock(__class__=MagicMock(__name__="StandardCopyStrategy"))
 
@@ -65,7 +70,11 @@ class TestJobFilePreparationService:
     @pytest.mark.asyncio
     async def test_prepare_file_not_found(self, preparer):
         """Test file preparation when file not found."""
-        job = {"file_path": "/src/missing.mxf"}
+        # Simulate a job with a tracked_file that is None
+        job = QueueJob(
+            tracked_file=None,
+            added_to_queue_at=datetime.now()
+        )
         preparer.state_manager.get_file_by_path.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)

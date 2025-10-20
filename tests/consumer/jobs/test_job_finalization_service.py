@@ -7,9 +7,12 @@ Max 70 lines for 139-line service.
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime
 
 from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.models import FileStatus
+from app.models import TrackedFile
+from app.services.consumer.job_models import QueueJob
 
 
 @pytest.fixture
@@ -28,7 +31,10 @@ class TestJobFinalizationService:
     @pytest.mark.asyncio
     async def test_finalize_success(self, finalizer):
         """Test successful job completion."""
-        job = {"file_path": "/test/file.txt"}
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=100, status=FileStatus.READY
+        )
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         file_size = 1000
 
         await finalizer.finalize_success(job, file_size)
@@ -39,7 +45,10 @@ class TestJobFinalizationService:
     @pytest.mark.asyncio
     async def test_finalize_failure(self, finalizer):
         """Test failed job handling."""
-        job = {"file_path": "/test/file.txt"}
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=100, status=FileStatus.READY
+        )
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         error = Exception("Test error")
 
         await finalizer.finalize_failure(job, error)
@@ -50,7 +59,10 @@ class TestJobFinalizationService:
     @pytest.mark.asyncio
     async def test_finalize_max_retries(self, finalizer):
         """Test max retry attempts reached."""
-        job = {"file_path": "/test/file.txt"}
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=100, status=FileStatus.READY
+        )
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
 
         await finalizer.finalize_max_retries(job)
 

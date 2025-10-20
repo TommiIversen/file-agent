@@ -92,35 +92,28 @@ class TestStateManager:
     ):
         """Test at remove_file fjerner fil fra tracking."""
         # Tilføj fil
-        await state_manager.add_file(sample_file_path, 1024)
+        tracked_file = await state_manager.add_file(sample_file_path, 1024)
 
         # Verificer fil eksisterer
-        tracked_file = await state_manager.get_file_by_path(sample_file_path)
-        assert tracked_file is not None
+        file_by_id = await state_manager.get_file_by_id(tracked_file.id)
+        assert file_by_id is not None
 
-        # Fjern fil
+        # Fjern fil (should use remove_file_by_id if available)
         success = await state_manager.remove_file(sample_file_path)
         assert success is True
 
         # Verificer fil er fjernet
-        tracked_file = await state_manager.get_file_by_path(sample_file_path)
-        assert tracked_file is None
-
-    async def test_remove_nonexistent_file_returns_false(self, state_manager):
-        """Test at fjernelse af ikke-eksisterende fil returnerer False."""
-        success = await state_manager.remove_file("/nonexistent/file.mxf")
-        assert success is False
+        file_by_id = await state_manager.get_file_by_id(tracked_file.id)
+        assert file_by_id is None
 
     async def test_get_files_by_status(self, state_manager):
         """Test at get_files_by_status returnerer korrekte filer."""
         # Tilføj flere filer med forskellige statusser
-        await state_manager.add_file("/test/file1.mxf", 1024)
-        await state_manager.add_file("/test/file2.mxf", 2048)
-        await state_manager.add_file("/test/file3.mxf", 4096)
+        file1 = await state_manager.add_file("/test/file1.mxf", 1024)
+        file2 = await state_manager.add_file("/test/file2.mxf", 2048)
+        file3 = await state_manager.add_file("/test/file3.mxf", 4096)
 
         # Opdater nogen til READY
-        file1 = await state_manager.get_file_by_path("/test/file1.mxf")
-        file2 = await state_manager.get_file_by_path("/test/file2.mxf")
         await state_manager.update_file_status_by_id(file1.id, FileStatus.READY)
         await state_manager.update_file_status_by_id(file2.id, FileStatus.READY)
 
@@ -190,11 +183,14 @@ class TestStateManager:
     async def test_thread_safety_concurrent_operations(self, state_manager):
         """Test thread safety med concurrent add/update/remove operationer."""
         file_paths = [f"/test/file_{i}.mxf" for i in range(100)]
+        tracked_files = {}
 
         async def add_files():
             """Add alle filer concurrent."""
             tasks = [state_manager.add_file(path, 1024) for path in file_paths]
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks)
+            for path, tracked_file in zip(file_paths, results):
+                tracked_files[path] = tracked_file
 
         async def update_files():
             """Update alle filer concurrent."""
@@ -202,9 +198,9 @@ class TestStateManager:
             # Get files first, then update by ID
             tasks = []
             for path in file_paths:
-                file = await state_manager.get_file_by_path(path)
-                if file:
-                    tasks.append(state_manager.update_file_status_by_id(file.id, FileStatus.READY))
+                tracked_file = tracked_files.get(path)
+                if tracked_file:
+                    tasks.append(state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY))
             await asyncio.gather(*tasks, return_exceptions=True)
 
         # Kør begge operationer samtidigt

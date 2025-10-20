@@ -7,10 +7,11 @@ Max 80 lines for 167-line service.
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime
 
 from app.services.consumer.job_space_manager import JobSpaceManager
-from app.models import SpaceCheckResult
-from app.services.consumer.job_models import ProcessResult
+from app.models import SpaceCheckResult, TrackedFile, FileStatus
+from app.services.consumer.job_models import ProcessResult, QueueJob
 
 
 @pytest.fixture
@@ -42,7 +43,8 @@ class TestJobSpaceManager:
     @pytest.mark.asyncio
     async def test_check_space_sufficient(self, space_manager):
         """Test space check with sufficient space."""
-        job = {"file_path": "/test/file.txt", "file_size": 1000}
+        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         expected = SpaceCheckResult(
             has_space=True,
             available_bytes=5000,
@@ -61,7 +63,8 @@ class TestJobSpaceManager:
     @pytest.mark.asyncio
     async def test_handle_space_shortage_with_retry(self, space_manager):
         """Test space shortage handling with retry manager."""
-        job = {"file_path": "/test/file.txt"}
+        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,
@@ -82,7 +85,8 @@ class TestJobSpaceManager:
     async def test_handle_space_shortage_no_retry_manager(self, space_manager):
         """Test space shortage handling without retry manager."""
         space_manager.space_retry_manager = None
-        job = {"file_path": "/test/file.txt"}
+        tracked_file = TrackedFile(file_path="/test/file.txt", file_size=1000, status=FileStatus.READY)
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,

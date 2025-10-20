@@ -74,9 +74,9 @@ class TestScannerUUIDIntegration:
         await state_manager.cleanup_missing_files(set())  # Empty set = all files missing
         
         # Verify file is marked as REMOVED
-        removed_file = await state_manager.get_file_by_path(file_path)
-        assert removed_file is None  # get_file excludes REMOVED files
-        
+        removed_file = await state_manager.get_file_by_id(tracked_file1.id)
+        assert removed_file is None  # get_file_by_id excludes REMOVED files
+
         # But history should exist
         history = await state_manager.get_file_history(file_path)
         assert len(history) == 1
@@ -121,7 +121,7 @@ class TestScannerUUIDIntegration:
         await state_manager.cleanup_missing_files(set())  # Mark as REMOVED
         
         # 2. Simulate scanner discovers same file again (mocking the discovery logic)
-        existing_file = await state_manager.get_file_by_path(file_path)
+        existing_file = await state_manager.get_file_by_id(tracked_file1.id)
         assert existing_file is None  # Should not find REMOVED files
         
         # 3. Scanner should add it as new file (this is what happens in real code)
@@ -136,7 +136,7 @@ class TestScannerUUIDIntegration:
         history = await state_manager.get_file_history(file_path)
         assert len(history) == 2
         
-        current_file = await state_manager.get_file_by_path(file_path)
+        current_file = await state_manager.get_file_by_id(tracked_file2.id)
         assert current_file is not None
         assert current_file.id == tracked_file2.id
 

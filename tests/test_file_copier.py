@@ -21,11 +21,11 @@ from pathlib import Path
 from app.config import Settings
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
-from app.services.file_copier import FileCopyService
+from app.services.file_copier import FileCopierService
 
 
-class TestFileCopyService:
-    """Test suite for FileCopyService functionality."""
+class TestFileCopierService:
+    """Test suite for FileCopierService functionality."""
 
     @pytest.fixture
     def temp_directories(self):
@@ -65,8 +65,8 @@ class TestFileCopyService:
 
     @pytest.fixture
     def file_copier(self, mock_settings, state_manager, job_queue_service):
-        """Create FileCopyService instance."""
-        return FileCopyService(mock_settings, state_manager, job_queue_service)
+        """Create FileCopierService instance."""
+        return FileCopierService(mock_settings, state_manager, job_queue_service)
 
     @pytest.fixture
     def sample_file(self, temp_directories):
@@ -82,7 +82,7 @@ class TestFileCopyService:
 
     @pytest.mark.asyncio
     async def test_file_copier_initialization(self, file_copier, mock_settings):
-        """Test FileCopyService initialization."""
+        """Test FileCopierService initialization."""
         assert file_copier.settings == mock_settings
 
         # Check statistics tracker initialization
@@ -211,8 +211,8 @@ class TestFileCopyService:
     # Status information is now available through get_copy_statistics method
 
 
-class TestFileCopyServiceIntegration:
-    """Integration tests for FileCopyService med andre services."""
+class TestFileCopierServiceIntegration:
+    """Integration tests for FileCopierService med andre services."""
 
     @pytest.fixture
     def full_system(self, temp_directories):
@@ -235,7 +235,7 @@ class TestFileCopyServiceIntegration:
         # Create services
         state_manager = StateManager()
         job_queue_service = JobQueueService(settings, state_manager)
-        file_copier = FileCopyService(settings, state_manager, job_queue_service)
+        file_copier = FileCopierService(settings, state_manager, job_queue_service)
 
         return {
             "settings": settings,

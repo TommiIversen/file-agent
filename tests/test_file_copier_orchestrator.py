@@ -1,7 +1,7 @@
 """
-Tests for the new ultra-lean FileCopyService orchestrator.
+Tests for the new ultra-lean FileCopierService orchestrator.
 
-The new FileCopyService is a pure orchestrator that delegates all operations
+The new FileCopierService is a pure orchestrator that delegates all operations
 to specialized services. These tests focus on orchestration behavior rather
 than the detailed copy logic (which is tested in individual service tests).
 """
@@ -9,7 +9,7 @@ than the detailed copy logic (which is tested in individual service tests).
 import pytest
 from unittest.mock import Mock, AsyncMock
 
-from app.services.file_copier import FileCopyService
+from app.services.file_copier import FileCopierService
 from app.services.job_queue import JobQueueService
 from app.services.copy_strategies import CopyStrategyFactory
 from app.services.tracking.copy_statistics import CopyStatisticsTracker
@@ -18,8 +18,8 @@ from app.services.destination.destination_checker import DestinationChecker
 from app.config import Settings
 
 
-class TestFileCopyServiceOrchestrator:
-    """Test the new lean FileCopyService orchestrator pattern."""
+class TestFileCopierServiceOrchestrator:
+    """Test the new lean FileCopierService orchestrator pattern."""
 
     @pytest.fixture
     def mock_settings(self):
@@ -45,8 +45,8 @@ class TestFileCopyServiceOrchestrator:
 
     @pytest.fixture
     def orchestrator(self, mock_settings, mock_state_manager, mock_job_queue):
-        """Create FileCopyService orchestrator instance."""
-        return FileCopyService(
+        """Create FileCopierService orchestrator instance."""
+        return FileCopierService(
             settings=mock_settings,
             state_manager=mock_state_manager,
             job_queue=mock_job_queue,
@@ -190,8 +190,8 @@ class TestFileCopyServiceOrchestrator:
         )
 
 
-class TestFileCopyServiceLegacyCompatibility:
-    """Test legacy compatibility for existing code that depends on FileCopyService."""
+class TestFileCopierServiceLegacyCompatibility:
+    """Test legacy compatibility for existing code that depends on FileCopierService."""
 
     @pytest.fixture
     def mock_settings(self):
@@ -216,17 +216,17 @@ class TestFileCopyServiceLegacyCompatibility:
     ):
         """Test that the legacy constructor signature still works."""
         # This should not raise an exception
-        service = FileCopyService(mock_settings, mock_state_manager, mock_job_queue)
+        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue)
 
         assert service.settings == mock_settings
-        assert isinstance(service, FileCopyService)
+        assert isinstance(service, FileCopierService)
 
     @pytest.mark.asyncio
     async def test_legacy_statistics_format(
         self, mock_settings, mock_state_manager, mock_job_queue
     ):
         """Test that statistics still return expected format for legacy code."""
-        service = FileCopyService(mock_settings, mock_state_manager, mock_job_queue)
+        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue)
 
         stats = await service.get_copy_statistics()
 
@@ -246,7 +246,7 @@ class TestFileCopyServiceLegacyCompatibility:
         self, mock_settings, mock_state_manager, mock_job_queue
     ):
         """Test legacy status methods."""
-        service = FileCopyService(mock_settings, mock_state_manager, mock_job_queue)
+        service = FileCopierService(mock_settings, mock_state_manager, mock_job_queue)
 
         # These methods should exist and return sensible values
         assert isinstance(service.is_running(), bool)

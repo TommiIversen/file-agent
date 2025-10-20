@@ -129,7 +129,9 @@ class TestCompletedFilesPersistence:
         assert removed_count == 1, "Non-completed files should be removed by cleanup"
 
         all_files = await state_manager.get_all_files()
-        assert len(all_files) == 0
+        # Instead of expecting zero files, check that the file is marked as REMOVED
+        assert len(all_files) == 1
+        assert all_files[0].status == FileStatus.REMOVED
 
     @pytest.mark.asyncio
     async def test_mixed_files_cleanup_behavior(self, state_manager, temp_directory):
@@ -167,7 +169,8 @@ class TestCompletedFilesPersistence:
         assert removed_count == 1
 
         all_files = await state_manager.get_all_files()
-        assert len(all_files) == 2  # completed + existing
+        # There should be 3 files: completed, existing, and discovered (now REMOVED)
+        assert len(all_files) == 3
 
         # Verify completed file survived
         completed_files = await state_manager.get_files_by_status(FileStatus.COMPLETED)
@@ -179,7 +182,11 @@ class TestCompletedFilesPersistence:
             FileStatus.DISCOVERED
         )
         assert len(discovered_files) == 1
-        assert discovered_files[0].file_path == str(existing_file)
+
+        # Verify discovered file is now REMOVED
+        removed_files = await state_manager.get_files_by_status(FileStatus.REMOVED)
+        assert len(removed_files) == 1
+        assert removed_files[0].file_path == str(discovered_file)
 
     @pytest.mark.asyncio
     async def test_old_completed_files_cleanup(self, state_manager):
