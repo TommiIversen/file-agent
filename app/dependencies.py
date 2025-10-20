@@ -13,13 +13,15 @@ from .config import Settings
 from .services.state_manager import StateManager
 from .services.scanner.file_scanner_service import FileScannerService
 from .services.job_queue import JobQueueService
-from .services.file_copier import FileCopyService
+from .services.file_copier import FileCopierService
 from .services.websocket_manager import WebSocketManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
 from .services.network_mount import NetworkMountService
 from .services.space_checker import SpaceChecker
 from .services.space_retry_manager import SpaceRetryManager
+from .services.consumer.job_processor import JobProcessor
+from .services.copy_strategies import CopyStrategyFactory
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -79,35 +81,24 @@ def get_job_queue_service() -> JobQueueService:
     return _singletons["job_queue_service"]
 
 
-def get_file_copier() -> FileCopyService:
+def get_file_copier() -> FileCopierService:
     """
-    Hent FileCopyService singleton instance med space checking og resume support.
+    Hent FileCopierService singleton instance med JobProcessor dependency.
 
     Returns:
-        FileCopyService instance med alle dependencies
+        FileCopierService instance med alle dependencies
     """
     if "file_copier" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
         job_queue_service = get_job_queue_service()
+        job_processor = get_job_processor()
 
-        # Space management dependencies (optional for backward compatibility)
-        space_checker = (
-            get_space_checker() if settings.enable_pre_copy_space_check else None
-        )
-        space_retry_manager = get_space_retry_manager() if space_checker else None
-
-        # Get storage monitor for destination checker integration
-        storage_monitor = get_storage_monitor()
-
-        _singletons["file_copier"] = FileCopyService(
+        _singletons["file_copier"] = FileCopierService(
             settings=settings,
             state_manager=state_manager,
             job_queue=job_queue_service,
-            space_checker=space_checker,
-            space_retry_manager=space_retry_manager,
-            storage_monitor=storage_monitor,
-            enable_resume=settings.enable_secure_resume,  # Enable resume based on settings
+            job_processor=job_processor,
         )
 
     return _singletons["file_copier"]
@@ -222,6 +213,50 @@ def get_storage_monitor() -> StorageMonitorService:
         websocket_manager._storage_monitor = _singletons["storage_monitor"]
 
     return _singletons["storage_monitor"]
+
+
+def get_copy_strategy_factory() -> CopyStrategyFactory:
+    """
+    Hent CopyStrategyFactory singleton instance.
+
+    Returns:
+        CopyStrategyFactory instance (oprettes kun én gang)
+    """
+    if "copy_strategy_factory" not in _singletons:
+        settings = get_settings()
+        state_manager = get_state_manager()
+        _singletons["copy_strategy_factory"] = CopyStrategyFactory(settings, state_manager)
+
+    return _singletons["copy_strategy_factory"]
+
+
+def get_job_processor() -> JobProcessor:
+    """
+    Hent JobProcessor singleton instance.
+
+    Returns:
+        JobProcessor instance med alle dependencies
+    """
+    if "job_processor" not in _singletons:
+        settings = get_settings()
+        state_manager = get_state_manager()
+        job_queue_service = get_job_queue_service()
+        copy_strategy_factory = get_copy_strategy_factory()
+        space_checker = (
+            get_space_checker() if settings.enable_pre_copy_space_check else None
+        )
+        space_retry_manager = get_space_retry_manager() if space_checker else None
+
+        _singletons["job_processor"] = JobProcessor(
+            settings=settings,
+            state_manager=state_manager,
+            job_queue=job_queue_service,
+            copy_strategy_factory=copy_strategy_factory,
+            space_checker=space_checker,
+            space_retry_manager=space_retry_manager,
+        )
+
+    return _singletons["job_processor"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:

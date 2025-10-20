@@ -7,9 +7,10 @@ simple dictionary objects with proper type safety and validation.
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from app.models import TrackedFile
+from app.models import TrackedFile, FileStatus
 
 
 @dataclass
@@ -118,4 +119,73 @@ class JobResult:
             f"JobResult({status}, "
             f"file={self.job.file_path}, "
             f"time={self.processing_time_seconds:.2f}s)"
+        )
+
+
+@dataclass
+class ProcessResult:
+    """
+    Result object for job processor workflow.
+
+    Indicates the outcome of processing a job through the entire workflow.
+    Used by JobProcessor to communicate results back to the consumer.
+    """
+
+    success: bool
+    file_path: str
+    error_message: Optional[str] = None
+    should_retry: bool = False
+    retry_scheduled: bool = False
+    space_shortage: bool = False
+
+    def __str__(self) -> str:
+        """Human-readable representation for logging."""
+        status = "SUCCESS" if self.success else "FAILED"
+        extras = []
+        if self.should_retry:
+            extras.append("retry=true")
+        if self.retry_scheduled:
+            extras.append("scheduled=true")
+        if self.space_shortage:
+            extras.append("space_shortage=true")
+
+        extra_str = f" ({', '.join(extras)})" if extras else ""
+        return f"ProcessResult({status}, {self.file_path}{extra_str})"
+
+
+@dataclass
+class PreparedFile:
+    """
+    File preparation result from JobFilePreparationService.
+
+    Contains all information needed to execute a copy operation
+    including strategy selection and destination path calculation.
+    """
+
+    tracked_file: TrackedFile
+    strategy_name: str
+    initial_status: FileStatus
+    destination_path: Path
+
+    @property
+    def file_id(self) -> str:
+        """Get the UUID of the tracked file."""
+        return self.tracked_file.id
+
+    @property
+    def file_path(self) -> str:
+        """Get the source file path."""
+        return self.tracked_file.file_path
+
+    @property
+    def file_size(self) -> int:
+        """Get the file size."""
+        return self.tracked_file.file_size
+
+    def __str__(self) -> str:
+        """Human-readable representation for logging."""
+        return (
+            f"PreparedFile(id={self.file_id[:8]}, "
+            f"strategy={self.strategy_name}, "
+            f"dest={self.destination_path.name})"
         )

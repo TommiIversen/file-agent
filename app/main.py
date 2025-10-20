@@ -59,11 +59,11 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(queue_task)
     logging.info("JobQueueService producer startet som background task")
 
-    # Start FileCopyService consumer som background task
+    # Start FileCopierService workers som background task
     file_copier = get_file_copier()
-    copier_task = asyncio.create_task(file_copier.start_consumer())
+    copier_task = asyncio.create_task(file_copier.start_workers())
     _background_tasks.append(copier_task)
-    logging.info("FileCopyService consumer startet som background task")
+    logging.info("FileCopierService workers startet som background task")
 
     # Initialize WebSocketManager (subscription happens automatically)
     get_websocket_manager()  # Initialize singleton
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     # Stop alle background tasks gracefully
     file_scanner.stop_scanning()
     job_queue_service.stop_producer()
-    await file_copier.stop_consumer()
+    await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
 
     # Cancel alle background tasks

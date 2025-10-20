@@ -63,7 +63,7 @@ class FileCopierService:
         # Worker management
         self._workers: List[asyncio.Task] = []
         self._running = False
-        self._worker_count = settings.copy_concurrency
+        self._worker_count = settings.max_concurrent_copies
 
         # Statistics
         self._total_jobs_processed = 0
