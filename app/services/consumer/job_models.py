@@ -1,8 +1,5 @@
 """
-Job Models for File Transfer Agent Consumer.
-
-Defines typed data structures for the job queue system to replace
-simple dictionary objects with proper type safety and validation.
+Job Models for Consumer - typed data structures for job queue system.
 """
 
 from dataclasses import dataclass
@@ -15,25 +12,13 @@ from app.models import TrackedFile, FileStatus
 
 @dataclass
 class QueueJob:
-    """
-    Typed job object for the job queue system.
+    """Typed job object for the job queue system with UUID-based architecture."""
 
-    Replaces simple dictionary objects with proper type safety,
-    validation, and direct access to TrackedFile for UUID consistency.
-    """
-
-    # Core file reference - UUID-based architecture
     tracked_file: TrackedFile
-
-    # Queue metadata
     added_to_queue_at: datetime
     retry_count: int = 0
-
-    # Optional retry metadata
     last_retry_at: Optional[datetime] = None
     requeued_at: Optional[datetime] = None
-
-    # Error tracking
     last_error_message: Optional[str] = None
 
     @property
@@ -62,7 +47,6 @@ class QueueJob:
         self.requeued_at = datetime.now()
 
     def __str__(self) -> str:
-        """Human-readable representation for logging."""
         return (
             f"QueueJob(id={self.file_id[:8]}, "
             f"path={self.file_path}, "
