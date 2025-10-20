@@ -1,10 +1,3 @@
-"""
-Datamodeller for File Transfer Agent.
-
-Indeholder alle Pydantic modeller og enums der definerer
-systemets grundlæggende datastrukturer.
-"""
-
 from datetime import datetime
 from enum import Enum
 from typing import Optional
