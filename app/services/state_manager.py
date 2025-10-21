@@ -64,6 +64,7 @@ class StateManager:
             FileStatus.PAUSED_GROWING_COPY,
             FileStatus.WAITING_FOR_SPACE,
             FileStatus.SPACE_ERROR,
+            FileStatus.WAITING_FOR_NETWORK,  # CRITICAL: Files waiting for network are still active!
         }
         
         candidates = [
@@ -88,6 +89,7 @@ class StateManager:
                 FileStatus.PAUSED_IN_QUEUE: 9,
                 FileStatus.PAUSED_GROWING_COPY: 10,
                 FileStatus.WAITING_FOR_SPACE: 11,
+                FileStatus.WAITING_FOR_NETWORK: 11,  # Same priority as WAITING_FOR_SPACE
                 FileStatus.SPACE_ERROR: 12,
             }
             
@@ -434,7 +436,11 @@ class StateManager:
 
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
-            return self._files_by_id.get(file_id)
+            result = self._files_by_id.get(file_id)
+            if not result:
+                # Log first few characters to help debug UUID mismatches
+                logging.debug(f"🔍 get_file_by_id: UUID {file_id[:8]}... not found in {len(self._files_by_id)} files")
+            return result
 
     async def get_file_history(self, file_path: str) -> List[TrackedFile]:
         async with self._lock:

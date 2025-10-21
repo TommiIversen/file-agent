@@ -46,6 +46,12 @@ class GrowingFileDetector:
         Check file growth status using TrackedFile state instead of separate tracking.
         Returns updated TrackedFile with growth information.
         """
+        # CRITICAL: Don't modify files that are waiting for network
+        # This prevents the bounce loop between READY and WAITING_FOR_NETWORK
+        if tracked_file.status == FileStatus.WAITING_FOR_NETWORK:
+            logging.debug(f"Skipping growth check for {tracked_file.file_path} - waiting for network")
+            return tracked_file.status, tracked_file
+            
         try:
             # Get current file info
             if not os.path.exists(tracked_file.file_path):

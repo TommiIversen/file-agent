@@ -53,6 +53,7 @@ class UIHelpers {
             case 'ReadyToStartGrowing':
             case 'InQueue':
             case 'WaitingForSpace':
+            case 'WaitingForNetwork':
                 return 'width: 0%';
             case 'Copying':
             case 'GrowingCopy':
@@ -86,6 +87,8 @@ class UIHelpers {
             case 'InQueue':
             case 'WaitingForSpace':
                 return 'bg-gray-600';
+            case 'WaitingForNetwork':
+                return 'bg-orange-600';  // Distinct color for network waiting
             case 'Copying':
                 return 'bg-blue-600';
             case 'GrowingCopy':
@@ -117,6 +120,7 @@ class UIHelpers {
             case 'ReadyToStartGrowing':
             case 'InQueue':
             case 'WaitingForSpace':
+            case 'WaitingForNetwork':
                 return '0%';
             case 'Copying':
                 return `${(file.copy_progress || 0).toFixed(1)}%`;
@@ -168,6 +172,8 @@ class UIHelpers {
                 return 'bg-orange-500';
             case 'WaitingForSpace':
                 return 'bg-orange-600';
+            case 'WaitingForNetwork':
+                return 'bg-indigo-600';  // Network waiting - distinct color
             case 'SpaceError':
                 return 'bg-purple-600';
             default:
@@ -229,6 +235,8 @@ class UIHelpers {
                 return 'Failed';
             case 'WaitingForSpace':
                 return 'Waiting (Space)';
+            case 'WaitingForNetwork':
+                return 'Waiting (Network)';  // Clear label for network waiting
             case 'SpaceError':
                 return 'Space Error';
             default:

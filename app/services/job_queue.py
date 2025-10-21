@@ -11,9 +11,10 @@ from app.services.state_manager import StateManager
 
 class JobQueueService:
 
-    def __init__(self, settings: Settings, state_manager: StateManager):
+    def __init__(self, settings: Settings, state_manager: StateManager, storage_monitor=None):
         self.settings = settings
         self.state_manager = state_manager
+        self.storage_monitor = storage_monitor  # Add storage monitor reference
         self.job_queue: Optional[asyncio.Queue[QueueJob]] = None
 
         self._total_jobs_added = 0
@@ -66,10 +67,73 @@ class JobQueueService:
                 FileStatus.READY_TO_START_GROWING,
                 # REMOVED GROWING_COPY - causes infinite loop during normal operation
             ]:
-                await self._add_job_to_queue(update.tracked_file)
+                # Check if network is available before queueing
+                if await self._is_network_available():
+                    await self._add_job_to_queue(update.tracked_file)
+                else:
+                    # Network is down - keep file as READY but don't queue
+                    await self.state_manager.update_file_status_by_id(
+                        file_id=update.tracked_file.id,
+                        status=FileStatus.WAITING_FOR_NETWORK,
+                        error_message="Network unavailable - waiting for recovery",
+                    )
+                    logging.info(
+                        f"⏸️ NETWORK DOWN: {update.tracked_file.file_path} ready but waiting for network"
+                    )
 
         except Exception as e:
             logging.error(f"Fejl ved håndtering af state change: {e}")
+    
+    async def _is_network_available(self) -> bool:
+        """Check if destination network is available"""
+        if not self.storage_monitor:
+            return True  # Assume available if no storage monitor
+            
+        try:
+            storage_state = self.storage_monitor._storage_state
+            dest_info = storage_state.get_destination_info()
+            
+            if not dest_info:
+                return False  # No destination info = not available
+                
+            # Available if status is OK or WARNING (WARNING still allows copying)
+            from app.models import StorageStatus
+            return dest_info.status in [StorageStatus.OK, StorageStatus.WARNING]
+            
+        except Exception as e:
+            logging.error(f"Error checking network availability: {e}")
+            return True  # Default to available on error
+    
+    async def process_waiting_network_files(self) -> None:
+        """Process all files waiting for network when network becomes available"""
+        try:
+            waiting_files = await self.state_manager.get_files_by_status(FileStatus.WAITING_FOR_NETWORK)
+            
+            if not waiting_files:
+                logging.info("🌐 NETWORK RECOVERY: No files waiting for network")
+                return
+                
+            logging.info(f"🌐 NETWORK RECOVERY: Processing {len(waiting_files)} files waiting for network")
+            
+            for tracked_file in waiting_files:
+                try:
+                    # Transition back to READY so they can be queued normally
+                    await self.state_manager.update_file_status_by_id(
+                        file_id=tracked_file.id,
+                        status=FileStatus.READY,
+                        error_message=None,
+                    )
+                    
+                    # They will be picked up by normal _handle_state_change flow
+                    logging.info(f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path}")
+                    
+                except Exception as e:
+                    logging.error(f"❌ Error reactivating {tracked_file.file_path}: {e}")
+                    
+            logging.info(f"✅ NETWORK RECOVERY: Completed processing {len(waiting_files)} files")
+            
+        except Exception as e:
+            logging.error(f"❌ Error processing waiting network files: {e}")
 
     async def _add_job_to_queue(self, tracked_file: TrackedFile) -> None:
         if self.job_queue is None:

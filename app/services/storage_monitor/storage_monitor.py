@@ -354,6 +354,9 @@ class StorageMonitorService:
             )
 
             await self._job_queue.handle_destination_recovery()
+            
+            # Also process files waiting for network
+            await self._job_queue.process_waiting_network_files()
 
             logging.info("✅ Intelligent resume initiated successfully")
 

@@ -212,6 +212,11 @@ class FileScanOrchestrator:
         ) = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
         if recommended_status != tracked_file.status:
+            # Don't override WAITING_FOR_NETWORK status from growth checks
+            if tracked_file.status == FileStatus.WAITING_FOR_NETWORK:
+                logging.debug(f"Preserving WAITING_FOR_NETWORK status for {file_path}")
+                return
+                
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=recommended_status,

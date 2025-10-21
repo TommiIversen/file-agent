@@ -58,31 +58,58 @@ class JobSpaceManager:
         """Handle space shortage by scheduling retry or marking as failed."""
         file_path = job.file_path
 
-        logging.warning(
-            f"Insufficient space for {file_path}: {space_check.reason}",
-            extra={
-                "operation": "space_shortage",
-                "file_path": file_path,
-                "available_gb": space_check.get_available_gb(),
-                "required_gb": space_check.get_required_gb(),
-                "shortage_gb": space_check.get_shortage_gb(),
-            },
-        )
+        # Check if this is a network accessibility issue vs actual space shortage
+        is_network_issue = "not accessible" in space_check.reason.lower()
+        
+        if is_network_issue:
+            logging.warning(
+                f"Network inaccessible for {file_path}: {space_check.reason}",
+                extra={
+                    "operation": "network_unavailable",
+                    "file_path": file_path,
+                    "reason": space_check.reason,
+                },
+            )
+            
+            # Use WAITING_FOR_NETWORK instead of SPACE_ERROR for network issues
+            await self.state_manager.update_file_status_by_id(
+                file_id=job.file_id,
+                status=FileStatus.WAITING_FOR_NETWORK,
+                error_message=f"Network unavailable: {space_check.reason}",
+            )
+            
+            return ProcessResult(
+                success=False,
+                file_path=file_path,
+                error_message=f"Network unavailable: {space_check.reason}",
+                should_retry=True,  # Should retry when network comes back
+            )
+        else:
+            logging.warning(
+                f"Insufficient space for {file_path}: {space_check.reason}",
+                extra={
+                    "operation": "space_shortage",
+                    "file_path": file_path,
+                    "available_gb": space_check.get_available_gb(),
+                    "required_gb": space_check.get_required_gb(),
+                    "shortage_gb": space_check.get_shortage_gb(),
+                },
+            )
 
-        if self.space_retry_manager:
-            try:
-                await self.space_retry_manager.schedule_space_retry(
-                    job.tracked_file, space_check
-                )
-                return ProcessResult(
-                    success=False,
-                    file_path=file_path,
-                    error_message=f"Insufficient space: {space_check.reason}",
-                    retry_scheduled=True,
-                    space_shortage=True,
-                )
-            except Exception as e:
-                logging.error(f"Error scheduling space retry for {file_path}: {e}")
+            if self.space_retry_manager:
+                try:
+                    await self.space_retry_manager.schedule_space_retry(
+                        job.tracked_file, space_check
+                    )
+                    return ProcessResult(
+                        success=False,
+                        file_path=file_path,
+                        error_message=f"Insufficient space: {space_check.reason}",
+                        retry_scheduled=True,
+                        space_shortage=True,
+                    )
+                except Exception as e:
+                    logging.error(f"Error scheduling space retry for {file_path}: {e}")
 
         try:
             await self.state_manager.update_file_status_by_id(
