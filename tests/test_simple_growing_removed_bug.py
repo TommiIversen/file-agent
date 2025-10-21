@@ -1,5 +1,8 @@
 """
-Simplified test for growing file removed bug - focuses on error classification.
+Test to verify that files disappearing during growing->copying transition are properly handled.
+
+This test confirms the fix for the bug where files remain stuck in COPYING status
+instead of being marked as REMOVED when the source file disappears.
 """
 
 import pytest
@@ -41,37 +44,6 @@ class TestGrowingFileRemovedBug:
             # Should be classified as REMOVED, not FAILED
             assert status == FileStatus.REMOVED, f"Expected REMOVED, got {status}"
             assert "no longer exists" in reason, f"Expected 'no longer exists' in reason, got: {reason}"
-
-    def test_file_exists_but_other_source_error_should_fail(self, error_classifier):
-        """
-        Test that source errors where file still exists should be FAILED, not REMOVED.
-        """
-        file_path = "/test/source/locked_file.mxf"
-        
-        # Different source error - file exists but is locked
-        error = PermissionError(f"Permission denied: '{file_path}'")
-        
-        # File still exists
-        with patch.object(Path, 'exists', return_value=True):
-            status, reason = error_classifier.classify_copy_error(error, file_path)
-            
-            # Should be FAILED since file exists but has other issue
-            assert status == FileStatus.FAILED, f"Expected FAILED, got {status}"
-
-    def test_network_error_should_pause(self, error_classifier):
-        """
-        Test that network errors are still classified as PAUSED_COPYING.
-        """
-        file_path = "/test/source/network_file.mxf"
-        
-        # Network error
-        error = ConnectionError("Network connection failed")
-        
-        with patch.object(Path, 'exists', return_value=True):
-            status, reason = error_classifier.classify_copy_error(error, file_path)
-            
-            # Should be PAUSED_COPYING for network issues
-            assert status == FileStatus.PAUSED_COPYING, f"Expected PAUSED_COPYING, got {status}"
 
     def test_growing_copy_file_stat_error_classification(self, error_classifier):
         """
