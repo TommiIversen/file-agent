@@ -7,9 +7,12 @@ when files are removed during copying.
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.dependencies import get_job_processor
 
 
+@pytest.mark.asyncio
 async def test_job_processor_has_error_classifier():
     """Test that JobProcessor is created with a proper error classifier."""
     

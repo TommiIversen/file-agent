@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 import logging
+import pytest
 
 # Setup logging to see what happens
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,7 @@ from app.services.state_manager import StateManager
 from app.config import Settings
 
 
+@pytest.mark.asyncio
 async def test_growing_file_removed_during_copying_complete_flow():
     """Test the complete flow when a growing file is removed during copying phase."""
     
@@ -144,6 +146,7 @@ async def test_growing_file_removed_during_copying_complete_flow():
         return True
 
 
+@pytest.mark.asyncio
 async def test_job_processor_integration():
     """Test that the job processor flow also works correctly."""
     

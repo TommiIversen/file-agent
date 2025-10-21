@@ -3,6 +3,7 @@
 Test that file scanner respects SPACE_ERROR cooldown.
 """
 
+import pytest
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
@@ -11,6 +12,7 @@ from app.models import TrackedFile, FileStatus
 from app.services.state_manager import StateManager
 
 
+@pytest.mark.asyncio
 async def test_file_scanner_cooldown_logic():
     """Test that file scanner properly skips files in cooldown."""
     

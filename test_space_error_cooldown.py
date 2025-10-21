@@ -3,6 +3,7 @@
 Test SPACE_ERROR cooldown functionality.
 """
 
+import pytest
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
@@ -11,6 +12,7 @@ from app.models import TrackedFile, FileStatus
 from app.services.state_manager import StateManager
 
 
+@pytest.mark.asyncio
 async def test_space_error_cooldown():
     """Test that SPACE_ERROR files respect cooldown period."""
     

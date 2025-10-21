@@ -45,11 +45,11 @@ def test_datetime_serialization():
                     print(f"❌ {field} is not a string: {type(serialized[field])}")
         
         print(f"\n🎉 All datetime serialization tests passed!")
-        return True
+        assert True  # Use assert instead of return
         
     except Exception as e:
         print(f"❌ Serialization failed: {e}")
-        return False
+        assert False, f"Serialization failed: {e}"  # Use assert instead of return
 
 if __name__ == "__main__":
     test_datetime_serialization()

@@ -3,6 +3,7 @@
 Test that growing file detector ignores files with SPACE_ERROR status.
 """
 
+import pytest
 import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock
@@ -12,6 +13,7 @@ from app.services.growing_file_detector import GrowingFileDetector
 from app.config import Settings
 
 
+@pytest.mark.asyncio
 async def test_growing_file_detector_ignores_space_error():
     """Test that growing file detector ignores files with SPACE_ERROR status."""
     
