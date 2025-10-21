@@ -8,7 +8,7 @@
 document.addEventListener('alpine:init', () => {
     Alpine.store('files', {
         // File State
-        items: new Map(),               // Map<filePath, TrackedFile>
+        items: new Map(),               // Map<fileId, TrackedFile> - bruger ID i stedet for path!
         sortBy: 'discovered',          // Current sort method
 
         // Statistics State
@@ -22,20 +22,20 @@ document.addEventListener('alpine:init', () => {
 
         // File Management Actions
         addFile(file) {
-            this.items.set(file.file_path, file);
+            this.items.set(file.id, file);  // Brug ID som key
             this.updateStatisticsFromFiles();
-            console.log(`File added: ${file.file_path}`);
+            console.log(`File added: ${file.file_path} (ID: ${file.id})`);
         },
 
-        updateFile(filePath, file) {
-            if (this.items.has(filePath)) {
-                this.items.set(filePath, file);
+        updateFile(fileId, file) {  // Ændret parameter navn for klarhed
+            if (this.items.has(fileId)) {
+                this.items.set(fileId, file);
                 this.updateStatisticsFromFiles();
-                console.log(`File updated: ${filePath} - Status: ${file.status}`);
+                console.log(`File updated: ${file.file_path} (ID: ${fileId}) - Status: ${file.status}`);
             } else {
                 // File doesn't exist yet - add it automatically
-                console.log(`Auto-adding unknown file during update: ${filePath}`);
-                this.addFile(file);  // Send only the file object, not filePath
+                console.log(`Auto-adding unknown file during update: ${file.file_path} (ID: ${fileId})`);
+                this.addFile(file);
             }
         },
 
@@ -45,7 +45,7 @@ document.addEventListener('alpine:init', () => {
             this.items.clear();
 
             files.forEach(file => {
-                this.items.set(file.file_path, file);
+                this.items.set(file.id, file);  // Brug ID som key
             });
 
             this.updateStatisticsFromFiles();

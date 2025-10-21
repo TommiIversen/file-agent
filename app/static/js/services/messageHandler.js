@@ -117,17 +117,17 @@ class MessageHandler {
             return;
         }
 
-        if (!data.file_path || !data.file) {
-            console.warn('Invalid file update data:', data);
+        if (!data.file || !data.file.id) {
+            console.warn('Invalid file update data - missing file ID:', data);
             return;
         }
 
-        // Update or add file
-        this.fileStore.updateFile(data.file_path, data.file);
+        // Update or add file using ID instead of file_path
+        this.fileStore.updateFile(data.file.id, data.file);
 
         // Log significant status changes
         if (data.file.status) {
-            console.log(`File ${data.file_path} status: ${data.file.status}`);
+            console.log(`File ${data.file_path} (ID: ${data.file.id}) status: ${data.file.status}`);
         }
     }
 

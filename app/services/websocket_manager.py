@@ -27,6 +27,7 @@ def _serialize_storage_info(storage_info) -> dict:
 
 def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
     return {
+        "id": tracked_file.id,  # TrackedFile ID - vigtigt for unique tracking!
         "file_path": tracked_file.file_path,
         "status": tracked_file.status.value,
         "file_size": tracked_file.file_size,
