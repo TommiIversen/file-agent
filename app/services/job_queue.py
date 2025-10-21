@@ -298,22 +298,10 @@ class JobQueueService:
     async def handle_destination_recovery(self) -> None:
         logging.info("� DESTINATION RECOVERY: Starting intelligent resume process")
 
-        paused_files = await self.state_manager.get_paused_files()
-
-        total_resumed = 0
-
-        if paused_files:
-            logging.info(f"▶️ Resuming {len(paused_files)} paused operations")
-            for tracked_file in paused_files:
-                await self._resume_paused_file(tracked_file)
-                total_resumed += 1
-
-        if total_resumed > 0:
-            logging.info(
-                f"✅ DESTINATION RECOVERY COMPLETE: Successfully resumed {total_resumed} operations"
-            )
-        else:
-            logging.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
+        # NOTE: Intelligent resume removed in fail-and-rediscover strategy
+        # Paused files concept eliminated - network errors cause immediate FAILED status
+        
+        logging.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
 
     async def _pause_active_operations(self) -> int:
         paused_count = 0
@@ -329,35 +317,10 @@ class JobQueueService:
             file_path = tracked_file.file_path
 
             try:
-                if current_status == FileStatus.IN_QUEUE:
-                    new_status = FileStatus.PAUSED_IN_QUEUE
-                elif current_status == FileStatus.COPYING:
-                    new_status = FileStatus.PAUSED_COPYING
-                elif current_status == FileStatus.GROWING_COPY:
-                    new_status = FileStatus.PAUSED_GROWING_COPY
-                elif (
-                        current_status == FileStatus.FAILED
-                        and self._is_likely_network_failure(tracked_file)
-                ):
-                    if tracked_file.bytes_copied and tracked_file.bytes_copied > 0:
-                        new_status = (
-                            FileStatus.PAUSED_GROWING_COPY
-                            if "growing" in (tracked_file.error_message or "").lower()
-                            else FileStatus.PAUSED_COPYING
-                        )
-                    else:
-                        new_status = FileStatus.PAUSED_IN_QUEUE
-                else:
-                    continue
-
-                await self.state_manager.update_file_status_by_id(
-                    file_id=tracked_file.id,
-                    status=new_status,
-                    error_message="Paused - destination unavailable",
-                )
-
-                paused_count += 1
-                logging.info(f"⏸️ PAUSED: {file_path} ({current_status} → {new_status})")
+                # NOTE: Pause logic removed in fail-and-rediscover strategy
+                # Active operations now fail immediately when destination becomes unavailable
+                # Files will be rediscovered by scanner and processed when network returns
+                continue
 
             except Exception as e:
                 logging.error(f"❌ Error pausing {file_path}: {e}")
@@ -409,6 +372,9 @@ class JobQueueService:
 
         except Exception as e:
             logging.error(f"❌ Error resuming {file_path}: {e}")
+
+    # NOTE: _resume_paused_file method removed above in fail-and-rediscover strategy
+    # Network errors now cause immediate FAILED status instead of pause/resume
 
     async def _get_recent_network_failed_files(self) -> List[TrackedFile]:
         cutoff_time = datetime.now() - timedelta(minutes=5)

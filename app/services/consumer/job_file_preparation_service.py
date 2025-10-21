@@ -72,15 +72,8 @@ class JobFilePreparationService:
             source, source_base, dest_base, self.template_engine
         )
 
-        # CRITICAL: For growing copy resume scenarios, don't resolve conflicts
-        # We want to reuse the existing destination file
-        if tracked_file and self._is_resume_scenario(tracked_file):
-            logging.info(
-                f"🔄 RESUME DETECTED: Skipping conflict resolution for {source.name} "
-                f"(bytes_copied: {tracked_file.bytes_copied:,}, status: {tracked_file.status}, "
-                f"is_growing: {tracked_file.is_growing_file}) → {dest_path}"
-            )
-            return Path(dest_path)
+        # NOTE: Resume scenario detection removed in fail-and-rediscover strategy
+        # All files now get conflict-free paths with _1 naming for recovery
         
         if tracked_file:
             logging.debug(
@@ -91,13 +84,8 @@ class JobFilePreparationService:
         
         return generate_conflict_free_path(Path(dest_path))
     
-    def _is_resume_scenario(self, tracked_file: TrackedFile) -> bool:
-        """Check if this is a resume scenario where we should reuse existing destination."""
-        return (
-            tracked_file.bytes_copied > 0 and 
-            tracked_file.is_growing_file and
-            tracked_file.status in [FileStatus.GROWING_COPY, FileStatus.IN_QUEUE, FileStatus.COPYING]
-        )
+    # NOTE: _is_resume_scenario removed in fail-and-rediscover strategy
+    # Files now get fresh destinations with _1 naming for recovery
 
     def get_preparation_info(self) -> dict:
         """Get file preparation service configuration details."""

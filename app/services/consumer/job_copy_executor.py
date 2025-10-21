@@ -113,10 +113,8 @@ class JobCopyExecutor:
             error, prepared_file.tracked_file.file_path
         )
 
-        if status == FileStatus.PAUSED_COPYING:
-            await self._handle_pause_error(prepared_file, reason, error)
-            return True
-        elif status == FileStatus.REMOVED:
+        # NOTE: PAUSED_COPYING removed in fail-and-rediscover strategy
+        if status == FileStatus.REMOVED:
             await self._handle_remove_error(prepared_file, reason, error)
             return False  # File is gone, don't retry
         else:  # FileStatus.FAILED
@@ -136,29 +134,8 @@ class JobCopyExecutor:
         file_name = Path(prepared_file.tracked_file.file_path).name
         logging.info(f"File removed during copy: {file_name} - {reason}")
 
-    async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
-        """Handle errors that should trigger pause instead of failure."""
-        current_tracked = await self.state_manager.get_file_by_id(prepared_file.tracked_file.id)
-
-        if current_tracked:
-            # Determine appropriate paused status
-            paused_status = {
-                FileStatus.COPYING: FileStatus.PAUSED_COPYING,
-                FileStatus.GROWING_COPY: FileStatus.PAUSED_GROWING_COPY,
-            }.get(current_tracked.status, FileStatus.PAUSED_COPYING)
-
-            await self.state_manager.update_file_status_by_id(
-                current_tracked.id,
-                paused_status,
-                error_message=f"Paused: {reason}",
-            )
-
-            logging.warning(
-                f"Copy paused: {Path(current_tracked.file_path).name} - {reason} "
-                f"(preserved {current_tracked.bytes_copied or 0:,} bytes)"
-            )
-        else:
-            await self._handle_fail_error(prepared_file, f"Pause failed - file not found: {reason}", error)
+    # NOTE: _handle_pause_error removed in fail-and-rediscover strategy
+    # Network errors now cause immediate FAILED status instead of pause
 
     async def _handle_fail_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
         """Handle errors that should result in immediate failure."""

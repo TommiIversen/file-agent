@@ -38,12 +38,8 @@ class FileStatus(str, Enum):
     # Network management states
     WAITING_FOR_NETWORK = "WaitingForNetwork"  # Destination er offline, venter på netværk
 
-    # Pause/Resume states for destination issues
-    PAUSED_IN_QUEUE = "PausedInQueue"  # Job var i queue da destination blev unavailable
-    PAUSED_COPYING = "PausedCopying"  # Copy var i gang da destination blev unavailable
-    PAUSED_GROWING_COPY = (
-        "PausedGrowingCopy"  # Growing copy var i gang da destination blev unavailable
-    )
+    # NOTE: Removed PAUSED_* states as part of fail-and-rediscover strategy
+    # Network errors now cause immediate FAILED status instead of pause/resume
 
 
 class StorageStatus(str, Enum):

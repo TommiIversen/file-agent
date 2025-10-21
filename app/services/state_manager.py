@@ -32,14 +32,13 @@ class StateManager:
                 FileStatus.READY: 5,
                 FileStatus.GROWING: 6,
                 FileStatus.DISCOVERED: 7,
-                FileStatus.PAUSED_COPYING: 8,
-                FileStatus.PAUSED_IN_QUEUE: 9,
-                FileStatus.PAUSED_GROWING_COPY: 10,
-                FileStatus.WAITING_FOR_SPACE: 11,
-                FileStatus.COMPLETED: 12,
-                FileStatus.FAILED: 13,
-                FileStatus.REMOVED: 14,
-                FileStatus.SPACE_ERROR: 15,
+                # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
+                FileStatus.WAITING_FOR_SPACE: 8,
+                FileStatus.WAITING_FOR_NETWORK: 9,
+                FileStatus.COMPLETED: 10,
+                FileStatus.FAILED: 11,
+                FileStatus.REMOVED: 12,
+                FileStatus.SPACE_ERROR: 13,
             }
 
             priority = active_statuses.get(f.status, 99)
@@ -59,9 +58,7 @@ class StateManager:
             FileStatus.IN_QUEUE,
             FileStatus.COPYING,
             FileStatus.GROWING_COPY,
-            FileStatus.PAUSED_COPYING,
-            FileStatus.PAUSED_IN_QUEUE,
-            FileStatus.PAUSED_GROWING_COPY,
+            # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
             FileStatus.WAITING_FOR_SPACE,
             FileStatus.SPACE_ERROR,
             FileStatus.WAITING_FOR_NETWORK,  # CRITICAL: Files waiting for network are still active!
@@ -85,12 +82,10 @@ class StateManager:
                 FileStatus.READY: 5,
                 FileStatus.GROWING: 6,
                 FileStatus.DISCOVERED: 7,
-                FileStatus.PAUSED_COPYING: 8,
-                FileStatus.PAUSED_IN_QUEUE: 9,
-                FileStatus.PAUSED_GROWING_COPY: 10,
-                FileStatus.WAITING_FOR_SPACE: 11,
-                FileStatus.WAITING_FOR_NETWORK: 11,  # Same priority as WAITING_FOR_SPACE
-                FileStatus.SPACE_ERROR: 12,
+                # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
+                FileStatus.WAITING_FOR_SPACE: 8,
+                FileStatus.WAITING_FOR_NETWORK: 8,  # Same priority as WAITING_FOR_SPACE
+                FileStatus.SPACE_ERROR: 9,
             }
             
             priority = active_priority.get(f.status, 99)
@@ -217,18 +212,8 @@ class StateManager:
             if existing_file.status == FileStatus.SPACE_ERROR:
                 return self._is_space_error_in_cooldown(existing_file, cooldown_minutes)
             
-            # Skip if file is in any paused state - these files wait for recovery
-            paused_statuses = {
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_GROWING_COPY,
-            }
-            if existing_file.status in paused_statuses:
-                logging.debug(
-                    f"SKIP PROCESSING: {file_path} is in paused state {existing_file.status.value} - "
-                    f"waiting for recovery [UUID: {existing_file.id[:8]}...]"
-                )
-                return True
+            # NOTE: PAUSED_* statuses removed in fail-and-rediscover strategy
+            # Files now fail immediately instead of pausing
                 
             return False
 
@@ -249,10 +234,9 @@ class StateManager:
                 FileStatus.IN_QUEUE,
                 FileStatus.COPYING,
                 FileStatus.GROWING_COPY,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_GROWING_COPY,
+                # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
                 FileStatus.WAITING_FOR_SPACE,
+                FileStatus.WAITING_FOR_NETWORK,
                 FileStatus.SPACE_ERROR,
             }
             
@@ -274,11 +258,10 @@ class StateManager:
                     FileStatus.READY: 5,
                     FileStatus.GROWING: 6,
                     FileStatus.DISCOVERED: 7,
-                    FileStatus.PAUSED_COPYING: 8,
-                    FileStatus.PAUSED_IN_QUEUE: 9,
-                    FileStatus.PAUSED_GROWING_COPY: 10,
-                    FileStatus.WAITING_FOR_SPACE: 11,
-                    FileStatus.SPACE_ERROR: 12,
+                    # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
+                    FileStatus.WAITING_FOR_SPACE: 8,
+                    FileStatus.WAITING_FOR_NETWORK: 8,  # Same priority as WAITING_FOR_SPACE
+                    FileStatus.SPACE_ERROR: 9,
                 }
                 
                 priority = active_priority.get(f.status, 99)
@@ -313,14 +296,13 @@ class StateManager:
             FileStatus.READY: 5,
             FileStatus.GROWING: 6,
             FileStatus.DISCOVERED: 7,
-            FileStatus.PAUSED_COPYING: 8,
-            FileStatus.PAUSED_IN_QUEUE: 9,
-            FileStatus.PAUSED_GROWING_COPY: 10,
-            FileStatus.WAITING_FOR_SPACE: 11,
-            FileStatus.COMPLETED: 12,
-            FileStatus.FAILED: 13,
-            FileStatus.REMOVED: 14,
-            FileStatus.SPACE_ERROR: 15,
+            # NOTE: Removed PAUSED_* statuses - using fail-and-rediscover strategy
+            FileStatus.WAITING_FOR_SPACE: 8,
+            FileStatus.WAITING_FOR_NETWORK: 8,  # Same priority as WAITING_FOR_SPACE
+            FileStatus.COMPLETED: 9,
+            FileStatus.FAILED: 10,
+            FileStatus.REMOVED: 11,
+            FileStatus.SPACE_ERROR: 12,
         }
 
         priority1 = active_statuses.get(file1.status, 99)
@@ -467,20 +449,8 @@ class StateManager:
             old_status = tracked_file.status
             tracked_file.status = status
 
-            # CRITICAL: Cancel any pending retry tasks when file is paused
-            # This prevents scheduled retries from reactivating paused files
-            paused_statuses = {
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_GROWING_COPY,
-            }
-            if status in paused_statuses and old_status not in paused_statuses:
-                # File is being paused - cancel any active retry tasks
-                await self._cancel_existing_retry_unlocked(file_id)
-                logging.debug(
-                    f"RETRY CANCELLED: File {tracked_file.file_path} paused - "
-                    f"cancelled scheduled retry [UUID: {file_id[:8]}...]"
-                )
+            # NOTE: PAUSED_* statuses removed in fail-and-rediscover strategy
+            # Files now fail immediately instead of pausing, so no pause-specific retry cancellation needed
 
             if status == FileStatus.READY_TO_START_GROWING:
                 tracked_file.is_growing_file = True
@@ -595,21 +565,14 @@ class StateManager:
             return list(current_files.values())
 
     async def get_paused_files(self) -> List[TrackedFile]:
+        """
+        Get paused files - DEPRECATED in fail-and-rediscover strategy.
+        Returns empty list as PAUSED_* statuses have been removed.
+        """
         async with self._lock:
-            current_files = {}
-            paused_statuses = [
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_GROWING_COPY,
-            ]
-
-            for tracked_file in self._files_by_id.values():
-                if tracked_file.status in paused_statuses:
-                    current = current_files.get(tracked_file.file_path)
-                    if not current or self._is_more_current(tracked_file, current):
-                        current_files[tracked_file.file_path] = tracked_file
-
-            return list(current_files.values())
+            # NOTE: PAUSED_* statuses removed - return empty list
+            # In fail-and-rediscover strategy, files fail immediately instead of pausing
+            return []
 
     async def is_file_stable(self, file_id: str, stable_time_seconds: int) -> bool:
         """
@@ -690,19 +653,8 @@ class StateManager:
                 logging.warning(f"Cannot schedule retry for unknown file ID: {file_id}")
                 return False
             
-            # CRITICAL: Do not schedule retries for paused files
-            # Paused files wait for network recovery, not scheduled retries
-            paused_statuses = {
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_GROWING_COPY,
-            }
-            if tracked_file.status in paused_statuses:
-                logging.info(
-                    f"RETRY SKIPPED: {tracked_file.file_path} is in paused state {tracked_file.status.value} - "
-                    f"waiting for network recovery instead of scheduled retry [UUID: {file_id[:8]}...]"
-                )
-                return False
+            # NOTE: PAUSED status checks removed in fail-and-rediscover strategy
+            # Files now fail immediately instead of pausing, so no paused-specific retry blocking needed
             
             # Cancel any existing retry for this file
             await self._cancel_existing_retry_unlocked(file_id)

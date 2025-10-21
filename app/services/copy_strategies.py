@@ -175,6 +175,15 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 f"Starting growing copy: {os.path.basename(source_path)} "
                 f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)"
             )
+            
+            # CRITICAL: Ensure we have the latest tracked file reference from state manager
+            # to avoid UUID mismatches in resume scenarios
+            latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
+            if latest_tracked_file:
+                tracked_file = latest_tracked_file
+                logging.debug(f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}")
+            else:
+                logging.warning(f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}...")
 
             dest_dir = Path(dest_path).parent
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -309,45 +318,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             
             async with aiofiles.open(dest_path, file_mode) as dst:
                 while True:
-                    # CRITICAL: Check if file has been paused during copy
+                    # NOTE: Pause detection removed in fail-and-rediscover strategy
+                    # Files now fail immediately instead of pausing during network issues
+                    
                     current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
-                    if current_tracked_file and current_tracked_file.status in [
-                        FileStatus.PAUSED_GROWING_COPY,
-                        FileStatus.PAUSED_COPYING,
-                        FileStatus.PAUSED_IN_QUEUE,
-                    ]:
-                        logging.info(
-                            f"🔄 GROWING COPY PAUSED: {os.path.basename(source_path)} "
-                            f"(status: {current_tracked_file.status.value}) - waiting for resume"
-                        )
-                        
-                        # Wait for resume - check status every second
-                        while True:
-                            await asyncio.sleep(1.0)
-                            resume_check = await self.state_manager.get_file_by_id(tracked_file.id)
-                            if not resume_check:
-                                logging.warning(f"File disappeared during pause: {source_path}")
-                                return False
-                            
-                            if resume_check.status == FileStatus.GROWING_COPY:
-                                logging.info(
-                                    f"▶️ GROWING COPY RESUMED: {os.path.basename(source_path)} "
-                                    f"- continuing from {bytes_copied:,} bytes"
-                                )
-                                # Update our tracked_file reference for continued processing
-                                tracked_file = resume_check
-                                break
-                            elif resume_check.status not in [
-                                FileStatus.PAUSED_GROWING_COPY,
-                                FileStatus.PAUSED_COPYING,
-                                FileStatus.PAUSED_IN_QUEUE,
-                            ]:
-                                # File was changed to a different status (e.g., FAILED)
-                                logging.info(
-                                    f"GROWING COPY CANCELLED: {os.path.basename(source_path)} "
-                                    f"(status changed to: {resume_check.status.value})"
-                                )
-                                return False
+                    if not current_tracked_file:
+                        logging.warning(f"File disappeared during copy: {source_path}")
+                        return False
 
                     try:
                         current_file_size = os.path.getsize(source_path)

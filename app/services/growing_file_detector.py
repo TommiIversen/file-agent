@@ -103,19 +103,13 @@ class GrowingFileDetector:
             elif growth_stable_since is None:
                 growth_stable_since = current_time
 
-            # CRITICAL: Don't update paused files - they wait for network recovery
+            # NOTE: PAUSED status checks removed in fail-and-rediscover strategy
+            # Files now fail immediately instead of pausing during network issues
+            
             current_file = await self.state_manager.get_file_by_id(tracked_file.id)
-            if current_file and current_file.status in [
-                FileStatus.PAUSED_IN_QUEUE,
-                FileStatus.PAUSED_COPYING,
-                FileStatus.PAUSED_GROWING_COPY,
-            ]:
-                logging.debug(
-                    f"GROWING CHECK SKIPPED: {tracked_file.file_path} is paused "
-                    f"({current_file.status.value}) - not updating growth data [UUID: {tracked_file.id[:8]}...]"
-                )
-                # Return current status without updating anything
-                return tracked_file.status, current_file
+            if not current_file:
+                logging.warning(f"File disappeared during growth check: {tracked_file.file_path}")
+                return FileStatus.REMOVED, None
 
             # Update TrackedFile with new information
             await self.state_manager.update_file_status_by_id(
