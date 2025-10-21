@@ -165,7 +165,7 @@ class UIHelpers {
             case 'Failed':
                 return 'bg-red-600';
             case 'Removed':
-                return 'bg-gray-500';
+                return 'bg-orange-500';
             case 'WaitingForSpace':
                 return 'bg-orange-600';
             case 'SpaceError':
