@@ -309,7 +309,9 @@ class JobQueueService:
             elif current_status == FileStatus.PAUSED_COPYING:
                 new_status = FileStatus.READY
             elif current_status == FileStatus.PAUSED_GROWING_COPY:
-                new_status = FileStatus.READY
+                # CRITICAL: PAUSED_GROWING_COPY must resume as GROWING_COPY to preserve
+                # resume functionality with partial data and existing copy strategy
+                new_status = FileStatus.GROWING_COPY
             else:
                 logging.warning(
                     f"⚠️ Unknown paused status for {file_path}: {current_status}"

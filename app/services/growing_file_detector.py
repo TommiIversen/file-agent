@@ -97,6 +97,20 @@ class GrowingFileDetector:
             elif growth_stable_since is None:
                 growth_stable_since = current_time
 
+            # CRITICAL: Don't update paused files - they wait for network recovery
+            current_file = await self.state_manager.get_file_by_id(tracked_file.id)
+            if current_file and current_file.status in [
+                FileStatus.PAUSED_IN_QUEUE,
+                FileStatus.PAUSED_COPYING,
+                FileStatus.PAUSED_GROWING_COPY,
+            ]:
+                logging.debug(
+                    f"GROWING CHECK SKIPPED: {tracked_file.file_path} is paused "
+                    f"({current_file.status.value}) - not updating growth data [UUID: {tracked_file.id[:8]}...]"
+                )
+                # Return current status without updating anything
+                return tracked_file.status, current_file
+
             # Update TrackedFile with new information
             await self.state_manager.update_file_status_by_id(
                 tracked_file.id,
@@ -207,6 +221,19 @@ class GrowingFileDetector:
             # File stopped growing, mark the time
             growth_stable_since = current_time
 
+        # CRITICAL: Don't update paused files - they wait for network recovery
+        current_file = await self.state_manager.get_file_by_id(tracked_file.id)
+        if current_file and current_file.status in [
+            FileStatus.PAUSED_IN_QUEUE,
+            FileStatus.PAUSED_COPYING,
+            FileStatus.PAUSED_GROWING_COPY,
+        ]:
+            logging.debug(
+                f"GROWING INFO UPDATE SKIPPED: {tracked_file.file_path} is paused "
+                f"({current_file.status.value}) - not updating growth info [UUID: {tracked_file.id[:8]}...]"
+            )
+            return  # Don't update paused files
+
         # Update TrackedFile with new growth information
         await self.state_manager.update_file_status_by_id(
             tracked_file.id,
@@ -237,6 +264,10 @@ class GrowingFileDetector:
                         FileStatus.FAILED,
                         FileStatus.REMOVED,
                         FileStatus.SPACE_ERROR,  # Don't process files with permanent space errors
+                        # CRITICAL: Don't process paused files - they wait for network recovery
+                        FileStatus.PAUSED_IN_QUEUE,
+                        FileStatus.PAUSED_COPYING,
+                        FileStatus.PAUSED_GROWING_COPY,
                     ]
                 ]
 
@@ -251,6 +282,19 @@ class GrowingFileDetector:
                         ) = await self.check_file_growth_status(tracked_file)
 
                         if recommended_status != tracked_file.status:
+                            # CRITICAL: Never update paused files - they wait for network recovery
+                            current_file = await self.state_manager.get_file_by_id(tracked_file.id)
+                            if current_file and current_file.status in [
+                                FileStatus.PAUSED_IN_QUEUE,
+                                FileStatus.PAUSED_COPYING,
+                                FileStatus.PAUSED_GROWING_COPY,
+                            ]:
+                                logging.debug(
+                                    f"GROWING UPDATE SKIPPED: {tracked_file.file_path} is paused "
+                                    f"({current_file.status.value}) - waiting for recovery [UUID: {tracked_file.id[:8]}...]"
+                                )
+                                continue  # Skip updating paused files
+                            
                             update_kwargs = {
                                 "is_growing_file": recommended_status
                                                    in [

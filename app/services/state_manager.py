@@ -214,6 +214,19 @@ class StateManager:
             # Skip if file is in SPACE_ERROR cooldown
             if existing_file.status == FileStatus.SPACE_ERROR:
                 return self._is_space_error_in_cooldown(existing_file, cooldown_minutes)
+            
+            # Skip if file is in any paused state - these files wait for recovery
+            paused_statuses = {
+                FileStatus.PAUSED_IN_QUEUE,
+                FileStatus.PAUSED_COPYING,
+                FileStatus.PAUSED_GROWING_COPY,
+            }
+            if existing_file.status in paused_statuses:
+                logging.debug(
+                    f"SKIP PROCESSING: {file_path} is in paused state {existing_file.status.value} - "
+                    f"waiting for recovery [UUID: {existing_file.id[:8]}...]"
+                )
+                return True
                 
             return False
 
@@ -448,6 +461,21 @@ class StateManager:
             old_status = tracked_file.status
             tracked_file.status = status
 
+            # CRITICAL: Cancel any pending retry tasks when file is paused
+            # This prevents scheduled retries from reactivating paused files
+            paused_statuses = {
+                FileStatus.PAUSED_IN_QUEUE,
+                FileStatus.PAUSED_COPYING,
+                FileStatus.PAUSED_GROWING_COPY,
+            }
+            if status in paused_statuses and old_status not in paused_statuses:
+                # File is being paused - cancel any active retry tasks
+                await self._cancel_existing_retry_unlocked(file_id)
+                logging.debug(
+                    f"RETRY CANCELLED: File {tracked_file.file_path} paused - "
+                    f"cancelled scheduled retry [UUID: {file_id[:8]}...]"
+                )
+
             if status == FileStatus.READY_TO_START_GROWING:
                 tracked_file.is_growing_file = True
             elif status in [FileStatus.READY, FileStatus.COMPLETED]:
@@ -656,6 +684,20 @@ class StateManager:
                 logging.warning(f"Cannot schedule retry for unknown file ID: {file_id}")
                 return False
             
+            # CRITICAL: Do not schedule retries for paused files
+            # Paused files wait for network recovery, not scheduled retries
+            paused_statuses = {
+                FileStatus.PAUSED_IN_QUEUE,
+                FileStatus.PAUSED_COPYING,
+                FileStatus.PAUSED_GROWING_COPY,
+            }
+            if tracked_file.status in paused_statuses:
+                logging.info(
+                    f"RETRY SKIPPED: {tracked_file.file_path} is in paused state {tracked_file.status.value} - "
+                    f"waiting for network recovery instead of scheduled retry [UUID: {file_id[:8]}...]"
+                )
+                return False
+            
             # Cancel any existing retry for this file
             await self._cancel_existing_retry_unlocked(file_id)
             
@@ -725,9 +767,26 @@ class StateManager:
                     logging.debug(f"Retry cancelled - file or retry info missing: {file_id}")
                     return
                 
-                # Only proceed if file is still waiting for space
+                # Only proceed if file is still waiting for space AND not paused
                 if tracked_file.status != FileStatus.WAITING_FOR_SPACE:
-                    logging.debug(f"Retry cancelled - file status changed: {tracked_file.file_path}")
+                    logging.debug(f"Retry cancelled - file status changed: {tracked_file.file_path} (status: {tracked_file.status.value})")
+                    return
+                
+                # CRITICAL: Check if file is now in paused state due to network interruption
+                # Paused files should NOT be reactivated by scheduled retries
+                paused_statuses = {
+                    FileStatus.PAUSED_IN_QUEUE,
+                    FileStatus.PAUSED_COPYING,
+                    FileStatus.PAUSED_GROWING_COPY,
+                }
+                if tracked_file.status in paused_statuses:
+                    logging.info(
+                        f"RETRY CANCELLED: {tracked_file.file_path} is in paused state {tracked_file.status.value} - "
+                        f"waiting for network recovery [UUID: {file_id[:8]}...]"
+                    )
+                    # Clean up retry info but keep file in paused state
+                    tracked_file.retry_info = None
+                    self._retry_tasks.pop(file_id, None)
                     return
                 
                 # Reset file to READY status
