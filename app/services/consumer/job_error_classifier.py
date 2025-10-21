@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Tuple
 
 from app.models import StorageStatus, FileStatus
+from app.services.copy.network_error_detector import NetworkError
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 
 
@@ -46,6 +47,10 @@ class JobErrorClassifier:
             - REMOVED: Source file disappeared 
             - FAILED: Technical copy errors
         """
+        # Handle NetworkError from fail-fast detection immediately
+        if isinstance(error, NetworkError):
+            return FileStatus.FAILED, f"Network failure detected: {str(error)}"
+            
         # Check destination status first
         if self._is_destination_unavailable():
             return FileStatus.FAILED, f"Destination unavailable (status: {self._get_destination_status()})"

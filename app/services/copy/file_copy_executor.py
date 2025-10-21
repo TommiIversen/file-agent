@@ -9,6 +9,7 @@ import aiofiles
 from app.config import Settings
 from app.utils.file_operations import validate_file_sizes, create_temp_file_path
 from app.utils.progress_utils import should_report_progress_with_bytes
+from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 
 
 @dataclass
@@ -262,7 +263,7 @@ class FileCopyExecutor:
             progress_callback: Optional[Callable[[CopyProgress], None]],
             start_time: datetime,
     ) -> CopyResult:
-        """Perform the actual file copy with progress tracking."""
+        """Perform the actual file copy with progress tracking and network error detection."""
         file_size = source.stat().st_size
         bytes_copied = 0
         last_progress_reported = -1
@@ -270,6 +271,12 @@ class FileCopyExecutor:
 
         logging.debug(
             f"Using {chunk_size // 1024}KB chunks for {file_size / (1024 ** 2):.1f}MB file"
+        )
+
+        # Initialize network error detector for fail-fast behavior
+        network_detector = NetworkErrorDetector(
+            destination_path=str(dest),
+            check_interval_bytes=1024 * 1024  # Check every 1MB
         )
 
         try:
@@ -282,8 +289,22 @@ class FileCopyExecutor:
                     if not chunk:
                         break
 
-                    await dst.write(chunk)
+                    try:
+                        await dst.write(chunk)
+                    except Exception as write_error:
+                        # Check if write error is network-related
+                        network_detector.check_write_error(write_error, "chunk write")
+                        # If not network error, re-raise original error
+                        raise write_error
+                        
                     bytes_copied += len(chunk)
+
+                    # Check network connectivity periodically for fail-fast behavior
+                    try:
+                        network_detector.check_destination_connectivity(bytes_copied)
+                    except NetworkError as ne:
+                        logging.error(f"Network connectivity lost during copy: {ne}")
+                        raise ne
 
                     if progress_callback:
                         current_time = datetime.now()

@@ -737,21 +737,8 @@ class StateManager:
                     return
                 
                 # CRITICAL: Check if file is now in paused state due to network interruption
-                # Paused files should NOT be reactivated by scheduled retries
-                paused_statuses = {
-                    FileStatus.PAUSED_IN_QUEUE,
-                    FileStatus.PAUSED_COPYING,
-                    FileStatus.PAUSED_GROWING_COPY,
-                }
-                if tracked_file.status in paused_statuses:
-                    logging.info(
-                        f"RETRY CANCELLED: {tracked_file.file_path} is in paused state {tracked_file.status.value} - "
-                        f"waiting for network recovery [UUID: {file_id[:8]}...]"
-                    )
-                    # Clean up retry info but keep file in paused state
-                    tracked_file.retry_info = None
-                    self._retry_tasks.pop(file_id, None)
-                    return
+                # NOTE: PAUSED status checks removed in fail-and-rediscover strategy
+                # Files now fail immediately instead of pausing, so no paused-specific retry blocking needed
                 
                 # Reset file to READY status
                 old_status = tracked_file.status

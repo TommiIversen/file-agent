@@ -11,6 +11,7 @@ import aiofiles
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.file_copy_executor import FileCopyExecutor, CopyProgress
+from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.state_manager import StateManager
 from app.utils.file_operations import create_temp_file_path
 from app.utils.progress_utils import calculate_transfer_rate
@@ -105,6 +106,9 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                 )
                 return False
 
+        except NetworkError:
+            # Re-raise network errors for immediate failure handling
+            raise
         except Exception as e:
             logging.error(
                 f"Error in normal copy strategy for {source.name}: {e}", exc_info=True
@@ -220,6 +224,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     # Source file disappeared during copying - let this bubble up
                     # so error classifier can properly handle it as REMOVED
                     raise
+                except NetworkError:
+                    # Network error during finish phase - let this bubble up for immediate failure
+                    raise
 
                 if final_success:
                     if await self._verify_file_integrity(
@@ -264,6 +271,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
         except FileNotFoundError:
             # Source file disappeared during copying - let this bubble up to error classifier
+            raise
+        except NetworkError:
+            # Network error during copy - let this bubble up for immediate failure
             raise
         except Exception as e:
             logging.error(f"Error in growing copy strategy: {e}")
@@ -313,112 +323,171 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     f"starting fresh copy"
                 )
 
+            # Initialize network error detector for fail-fast behavior
+            network_detector = NetworkErrorDetector(
+                destination_path=dest_path,
+                check_interval_bytes=chunk_size * 10  # Check every 10 chunks
+            )
+
             # Open destination file in append mode if resuming, write mode if fresh
             file_mode = "ab" if dest_file_path.exists() and bytes_copied > 0 else "wb"
             
             async with aiofiles.open(dest_path, file_mode) as dst:
-                while True:
-                    # NOTE: Pause detection removed in fail-and-rediscover strategy
-                    # Files now fail immediately instead of pausing during network issues
-                    
-                    current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
-                    if not current_tracked_file:
-                        logging.warning(f"File disappeared during copy: {source_path}")
-                        return False
-
-                    try:
-                        current_file_size = os.path.getsize(source_path)
-                    except OSError:
-                        logging.warning(f"Cannot access source file: {source_path}")
-                        break
-
-                    if current_file_size > last_file_size:
-                        no_growth_cycles = 0
-                        last_file_size = current_file_size
-                    else:
-                        no_growth_cycles += 1
-
-                        if no_growth_cycles >= max_no_growth_cycles:
-                            logging.info(
-                                f"File stopped growing: {os.path.basename(source_path)}"
-                            )
-                            break
-
-                    safe_copy_to = max(0, current_file_size - safety_margin_bytes)
-
-                    if safe_copy_to > bytes_copied:
-                        bytes_to_copy = safe_copy_to - bytes_copied
-
-                        async with aiofiles.open(source_path, "rb") as src:
-                            await src.seek(bytes_copied)
-
-                            while bytes_to_copy > 0:
-                                read_size = min(chunk_size, bytes_to_copy)
-                                chunk = await src.read(read_size)
-
-                                if not chunk:
-                                    break
-
-                                await dst.write(chunk)
-                                chunk_len = len(chunk)
-                                bytes_copied += chunk_len
-                                bytes_to_copy -= chunk_len
-
-                                copy_ratio = (
-                                    (bytes_copied / current_file_size) * 100
-                                    if current_file_size > 0
-                                    else 0
-                                )
-
-                                current_time = datetime.now()
-                                if not hasattr(self, "_copy_start_time"):
-                                    self._copy_start_time = current_time
-                                    self._copy_start_bytes = bytes_copied
-
-                                elapsed_seconds = (
-                                        current_time - self._copy_start_time
-                                ).total_seconds()
-                                transfer_rate = calculate_transfer_rate(
-                                    bytes_copied - self._copy_start_bytes,
-                                    elapsed_seconds,
-                                )
-                                copy_speed_mbps = transfer_rate / (
-                                        1024 * 1024
-                                )
-
-                                await self.state_manager.update_file_status_by_id(
-                                    tracked_file.id,
-                                    FileStatus.GROWING_COPY,
-                                    copy_progress=copy_ratio,
-                                    bytes_copied=bytes_copied,
-                                    file_size=current_file_size,
-                                    copy_speed_mbps=copy_speed_mbps,
-                                )
-
-                                if pause_ms > 0:
-                                    await asyncio.sleep(pause_ms / 1000)
-                    else:
-                        copy_ratio = (
-                            (bytes_copied / current_file_size) * 100
-                            if current_file_size > 0
-                            else 0
-                        )
-
-                        await self.state_manager.update_file_status_by_id(
-                            tracked_file.id,
-                            FileStatus.GROWING_COPY,
-                            copy_progress=copy_ratio,
-                            bytes_copied=bytes_copied,
-                            file_size=current_file_size,
-                        )
-
-                    await asyncio.sleep(poll_interval)
+                bytes_copied = await self._growing_copy_loop(
+                    source_path, dst, tracked_file, bytes_copied, last_file_size,
+                    no_growth_cycles, max_no_growth_cycles, safety_margin_bytes,
+                    chunk_size, poll_interval, pause_ms, network_detector
+                )
 
             return True
 
+        except NetworkError:
+            # Re-raise network errors for immediate failure handling
+            raise
         except Exception as e:
             logging.error(f"Error in growing file copy: {e}")
             return False
+
+    async def _growing_copy_loop(
+            self, source_path: str, dst, tracked_file: TrackedFile, 
+            bytes_copied: int, last_file_size: int, no_growth_cycles: int,
+            max_no_growth_cycles: int, safety_margin_bytes: int, chunk_size: int,
+            poll_interval: float, pause_ms: int, network_detector: NetworkErrorDetector
+    ) -> int:
+        """
+        Main growing copy loop extracted for better testability.
+        Returns the final bytes_copied count.
+        """
+        while True:
+            # NOTE: Pause detection removed in fail-and-rediscover strategy
+            # Files now fail immediately instead of pausing during network issues
+            
+            current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
+            if not current_tracked_file:
+                logging.warning(f"File disappeared during copy: {source_path}")
+                return bytes_copied
+
+            try:
+                current_file_size = os.path.getsize(source_path)
+            except OSError:
+                logging.warning(f"Cannot access source file: {source_path}")
+                break
+
+            if current_file_size > last_file_size:
+                no_growth_cycles = 0
+                last_file_size = current_file_size
+            else:
+                no_growth_cycles += 1
+
+                if no_growth_cycles >= max_no_growth_cycles:
+                    logging.info(
+                        f"File stopped growing: {os.path.basename(source_path)}"
+                    )
+                    break
+
+            safe_copy_to = max(0, current_file_size - safety_margin_bytes)
+
+            if safe_copy_to > bytes_copied:
+                bytes_copied = await self._copy_chunk_range(
+                    source_path, dst, bytes_copied, safe_copy_to, chunk_size,
+                    tracked_file, current_file_size, pause_ms, network_detector
+                )
+            else:
+                # No new data to copy, just update progress
+                copy_ratio = (
+                    (bytes_copied / current_file_size) * 100
+                    if current_file_size > 0
+                    else 0
+                )
+
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id,
+                    FileStatus.GROWING_COPY,
+                    copy_progress=copy_ratio,
+                    bytes_copied=bytes_copied,
+                    file_size=current_file_size,
+                )
+
+            await asyncio.sleep(poll_interval)
+
+        return bytes_copied
+
+    async def _copy_chunk_range(
+            self, source_path: str, dst, start_bytes: int, end_bytes: int, 
+            chunk_size: int, tracked_file: TrackedFile, current_file_size: int,
+            pause_ms: int, network_detector: NetworkErrorDetector
+    ) -> int:
+        """
+        Copy a range of bytes from source to destination with network error detection.
+        Returns the final bytes copied count.
+        """
+        bytes_copied = start_bytes
+        bytes_to_copy = end_bytes - start_bytes
+
+        async with aiofiles.open(source_path, "rb") as src:
+            await src.seek(bytes_copied)
+
+            while bytes_to_copy > 0:
+                read_size = min(chunk_size, bytes_to_copy)
+                chunk = await src.read(read_size)
+
+                if not chunk:
+                    break
+
+                try:
+                    await dst.write(chunk)
+                except Exception as write_error:
+                    # Check if write error is network-related for immediate failure
+                    network_detector.check_write_error(write_error, "growing copy chunk write")
+                    # If not network error, re-raise original error
+                    raise write_error
+                    
+                chunk_len = len(chunk)
+                bytes_copied += chunk_len
+                bytes_to_copy -= chunk_len
+
+                # Check network connectivity periodically for fail-fast behavior
+                try:
+                    network_detector.check_destination_connectivity(bytes_copied)
+                except NetworkError as ne:
+                    logging.error(f"Network connectivity lost during growing copy: {ne}")
+                    raise ne
+
+                copy_ratio = (
+                    (bytes_copied / current_file_size) * 100
+                    if current_file_size > 0
+                    else 0
+                )
+
+                current_time = datetime.now()
+                if not hasattr(self, "_copy_start_time"):
+                    self._copy_start_time = current_time
+                    self._copy_start_bytes = bytes_copied
+
+                elapsed_seconds = (
+                        current_time - self._copy_start_time
+                ).total_seconds()
+                transfer_rate = calculate_transfer_rate(
+                    bytes_copied - self._copy_start_bytes,
+                    elapsed_seconds,
+                )
+                copy_speed_mbps = transfer_rate / (
+                        1024 * 1024
+                )
+
+                await self.state_manager.update_file_status_by_id(
+                    tracked_file.id,
+                    FileStatus.GROWING_COPY,
+                    copy_progress=copy_ratio,
+                    bytes_copied=bytes_copied,
+                    file_size=current_file_size,
+                    copy_speed_mbps=copy_speed_mbps,
+                )
+
+                if pause_ms > 0:
+                    await asyncio.sleep(pause_ms / 1000)
+
+        return bytes_copied
 
     async def _finish_normal_copy(
             self, source_path: str, dest_path: str, tracked_file: TrackedFile
@@ -442,6 +511,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
             chunk_size = self.settings.chunk_size_kb * 1024
 
+            # Initialize network error detector for finish phase
+            network_detector = NetworkErrorDetector(
+                destination_path=dest_path,
+                check_interval_bytes=chunk_size * 5  # Check every 5 chunks
+            )
+
             async with aiofiles.open(source, "rb") as src:
                 async with aiofiles.open(dest, "ab") as dst:
                     await src.seek(bytes_already_copied)
@@ -451,8 +526,22 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         if not chunk:
                             break
 
-                        await dst.write(chunk)
+                        try:
+                            await dst.write(chunk)
+                        except Exception as write_error:
+                            # Check if write error is network-related
+                            network_detector.check_write_error(write_error, "finish copy chunk write")
+                            # If not network error, re-raise original error
+                            raise write_error
+                            
                         bytes_already_copied += len(chunk)
+
+                        # Check network connectivity periodically
+                        try:
+                            network_detector.check_destination_connectivity(bytes_already_copied)
+                        except NetworkError as ne:
+                            logging.error(f"Network connectivity lost during finish copy: {ne}")
+                            raise ne
 
                         progress = (
                             (bytes_already_copied / final_size) * 100
@@ -475,6 +564,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 f"Source file no longer exists while finishing copy for {source.name}: {e}"
             )
             raise e
+        except NetworkError:
+            # Re-raise network errors for immediate failure handling
+            raise
         except Exception as e:
             logging.error(
                 f"Error finishing normal copy for {source.name}: {e}", exc_info=True
