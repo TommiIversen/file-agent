@@ -22,12 +22,22 @@ document.addEventListener('alpine:init', () => {
 
         // File Management Actions
         addFile(file) {
+            if (!file || !file.id) {
+                console.error('addFile called with invalid file object:', file);
+                return;
+            }
+            
             this.items.set(file.id, file);  // Brug ID som key
             this.updateStatisticsFromFiles();
             console.log(`File added: ${file.file_path} (ID: ${file.id})`);
         },
 
         updateFile(fileId, file) {  // Ændret parameter navn for klarhed
+            if (!fileId || !file || !file.id) {
+                console.error('updateFile called with invalid parameters:', { fileId, file });
+                return;
+            }
+            
             if (this.items.has(fileId)) {
                 this.items.set(fileId, file);
                 this.updateStatisticsFromFiles();
@@ -41,11 +51,20 @@ document.addEventListener('alpine:init', () => {
 
         // Initial State Management
         setInitialFiles(files) {
+            if (!Array.isArray(files)) {
+                console.error('setInitialFiles called with non-array:', files);
+                return;
+            }
+            
             console.log('Setting initial files:', files.length);
             this.items.clear();
 
             files.forEach(file => {
-                this.items.set(file.id, file);  // Brug ID som key
+                if (file && file.id) {
+                    this.items.set(file.id, file);  // Brug ID som key
+                } else {
+                    console.warn('Skipping invalid file in setInitialFiles:', file);
+                }
             });
 
             this.updateStatisticsFromFiles();
@@ -104,29 +123,49 @@ document.addEventListener('alpine:init', () => {
 
         // Computed Properties - File Lists
         get allFiles() {
+            if (!this.items) {
+                console.warn('fileStore.items is not initialized yet');
+                return [];
+            }
             const files = Array.from(this.items.values());
             return this.sortFiles(files);
         },
 
         get activeFiles() {
+            if (!this.items) {
+                console.warn('fileStore.items is not initialized yet');
+                return [];
+            }
             const files = Array.from(this.items.values())
                 .filter(file => !['Completed', 'Failed'].includes(file.status));
             return this.sortFiles(files);
         },
 
         get completedFiles() {
+            if (!this.items) {
+                console.warn('fileStore.items is not initialized yet');
+                return [];
+            }
             const files = Array.from(this.items.values())
                 .filter(file => file.status === 'Completed');
             return this.sortFiles(files);
         },
 
         get growingFiles() {
+            if (!this.items) {
+                console.warn('fileStore.items is not initialized yet');
+                return [];
+            }
             const files = Array.from(this.items.values())
                 .filter(file => file.is_growing_file || ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status));
             return this.sortFiles(files);
         },
 
         get failedFiles() {
+            if (!this.items) {
+                console.warn('fileStore.items is not initialized yet');
+                return [];
+            }
             const files = Array.from(this.items.values())
                 .filter(file => file.status === 'Failed');
             return this.sortFiles(files);
@@ -134,7 +173,18 @@ document.addEventListener('alpine:init', () => {
 
         // Sorting Logic
         sortFiles(files) {
+            if (!files || !Array.isArray(files)) {
+                console.warn('sortFiles called with invalid files array:', files);
+                return [];
+            }
+            
             return files.sort((a, b) => {
+                // Defensive checks for file objects
+                if (!a || !b) {
+                    console.warn('sortFiles: null file object detected', { a, b });
+                    return 0;
+                }
+                
                 switch (this.sortBy) {
                     case 'activity':
                         // Sort by most relevant timestamp based on status

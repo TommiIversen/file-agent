@@ -249,13 +249,21 @@ class FileTransferApp {
         // Global error handler
         window.addEventListener('error', (event) => {
             console.error('Global error:', event.error);
-            this.handleGlobalError(event.error);
+            if (event.error) {
+                this.handleGlobalError(event.error);
+            } else {
+                this.handleGlobalError(new Error('Unknown global error occurred'));
+            }
         });
 
         // Unhandled promise rejection handler
         window.addEventListener('unhandledrejection', (event) => {
             console.error('Unhandled promise rejection:', event.reason);
-            this.handleGlobalError(event.reason);
+            if (event.reason) {
+                this.handleGlobalError(event.reason);
+            } else {
+                this.handleGlobalError(new Error('Unknown promise rejection'));
+            }
         });
 
         // Page visibility change handler
@@ -299,16 +307,26 @@ class FileTransferApp {
      * Handle global errors
      */
     handleGlobalError(error) {
+        // Defensive handling of error object
+        if (!error) {
+            console.warn('handleGlobalError called with null/undefined error');
+            return;
+        }
+
+        const errorMessage = error.message || error.toString() || 'Unknown error';
+        const errorStack = error.stack || 'No stack trace available';
+
         // Log error details
         console.error('Global error details:', {
-            message: error.message,
-            stack: error.stack,
+            message: errorMessage,
+            stack: errorStack,
+            originalError: error,
             timestamp: new Date().toISOString()
         });
 
         // Dispatch error event
         this.dispatchAppEvent('app:error', {
-            error: error.message,
+            error: errorMessage,
             timestamp: new Date().toISOString()
         });
     }

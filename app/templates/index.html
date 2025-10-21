@@ -277,7 +277,7 @@
     <!-- Files List -->
     <div class="space-y-2">
 
-        <template x-for="file in $store.files.allFiles" :key="file.file_path">
+        <template x-for="file in $store.files.allFiles" :key="file.id">
             <!-- Simple File Row with Hover Tooltip -->
             <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
                 <div class="flex items-center space-x-4">
