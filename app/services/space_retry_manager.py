@@ -131,15 +131,12 @@ class SpaceRetryManager:
         """
         Check if file is in a paused state due to destination storage issues.
         
-        Paused files should NOT increment retry counts - they are waiting
-        for destination to become available again, not actively failing.
+        NOTE: With fail-and-rediscover strategy, we no longer use paused states.
+        Files immediately fail and are rediscovered instead of being paused.
+        This method now always returns False.
         """
-        paused_statuses = [
-            FileStatus.PAUSED_IN_QUEUE,
-            FileStatus.PAUSED_COPYING,
-            FileStatus.PAUSED_GROWING_COPY,
-        ]
-        return tracked_file.status in paused_statuses
+        # In fail-and-rediscover strategy, no files are paused
+        return False
 
     async def _schedule_paused_file_retry(
             self, tracked_file: TrackedFile, space_check: SpaceCheckResult

@@ -449,8 +449,14 @@ class StateManager:
             old_status = tracked_file.status
             tracked_file.status = status
 
-            # NOTE: PAUSED_* statuses removed in fail-and-rediscover strategy
-            # Files now fail immediately instead of pausing, so no pause-specific retry cancellation needed
+            # NOTE: Cancel retry tasks for terminal statuses in fail-and-rediscover strategy
+            terminal_statuses = {FileStatus.FAILED, FileStatus.COMPLETED, FileStatus.REMOVED}
+            if status in terminal_statuses:
+                await self._cancel_existing_retry_unlocked(file_id)
+                logging.debug(
+                    f"RETRY CANCELLED: File {tracked_file.file_path} reached terminal status {status.value} - "
+                    f"cancelled scheduled retry [UUID: {file_id[:8]}...]"
+                )
 
             if status == FileStatus.READY_TO_START_GROWING:
                 tracked_file.is_growing_file = True

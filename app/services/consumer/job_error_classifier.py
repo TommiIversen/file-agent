@@ -42,19 +42,19 @@ class JobErrorClassifier:
         
         Returns:
             Tuple of (FileStatus, reason) where:
-            - PAUSED_COPYING: Network/destination issues, should retry
+            - FAILED: Network/destination issues (fail-and-rediscover strategy)
             - REMOVED: Source file disappeared 
             - FAILED: Technical copy errors
         """
         # Check destination status first
         if self._is_destination_unavailable():
-            return FileStatus.PAUSED_COPYING, f"Destination unavailable (status: {self._get_destination_status()})"
+            return FileStatus.FAILED, f"Destination unavailable (status: {self._get_destination_status()})"
 
         error_str = str(error).lower()
 
-        # Check for network errors (should pause)
+        # Check for network errors (now fail immediately in fail-and-rediscover)
         if self._is_network_error(error, error_str):
-            return FileStatus.PAUSED_COPYING, self._get_network_error_reason(error, error_str)
+            return FileStatus.FAILED, self._get_network_error_reason(error, error_str)
 
         # Check for source errors (should remove if file disappeared, otherwise fail)
         if self._is_source_error(error_str, file_path):
@@ -68,9 +68,9 @@ class JobErrorClassifier:
             # Other source errors should fail
             return FileStatus.FAILED, self._get_source_error_reason(error_str, file_path)
 
-        # Default to pause for unknown errors (safer)
-        logging.warning(f"Unknown error type for {Path(file_path).name}: {error_str} → defaulting to PAUSE")
-        return FileStatus.PAUSED_COPYING, f"Unknown error (defaulting to pause): {str(error)}"
+        # Default to fail for unknown errors (fail-and-rediscover strategy)
+        logging.warning(f"Unknown error type for {Path(file_path).name}: {error_str} → defaulting to FAILED")
+        return FileStatus.FAILED, f"Unknown error (immediate failure): {str(error)}"
 
     def _is_destination_unavailable(self) -> bool:
         """Check if destination is currently unavailable."""
