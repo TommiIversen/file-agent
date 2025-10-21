@@ -203,9 +203,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     tracked_file.id, FileStatus.COPYING
                 )
 
-                final_success = await self._finish_normal_copy(
-                    source_path, str(copy_dest_path), tracked_file
-                )
+                try:
+                    final_success = await self._finish_normal_copy(
+                        source_path, str(copy_dest_path), tracked_file
+                    )
+                except FileNotFoundError:
+                    # Source file disappeared during copying - let this bubble up
+                    # so error classifier can properly handle it as REMOVED
+                    raise
 
                 if final_success:
                     if await self._verify_file_integrity(
@@ -425,6 +430,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
             return True
 
+        except FileNotFoundError as e:
+            # Source file disappeared during copying - re-raise so error classifier can handle it
+            logging.error(
+                f"Source file no longer exists while finishing copy for {source.name}: {e}"
+            )
+            raise e
         except Exception as e:
             logging.error(
                 f"Error finishing normal copy for {source.name}: {e}", exc_info=True
