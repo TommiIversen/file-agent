@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 from uuid import uuid4
+import asyncio
+import glob
 
 import aiofiles
 
@@ -34,6 +36,9 @@ class StorageChecker:
         try:
             is_accessible = await self._check_accessibility(path)
             if is_accessible:
+                # Ryd op i gamle test-filer før vi laver nye checks
+                await self.cleanup_old_test_files(path)
+                
                 free_gb, total_gb, used_gb = await self._get_disk_usage(path)
                 has_write_access = await self._check_write_access(path)
             else:
@@ -123,6 +128,63 @@ class StorageChecker:
                 logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
             logging.warning(f"Could not clean up test file {test_file_path}: {e}")
+
+    async def cleanup_old_test_files(self, directory: str) -> int:
+        """
+        Ryd op i gamle test-filer i det specificerede directory.
+        
+        Args:
+            directory: Stien til directory der skal ryddes op i
+            
+        Returns:
+            Antal filer der blev slettet
+        """
+        cleaned_count = 0
+        try:
+            # Find alle test-filer der matcher vores prefix
+            pattern = os.path.join(directory, f"{self._test_file_prefix}*.tmp")
+            test_files = glob.glob(pattern)
+            
+            logging.debug(f"Found {len(test_files)} old test files to clean up in {directory}")
+            
+            for test_file in test_files:
+                try:
+                    if os.path.exists(test_file):
+                        os.remove(test_file)
+                        cleaned_count += 1
+                        logging.debug(f"Cleaned up old test file: {test_file}")
+                except Exception as e:
+                    logging.warning(f"Could not clean up old test file {test_file}: {e}")
+                    
+            if cleaned_count > 0:
+                logging.info(f"Cleaned up {cleaned_count} old test files from {directory}")
+                
+        except Exception as e:
+            logging.error(f"Error during old test files cleanup in {directory}: {e}")
+            
+        return cleaned_count
+
+    async def cleanup_all_test_files(self, source_dir: str, dest_dir: str = None) -> int:
+        """
+        Ryd op i gamle test-filer i både source og destination directories.
+        
+        Args:
+            source_dir: Source directory sti
+            dest_dir: Destination directory sti (optional)
+            
+        Returns:
+            Total antal filer der blev slettet
+        """
+        total_cleaned = 0
+        
+        # Cleanup source directory
+        total_cleaned += await self.cleanup_old_test_files(source_dir)
+        
+        # Cleanup destination directory hvis angivet
+        if dest_dir and os.path.exists(dest_dir):
+            total_cleaned += await self.cleanup_old_test_files(dest_dir)
+            
+        return total_cleaned
 
     def _evaluate_status(
             self,

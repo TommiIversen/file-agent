@@ -6,6 +6,8 @@ import asyncio
 import logging
 import time
 import uuid
+import glob
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +72,9 @@ class DestinationChecker:
         target_path = dest_path or self.destination_path
 
         try:
+            # Ryd op i gamle test-filer først
+            await self.cleanup_old_test_files()
+            
             test_file = target_path / f".file_agent_write_test_{uuid.uuid4().hex[:8]}"
 
             async with aiofiles.open(test_file, "w") as f:
@@ -120,6 +125,44 @@ class DestinationChecker:
             "is_cache_valid": self._is_cache_valid(),
             "destination_path": str(self.destination_path),
         }
+
+    async def cleanup_old_test_files(self) -> int:
+        """
+        Ryd op i gamle test-filer i destination directory.
+        
+        Returns:
+            Antal filer der blev slettet
+        """
+        cleaned_count = 0
+        try:
+            # Find alle test-filer der matcher vores pattern (.file_agent_test_* og .file_agent_write_test_*)
+            patterns = [
+                str(self.destination_path / ".file_agent_test_*"),
+                str(self.destination_path / ".file_agent_write_test_*")
+            ]
+            
+            test_files = []
+            for pattern in patterns:
+                test_files.extend(glob.glob(pattern))
+            
+            logging.debug(f"Found {len(test_files)} old test files to clean up in {self.destination_path}")
+            
+            for test_file in test_files:
+                try:
+                    if os.path.exists(test_file):
+                        os.remove(test_file)
+                        cleaned_count += 1
+                        logging.debug(f"Cleaned up old test file: {test_file}")
+                except Exception as e:
+                    logging.warning(f"Could not clean up old test file {test_file}: {e}")
+                    
+            if cleaned_count > 0:
+                logging.info(f"Cleaned up {cleaned_count} old test files from {self.destination_path}")
+                
+        except Exception as e:
+            logging.error(f"Error during old test files cleanup in {self.destination_path}: {e}")
+            
+        return cleaned_count
 
     async def _trigger_storage_update_if_changed(self, current_available: bool) -> None:
         """Trigger storage monitor update if availability status changed."""
@@ -220,6 +263,9 @@ class DestinationChecker:
                     is_available=True, checked_at=datetime.now()
                 )
             else:
+                # Ryd op i gamle test-filer før vi laver en ny
+                await self.cleanup_old_test_files()
+                
                 test_file = (
                         self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 )
