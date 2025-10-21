@@ -7,10 +7,11 @@ from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
 
 
 class StateManager:
-    def __init__(self):
+    def __init__(self, cooldown_minutes: int = 60):
         self._files_by_id: Dict[str, TrackedFile] = {}
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
+        self._cooldown_minutes = cooldown_minutes
         
         # Retry task tracking - only tasks, state is in TrackedFile.retry_info
         self._retry_tasks: Dict[str, asyncio.Task] = {}
@@ -157,6 +158,64 @@ class StateManager:
             if current_file and current_file.status == FileStatus.REMOVED:
                 return None
             return current_file
+
+    def _is_space_error_in_cooldown(self, tracked_file: TrackedFile, cooldown_minutes: int = 60) -> bool:
+        """
+        Check if a file with SPACE_ERROR status is still in cooldown period.
+        
+        Args:
+            tracked_file: The TrackedFile to check
+            cooldown_minutes: Cooldown period in minutes (default 60)
+            
+        Returns:
+            True if file is in cooldown, False otherwise
+        """
+        if tracked_file.status != FileStatus.SPACE_ERROR:
+            return False
+            
+        if not tracked_file.space_error_at:
+            # No timestamp set, allow processing (shouldn't happen but be safe)
+            return False
+            
+        cooldown_duration = timedelta(minutes=cooldown_minutes)
+        time_since_error = datetime.now() - tracked_file.space_error_at
+        
+        is_in_cooldown = time_since_error < cooldown_duration
+        
+        if is_in_cooldown:
+            remaining_minutes = (cooldown_duration - time_since_error).total_seconds() / 60
+            logging.debug(
+                f"File {tracked_file.file_path} in SPACE_ERROR cooldown - "
+                f"{remaining_minutes:.1f} minutes remaining"
+            )
+        
+        return is_in_cooldown
+
+    async def should_skip_file_processing(self, file_path: str, cooldown_minutes: int = None) -> bool:
+        """
+        Check if a file should be skipped for processing due to cooldown or other conditions.
+        
+        Args:
+            file_path: Path to the file to check
+            cooldown_minutes: Override cooldown period (uses config default if None)
+            
+        Returns:
+            True if file should be skipped, False if it can be processed
+        """
+        async with self._lock:
+            existing_file = self._get_current_file_for_path(file_path)
+            if not existing_file:
+                return False
+                
+            # Use config value if not specified
+            if cooldown_minutes is None:
+                cooldown_minutes = self._cooldown_minutes
+                
+            # Skip if file is in SPACE_ERROR cooldown
+            if existing_file.status == FileStatus.SPACE_ERROR:
+                return self._is_space_error_in_cooldown(existing_file, cooldown_minutes)
+                
+            return False
 
     async def get_active_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         """

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 
 from app.models import TrackedFile
 from ..config import Settings
@@ -88,6 +89,7 @@ class SpaceRetryManager:
             await self._state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=FileStatus.SPACE_ERROR,
+                space_error_at=datetime.now(),
                 error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}",
             )
             logging.debug(

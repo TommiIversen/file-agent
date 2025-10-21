@@ -111,6 +111,11 @@ class FileScanOrchestrator:
             try:
                 file_path = file_path_obj.path
 
+                # Check if file should be skipped due to cooldown or other conditions
+                should_skip = await self.state_manager.should_skip_file_processing(file_path)
+                if should_skip:
+                    continue
+
                 # Brug get_active_file_by_path i stedet for get_file_by_path
                 # Dette sikrer at completed files ikke bliver genbrugt når en ny fil 
                 # med samme navn bliver opdaget

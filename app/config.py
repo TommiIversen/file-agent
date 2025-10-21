@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     space_retry_delay_seconds: int = 300  # 5 minutes between space retries
     max_space_retries: int = 6  # Max 30 minutes waiting for space
     minimum_free_space_after_copy_gb: float = 2.0  # Minimum space to leave after copy
+    space_error_cooldown_minutes: int = 60  # Cooldown period for SPACE_ERROR files (1 hour)
 
     # File history management  
     keep_files_hours: int = 336  # Keep ALL files in memory for 14 days (14*24=336 hours) - provides complete UI log

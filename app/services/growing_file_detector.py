@@ -236,6 +236,7 @@ class GrowingFileDetector:
                         FileStatus.COMPLETED,
                         FileStatus.FAILED,
                         FileStatus.REMOVED,
+                        FileStatus.SPACE_ERROR,  # Don't process files with permanent space errors
                     ]
                 ]
 

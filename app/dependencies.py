@@ -42,7 +42,10 @@ def get_state_manager() -> StateManager:
         StateManager instance (oprettes kun én gang)
     """
     if "state_manager" not in _singletons:
-        _singletons["state_manager"] = StateManager()
+        settings = get_settings()
+        _singletons["state_manager"] = StateManager(
+            cooldown_minutes=settings.space_error_cooldown_minutes
+        )
 
     return _singletons["state_manager"]
 
