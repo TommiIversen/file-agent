@@ -385,8 +385,8 @@ class JobQueueService:
         for tracked_file in all_files:
             if (
                     tracked_file.status == FileStatus.FAILED
-                    and tracked_file.last_error_at
-                    and tracked_file.last_error_at >= cutoff_time
+                    and tracked_file.failed_at
+                    and tracked_file.failed_at >= cutoff_time
                     and self._is_likely_network_failure(tracked_file)
             ):
                 recent_failed.append(tracked_file)
