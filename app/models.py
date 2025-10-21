@@ -153,6 +153,24 @@ class TrackedFile(BaseModel):
         default=None, description="Sidste gang vi tjekkede for file growth"
     )
 
+    # Additional growing file tracking fields to eliminate duplicate state in GrowingFileDetector
+    previous_file_size: int = Field(
+        default=0,
+        ge=0,
+        description="Forrige filstørrelse før sidste size check (til growth detection)",
+    )
+    
+    first_seen_size: int = Field(
+        default=0,
+        ge=0,
+        description="Filstørrelse da filen først blev opdaget (til growth analysis)",
+    )
+    
+    growth_stable_since: Optional[datetime] = Field(
+        default=None,
+        description="Tidspunkt hvor filen sidst stoppede med at vokse (til stability detection)",
+    )
+
     # Retry tracking - consolidated in TrackedFile
     retry_info: Optional["RetryInfo"] = Field(
         default=None, description="Active retry information if file has scheduled retry"
