@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from .utils.host_config import get_hostname_settings_file
 
 
 class Settings(BaseSettings):
@@ -78,9 +79,20 @@ class Settings(BaseSettings):
     windows_drive_letter: str = ""  # Windows drive letter (e.g., "Z") or empty for UNC
     macos_mount_point: str = ""  # macOS mount point prefix (default: /Volumes)
 
-    model_config = SettingsConfigDict(env_file="settings.env")
+    model_config = SettingsConfigDict(env_file=get_hostname_settings_file())
 
     @property
     def log_directory(self) -> Path:
         """Returnerer log directory som Path objekt"""
         return Path(self.log_file_path).parent
+
+    @property
+    def config_file_info(self) -> dict:
+        """Return information about which configuration file is being used."""
+        from .utils.host_config import get_hostname, list_all_settings_files
+        
+        return {
+            "hostname": get_hostname(),
+            "active_config_file": get_hostname_settings_file(),
+            "all_available_configs": list_all_settings_files()
+        }
