@@ -49,7 +49,8 @@ class GrowingFileDetector:
         try:
             # Get current file info
             if not os.path.exists(tracked_file.file_path):
-                return FileStatus.FAILED, None
+                logging.info(f"File no longer exists during growth check: {tracked_file.file_path}")
+                return FileStatus.REMOVED, None
 
             current_size = os.path.getsize(tracked_file.file_path)
             current_time = datetime.now()

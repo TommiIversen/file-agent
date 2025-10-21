@@ -102,16 +102,32 @@ class JobCopyExecutor:
             await self._handle_fail_error(prepared_file, "Copy operation failed", error)
             return False
 
-        should_pause, reason = self.error_classifier.classify_copy_error(
+        status, reason = self.error_classifier.classify_copy_error(
             error, prepared_file.tracked_file.file_path
         )
 
-        if should_pause:
+        if status == FileStatus.PAUSED_COPYING:
             await self._handle_pause_error(prepared_file, reason, error)
             return True
-        else:
+        elif status == FileStatus.REMOVED:
+            await self._handle_remove_error(prepared_file, reason, error)
+            return False  # File is gone, don't retry
+        else:  # FileStatus.FAILED
             await self._handle_fail_error(prepared_file, reason, error)
             return False
+
+    async def _handle_remove_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+        """Handle errors where source file disappeared."""
+        await self.state_manager.update_file_status_by_id(
+            prepared_file.tracked_file.id,
+            FileStatus.REMOVED,
+            copy_progress=0.0,
+            bytes_copied=0,
+            error_message=f"Removed: {reason}",
+        )
+
+        file_name = Path(prepared_file.tracked_file.file_path).name
+        logging.info(f"File removed during copy: {file_name} - {reason}")
 
     async def _handle_pause_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
         """Handle errors that should trigger pause instead of failure."""

@@ -1,5 +1,5 @@
 """
-Job Error Classifier - determines if copy errors should pause or fail immediately.
+Job Error Classifier - determines if copy errors should pause, fail, or remove file.
 """
 
 import errno
@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Tuple
 
-from app.models import StorageStatus
+from app.models import StorageStatus, FileStatus
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 
 
@@ -36,25 +36,41 @@ class JobErrorClassifier:
     def __init__(self, storage_monitor: StorageMonitorService):
         self.storage_monitor = storage_monitor
 
-    def classify_copy_error(self, error: Exception, file_path: str) -> Tuple[bool, str]:
-        """Classify copy error to determine if it should pause or fail."""
+    def classify_copy_error(self, error: Exception, file_path: str) -> Tuple[FileStatus, str]:
+        """
+        Classify copy error to determine appropriate FileStatus and reason.
+        
+        Returns:
+            Tuple of (FileStatus, reason) where:
+            - PAUSED_COPYING: Network/destination issues, should retry
+            - REMOVED: Source file disappeared 
+            - FAILED: Technical copy errors
+        """
         # Check destination status first
         if self._is_destination_unavailable():
-            return True, f"Destination unavailable (status: {self._get_destination_status()})"
+            return FileStatus.PAUSED_COPYING, f"Destination unavailable (status: {self._get_destination_status()})"
 
         error_str = str(error).lower()
 
         # Check for network errors (should pause)
         if self._is_network_error(error, error_str):
-            return True, self._get_network_error_reason(error, error_str)
+            return FileStatus.PAUSED_COPYING, self._get_network_error_reason(error, error_str)
 
-        # Check for source errors (should fail)
+        # Check for source errors (should remove if file disappeared, otherwise fail)
         if self._is_source_error(error_str, file_path):
-            return False, self._get_source_error_reason(error_str, file_path)
+            # If source file no longer exists, mark as REMOVED instead of FAILED
+            try:
+                if not Path(file_path).exists():
+                    return FileStatus.REMOVED, "Source file no longer exists"
+            except Exception:
+                pass
+            
+            # Other source errors should fail
+            return FileStatus.FAILED, self._get_source_error_reason(error_str, file_path)
 
         # Default to pause for unknown errors (safer)
         logging.warning(f"Unknown error type for {Path(file_path).name}: {error_str} → defaulting to PAUSE")
-        return True, f"Unknown error (defaulting to pause): {str(error)}"
+        return FileStatus.PAUSED_COPYING, f"Unknown error (defaulting to pause): {str(error)}"
 
     def _is_destination_unavailable(self) -> bool:
         """Check if destination is currently unavailable."""
