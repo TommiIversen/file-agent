@@ -253,6 +253,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             else:
                 return False
 
+        except FileNotFoundError:
+            # Source file disappeared during copying - let this bubble up to error classifier
+            raise
         except Exception as e:
             logging.error(f"Error in growing copy strategy: {e}")
             return False

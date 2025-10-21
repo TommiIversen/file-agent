@@ -57,6 +57,9 @@ class JobCopyExecutor:
             self._log_copy_result(prepared_file, copy_success, strategy, dest_path.exists())
             return copy_success
 
+        except FileNotFoundError:
+            # Let FileNotFoundError bubble up to be handled by error classifier
+            raise
         except Exception as e:
             logging.error(f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}")
             return False
@@ -67,18 +70,22 @@ class JobCopyExecutor:
             logging.info(f"Fresh copy: {dest_path.name}")
             return
 
-        dest_size = dest_path.stat().st_size
-        source_size = source_path.stat().st_size
-        completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
+        try:
+            dest_size = dest_path.stat().st_size
+            source_size = source_path.stat().st_size
+            completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
 
-        strategy_name = strategy.__class__.__name__
-        is_resumable = "Resumable" in strategy_name
+            strategy_name = strategy.__class__.__name__
+            is_resumable = "Resumable" in strategy_name
 
-        logging.info(
-            f"Resume scenario: {dest_path.name} "
-            f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}%) "
-            f"using {'resumable' if is_resumable else 'non-resumable'} strategy"
-        )
+            logging.info(
+                f"Resume scenario: {dest_path.name} "
+                f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}%) "
+                f"using {'resumable' if is_resumable else 'non-resumable'} strategy"
+            )
+        except FileNotFoundError:
+            # Source file disappeared, let this bubble up to be handled properly
+            raise
 
     def _log_copy_result(self, prepared_file, success: bool, strategy, dest_existed: bool):
         """Log copy operation result with resume metrics if applicable."""
