@@ -117,15 +117,15 @@ class JobQueueService:
             
             for tracked_file in waiting_files:
                 try:
-                    # Transition back to READY so they can be queued normally
+                    # Transition back to DISCOVERED so they are re-evaluated for growing status
                     await self.state_manager.update_file_status_by_id(
                         file_id=tracked_file.id,
-                        status=FileStatus.READY,
+                        status=FileStatus.DISCOVERED,
                         error_message=None,
                     )
                     
-                    # They will be picked up by normal _handle_state_change flow
-                    logging.info(f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path}")
+                    # They will be re-evaluated through normal scanner discovery flow
+                    logging.info(f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation")
                     
                 except Exception as e:
                     logging.error(f"❌ Error reactivating {tracked_file.file_path}: {e}")
@@ -284,16 +284,16 @@ class JobQueueService:
         }
 
     async def handle_destination_unavailable(self) -> None:
-        logging.info("⏸️ DESTINATION UNAVAILABLE: Failing active operations for rediscovery")
+        logging.info("⏸️ DESTINATION UNAVAILABLE: Pausing active operations")
 
-        failed_count = await self._fail_active_growing_operations()
+        paused_count = await self._pause_active_operations()
 
-        if failed_count > 0:
+        if paused_count > 0:
             logging.info(
-                f"❌ FAILED: {failed_count} growing copy operations for rediscovery"
+                f"⏸️ PAUSED: {paused_count} active operations until destination recovery"
             )
         else:
-            logging.info("ℹ️ No active growing operations to fail")
+            logging.info("ℹ️ No active operations to pause")
 
     async def handle_destination_recovery(self) -> None:
         logging.info("� DESTINATION RECOVERY: Starting intelligent resume process")
@@ -303,58 +303,29 @@ class JobQueueService:
         
         logging.info("ℹ️ DESTINATION RECOVERY: No operations needed resume")
 
-    async def _fail_active_growing_operations(self) -> int:
-        """Fail all active growing copy operations when network goes down"""
-        failed_count = 0
+    async def _pause_active_operations(self) -> int:
+        paused_count = 0
 
-        try:
-            # Get all files in GROWING_COPY status
-            growing_files = await self.state_manager.get_files_by_status(FileStatus.GROWING_COPY)
-            
-            # Also get files in COPYING status that might be growing copies
-            copying_files = await self.state_manager.get_files_by_status(FileStatus.COPYING)
-            
-            # For all growing copy files, immediately fail them
-            for tracked_file in growing_files:
-                try:
-                    await self.state_manager.update_file_status_by_id(
-                        file_id=tracked_file.id,
-                        status=FileStatus.FAILED,
-                        error_message="Network interruption during growing copy - will rediscover when network returns",
-                    )
-                    
-                    logging.info(
-                        f"❌ NETWORK FAILURE: Failed growing copy {tracked_file.file_path} for rediscovery"
-                    )
-                    failed_count += 1
-                    
-                except Exception as e:
-                    logging.error(f"❌ Error failing growing copy {tracked_file.file_path}: {e}")
-                    
-            # Check copying files to see if any are actually growing copies
-            # (they might have transitioned from GROWING_COPY to COPYING)
-            for tracked_file in copying_files:
-                try:
-                    # If file has bytes_copied > 0 and is still growing, it was likely a growing copy
-                    if tracked_file.bytes_copied and tracked_file.bytes_copied > 0:
-                        await self.state_manager.update_file_status_by_id(
-                            file_id=tracked_file.id,
-                            status=FileStatus.FAILED,
-                            error_message="Network interruption during copy operation - will rediscover when network returns",
-                        )
-                        
-                        logging.info(
-                            f"❌ NETWORK FAILURE: Failed copy operation {tracked_file.file_path} for rediscovery"
-                        )
-                        failed_count += 1
-                        
-                except Exception as e:
-                    logging.error(f"❌ Error failing copy operation {tracked_file.file_path}: {e}")
-                    
-        except Exception as e:
-            logging.error(f"❌ Error during network failure handling: {e}")
+        active_files = await self.state_manager.get_active_copy_files()
 
-        return failed_count
+        recent_failed_files = await self._get_recent_network_failed_files()
+
+        all_files_to_pause = active_files + recent_failed_files
+
+        for tracked_file in all_files_to_pause:
+            current_status = tracked_file.status
+            file_path = tracked_file.file_path
+
+            try:
+                # NOTE: Pause logic removed in fail-and-rediscover strategy
+                # Active operations now fail immediately when destination becomes unavailable
+                # Files will be rediscovered by scanner and processed when network returns
+                continue
+
+            except Exception as e:
+                logging.error(f"❌ Error pausing {file_path}: {e}")
+
+        return paused_count
 
     async def _resume_paused_file(self, tracked_file: TrackedFile) -> None:
         file_path = tracked_file.file_path
