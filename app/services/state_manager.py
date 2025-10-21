@@ -110,6 +110,11 @@ class StateManager:
                 logging.debug(f"Fil allerede tracked som aktiv: {file_path}")
                 return existing_active
 
+            # Check hvis der var en removed/completed fil tidligere (BEFORE adding new file)
+            # Dette skal gøres FØR den nye fil tilføjes, ellers vil _get_current_file_for_path 
+            # returnere den nye fil i stedet for den gamle
+            any_existing = self._get_current_file_for_path(file_path)
+
             tracked_file = TrackedFile(
                 file_path=file_path,
                 file_size=file_size,
@@ -119,8 +124,7 @@ class StateManager:
 
             self._files_by_id[tracked_file.id] = tracked_file
 
-            # Check hvis der var en removed/completed fil tidligere (kun for logging)
-            any_existing = self._get_current_file_for_path(file_path)
+            # Log appropriate message based on previous file status
             if any_existing and any_existing.status == FileStatus.REMOVED:
                 logging.info(
                     f"File returned after REMOVED - creating new entry: {file_path}"
