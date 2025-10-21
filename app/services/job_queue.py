@@ -326,9 +326,17 @@ class JobQueueService:
                 retry_count=0,
             )
 
-            # NOTE: For PAUSED_GROWING_COPY -> GROWING_COPY, we do NOT add a new job
-            # to the queue because the growing copy process should continue in-place
-            # via the existing copy strategy. Adding a new job would start a fresh copy.
+            # CRITICAL: For PAUSED_GROWING_COPY -> GROWING_COPY, we need to restart 
+            # the growing copy process but with resume capability
+            if current_status == FileStatus.PAUSED_GROWING_COPY and new_status == FileStatus.GROWING_COPY:
+                # Get the updated tracked file after status change
+                updated_file = await self.state_manager.get_file_by_id(tracked_file.id)
+                if updated_file:
+                    await self._add_job_to_queue(updated_file)
+                    logging.info(
+                        f"🔄 GROWING COPY RESTART: Added resume job for {file_path} "
+                        f"[UUID: {tracked_file.id[:8]}...] - will continue from {tracked_file.bytes_copied:,} bytes"
+                    )
 
             logging.info(
                 f"▶️ RESUMED: {file_path} ({current_status} → {new_status}) "

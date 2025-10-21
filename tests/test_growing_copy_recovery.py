@@ -136,10 +136,10 @@ class TestGrowingCopyRecovery:
         assert paused_growing_file.is_growing_file is True  # Growing file flag preserved
 
     @pytest.mark.asyncio
-    async def test_growing_copy_resume_does_not_create_new_job(
+    async def test_growing_copy_resume_creates_job_but_reuses_destination(
         self, job_queue, state_manager, paused_growing_file
     ):
-        """Test that resuming PAUSED_GROWING_COPY does NOT create a new job (prevents fresh copy)."""
+        """Test that resuming PAUSED_GROWING_COPY creates job but reuses existing destination file."""
         # Setup: Mock job queue handling and state manager
         job_queue._add_job_to_queue = AsyncMock()
         state_manager.get_file_by_id.return_value = paused_growing_file
@@ -147,8 +147,8 @@ class TestGrowingCopyRecovery:
         # Act: Resume the paused growing file
         await job_queue._resume_paused_file(paused_growing_file)
         
-        # Assert: NO new job should be added to queue (growing copy should continue in-place)
-        job_queue._add_job_to_queue.assert_not_called()
+        # Assert: Job should be added to queue for growing copy restart
+        job_queue._add_job_to_queue.assert_called_once()
         
         # Verify that the state manager was called to update status
         state_manager.update_file_status_by_id.assert_called_once_with(

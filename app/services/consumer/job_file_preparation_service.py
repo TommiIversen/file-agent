@@ -2,11 +2,12 @@
 Job File Preparation Service - prepares files for copy operations.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 from app.config import Settings
-from app.models import FileStatus
+from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile, QueueJob
 from app.services.copy_strategies import CopyStrategyFactory
 from app.services.state_manager import StateManager
@@ -41,7 +42,7 @@ class JobFilePreparationService:
         strategy_name = strategy.__class__.__name__
 
         initial_status = self._determine_initial_status(strategy_name)
-        destination_path = self._calculate_destination_path(file_path)
+        destination_path = self._calculate_destination_path(file_path, tracked_file)
 
         return PreparedFile(
             tracked_file=tracked_file,
@@ -57,7 +58,7 @@ class JobFilePreparationService:
         else:
             return FileStatus.COPYING
 
-    def _calculate_destination_path(self, file_path: str) -> Path:
+    def _calculate_destination_path(self, file_path: str, tracked_file: TrackedFile = None) -> Path:
         """Calculate destination path using template engine if enabled."""
         source = Path(file_path)
         source_base = Path(self.settings.source_directory)
@@ -67,7 +68,24 @@ class JobFilePreparationService:
             source, source_base, dest_base, self.template_engine
         )
 
+        # CRITICAL: For growing copy resume scenarios, don't resolve conflicts
+        # We want to reuse the existing destination file
+        if tracked_file and self._is_resume_scenario(tracked_file):
+            logging.debug(
+                f"RESUME DETECTED: Skipping conflict resolution for {source.name} "
+                f"(bytes_copied: {tracked_file.bytes_copied:,})"
+            )
+            return Path(dest_path)
+        
         return generate_conflict_free_path(Path(dest_path))
+    
+    def _is_resume_scenario(self, tracked_file: TrackedFile) -> bool:
+        """Check if this is a resume scenario where we should reuse existing destination."""
+        return (
+            tracked_file.bytes_copied > 0 and 
+            tracked_file.status == FileStatus.GROWING_COPY and
+            tracked_file.is_growing_file
+        )
 
     def get_preparation_info(self) -> dict:
         """Get file preparation service configuration details."""
