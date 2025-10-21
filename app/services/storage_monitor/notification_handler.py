@@ -15,6 +15,7 @@ class NotificationHandler:
         old_status = old_info.status if old_info else None
         new_status = new_info.status
 
+        # Always send websocket update - simple and reliable
         if old_status != new_status:
             logging.info(
                 f"{storage_type.title()} storage status changed: {old_status} -> {new_status}",
@@ -27,20 +28,21 @@ class NotificationHandler:
                     "path": new_info.path,
                 },
             )
-
-            update = StorageUpdate(
-                storage_type=storage_type,
-                old_status=old_status,
-                new_status=new_status,
-                storage_info=new_info,
-            )
-
-            await self._notify_websocket(update)
         else:
             logging.debug(
                 f"{storage_type.title()} storage: {new_status.value} "
                 f"({new_info.free_space_gb:.1f}GB free)"
             )
+
+        # Send websocket update every time - keep frontend in sync
+        update = StorageUpdate(
+            storage_type=storage_type,
+            old_status=old_status,
+            new_status=new_status,
+            storage_info=new_info,
+        )
+
+        await self._notify_websocket(update)
 
     async def _notify_websocket(self, update: StorageUpdate) -> None:
         if not self._websocket_manager:

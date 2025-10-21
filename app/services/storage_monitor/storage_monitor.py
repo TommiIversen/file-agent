@@ -65,6 +65,7 @@ class StorageMonitorService:
         logging.info("Storage monitoring stopped")
 
     async def _monitoring_loop(self) -> None:
+        logging.info(f"Storage monitoring loop starting - checking every {self._settings.storage_check_interval_seconds}s")
         try:
             while self._is_running:
                 try:
@@ -180,6 +181,18 @@ class StorageMonitorService:
 
             old_info = self._get_current_info(storage_type)
             self._update_storage_info(storage_type, new_info)
+
+            # Log storage status for visibility
+            if new_info.is_accessible:
+                logging.info(
+                    f"Storage check - {storage_type.title()}: "
+                    f"{new_info.free_space_gb:.2f}GB free / {new_info.total_space_gb:.2f}GB total "
+                    f"({new_info.status.value}) at {path}"
+                )
+            else:
+                logging.warning(
+                    f"Storage check - {storage_type.title()}: Not accessible at {path}"
+                )
 
             await self._notification_handler.handle_status_change(
                 storage_type, old_info, new_info
