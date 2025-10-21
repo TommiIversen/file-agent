@@ -111,7 +111,10 @@ class FileScanOrchestrator:
             try:
                 file_path = file_path_obj.path
 
-                existing_file = await self.state_manager.get_file_by_path(file_path)
+                # Brug get_active_file_by_path i stedet for get_file_by_path
+                # Dette sikrer at completed files ikke bliver genbrugt når en ny fil 
+                # med samme navn bliver opdaget
+                existing_file = await self.state_manager.get_active_file_by_path(file_path)
                 if existing_file is not None:
                     await self._check_existing_file_changes(existing_file, file_path)
                     continue

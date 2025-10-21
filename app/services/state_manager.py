@@ -47,6 +47,55 @@ class StateManager:
 
         return min(candidates, key=sort_key)
 
+    def _get_active_file_for_path_internal(self, file_path: str) -> Optional[TrackedFile]:
+        """Internal version of get_active_file_by_path without async lock"""
+        # Find kun filer der ikke er completed, failed eller removed
+        active_statuses = {
+            FileStatus.DISCOVERED,
+            FileStatus.READY,
+            FileStatus.GROWING,
+            FileStatus.READY_TO_START_GROWING,
+            FileStatus.IN_QUEUE,
+            FileStatus.COPYING,
+            FileStatus.GROWING_COPY,
+            FileStatus.PAUSED_COPYING,
+            FileStatus.PAUSED_IN_QUEUE,
+            FileStatus.PAUSED_GROWING_COPY,
+            FileStatus.WAITING_FOR_SPACE,
+            FileStatus.SPACE_ERROR,
+        }
+        
+        candidates = [
+            f for f in self._files_by_id.values() 
+            if f.file_path == file_path and f.status in active_statuses
+        ]
+        
+        if not candidates:
+            return None
+            
+        # Returner den med højeste prioritet blandt aktive filer
+        def sort_key(f: TrackedFile):
+            active_priority = {
+                FileStatus.COPYING: 1,
+                FileStatus.IN_QUEUE: 2,
+                FileStatus.GROWING_COPY: 3,
+                FileStatus.READY_TO_START_GROWING: 4,
+                FileStatus.READY: 5,
+                FileStatus.GROWING: 6,
+                FileStatus.DISCOVERED: 7,
+                FileStatus.PAUSED_COPYING: 8,
+                FileStatus.PAUSED_IN_QUEUE: 9,
+                FileStatus.PAUSED_GROWING_COPY: 10,
+                FileStatus.WAITING_FOR_SPACE: 11,
+                FileStatus.SPACE_ERROR: 12,
+            }
+            
+            priority = active_priority.get(f.status, 99)
+            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
+            return (priority, time_priority)
+        
+        return min(candidates, key=sort_key)
+
     def _get_all_files_for_path(self, file_path: str) -> List[TrackedFile]:
         return [f for f in self._files_by_id.values() if f.file_path == file_path]
 
@@ -54,10 +103,12 @@ class StateManager:
             self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
         async with self._lock:
-            existing = self._get_current_file_for_path(file_path)
-            if existing and existing.status != FileStatus.REMOVED:
-                logging.debug(f"Fil allerede tracked: {file_path}")
-                return existing
+            # Check for existing ACTIVE files only - ignore completed/failed files
+            # Dette sikrer at completed files ikke forhindrer nye filer med samme navn
+            existing_active = self._get_active_file_for_path_internal(file_path)
+            if existing_active:
+                logging.debug(f"Fil allerede tracked som aktiv: {file_path}")
+                return existing_active
 
             tracked_file = TrackedFile(
                 file_path=file_path,
@@ -68,12 +119,19 @@ class StateManager:
 
             self._files_by_id[tracked_file.id] = tracked_file
 
-            if existing and existing.status == FileStatus.REMOVED:
+            # Check hvis der var en removed/completed fil tidligere (kun for logging)
+            any_existing = self._get_current_file_for_path(file_path)
+            if any_existing and any_existing.status == FileStatus.REMOVED:
                 logging.info(
                     f"File returned after REMOVED - creating new entry: {file_path}"
                 )
                 logging.info(
-                    f"Previous REMOVED entry preserved as history: {existing.id}"
+                    f"Previous REMOVED entry preserved as history: {any_existing.id}"
+                )
+            elif any_existing and any_existing.status in [FileStatus.COMPLETED, FileStatus.FAILED]:
+                logging.info(
+                    f"Ny fil med samme navn som completed/failed fil: {file_path} "
+                    f"(Previous: {any_existing.id[:8]}..., New: {tracked_file.id[:8]}...)"
                 )
             else:
                 logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
@@ -95,6 +153,61 @@ class StateManager:
             if current_file and current_file.status == FileStatus.REMOVED:
                 return None
             return current_file
+
+    async def get_active_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
+        """
+        Hent aktiv fil for en given path - ignorerer completed og failed files.
+        
+        Denne metode bruges af file scanner for at undgå at genbruge completed files
+        når en ny fil med samme navn bliver opdaget.
+        """
+        async with self._lock:
+            # Find kun filer der ikke er completed, failed eller removed
+            active_statuses = {
+                FileStatus.DISCOVERED,
+                FileStatus.READY,
+                FileStatus.GROWING,
+                FileStatus.READY_TO_START_GROWING,
+                FileStatus.IN_QUEUE,
+                FileStatus.COPYING,
+                FileStatus.GROWING_COPY,
+                FileStatus.PAUSED_COPYING,
+                FileStatus.PAUSED_IN_QUEUE,
+                FileStatus.PAUSED_GROWING_COPY,
+                FileStatus.WAITING_FOR_SPACE,
+                FileStatus.SPACE_ERROR,
+            }
+            
+            candidates = [
+                f for f in self._files_by_id.values() 
+                if f.file_path == file_path and f.status in active_statuses
+            ]
+            
+            if not candidates:
+                return None
+                
+            # Returner den med højeste prioritet blandt aktive filer
+            def sort_key(f: TrackedFile):
+                active_priority = {
+                    FileStatus.COPYING: 1,
+                    FileStatus.IN_QUEUE: 2,
+                    FileStatus.GROWING_COPY: 3,
+                    FileStatus.READY_TO_START_GROWING: 4,
+                    FileStatus.READY: 5,
+                    FileStatus.GROWING: 6,
+                    FileStatus.DISCOVERED: 7,
+                    FileStatus.PAUSED_COPYING: 8,
+                    FileStatus.PAUSED_IN_QUEUE: 9,
+                    FileStatus.PAUSED_GROWING_COPY: 10,
+                    FileStatus.WAITING_FOR_SPACE: 11,
+                    FileStatus.SPACE_ERROR: 12,
+                }
+                
+                priority = active_priority.get(f.status, 99)
+                time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
+                return (priority, time_priority)
+            
+            return min(candidates, key=sort_key)
 
     async def get_all_files(self) -> List[TrackedFile]:
         async with self._lock:
