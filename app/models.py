@@ -153,6 +153,11 @@ class TrackedFile(BaseModel):
         default=None, description="Sidste gang vi tjekkede for file growth"
     )
 
+    # Retry tracking - consolidated in TrackedFile
+    retry_info: Optional["RetryInfo"] = Field(
+        default=None, description="Active retry information if file has scheduled retry"
+    )
+
     model_config = ConfigDict(
         # Eksempel data til dokumentation
         json_schema_extra={
@@ -393,4 +398,21 @@ class SpaceCheckResult(BaseModel):
         """Get required space in GB for display"""
         return self.required_bytes / (1024 ** 3)
 
+    model_config = ConfigDict()
+
+
+class RetryInfo(BaseModel):
+    """
+    Information about scheduled retry operations for space-related failures.
+    
+    Used directly in TrackedFile to maintain single source of truth.
+    """
+    
+    scheduled_at: datetime = Field(..., description="When retry was scheduled")
+    retry_at: datetime = Field(..., description="When retry should execute")
+    reason: str = Field(..., description="Reason for retry (e.g., 'space shortage')")
+    retry_type: str = Field(default="space", description="Type of retry operation")
+    
+    # Note: asyncio.Task cannot be serialized in Pydantic, so we handle it separately in StateManager
+    
     model_config = ConfigDict()
