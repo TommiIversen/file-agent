@@ -274,19 +274,6 @@ class StateManager:
         async with self._lock:
             return list(self._files_by_id.values())
 
-    async def get_current_files_only(self) -> List[TrackedFile]:
-        async with self._lock:
-            current_files = {}
-            for tracked_file in self._files_by_id.values():
-                if tracked_file.status == FileStatus.REMOVED:
-                    continue
-
-                current = current_files.get(tracked_file.file_path)
-                if not current or self._is_more_current(tracked_file, current):
-                    current_files[tracked_file.file_path] = tracked_file
-
-            return list(current_files.values())
-
     def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
         active_statuses = {
             FileStatus.COPYING: 1,
@@ -569,16 +556,6 @@ class StateManager:
                         current_files[tracked_file.file_path] = tracked_file
 
             return list(current_files.values())
-
-    async def get_paused_files(self) -> List[TrackedFile]:
-        """
-        Get paused files - DEPRECATED in fail-and-rediscover strategy.
-        Returns empty list as PAUSED_* statuses have been removed.
-        """
-        async with self._lock:
-            # NOTE: PAUSED_* statuses removed - return empty list
-            # In fail-and-rediscover strategy, files fail immediately instead of pausing
-            return []
 
     async def is_file_stable(self, file_id: str, stable_time_seconds: int) -> bool:
         """
