@@ -72,9 +72,6 @@ class DestinationChecker:
         target_path = dest_path or self.destination_path
 
         try:
-            # Ryd op i gamle test-filer først
-            await self.cleanup_old_test_files()
-            
             test_file = target_path / f".file_agent_write_test_{uuid.uuid4().hex[:8]}"
 
             async with aiofiles.open(test_file, "w") as f:
@@ -263,9 +260,6 @@ class DestinationChecker:
                     is_available=True, checked_at=datetime.now()
                 )
             else:
-                # Ryd op i gamle test-filer før vi laver en ny
-                await self.cleanup_old_test_files()
-                
                 test_file = (
                         self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 )

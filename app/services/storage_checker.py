@@ -36,9 +36,6 @@ class StorageChecker:
         try:
             is_accessible = await self._check_accessibility(path)
             if is_accessible:
-                # Ryd op i gamle test-filer før vi laver nye checks
-                await self.cleanup_old_test_files(path)
-                
                 free_gb, total_gb, used_gb = await self._get_disk_usage(path)
                 has_write_access = await self._check_write_access(path)
             else:

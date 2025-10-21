@@ -15,6 +15,7 @@ from .dependencies import (
     get_file_copier,
     get_websocket_manager,
     get_storage_monitor,
+    get_storage_checker,
 )
 from .logging_config import setup_logging
 from .routers import views
@@ -35,6 +36,18 @@ async def lifespan(app: FastAPI):
     logging.info(f"Source directory: {settings.source_directory}")
     logging.info(f"Destination directory: {settings.destination_directory}")
     logging.info("StateManager klar til brug")
+
+    # Cleanup old test files at startup
+    storage_checker = get_storage_checker()
+    try:
+        cleaned_count = await storage_checker.cleanup_all_test_files(
+            settings.source_directory, 
+            settings.destination_directory
+        )
+        if cleaned_count > 0:
+            logging.info(f"Startup cleanup: removed {cleaned_count} old test files")
+    except Exception as e:
+        logging.warning(f"Startup cleanup failed (non-critical): {e}")
 
     # Start FileScannerService som background task
     file_scanner = get_file_scanner()
