@@ -20,11 +20,11 @@ DEFAULT_OUTPUT_FOLDER = r"C:\temp_input"
 DEFAULT_STREAM_COUNT = 1
 DEFAULT_WRITE_INTERVAL_MS = 500  # Millisekunder mellem hver skrivning
 DEFAULT_CHUNK_SIZE_KB = 64 * 3  # KB per skrivning (realistisk for video)
-DEFAULT_CLIP_DURATION_MINUTES = 2  # Minutter før ny fil startes
+DEFAULT_CLIP_DURATION_MINUTES = 4  # Minutter før ny fil startes
 DEFAULT_NEW_FILE_INTERVAL_MINUTES = (
     0  # Forskydning mellem stream starts (0 = alle samtidigt)
 )
-DEFAULT_UNIQUE_FILENAMES = False  # Lav unikke fil navne med timestamp
+DEFAULT_UNIQUE_FILENAMES = True  # Lav unikke fil navne med timestamp
 
 
 class VideoStream:

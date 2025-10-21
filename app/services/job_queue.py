@@ -64,6 +64,7 @@ class JobQueueService:
             if update.new_status in [
                 FileStatus.READY,
                 FileStatus.READY_TO_START_GROWING,
+                FileStatus.GROWING_COPY,  # CRITICAL: Resume growing copy jobs after network recovery
             ]:
                 await self._add_job_to_queue(update.tracked_file)
 

@@ -136,6 +136,44 @@ class TestGrowingCopyRecovery:
         assert paused_growing_file.is_growing_file is True  # Growing file flag preserved
 
     @pytest.mark.asyncio
+    async def test_growing_copy_resume_triggers_job_queue(
+        self, job_queue, state_manager, paused_growing_file
+    ):
+        """Test that resuming GROWING_COPY status triggers job queue processing."""
+        # Setup: Mock job queue handling
+        job_queue._add_job_to_queue = AsyncMock()
+        
+        # Simulate state change from PAUSED_GROWING_COPY -> GROWING_COPY
+        from app.models import FileStateUpdate, FileStatus
+        
+        # Update the file to growing copy status for the test
+        growing_file = TrackedFile(
+            id=paused_growing_file.id,
+            file_path=paused_growing_file.file_path,
+            status=FileStatus.GROWING_COPY,  # Status after resume
+            file_size=paused_growing_file.file_size,
+            bytes_copied=paused_growing_file.bytes_copied,
+            discovered_at=paused_growing_file.discovered_at,
+            started_copying_at=paused_growing_file.started_copying_at,
+            last_growth_check=paused_growing_file.last_growth_check,
+            growth_stable_since=paused_growing_file.growth_stable_since,
+            is_growing_file=paused_growing_file.is_growing_file
+        )
+        
+        state_change = FileStateUpdate(
+            file_path=paused_growing_file.file_path,
+            tracked_file=growing_file,
+            old_status=FileStatus.PAUSED_GROWING_COPY,
+            new_status=FileStatus.GROWING_COPY
+        )
+        
+        # Act: Handle the state change (simulating resume)
+        await job_queue._handle_state_change(state_change)
+        
+        # Assert: Job should be added to queue for processing
+        job_queue._add_job_to_queue.assert_called_once_with(growing_file)
+
+    @pytest.mark.asyncio
     async def test_mixed_paused_files_resume_correctly(
         self, job_queue, state_manager, paused_growing_file, paused_normal_file
     ):
