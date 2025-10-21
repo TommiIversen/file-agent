@@ -64,7 +64,7 @@ class JobQueueService:
             if update.new_status in [
                 FileStatus.READY,
                 FileStatus.READY_TO_START_GROWING,
-                FileStatus.GROWING_COPY,  # CRITICAL: Resume growing copy jobs after network recovery
+                # REMOVED GROWING_COPY - causes infinite loop during normal operation
             ]:
                 await self._add_job_to_queue(update.tracked_file)
 
@@ -325,6 +325,10 @@ class JobQueueService:
                 error_message=None,
                 retry_count=0,
             )
+
+            # NOTE: For PAUSED_GROWING_COPY -> GROWING_COPY, we do NOT add a new job
+            # to the queue because the growing copy process should continue in-place
+            # via the existing copy strategy. Adding a new job would start a fresh copy.
 
             logging.info(
                 f"▶️ RESUMED: {file_path} ({current_status} → {new_status}) "

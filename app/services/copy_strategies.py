@@ -288,8 +288,67 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     self.settings.growing_file_growth_timeout_seconds // poll_interval
             )
 
-            async with aiofiles.open(dest_path, "wb") as dst:
+            # CRITICAL: Resume from existing progress if destination file exists
+            dest_file_path = Path(dest_path)
+            if dest_file_path.exists():
+                existing_bytes = dest_file_path.stat().st_size
+                bytes_copied = existing_bytes
+                last_file_size = existing_bytes
+                logging.info(
+                    f"🔄 GROWING COPY RESUME: {os.path.basename(source_path)} "
+                    f"continuing from {bytes_copied:,} bytes"
+                )
+            else:
+                logging.info(
+                    f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
+                    f"starting fresh copy"
+                )
+
+            # Open destination file in append mode if resuming, write mode if fresh
+            file_mode = "ab" if dest_file_path.exists() and bytes_copied > 0 else "wb"
+            
+            async with aiofiles.open(dest_path, file_mode) as dst:
                 while True:
+                    # CRITICAL: Check if file has been paused during copy
+                    current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
+                    if current_tracked_file and current_tracked_file.status in [
+                        FileStatus.PAUSED_GROWING_COPY,
+                        FileStatus.PAUSED_COPYING,
+                        FileStatus.PAUSED_IN_QUEUE,
+                    ]:
+                        logging.info(
+                            f"🔄 GROWING COPY PAUSED: {os.path.basename(source_path)} "
+                            f"(status: {current_tracked_file.status.value}) - waiting for resume"
+                        )
+                        
+                        # Wait for resume - check status every second
+                        while True:
+                            await asyncio.sleep(1.0)
+                            resume_check = await self.state_manager.get_file_by_id(tracked_file.id)
+                            if not resume_check:
+                                logging.warning(f"File disappeared during pause: {source_path}")
+                                return False
+                            
+                            if resume_check.status == FileStatus.GROWING_COPY:
+                                logging.info(
+                                    f"▶️ GROWING COPY RESUMED: {os.path.basename(source_path)} "
+                                    f"- continuing from {bytes_copied:,} bytes"
+                                )
+                                # Update our tracked_file reference for continued processing
+                                tracked_file = resume_check
+                                break
+                            elif resume_check.status not in [
+                                FileStatus.PAUSED_GROWING_COPY,
+                                FileStatus.PAUSED_COPYING,
+                                FileStatus.PAUSED_IN_QUEUE,
+                            ]:
+                                # File was changed to a different status (e.g., FAILED)
+                                logging.info(
+                                    f"GROWING COPY CANCELLED: {os.path.basename(source_path)} "
+                                    f"(status changed to: {resume_check.status.value})"
+                                )
+                                return False
+
                     try:
                         current_file_size = os.path.getsize(source_path)
                     except OSError:
