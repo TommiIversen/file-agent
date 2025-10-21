@@ -27,28 +27,12 @@ def _serialize_storage_info(storage_info) -> dict:
 
 def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
     """
-    Serialize TrackedFile using Pydantic's built-in serialization.
+    Serialize TrackedFile using Pydantic's built-in JSON serialization.
     
-    Much cleaner than manual mapping and automatically includes all fields!
+    Uses mode='json' to automatically handle datetime objects and other types.
     """
-    data = tracked_file.model_dump()
-    
-    # Convert datetime objects to ISO format for frontend
-    datetime_fields = [
-        'discovered_at', 'started_copying_at', 'completed_at', 
-        'failed_at', 'last_write_time', 'last_growth_check', 'growth_stable_since'
-    ]
-    
-    for field in datetime_fields:
-        if data.get(field) and isinstance(data[field], datetime):
-            data[field] = data[field].isoformat()
-        elif data.get(field) and isinstance(data[field], str):
-            # Already a string from model_dump, ensure it's ISO format
-            try:
-                dt = datetime.fromisoformat(data[field])
-                data[field] = dt.isoformat()
-            except:
-                pass  # Keep original string if parsing fails
+    # Use mode='json' to automatically convert datetime and other objects to JSON-compatible types
+    data = tracked_file.model_dump(mode='json')
     
     # Add computed field for UI convenience
     data["file_size_mb"] = round(tracked_file.file_size / (1024 * 1024), 2)
