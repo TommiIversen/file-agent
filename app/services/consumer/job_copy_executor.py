@@ -11,6 +11,7 @@ from app.config import Settings
 from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
+from app.services.copy.network_error_detector import NetworkError
 from app.services.copy_strategies import CopyStrategyFactory
 from app.services.state_manager import StateManager
 
@@ -59,6 +60,9 @@ class JobCopyExecutor:
 
         except FileNotFoundError:
             # Let FileNotFoundError bubble up to be handled by error classifier
+            raise
+        except NetworkError:
+            # Let NetworkError bubble up to be handled by error classifier
             raise
         except Exception as e:
             logging.error(f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}")
