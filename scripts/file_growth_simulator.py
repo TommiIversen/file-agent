@@ -19,11 +19,12 @@ Skriver direkte til .mxf filer som en rigtig videoptager.
 DEFAULT_OUTPUT_FOLDER = r"C:\temp_input"
 DEFAULT_STREAM_COUNT = 1
 DEFAULT_WRITE_INTERVAL_MS = 500  # Millisekunder mellem hver skrivning
-DEFAULT_CHUNK_SIZE_KB = 64 * 2  # KB per skrivning (realistisk for video)
-DEFAULT_CLIP_DURATION_MINUTES = 4  # Minutter før ny fil startes
+DEFAULT_CHUNK_SIZE_KB = 64 * 3  # KB per skrivning (realistisk for video)
+DEFAULT_CLIP_DURATION_MINUTES = 2  # Minutter før ny fil startes
 DEFAULT_NEW_FILE_INTERVAL_MINUTES = (
     0  # Forskydning mellem stream starts (0 = alle samtidigt)
 )
+DEFAULT_UNIQUE_FILENAMES = False  # Lav unikke fil navne med timestamp
 
 
 class VideoStream:
@@ -37,6 +38,7 @@ class VideoStream:
         write_interval_ms: int,
         clip_duration_minutes: int,
         stream_type: str = "Cam",
+        unique_filenames: bool = True,
     ):
         self.stream_id = stream_id
         self.stream_type = stream_type  # "Cam", "PGM", "CLN"
@@ -44,6 +46,7 @@ class VideoStream:
         self.chunk_size_bytes = chunk_size_kb * 1024
         self.write_interval_seconds = write_interval_ms / 1000.0
         self.clip_duration = timedelta(minutes=clip_duration_minutes)
+        self.unique_filenames = unique_filenames
 
         self.current_file = None
         self.current_file_start_time = None
@@ -55,11 +58,16 @@ class VideoStream:
 
     def _get_filename(self) -> str:
         """Genererer filnavn der matcher template system"""
-        # Format: YYMMDD_HHMM_Ingest_TYPE.mxf
-        # Eksempel: 200305_1344_Ingest_Cam1.mxf
-        now = datetime.now()
-        date_str = now.strftime("%y%m%d")  # YYMMDD format
-        time_str = now.strftime("%H%M")  # HHMM format
+        if self.unique_filenames:
+            # Format: YYMMDD_HHMM_Ingest_TYPE.mxf
+            # Eksempel: 200305_1344_Ingest_Cam1.mxf
+            now = datetime.now()
+            date_str = now.strftime("%y%m%d")  # YYMMDD format
+            time_str = now.strftime("%H%M")  # HHMM format
+            prefix = f"{date_str}_{time_str}_"
+        else:
+            # Uden timestamp for at teste duplicate handling
+            prefix = ""
 
         if self.stream_type == "Cam":
             type_suffix = f"Cam{self.stream_id}"
@@ -70,7 +78,7 @@ class VideoStream:
         else:
             type_suffix = f"{self.stream_type}{self.stream_id}"
 
-        return f"{date_str}_{time_str}_Ingest_{type_suffix}.mxf"
+        return f"{prefix}Ingest_{type_suffix}.mxf"
 
     def _start_new_file(self):
         """Starter en ny fil for denne stream"""
@@ -160,6 +168,7 @@ class FileGrowthSimulator:
         clip_duration_minutes: int,
         new_file_interval_minutes: int,
         stream_mix: str = "mixed",
+        unique_filenames: bool = True,
     ):
         self.output_folder = Path(output_folder)
         self.stream_count = stream_count
@@ -168,6 +177,7 @@ class FileGrowthSimulator:
         self.clip_duration_minutes = clip_duration_minutes
         self.new_file_interval_minutes = new_file_interval_minutes
         self.stream_mix = stream_mix  # "mixed", "cameras", "program"
+        self.unique_filenames = unique_filenames
 
         self.streams: List[VideoStream] = []
         self.stream_tasks: List[asyncio.Task] = []
@@ -216,6 +226,7 @@ class FileGrowthSimulator:
                 write_interval_ms=self.write_interval_ms,
                 clip_duration_minutes=self.clip_duration_minutes,
                 stream_type=stream_type,
+                unique_filenames=self.unique_filenames,
             )
             self.streams.append(stream)
             logging.info(f"Stream {i + 1}: Type = {stream_type}")
@@ -319,6 +330,20 @@ def main():
         help="Type af streams at generere: mixed=60%% Cam/20%% PGM/20%% CLN, cameras=kun kameraer, program=kun PGM/CLN",
     )
 
+    parser.add_argument(
+        "--unique-filenames",
+        action="store_true",
+        default=DEFAULT_UNIQUE_FILENAMES,
+        help="Generer unikke fil navne med timestamp (default: %(default)s). Brug --no-unique-filenames for at deaktivere.",
+    )
+
+    parser.add_argument(
+        "--no-unique-filenames",
+        dest="unique_filenames",
+        action="store_false",
+        help="Deaktiver unikke fil navne - brug samme navn for at teste duplicate handling",
+    )
+
     args = parser.parse_args()
 
     # Opret simulator
@@ -330,6 +355,7 @@ def main():
         clip_duration_minutes=args.clip_duration_minutes,
         new_file_interval_minutes=args.new_file_interval_minutes,
         stream_mix=args.stream_mix,
+        unique_filenames=args.unique_filenames,
     )
 
     # Kør simulator
