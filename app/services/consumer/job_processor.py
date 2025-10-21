@@ -27,6 +27,7 @@ class JobProcessor:
             copy_strategy_factory: CopyStrategyFactory,
             space_checker=None,
             space_retry_manager=None,
+            error_classifier=None,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -58,7 +59,7 @@ class JobProcessor:
             settings=settings,
             state_manager=state_manager,
             copy_strategy_factory=copy_strategy_factory,
-            error_classifier=None,
+            error_classifier=error_classifier,
         )
 
         logging.debug("JobProcessor initialized")

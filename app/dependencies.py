@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Dict, Any, Optional
 
 from .config import Settings
+from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
 from .services.copy_strategies import CopyStrategyFactory
 from .services.file_copier import FileCopierService
@@ -215,6 +216,20 @@ def get_storage_monitor() -> StorageMonitorService:
     return _singletons["storage_monitor"]
 
 
+def get_job_error_classifier() -> JobErrorClassifier:
+    """
+    Hent JobErrorClassifier singleton instance.
+
+    Returns:
+        JobErrorClassifier instance (oprettes kun én gang)
+    """
+    if "job_error_classifier" not in _singletons:
+        storage_monitor = get_storage_monitor()
+        _singletons["job_error_classifier"] = JobErrorClassifier(storage_monitor)
+
+    return _singletons["job_error_classifier"]
+
+
 def get_copy_strategy_factory() -> CopyStrategyFactory:
     """
     Hent CopyStrategyFactory singleton instance.
@@ -248,6 +263,7 @@ def get_job_processor() -> JobProcessor:
             get_space_checker() if settings.enable_pre_copy_space_check else None
         )
         space_retry_manager = get_space_retry_manager() if space_checker else None
+        error_classifier = get_job_error_classifier()
 
         _singletons["job_processor"] = JobProcessor(
             settings=settings,
@@ -256,6 +272,7 @@ def get_job_processor() -> JobProcessor:
             copy_strategy_factory=copy_strategy_factory,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
+            error_classifier=error_classifier,
         )
 
     return _singletons["job_processor"]
