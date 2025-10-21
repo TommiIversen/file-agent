@@ -276,6 +276,26 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             # Network error during copy - let this bubble up for immediate failure
             raise
         except Exception as e:
+            # Check if this exception might be network-related before giving up
+            error_str = str(e).lower()
+            
+            # Check for network error patterns in the exception
+            network_indicators = {
+                "invalid argument", "errno 22", "network path was not found", "winerror 53",
+                "the network name cannot be found", "winerror 67", "access is denied",
+                "input/output error", "errno 5", "connection refused", "network is unreachable"
+            }
+            
+            is_network_error = any(indicator in error_str for indicator in network_indicators)
+            
+            # Check errno if available
+            if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
+                is_network_error = True
+                
+            if is_network_error:
+                logging.error(f"Network error detected in growing copy strategy: {e}")
+                raise NetworkError(f"Network error during growing copy: {e}")
+            
             logging.error(f"Error in growing copy strategy: {e}")
             return False
         finally:
@@ -345,6 +365,26 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             # Re-raise network errors for immediate failure handling
             raise
         except Exception as e:
+            # Check if this exception might be network-related before giving up
+            error_str = str(e).lower()
+            
+            # Check for network error patterns in the exception
+            network_indicators = {
+                "invalid argument", "errno 22", "network path was not found", "winerror 53",
+                "the network name cannot be found", "winerror 67", "access is denied",
+                "input/output error", "errno 5", "connection refused", "network is unreachable"
+            }
+            
+            is_network_error = any(indicator in error_str for indicator in network_indicators)
+            
+            # Check errno if available
+            if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
+                is_network_error = True
+                
+            if is_network_error:
+                logging.error(f"Network error detected in growing copy: {e}")
+                raise NetworkError(f"Network error during growing copy: {e}")
+            
             logging.error(f"Error in growing file copy: {e}")
             return False
 

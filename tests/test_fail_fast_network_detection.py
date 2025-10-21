@@ -35,6 +35,19 @@ class TestFailFastNetworkErrorDetection:
         assert "Network error during test write" in str(exc_info.value)
 
     @pytest.mark.asyncio
+    async def test_network_error_detector_detects_errno_22(self):
+        """Test that network error detector catches errno 22 (Invalid argument) as network error."""
+        detector = NetworkErrorDetector("/fake/dest/path")
+        
+        # Simulate errno 22 which can be network-related on Windows
+        invalid_arg_error = OSError(22, "Invalid argument")
+        
+        with pytest.raises(NetworkError) as exc_info:
+            detector.check_write_error(invalid_arg_error, "test write")
+            
+        assert "Network error during test write" in str(exc_info.value)
+
+    @pytest.mark.asyncio
     async def test_network_error_detector_connectivity_check(self):
         """Test that connectivity checks detect when destination becomes unavailable."""
         # Create a temporary directory that we can control
@@ -155,6 +168,47 @@ class TestFailFastNetworkErrorDetection:
                 )
                 
             assert "Network error during growing copy chunk write" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_growing_copy_strategy_detects_errno_22_as_network_error(self):
+        """Test that GrowingFileCopyStrategy properly detects errno 22 as network error."""
+        settings = Settings()
+        settings.growing_file_min_size_mb = 1
+        settings.use_temporary_file = False
+        
+        state_manager = AsyncMock(spec=StateManager)
+        file_copy_executor = AsyncMock(spec=FileCopyExecutor)
+        
+        strategy = GrowingFileCopyStrategy(
+            settings=settings,
+            state_manager=state_manager,
+            file_copy_executor=file_copy_executor
+        )
+        
+        tracked_file = TrackedFile(
+            file_path="c:\\test\\growing.mxv",
+            file_size=2000000,
+            is_growing_file=True
+        )
+        
+        # Mock a general exception with errno 22 that should be caught as network error
+        errno_22_error = OSError(22, "Invalid argument")
+        
+        # Mock the _copy_growing_file method to raise errno 22
+        with patch.object(strategy, '_copy_growing_file', side_effect=errno_22_error):
+            with patch('os.path.getsize', return_value=2000000):  # Mock file size check
+                with patch('pathlib.Path.exists', return_value=False):
+                    with patch('pathlib.Path.mkdir'):
+                        # Should catch errno 22 and convert to NetworkError
+                        with pytest.raises(NetworkError) as exc_info:
+                            await strategy.copy_file(
+                                "c:\\test\\growing.mxv",
+                                "c:\\test\\dest.mxv",
+                                tracked_file
+                            )
+                            
+                        assert "Network error during growing copy" in str(exc_info.value)
+                        assert "Invalid argument" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_error_classifier_handles_network_error_immediately(self):

@@ -20,7 +20,10 @@ class JobErrorClassifier:
     NETWORK_ERROR_STRINGS = {
         "input/output error", "errno 5", "connection refused", "network is unreachable",
         "no route to host", "connection timed out", "broken pipe", "errno 32", "errno 110",
-        "errno 111", "smb error", "cifs error", "mount_smbfs", "network mount", "permission denied"
+        "errno 111", "smb error", "cifs error", "mount_smbfs", "network mount", "permission denied",
+        "invalid argument", "errno 22", "network path was not found", "winerror 53", 
+        "the network name cannot be found", "winerror 67", "the network location cannot be reached",
+        "winerror 1231", "access is denied", "errno 13"
     }
 
     # Source file error indicators  
@@ -28,10 +31,14 @@ class JobErrorClassifier:
         "no such file or directory", "errno 2", "file not found", "source file", "input file"
     }
 
-    # Network-related errno codes
+    # Network-related errno codes (including Windows-specific)
     NETWORK_ERRNO_CODES = {
         errno.EIO, errno.ECONNREFUSED, errno.ETIMEDOUT, errno.ENETUNREACH,
-        errno.EHOSTUNREACH, errno.EPIPE, errno.EACCES, errno.ENOTCONN, errno.ECONNRESET
+        errno.EHOSTUNREACH, errno.EPIPE, errno.EACCES, errno.ENOTCONN, errno.ECONNRESET,
+        errno.EINVAL,  # Can be network-related on Windows when destination unavailable
+        errno.ENOENT,  # Network path not found
+        errno.EACCES,  # Access denied (can be network mount issues)
+        22, 53, 67, 1231, 13   # Windows-specific network error codes including errno 22
     }
 
     def __init__(self, storage_monitor: StorageMonitorService):
