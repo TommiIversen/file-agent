@@ -26,34 +26,34 @@ def _serialize_storage_info(storage_info) -> dict:
 
 
 def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
-    return {
-        "id": tracked_file.id,  # TrackedFile ID - vigtigt for unique tracking!
-        "file_path": tracked_file.file_path,
-        "status": tracked_file.status.value,
-        "file_size": tracked_file.file_size,
-        "file_size_mb": round(tracked_file.file_size / (1024 * 1024), 2),
-        "last_write_time": tracked_file.last_write_time.isoformat()
-        if tracked_file.last_write_time
-        else None,
-        "copy_progress": tracked_file.copy_progress,
-        "error_message": tracked_file.error_message,
-        "retry_count": tracked_file.retry_count,
-        "discovered_at": tracked_file.discovered_at.isoformat(),
-        "started_copying_at": tracked_file.started_copying_at.isoformat()
-        if tracked_file.started_copying_at
-        else None,
-        "completed_at": tracked_file.completed_at.isoformat()
-        if tracked_file.completed_at
-        else None,
-        "destination_path": tracked_file.destination_path,
-        "is_growing_file": tracked_file.is_growing_file,
-        "growth_rate_mbps": tracked_file.growth_rate_mbps,
-        "bytes_copied": tracked_file.bytes_copied,
-        "copy_speed_mbps": tracked_file.copy_speed_mbps,
-        "last_growth_check": tracked_file.last_growth_check.isoformat()
-        if tracked_file.last_growth_check
-        else None,
-    }
+    """
+    Serialize TrackedFile using Pydantic's built-in serialization.
+    
+    Much cleaner than manual mapping and automatically includes all fields!
+    """
+    data = tracked_file.model_dump()
+    
+    # Convert datetime objects to ISO format for frontend
+    datetime_fields = [
+        'discovered_at', 'started_copying_at', 'completed_at', 
+        'failed_at', 'last_write_time', 'last_growth_check', 'growth_stable_since'
+    ]
+    
+    for field in datetime_fields:
+        if data.get(field) and isinstance(data[field], datetime):
+            data[field] = data[field].isoformat()
+        elif data.get(field) and isinstance(data[field], str):
+            # Already a string from model_dump, ensure it's ISO format
+            try:
+                dt = datetime.fromisoformat(data[field])
+                data[field] = dt.isoformat()
+            except:
+                pass  # Keep original string if parsing fails
+    
+    # Add computed field for UI convenience
+    data["file_size_mb"] = round(tracked_file.file_size / (1024 * 1024), 2)
+    
+    return data
 
 
 class WebSocketManager:
