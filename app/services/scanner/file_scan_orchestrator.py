@@ -11,7 +11,6 @@ from app.services.state_manager import StateManager
 from .domain_objects import FilePath, FileMetadata, ScanConfiguration
 from .file_cleanup_service import FileCleanupService
 from .file_discovery_service import FileDiscoveryService
-from .file_stability_tracker import FileStabilityTracker
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -33,7 +32,6 @@ class FileScanOrchestrator:
         self._running = False
 
         self.discovery_service = FileDiscoveryService(config)
-        self.stability_tracker = FileStabilityTracker(config)
         self.cleanup_service = FileCleanupService(config, state_manager)
 
         self.growing_file_detector = None
@@ -100,8 +98,7 @@ class FileScanOrchestrator:
         current_files = await self.discovery_service.discover_all_files()
         await self.cleanup_service.cleanup_missing_files(current_files)
 
-        current_file_paths = {fp.path for fp in current_files}
-        self.stability_tracker.cleanup_tracking_for_missing_files(current_file_paths)
+        # StateManager handles its own cleanup - no need for separate tracking cleanup
         await self.cleanup_service.cleanup_old_files()
 
     async def _process_and_stabilize_files(self) -> None:
@@ -133,10 +130,7 @@ class FileScanOrchestrator:
                     last_write_time=metadata.last_write_time,
                 )
 
-                self.stability_tracker.initialize_file_tracking(
-                    file_path, metadata.last_write_time
-                )
-
+                # File tracking is now handled entirely by StateManager
                 logging.info(
                     f"NEW FILE: {metadata.path.name} ({metadata.size} bytes) "
                     f"[UUID: {tracked_file.id[:8]}...]"
@@ -224,17 +218,27 @@ class FileScanOrchestrator:
     ) -> None:
         file_path = metadata.path.path
 
-        if metadata.size != tracked_file.file_size:
+        # Check if file has changed and update metadata if needed
+        file_changed = await self.state_manager.update_file_metadata(
+            tracked_file.id, metadata.size, metadata.last_write_time
+        )
+
+        if file_changed:
+            # File changed, status reset to DISCOVERED and stability timer reset
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=FileStatus.DISCOVERED,
-                file_size=metadata.size,
             )
             logging.debug(
-                f"SIZE UPDATE: {file_path} -> {metadata.size} bytes [UUID: {tracked_file.id[:8]}...]"
+                f"SIZE/TIME UPDATE: {file_path} -> {metadata.size} bytes [UUID: {tracked_file.id[:8]}...]"
             )
+            return  # Don't check stability if file just changed
 
-        is_stable = await self.stability_tracker.check_file_stability(metadata)
+        # Check if file is stable using StateManager
+        is_stable = await self.state_manager.is_file_stable(
+            tracked_file.id, self.config.file_stable_time_seconds
+        )
+        
         if is_stable:
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,

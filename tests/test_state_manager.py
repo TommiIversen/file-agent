@@ -215,3 +215,78 @@ class TestStateManager:
         # Test unsubscribe af non-existent callback
         success = state_manager.unsubscribe(test_subscriber)
         assert success is False
+
+    async def test_is_file_stable_unknown_file(self, state_manager):
+        """Test at is_file_stable returnerer False for ukendt fil."""
+        result = await state_manager.is_file_stable("unknown-id", 10)
+        assert result is False
+
+    async def test_is_file_stable_timing(self, state_manager, sample_file_path):
+        """Test file stability timing logic."""
+        # Add file
+        tracked_file = await state_manager.add_file(sample_file_path, 1024)
+        
+        # File should not be stable immediately
+        result = await state_manager.is_file_stable(tracked_file.id, 2)
+        assert result is False
+        
+        # Simulate time passing by manually setting discovered_at
+        from datetime import datetime, timedelta
+        tracked_file.discovered_at = datetime.now() - timedelta(seconds=3)
+        
+        # Now file should be stable
+        result = await state_manager.is_file_stable(tracked_file.id, 2)
+        assert result is True
+
+    async def test_update_file_metadata_no_change(self, state_manager, sample_file_path):
+        """Test update_file_metadata når der ikke er ændringer."""
+        from datetime import datetime
+        
+        write_time = datetime.now()
+        tracked_file = await state_manager.add_file(
+            sample_file_path, 1024, last_write_time=write_time
+        )
+        
+        # Update with same metadata - should return False
+        result = await state_manager.update_file_metadata(
+            tracked_file.id, 1024, write_time
+        )
+        assert result is False
+        
+        # File should retain same discovered_at
+        updated_file = await state_manager.get_file_by_id(tracked_file.id)
+        assert updated_file.discovered_at == tracked_file.discovered_at
+
+    async def test_update_file_metadata_with_changes(self, state_manager, sample_file_path):
+        """Test update_file_metadata når fil har ændret sig."""
+        from datetime import datetime, timedelta
+        
+        original_time = datetime.now() - timedelta(seconds=10)
+        tracked_file = await state_manager.add_file(
+            sample_file_path, 1024, last_write_time=original_time
+        )
+        
+        # Store original discovered_at
+        original_discovered = tracked_file.discovered_at
+        
+        # Update with different size
+        new_time = datetime.now()
+        result = await state_manager.update_file_metadata(
+            tracked_file.id, 2048, new_time
+        )
+        assert result is True
+        
+        # File should have updated metadata and reset timer
+        updated_file = await state_manager.get_file_by_id(tracked_file.id)
+        assert updated_file.file_size == 2048
+        assert updated_file.last_write_time == new_time
+        assert updated_file.discovered_at > original_discovered  # Timer was reset
+
+    async def test_update_file_metadata_unknown_file(self, state_manager):
+        """Test update_file_metadata for ukendt fil."""
+        from datetime import datetime
+        
+        result = await state_manager.update_file_metadata(
+            "unknown-id", 1024, datetime.now()
+        )
+        assert result is False

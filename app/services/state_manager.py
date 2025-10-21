@@ -397,3 +397,69 @@ class StateManager:
                         current_files[tracked_file.file_path] = tracked_file
 
             return list(current_files.values())
+
+    async def is_file_stable(self, file_id: str, stable_time_seconds: int) -> bool:
+        """
+        Check if file has been stable for required duration.
+        
+        A file is considered stable when it hasn't changed (size or write time)
+        for at least stable_time_seconds since it was discovered or last changed.
+        """
+        async with self._lock:
+            tracked_file = self._files_by_id.get(file_id)
+            if not tracked_file:
+                return False
+            
+            # Check if file has been unchanged since discovery/last change
+            now = datetime.now()
+            time_since_discovery = now - tracked_file.discovered_at
+            stable_duration = timedelta(seconds=stable_time_seconds)
+            
+            is_stable = time_since_discovery >= stable_duration
+            
+            if is_stable:
+                logging.debug(f"File is stable: {tracked_file.file_path} (stable for {time_since_discovery.total_seconds():.1f}s)")
+            
+            return is_stable
+
+    async def update_file_metadata(self, file_id: str, new_size: int, 
+                                 new_write_time: datetime) -> bool:
+        """
+        Update file metadata and reset stability timer if file has changed.
+        
+        Returns True if file has changed (requiring stability timer reset),
+        False if no changes detected.
+        """
+        async with self._lock:
+            tracked_file = self._files_by_id.get(file_id)
+            if not tracked_file:
+                logging.warning(f"Attempted to update metadata for unknown file ID: {file_id}")
+                return False
+            
+            # Check if file has changed
+            size_changed = tracked_file.file_size != new_size
+            time_changed = tracked_file.last_write_time != new_write_time
+            
+            if size_changed or time_changed:
+                # File has changed - update metadata and reset stability timer
+                old_size = tracked_file.file_size
+                tracked_file.file_size = new_size
+                tracked_file.last_write_time = new_write_time
+                tracked_file.discovered_at = datetime.now()  # Reset stability timer
+                
+                logging.info(f"File changed, resetting stability timer: {tracked_file.file_path} "
+                           f"(size: {old_size} -> {new_size}, write_time updated)")
+                
+                # Notify subscribers of the change
+                await self._notify(
+                    FileStateUpdate(
+                        file_path=tracked_file.file_path,
+                        old_status=tracked_file.status,
+                        new_status=tracked_file.status,  # Status unchanged, but metadata updated
+                        tracked_file=tracked_file,
+                    )
+                )
+                
+                return True  # File changed
+            
+            return False  # No change detected
