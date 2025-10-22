@@ -65,8 +65,8 @@ class OutputFolderTemplateEngine:
             folder_template = matching_rule.folder_template
             self.logger.debug(f"Using rule for '{filename}': {folder_template}")
         else:
-            # Use default category
-            folder_template = f"{self.default_category}\\{{date}}"
+            # Use default category with forward slash for cross-platform compatibility
+            folder_template = f"{self.default_category}/{{date}}"
             self.logger.debug(
                 f"Using default category for '{filename}': {folder_template}"
             )
@@ -94,7 +94,7 @@ class OutputFolderTemplateEngine:
         folder_template = (
             matching_rule.folder_template
             if matching_rule
-            else f"{self.default_category}\\{{date}}"
+            else f"{self.default_category}/{{date}}"
         )
 
         variables = self._extract_variables(filename)
@@ -196,6 +196,10 @@ class OutputFolderTemplateEngine:
         for var_name, var_value in variables.items():
             placeholder = f"{{{var_name}}}"
             result = result.replace(placeholder, var_value)
+
+        # Convert any backslash separators to forward slashes for cross-platform compatibility
+        # pathlib will handle proper conversion when creating the Path
+        result = result.replace("\\", "/")
 
         return result
 
