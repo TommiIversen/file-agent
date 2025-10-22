@@ -14,6 +14,13 @@ document.addEventListener('alpine:init', () => {
         settingsLoading: false,
         settingsError: null,
         
+        // Administrative actions
+        reloadingConfig: false,
+        restartingApp: false,
+        restartCountdown: null,
+        actionMessage: null,
+        actionSuccess: false,
+        
         /**
          * Initialize the UI store
          */
@@ -76,6 +83,124 @@ document.addEventListener('alpine:init', () => {
             // Simple error display - can be enhanced later
             console.error('UI Error:', message);
             alert('Error: ' + message);
+        },
+        
+        /**
+         * Reload configuration from file
+         */
+        async reloadConfig() {
+            if (this.reloadingConfig) return;
+            
+            this.reloadingConfig = true;
+            this.actionMessage = null;
+            
+            try {
+                console.log('🔄 Reloading configuration...');
+                
+                const response = await fetch('/api/reload-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.actionSuccess = true;
+                    this.actionMessage = result.message;
+                    
+                    // Automatically reload settings to show new values
+                    await this.loadSettings();
+                    
+                    console.log('✅ Configuration reloaded successfully');
+                } else {
+                    this.actionSuccess = false;
+                    this.actionMessage = result.message || 'Failed to reload configuration';
+                    console.error('❌ Failed to reload configuration:', result.message);
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to reload configuration:', error);
+                this.actionSuccess = false;
+                this.actionMessage = 'Network error: ' + error.message;
+                
+            } finally {
+                this.reloadingConfig = false;
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = null;
+                }, 5000);
+            }
+        },
+        
+        /**
+         * Restart the entire application
+         */
+        async restartApplication() {
+            if (this.restartingApp) return;
+            
+            // Confirm with user
+            if (!confirm('Are you sure you want to restart the application? This will briefly interrupt file transfers.')) {
+                return;
+            }
+            
+            this.restartingApp = true;
+            this.actionMessage = null;
+            this.restartCountdown = 2;
+            
+            try {
+                console.log('🚀 Restarting application...');
+                
+                const response = await fetch('/api/restart-application', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.actionSuccess = true;
+                    this.actionMessage = result.message;
+                    
+                    // Start countdown
+                    const countdownInterval = setInterval(() => {
+                        this.restartCountdown--;
+                        if (this.restartCountdown <= 0) {
+                            clearInterval(countdownInterval);
+                            
+                            // Show reconnecting message and try to reconnect
+                            this.actionMessage = 'Application restarting... Reconnecting...';
+                            
+                            // Try to reconnect after restart
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 3000);
+                        }
+                    }, 1000);
+                    
+                    console.log('✅ Application restart initiated');
+                } else {
+                    this.actionSuccess = false;
+                    this.actionMessage = result.message || 'Failed to restart application';
+                    console.error('❌ Failed to restart application:', result.message);
+                    this.restartingApp = false;
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to restart application:', error);
+                this.actionSuccess = false;
+                this.actionMessage = 'Network error: ' + error.message;
+                this.restartingApp = false;
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    this.actionMessage = null;
+                }, 5000);
+            }
         }
     });
 });
@@ -87,4 +212,12 @@ window.openSettingsModal = function() {
 
 window.closeSettingsModal = function() {
     Alpine.store('ui').closeSettingsModal();
+};
+
+window.reloadConfig = function() {
+    Alpine.store('ui').reloadConfig();
+};
+
+window.restartApplication = function() {
+    Alpine.store('ui').restartApplication();
 };

@@ -733,6 +733,53 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Administrative Actions -->
+            <div class="bg-gradient-to-r from-purple-700 to-blue-700 bg-opacity-60 rounded-lg p-4 border border-purple-500">
+                <h3 class="text-lg font-semibold text-white mb-3">⚡ Administrative Actions</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Reload Config -->
+                    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
+                        <h4 class="text-white font-semibold mb-2">🔄 Reload Configuration</h4>
+                        <p class="text-gray-300 text-sm mb-3">Reload settings from config file without restarting the application</p>
+                        <button @click="reloadConfig()" 
+                                :disabled="$store.ui?.reloadingConfig"
+                                class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
+                            <span x-show="!$store.ui?.reloadingConfig">🔄 Reload Config</span>
+                            <span x-show="$store.ui?.reloadingConfig">
+                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                Reloading...
+                            </span>
+                        </button>
+                    </div>
+                    
+                    <!-- Restart Application -->
+                    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
+                        <h4 class="text-white font-semibold mb-2">🚀 Restart Application</h4>
+                        <p class="text-gray-300 text-sm mb-3">Gracefully restart the entire application (2 second delay)</p>
+                        <button @click="restartApplication()" 
+                                :disabled="$store.ui?.restartingApp"
+                                class="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
+                            <span x-show="!$store.ui?.restartingApp">🚀 Restart App</span>
+                            <span x-show="$store.ui?.restartingApp">
+                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                Restarting in <span x-text="$store.ui?.restartCountdown || 2"></span>s...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Action Results -->
+                <div x-show="$store.ui?.actionMessage" 
+                     class="mt-4 p-3 rounded-lg border"
+                     :class="$store.ui?.actionSuccess ? 'bg-green-900 bg-opacity-50 border-green-500 text-green-300' : 'bg-red-900 bg-opacity-50 border-red-500 text-red-300'">
+                    <div class="flex items-center">
+                        <span x-show="$store.ui?.actionSuccess" class="mr-2">✅</span>
+                        <span x-show="!$store.ui?.actionSuccess" class="mr-2">❌</span>
+                        <span x-text="$store.ui?.actionMessage"></span>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Loading State -->
