@@ -1,10 +1,9 @@
 import asyncio
 import logging
 import os
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, Dict, Any
 from typing import TYPE_CHECKING
 
 import aiofiles.os
@@ -19,70 +18,31 @@ if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
 
 
-
-
-@dataclass(frozen=True)
-class FilePath:
-    """Domain object representing a file path with its operations."""
-
-    path: str
-
-    @property
-    def name(self) -> str:
-        return os.path.basename(self.path)
-
-    @property
-    def extension(self) -> str:
-        return Path(self.path).suffix.lower()
-
-    async def exists(self) -> bool:
-        return await aiofiles.os.path.exists(self.path)
-
-    def is_mxf_file(self) -> bool:
-        return self.extension == ".mxf"
-
-    def should_ignore(self) -> bool:
-        """Check if file should be ignored (test files, etc.)"""
-        return "test_file" in self.name.lower() or self.name.startswith(".")
-
-    def __hash__(self) -> int:
-        """Make FilePath hashable so it can be stored in sets."""
-        return hash(self.path)
-
-    def __eq__(self, other) -> bool:
-        """Define equality based on path."""
-        if not isinstance(other, FilePath):
-            return False
-        return self.path == other.path
-
-
-@dataclass
-class FileMetadata:
-    """Domain object encapsulating file metadata and operations."""
-
-    path: FilePath
-    size: int
-    last_write_time: datetime
-
-    @classmethod
-    async def from_path(cls, file_path: str) -> Optional["FileMetadata"]:
-        """Create FileMetadata from a file path."""
-        try:
-            path_obj = FilePath(file_path)
-            if not await path_obj.exists():
-                return None
-
-            stat_result = await aiofiles.os.stat(file_path)
-            return cls(
-                path=path_obj,
-                size=stat_result.st_size,
-                last_write_time=datetime.fromtimestamp(stat_result.st_mtime),
-            )
-        except (OSError, IOError):
+async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:
+    """Get file metadata including size and modification time."""
+    try:
+        path = Path(file_path)
+        if not await aiofiles.os.path.exists(path):
             return None
 
-    def is_empty(self) -> bool:
-        return self.size == 0
+        stat_result = await aiofiles.os.stat(file_path)
+        return {
+            'path': path,
+            'size': stat_result.st_size,
+            'last_write_time': datetime.fromtimestamp(stat_result.st_mtime)
+        }
+    except (OSError, IOError):
+        return None
+
+
+def is_mxf_file(path: Path) -> bool:
+    """Check if file is an MXF file."""
+    return path.suffix.lower() == ".mxf"
+
+
+def should_ignore_file(path: Path) -> bool:
+    """Check if file should be ignored (test files, etc.)"""
+    return "test_file" in path.name.lower() or path.name.startswith(".")
 
 
 
@@ -169,10 +129,10 @@ class FileScanner:
         scan_duration = (datetime.now() - scan_start).total_seconds()
         logging.debug(f"Scan iteration completed in {scan_duration:.2f}s")
 
-    async def _cleanup_missing_files(self, current_files: Set[FilePath]) -> int:
+    async def _cleanup_missing_files(self, current_files: Set[Path]) -> int:
         """Clean up files that no longer exist in the source directory."""
         try:
-            current_file_paths = {fp.path for fp in current_files}
+            current_file_paths = {str(path) for path in current_files}
 
             removed_count = await self.state_manager.cleanup_missing_files(
                 current_file_paths
@@ -208,9 +168,9 @@ class FileScanner:
             logging.error(f"Error cleaning up old files: {e}")
             return 0
 
-    async def _discover_all_files(self) -> Set[FilePath]:
+    async def _discover_all_files(self) -> Set[Path]:
         """Discover all MXF files in the source directory."""
-        discovered_files: Set[FilePath] = set()
+        discovered_files: Set[Path] = set()
 
         try:
             source_path = Path(self.config.source_directory)
@@ -228,9 +188,9 @@ class FileScanner:
                 for file in files:
                     file_path = os.path.join(root, file)
                     abs_file_path = os.path.abspath(file_path)
-                    path_obj = FilePath(abs_file_path)
+                    path_obj = Path(abs_file_path)
 
-                    if path_obj.is_mxf_file() and not path_obj.should_ignore():
+                    if is_mxf_file(path_obj) and not should_ignore_file(path_obj):
                         discovered_files.add(path_obj)
 
             logging.debug(f"Discovered {len(discovered_files)} MXF files")
@@ -240,10 +200,10 @@ class FileScanner:
 
         return discovered_files
 
-    async def _process_discovered_files(self, current_files: Set[FilePath]) -> None:
-        for file_path_obj in current_files:
+    async def _process_discovered_files(self, current_files: Set[Path]) -> None:
+        for path_obj in current_files:
             try:
-                file_path = file_path_obj.path
+                file_path = str(path_obj)
 
                 # Check if file should be skipped due to cooldown or other conditions
                 should_skip = await self.state_manager.should_skip_file_processing(file_path)
@@ -258,46 +218,46 @@ class FileScanner:
                     await self._check_existing_file_changes(existing_file, file_path)
                     continue
 
-                metadata = await FileMetadata.from_path(file_path)
+                metadata = await get_file_metadata(file_path)
                 if metadata is None:
                     continue
 
-                if metadata.is_empty():
-                    logging.debug(f"Skipping empty file: {metadata.path.name}")
+                if metadata['size'] == 0:  # Check if empty
+                    logging.debug(f"Skipping empty file: {path_obj.name}")
                     continue
 
                 tracked_file = await self.state_manager.add_file(
                     file_path=file_path,
-                    file_size=metadata.size,
-                    last_write_time=metadata.last_write_time,
+                    file_size=metadata['size'],
+                    last_write_time=metadata['last_write_time'],
                 )
 
                 # File tracking is now handled entirely by StateManager
                 logging.info(
-                    f"NEW FILE: {metadata.path.name} ({metadata.size} bytes) "
+                    f"NEW FILE: {path_obj.name} ({metadata['size']} bytes) "
                     f"[UUID: {tracked_file.id[:8]}...]"
                 )
 
             except Exception as e:
-                logging.error(f"Error processing file {file_path_obj.path}: {e}")
+                logging.error(f"Error processing file {path_obj}: {e}")
 
     async def _check_existing_file_changes(self, tracked_file, file_path: str) -> None:
-        metadata = await FileMetadata.from_path(file_path)
+        metadata = await get_file_metadata(file_path)
         if metadata is None:
             return
 
-        if metadata.size != tracked_file.file_size:
+        if metadata['size'] != tracked_file.file_size:
             logging.info(
                 f"SIZE CHANGE: {tracked_file.file_path} "
-                f"({tracked_file.file_size} → {metadata.size} bytes) "
+                f"({tracked_file.file_size} → {metadata['size']} bytes) "
                 f"[UUID: {tracked_file.id[:8]}...]"
             )
 
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=tracked_file.status,
-                file_size=metadata.size,
-                last_write_time=metadata.last_write_time,
+                file_size=metadata['size'],
+                last_write_time=metadata['last_write_time'],
             )
 
     async def _check_file_stability(self) -> None:
@@ -317,7 +277,7 @@ class FileScanner:
             for tracked_file in all_files_to_check:
                 file_path = tracked_file.file_path
 
-                metadata = await FileMetadata.from_path(file_path)
+                metadata = await get_file_metadata(file_path)
                 if metadata is None:
                     continue
 
@@ -332,11 +292,11 @@ class FileScanner:
             logging.error(f"Error in stability check: {e}")
 
     async def _handle_growing_file_logic(
-            self, metadata: FileMetadata, tracked_file: TrackedFile
+            self, metadata: Dict[str, Any], tracked_file: TrackedFile
     ) -> None:
-        file_path = metadata.path.path
+        file_path = str(metadata['path'])
 
-        await self.growing_file_detector.update_file_growth_info(tracked_file, metadata.size)
+        await self.growing_file_detector.update_file_growth_info(tracked_file, metadata['size'])
 
         recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
@@ -349,20 +309,20 @@ class FileScanner:
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=recommended_status,
-                file_size=metadata.size,
+                file_size=metadata['size'],
             )
             logging.info(
                 f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
             )
 
     async def _handle_traditional_stability_logic(
-            self, metadata: FileMetadata, tracked_file
+            self, metadata: Dict[str, Any], tracked_file
     ) -> None:
-        file_path = metadata.path.path
+        file_path = str(metadata['path'])
 
         # Check if file has changed and update metadata if needed
         file_changed = await self.state_manager.update_file_metadata(
-            tracked_file.id, metadata.size, metadata.last_write_time
+            tracked_file.id, metadata['size'], metadata['last_write_time']
         )
 
         if file_changed:
@@ -372,7 +332,7 @@ class FileScanner:
                 status=FileStatus.DISCOVERED,
             )
             logging.debug(
-                f"SIZE/TIME UPDATE: {file_path} -> {metadata.size} bytes [UUID: {tracked_file.id[:8]}...]"
+                f"SIZE/TIME UPDATE: {file_path} -> {metadata['size']} bytes [UUID: {tracked_file.id[:8]}...]"
             )
             return  # Don't check stability if file just changed
 

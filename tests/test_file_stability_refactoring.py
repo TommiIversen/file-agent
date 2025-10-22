@@ -9,8 +9,9 @@ import pytest
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from app.services.scanner.file_scanner import FileScanner, FilePath, FileMetadata
+from app.services.scanner.file_scanner import FileScanner, get_file_metadata
 from app.services.scanner.domain_objects import ScanConfiguration
 from app.services.state_manager import StateManager
 from app.models import FileStatus
@@ -58,13 +59,13 @@ class TestFileStabilityRefactoring:
         file_path = "/test/source/video.mxf"
         tracked_file = await state_manager.add_file(file_path, 1024)
         
-        # Create metadata with same info (no changes)
-        metadata = FileMetadata(
-            path=FilePath(file_path),
-            size=1024,
-            last_write_time=tracked_file.last_write_time,
-        )
-        
+        # Create metadata dictionary with same info (no changes)
+        metadata = {
+            'path': Path(file_path),
+            'size': 1024,
+            'last_write_time': tracked_file.last_write_time,
+        }
+
         # Mock StateManager methods to verify they are called
         with patch.object(state_manager, 'update_file_metadata', new_callable=AsyncMock) as mock_update:
             with patch.object(state_manager, 'is_file_stable', new_callable=AsyncMock) as mock_stable:
@@ -95,14 +96,14 @@ class TestFileStabilityRefactoring:
         # Store original discovered_at
         original_discovered = tracked_file.discovered_at
         
-        # Create metadata with changed size
+        # Create metadata dictionary with changed size
         new_time = datetime.now()
-        metadata = FileMetadata(
-            path=FilePath(file_path),
-            size=2048,  # Different size
-            last_write_time=new_time,
-        )
-        
+        metadata = {
+            'path': Path(file_path),
+            'size': 2048,  # Different size
+            'last_write_time': new_time,
+        }
+
         # Call stability logic
         await orchestrator._handle_traditional_stability_logic(metadata, tracked_file)
         
@@ -125,13 +126,13 @@ class TestFileStabilityRefactoring:
         # Manually set discovered_at to simulate stability period
         tracked_file.discovered_at = datetime.now() - timedelta(seconds=3)
         
-        # Create metadata (no changes)
-        metadata = FileMetadata(
-            path=FilePath(file_path),
-            size=1024,
-            last_write_time=write_time,
-        )
-        
+        # Create metadata dictionary (no changes)
+        metadata = {
+            'path': Path(file_path),
+            'size': 1024,
+            'last_write_time': write_time,
+        }
+
         # Call stability logic
         await orchestrator._handle_traditional_stability_logic(metadata, tracked_file)
         
