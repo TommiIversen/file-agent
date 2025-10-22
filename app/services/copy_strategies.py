@@ -13,8 +13,24 @@ from app.models import FileStatus, TrackedFile
 from app.services.copy.file_copy_executor import FileCopyExecutor, CopyProgress
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.state_manager import StateManager
-from app.utils.file_operations import create_temp_file_path
 from app.utils.progress_utils import calculate_transfer_rate
+
+
+async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
+    try:
+        source_size = os.path.getsize(source_path)
+        dest_size = os.path.getsize(dest_path)
+
+        if source_size != dest_size:
+            logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
+            return False
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Error verifying file integrity: {e}")
+        return False
+
 
 
 class FileCopyStrategy(ABC):
@@ -79,7 +95,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                     f"Executor finished successfully for {source.name}. Verifying and finalizing."
                 )
 
-                if not await self._verify_file_integrity(source_path, dest_path):
+                if not await _verify_file_integrity(source_path, dest_path):
                     logging.error(f"Post-copy verification failed for {source.name}")
                     return False
 
@@ -115,20 +131,6 @@ class NormalFileCopyStrategy(FileCopyStrategy):
             )
             return False
 
-    async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
-        try:
-            source_size = os.path.getsize(source_path)
-            dest_size = os.path.getsize(dest_path)
-
-            if source_size != dest_size:
-                logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
-                return False
-
-            return True
-
-        except Exception as e:
-            logging.error(f"Error verifying file integrity: {e}")
-            return False
 
 
 class GrowingFileCopyStrategy(FileCopyStrategy):
@@ -193,18 +195,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             dest_dir.mkdir(parents=True, exist_ok=True)
             logging.debug(f"Ensured destination directory exists: {dest_dir}")
 
-            if self.settings.use_temporary_file:
-                temp_dest_path = create_temp_file_path(Path(dest_path))
-                copy_dest_path = temp_dest_path
-                logging.debug(
-                    f"Using temporary file for growing copy: {temp_dest_path}"
-                )
-            else:
-                copy_dest_path = dest_path
-                logging.debug(f"Using direct growing copy to: {dest_path}")
+            copy_dest_path = dest_path
 
             success = await self._copy_growing_file(
-                source_path, copy_dest_path, tracked_file
+                source_path, dest_path, tracked_file
             )
 
             if success:
@@ -229,15 +223,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     raise
 
                 if final_success:
-                    if await self._verify_file_integrity(
+                    if await _verify_file_integrity(
                             source_path, str(copy_dest_path)
                     ):
-                        if self.settings.use_temporary_file and temp_dest_path:
-                            os.rename(temp_dest_path, dest_path)
-                            logging.debug(
-                                f"Renamed temp file to final destination: {dest_path}"
-                            )
-
                         try:
                             os.remove(source_path)
                             logging.debug(
@@ -311,48 +299,31 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
-            chunk_size = (
-                    self.settings.growing_file_chunk_size_kb * 1024
-            )
-            safety_margin_bytes = (
-                    self.settings.growing_file_safety_margin_mb * 1024 * 1024
-            )
+            chunk_size = self.settings.growing_file_chunk_size_kb * 1024
+            safety_margin_bytes = self.settings.growing_file_safety_margin_mb * 1024 * 1024
             poll_interval = self.settings.growing_file_poll_interval_seconds
             pause_ms = self.settings.growing_copy_pause_ms
 
             bytes_copied = 0
             last_file_size = 0
             no_growth_cycles = 0
-            max_no_growth_cycles = (
-                    self.settings.growing_file_growth_timeout_seconds // poll_interval
-            )
+            max_no_growth_cycles = self.settings.growing_file_growth_timeout_seconds // poll_interval
 
             # CRITICAL: Resume from existing progress if destination file exists
             dest_file_path = Path(dest_path)
-            if dest_file_path.exists():
-                existing_bytes = dest_file_path.stat().st_size
-                bytes_copied = existing_bytes
-                last_file_size = existing_bytes
-                logging.info(
-                    f"🔄 GROWING COPY RESUME: {os.path.basename(source_path)} "
-                    f"continuing from {bytes_copied:,} bytes"
-                )
-            else:
-                logging.info(
-                    f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
-                    f"starting fresh copy"
-                )
+
+            logging.info(
+                f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
+                f"starting fresh copy"
+            )
 
             # Initialize network error detector for fail-fast behavior
             network_detector = NetworkErrorDetector(
                 destination_path=dest_path,
                 check_interval_bytes=chunk_size * 10  # Check every 10 chunks
             )
-
-            # Open destination file in append mode if resuming, write mode if fresh
-            file_mode = "ab" if dest_file_path.exists() and bytes_copied > 0 else "wb"
             
-            async with aiofiles.open(dest_path, file_mode) as dst:
+            async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
                     source_path, dst, tracked_file, bytes_copied, last_file_size,
                     no_growth_cycles, max_no_growth_cycles, safety_margin_bytes,
@@ -611,21 +582,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             logging.error(
                 f"Error finishing normal copy for {source.name}: {e}", exc_info=True
             )
-            return False
-
-    async def _verify_file_integrity(self, source_path: str, dest_path: str) -> bool:
-        try:
-            source_size = os.path.getsize(source_path)
-            dest_size = os.path.getsize(dest_path)
-
-            if source_size != dest_size:
-                logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
-                return False
-
-            return True
-
-        except Exception as e:
-            logging.error(f"Error verifying file integrity: {e}")
             return False
 
 

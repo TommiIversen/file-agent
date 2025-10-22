@@ -101,6 +101,8 @@ class FileScanOrchestrator:
         # StateManager handles its own cleanup - no need for separate tracking cleanup
         await self.cleanup_service.cleanup_old_files()
 
+
+
     async def _process_and_stabilize_files(self) -> None:
         current_files = await self.discovery_service.discover_all_files()
         await self._process_discovered_files(current_files)
