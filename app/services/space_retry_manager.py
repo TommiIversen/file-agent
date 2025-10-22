@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime
 
@@ -18,19 +17,10 @@ class SpaceRetryManager:
     async def schedule_space_retry(
             self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
-        # Check if file is in a paused state - paused files should NOT increment retry count
-        # They are waiting for destination to become available, not actively failing
-        if self._is_file_paused(tracked_file):
-            logging.debug(
-                f"SPACE RETRY SKIPPED: File {tracked_file.file_path} is paused - "
-                f"will resume when destination becomes available [UUID: {tracked_file.id[:8]}...]"
-            )
-            # Don't increment retry count for paused files
-            # They should remain paused until destination recovery
-            await self._schedule_paused_file_retry(tracked_file, space_check)
-            return
+        # In fail-and-rediscover strategy, all files that fail go directly to retry logic
+        # No pause states exist - files either succeed, fail, or wait for space/network
         
-        # Only increment retry count for actively copying files
+        # Increment retry count for all space-related failures
         retry_count = await self._state_manager.increment_retry_count(tracked_file.id)
         
         if self._should_give_up_retry(retry_count):
@@ -126,40 +116,6 @@ class SpaceRetryManager:
 
     def _should_give_up_retry(self, current_retry_count: int) -> bool:
         return current_retry_count >= self._settings.max_space_retries
-
-    def _is_file_paused(self, tracked_file: TrackedFile) -> bool:
-        """
-        Check if file is in a paused state due to destination storage issues.
-        
-        NOTE: With fail-and-rediscover strategy, we no longer use paused states.
-        Files immediately fail and are rediscovered instead of being paused.
-        This method now always returns False.
-        """
-        # In fail-and-rediscover strategy, no files are paused
-        return False
-
-    async def _schedule_paused_file_retry(
-            self, tracked_file: TrackedFile, space_check: SpaceCheckResult
-    ) -> None:
-        """
-        Handle space retry for paused files without incrementing retry count.
-        
-        Paused files remain in their paused state until destination recovery.
-        They should not accumulate retry counts that could lead to SPACE_ERROR.
-        """
-        logging.debug(
-            f"PAUSED FILE SPACE RETRY: {tracked_file.file_path} "
-            f"[UUID: {tracked_file.id[:8]}...] - status: {tracked_file.status.value}"
-        )
-        
-        # Update error message to indicate waiting for destination recovery
-        await self._state_manager.update_file_status_by_id(
-            file_id=tracked_file.id,
-            status=tracked_file.status,  # Keep current paused status
-            error_message=f"Waiting for destination recovery: {space_check.reason}",
-        )
-        
-        # Do NOT schedule any retries - paused files wait for universal recovery
 
     async def cancel_all_retries(self) -> None:
         """Cancel all pending space retries."""

@@ -54,7 +54,7 @@ class TestFileDiscovery:
 
             # Should find 2 files (excluding .mp4 and test_file)
             assert len(files) == 2
-            file_paths = {f.path for f in files}
+            file_paths = {str(f) for f in files}
             assert any("file1.mxf" in path for path in file_paths)
             assert any("file2.MXF" in path for path in file_paths)
 
@@ -115,5 +115,5 @@ class TestFileDiscovery:
             files = await orchestrator._discover_all_files()
 
             assert len(files) == 1
-            file_paths = {f.path for f in files}
+            file_paths = {str(f) for f in files}
             assert any("normal.mxf" in path for path in file_paths)

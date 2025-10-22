@@ -309,9 +309,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             no_growth_cycles = 0
             max_no_growth_cycles = self.settings.growing_file_growth_timeout_seconds // poll_interval
 
-            # CRITICAL: Resume from existing progress if destination file exists
-            dest_file_path = Path(dest_path)
-
+            # Fresh copy approach - fail-and-rediscover strategy eliminates resume complexity
             logging.info(
                 f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
                 f"starting fresh copy"
@@ -528,10 +526,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 check_interval_bytes=chunk_size * 5  # Check every 5 chunks
             )
 
+            # Fresh copy from start - no resume logic in fail-and-rediscover strategy
+            bytes_already_copied = 0
             async with aiofiles.open(source, "rb") as src:
-                async with aiofiles.open(dest, "ab") as dst:
-                    await src.seek(bytes_already_copied)
-
+                async with aiofiles.open(dest, "wb") as dst:
                     while True:
                         chunk = await src.read(chunk_size)
                         if not chunk:
@@ -591,39 +589,18 @@ class CopyStrategyFactory:
             self,
             settings: Settings,
             state_manager: StateManager,
-            enable_resume: bool = True,
     ):
         self.settings = settings
         self.state_manager = state_manager
-        self.enable_resume = enable_resume
         self.file_copy_executor = FileCopyExecutor(settings)
 
-        if enable_resume:
-            from app.utils.resumable_copy_strategies import (
-                ResumableNormalFileCopyStrategy,
-                ResumableGrowingFileCopyStrategy,
-                CONSERVATIVE_CONFIG,
-            )
-
-            self.normal_strategy = ResumableNormalFileCopyStrategy(
-                settings=settings,
-                state_manager=state_manager,
-                file_copy_executor=self.file_copy_executor,
-                resume_config=CONSERVATIVE_CONFIG,
-            )
-            self.growing_strategy = ResumableGrowingFileCopyStrategy(
-                settings=settings,
-                state_manager=state_manager,
-                file_copy_executor=self.file_copy_executor,
-                resume_config=CONSERVATIVE_CONFIG,
-            )
-        else:
-            self.normal_strategy = NormalFileCopyStrategy(
-                settings, state_manager, self.file_copy_executor
-            )
-            self.growing_strategy = GrowingFileCopyStrategy(
-                settings, state_manager, self.file_copy_executor
-            )
+        # Simple strategy initialization - no resume logic in fail-and-rediscover approach
+        self.normal_strategy = NormalFileCopyStrategy(
+            settings, state_manager, self.file_copy_executor
+        )
+        self.growing_strategy = GrowingFileCopyStrategy(
+            settings, state_manager, self.file_copy_executor
+        )
 
     def get_strategy(self, tracked_file: TrackedFile) -> FileCopyStrategy:
         import logging
