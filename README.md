@@ -41,18 +41,56 @@ This decoupled nature means that each component has a single responsibility, mak
 
 ## Installation
 
-```cmd
+### Prerequisites
+- **Python 3.13+** (required)
+- **pip** (usually included with Python)
+
+### Quick Setup
+
+1. **Install dependencies:**
+```bash
 pip install -r requirements.txt
 ```
 
+2. **Start the application:**
+```bash
+# Development mode (with auto-reload)
 uvicorn app.main:app --reload
 
-eller
-
+# Or alternatively:
 python -m uvicorn app.main:app --reload
 
+# Production mode (external access)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
+3. **Access the web interface:**
+   - Local: http://localhost:8000
+   - Health check: http://localhost:8000/health
+   - API docs: http://localhost:8000/docs
 
+### macOS Service Setup
+
+For automatic startup as a system service on macOS:
+
+```bash
+# Make the script executable
+chmod +x scripts/service-setup/install-macos.sh
+
+# Run the installer
+./scripts/service-setup/install-macos.sh
+```
+
+The installer will:
+- Check for Python 3.13+
+- Install dependencies via pip
+- Test application startup
+- Create a macOS launchd service
+- Start the service automatically
+
+### Development Tools
+
+```bash
 # Find alle unused/dead code patterns
 ruff check . --select F,E
 
@@ -64,3 +102,4 @@ ruff check . --select B
 
 # Find style issues
 ruff check . --select E,W
+```

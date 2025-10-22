@@ -1,6 +1,6 @@
 #!/bin/bash
 # File Transfer Agent - macOS Service Setup Script
-# This script sets up the File Transfer Agent as a macOS launchd service
+# Simple setup for File Transfer Agent as a macOS launchd service
 
 set -e  # Exit on any error
 
@@ -53,17 +53,27 @@ check_permissions() {
 check_prerequisites() {
     log_info "Checking prerequisites..."
     
-    # Check Python 3.8+
+    # Check Python 3.13+
     if ! command -v python3 &> /dev/null; then
         log_error "Python 3 is required but not installed"
+        log_info "Please install Python 3.13+ from https://www.python.org/downloads/"
         exit 1
     fi
     
     PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
     log_info "Found Python version: $PYTHON_VERSION"
     
-    if [[ $(echo "$PYTHON_VERSION < 3.8" | bc -l) -eq 1 ]]; then
-        log_error "Python 3.8+ required, found $PYTHON_VERSION"
+    # Check for Python 3.13+
+    if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 13) else 1)" 2>/dev/null; then
+        log_error "Python 3.13+ required, found $PYTHON_VERSION"
+        log_info "Please upgrade Python to 3.13+ from https://www.python.org/downloads/"
+        exit 1
+    fi
+    
+    # Check if pip is available
+    if ! python3 -m pip --version &> /dev/null; then
+        log_error "pip is required but not available"
+        log_info "Please install pip or reinstall Python with pip included"
         exit 1
     fi
     
@@ -73,42 +83,56 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check if virtual environment exists
-    if [[ ! -d "$PROJECT_DIR/venv" ]]; then
-        log_warning "Virtual environment not found, creating..."
-        create_virtual_environment
+    # Check if requirements.txt exists
+    if [[ ! -f "$PROJECT_DIR/requirements.txt" ]]; then
+        log_error "requirements.txt not found in project directory"
+        exit 1
     fi
     
     log_success "Prerequisites check passed"
 }
 
-# Create virtual environment and install dependencies
-create_virtual_environment() {
-    log_info "Creating virtual environment..."
+# Install dependencies
+install_dependencies() {
+    log_info "Installing dependencies..."
     cd "$PROJECT_DIR"
     
-    python3 -m venv venv
-    source venv/bin/activate
+    # Install requirements
+    python3 -m pip install -r requirements.txt
     
-    # Upgrade pip
-    pip install --upgrade pip
+    log_success "Dependencies installed successfully"
+}
+
+# Test application startup
+test_application() {
+    log_info "Testing application startup..."
+    cd "$PROJECT_DIR"
     
-    # Install dependencies
-    if [[ -f "requirements.txt" ]]; then
-        pip install -r requirements.txt
+    # Test that the app can start
+    timeout 10s python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 &
+    APP_PID=$!
+    
+    # Wait a moment for startup
+    sleep 5
+    
+    # Check if app is responding
+    if curl -s http://localhost:8001/health > /dev/null 2>&1; then
+        log_success "Application startup test successful"
+        kill $APP_PID 2>/dev/null || true
     else
-        log_info "Installing basic dependencies..."
-        pip install fastapi uvicorn aiofiles pydantic python-dotenv
+        log_warning "Application health check failed, but continuing with service setup"
+        kill $APP_PID 2>/dev/null || true
     fi
     
-    log_success "Virtual environment created and dependencies installed"
+    # Wait for cleanup
+    sleep 2
 }
 
 # Create the launch daemon plist file
 create_plist_file() {
     log_info "Creating launchd plist file..."
     
-    PYTHON_PATH="$PROJECT_DIR/venv/bin/python"
+    PYTHON_PATH=$(which python3)
     WORK_DIR="$PROJECT_DIR"
     LOG_DIR="$PROJECT_DIR/logs"
     
@@ -283,63 +307,18 @@ show_completion_info() {
     echo "  • Start Service: launchctl load $INSTALL_DIR/$PLIST_NAME"
     echo "  • View Logs: tail -f $PROJECT_DIR/logs/file-agent.log"
     echo
-    log_info "SMB Mount Management:"
-    echo "  • Mount SMB: $PROJECT_DIR/scripts/macos/smb-mount.sh mount"
-    echo "  • Check Status: $PROJECT_DIR/scripts/macos/smb-mount.sh status"
-    echo "  • Unmount: $PROJECT_DIR/scripts/macos/smb-mount.sh unmount"
-    echo "  • Configure: $PROJECT_DIR/scripts/macos/smb-mount.sh config"
-    echo
     log_info "Web Interface:"
     echo "  • URL: http://localhost:8000"
     echo "  • Health Check: http://localhost:8000/health"
     echo "  • API Documentation: http://localhost:8000/docs"
     echo
+    log_info "Manual Startup (for testing):"
+    echo "  • cd $PROJECT_DIR"
+    echo "  • python3 -m uvicorn app.main:app --reload"
+    echo "  • or: python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    echo
     log_info "To uninstall:"
     echo "  • Run: $PROJECT_DIR/scripts/service-setup/uninstall-macos.sh"
-}
-
-# Check and setup SMB mount if needed
-setup_smb_mount() {
-    local smb_script="$PROJECT_DIR/scripts/macos/smb-mount.sh"
-    
-    if [[ -f "$smb_script" ]]; then
-        log_info "SMB mount script found, making it executable..."
-        chmod +x "$smb_script"
-        
-        # Ask user if they want to configure SMB mounting
-        echo
-        read -p "Do you want to set up automatic SMB mounting? (y/N): " -n 1 -r
-        echo
-        
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            log_info "Setting up SMB mount configuration..."
-            
-            # Create config if it doesn't exist
-            if ! "$smb_script" config 2>/dev/null; then
-                log_info "SMB configuration created. Please edit ~/.file-agent/smb-config"
-                log_info "Then run: $smb_script mount"
-            fi
-            
-            # Test mounting
-            echo
-            read -p "Test SMB mount now? (y/N): " -n 1 -r
-            echo
-            
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                if "$smb_script" mount; then
-                    log_success "SMB mount test successful"
-                else
-                    log_warning "SMB mount test failed. Check configuration and run manually later."
-                fi
-            fi
-        else
-            log_info "Skipping SMB mount setup. You can configure it later with:"
-            log_info "  $smb_script config"
-            log_info "  $smb_script mount"
-        fi
-    else
-        log_info "No SMB mount script found, skipping SMB setup"
-    fi
 }
 
 # Main installation process
@@ -350,7 +329,8 @@ main() {
     
     check_permissions
     check_prerequisites
-    #setup_smb_mount          # New SMB mount setup
+    install_dependencies
+    test_application
     
     # Create install directory if it doesn't exist
     mkdir -p "$INSTALL_DIR"
