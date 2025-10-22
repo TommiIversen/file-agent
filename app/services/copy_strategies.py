@@ -526,10 +526,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 check_interval_bytes=chunk_size * 5  # Check every 5 chunks
             )
 
-            # Fresh copy from start - no resume logic in fail-and-rediscover strategy
-            bytes_already_copied = 0
+            # Resume from where growing copy left off
             async with aiofiles.open(source, "rb") as src:
-                async with aiofiles.open(dest, "wb") as dst:
+                async with aiofiles.open(dest, "ab") as dst:  # 'ab' for append mode
+                    # Seek to the position where we should continue reading
+                    await src.seek(bytes_already_copied)
                     while True:
                         chunk = await src.read(chunk_size)
                         if not chunk:
