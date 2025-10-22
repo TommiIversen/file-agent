@@ -40,16 +40,7 @@ class TestFilePath:
         assert hidden_file.should_ignore()
         assert not normal_file.should_ignore()
 
-    @pytest.mark.asyncio
-    async def test_exists(self):
-        path = FilePath("/nonexistent/file.mxf")
 
-        with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
-            mock_exists.return_value = True
-            assert await path.exists()
-
-            mock_exists.return_value = False
-            assert not await path.exists()
 
 
 class TestFileMetadata:
@@ -66,27 +57,7 @@ class TestFileMetadata:
         assert empty_meta.is_empty()
         assert not normal_meta.is_empty()
 
-    def test_size_mb(self):
-        meta = FileMetadata(
-            path=FilePath("/test.mxf"),
-            size=2 * 1024 * 1024,  # 2MB
-            last_write_time=datetime.now(),
-        )
 
-        assert meta.size_mb() == 2.0
-
-    def test_is_stable(self):
-        now = datetime.now()
-        stable_time = now - timedelta(seconds=30)
-
-        meta = FileMetadata(path=FilePath("/test.mxf"), size=1024, last_write_time=now)
-
-        # File should be stable if last seen time is old enough
-        assert meta.is_stable(timedelta(seconds=20), stable_time)
-
-        # File should not be stable if last seen time is too recent
-        recent_time = now - timedelta(seconds=10)
-        assert not meta.is_stable(timedelta(seconds=20), recent_time)
 
     @pytest.mark.asyncio
     async def test_from_path_success(self):

@@ -1,8 +1,12 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Set
 from typing import TYPE_CHECKING
+
+import aiofiles.os
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -10,7 +14,6 @@ from app.services.growing_file_detector import GrowingFileDetector
 from app.services.state_manager import StateManager
 from .domain_objects import FilePath, FileMetadata, ScanConfiguration
 from .file_cleanup_service import FileCleanupService
-from .file_discovery_service import FileDiscoveryService
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -31,7 +34,6 @@ class FileScanOrchestrator:
         self.settings = settings
         self._running = False
 
-        self.discovery_service = FileDiscoveryService(config)
         self.cleanup_service = FileCleanupService(config, state_manager)
 
         self.growing_file_detector = None
@@ -88,25 +90,50 @@ class FileScanOrchestrator:
     async def _execute_scan_iteration(self) -> None:
         scan_start = datetime.now()
 
-        await self._discover_and_cleanup_files()
-        await self._process_and_stabilize_files()
-
-        scan_duration = (datetime.now() - scan_start).total_seconds()
-        logging.debug(f"Scan iteration completed in {scan_duration:.2f}s")
-
-    async def _discover_and_cleanup_files(self) -> None:
-        current_files = await self.discovery_service.discover_all_files()
+        current_files = await self._discover_all_files()
         await self.cleanup_service.cleanup_missing_files(current_files)
 
         # StateManager handles its own cleanup - no need for separate tracking cleanup
         await self.cleanup_service.cleanup_old_files()
 
-
-
-    async def _process_and_stabilize_files(self) -> None:
-        current_files = await self.discovery_service.discover_all_files()
+        current_files = await self._discover_all_files()
         await self._process_discovered_files(current_files)
         await self._check_file_stability()
+
+        scan_duration = (datetime.now() - scan_start).total_seconds()
+        logging.debug(f"Scan iteration completed in {scan_duration:.2f}s")
+
+    async def _discover_all_files(self) -> Set[FilePath]:
+        """Discover all MXF files in the source directory."""
+        discovered_files: Set[FilePath] = set()
+
+        try:
+            source_path = Path(self.config.source_directory)
+
+            if not await aiofiles.os.path.exists(source_path):
+                logging.debug(f"Source directory does not exist: {source_path}")
+                return discovered_files
+
+            if not await aiofiles.os.path.isdir(source_path):
+                logging.debug(f"Source path is not a directory: {source_path}")
+                return discovered_files
+
+            # Scan recursively for .mxf files
+            for root, _, files in os.walk(source_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    abs_file_path = os.path.abspath(file_path)
+                    path_obj = FilePath(abs_file_path)
+
+                    if path_obj.is_mxf_file() and not path_obj.should_ignore():
+                        discovered_files.add(path_obj)
+
+            logging.debug(f"Discovered {len(discovered_files)} MXF files")
+
+        except Exception as e:
+            logging.error(f"Error discovering files: {e}")
+
+        return discovered_files
 
     async def _process_discovered_files(self, current_files: Set[FilePath]) -> None:
         for file_path_obj in current_files:
@@ -204,14 +231,9 @@ class FileScanOrchestrator:
     ) -> None:
         file_path = metadata.path.path
 
-        await self.growing_file_detector.update_file_growth_info(
-            tracked_file, metadata.size
-        )
+        await self.growing_file_detector.update_file_growth_info(tracked_file, metadata.size)
 
-        (
-            recommended_status,
-            growth_info,
-        ) = await self.growing_file_detector.check_file_growth_status(tracked_file)
+        recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
         if recommended_status != tracked_file.status:
             # Don't override WAITING_FOR_NETWORK status from growth checks

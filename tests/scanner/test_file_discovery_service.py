@@ -1,15 +1,16 @@
 """
-Tests for FileDiscoveryService - focused on file discovery operations only.
+Tests for file discovery functionality - now integrated in FileScanOrchestrator.
 """
 
 import pytest
-from unittest.mock import patch, AsyncMock
-from app.services.scanner.file_discovery_service import FileDiscoveryService
+from unittest.mock import patch, AsyncMock, MagicMock
+from app.services.scanner.file_scan_orchestrator import FileScanOrchestrator
 from app.services.scanner.domain_objects import ScanConfiguration
+from app.services.state_manager import StateManager
 
 
-class TestFileDiscoveryService:
-    """Test the FileDiscoveryService focused service."""
+class TestFileDiscovery:
+    """Test the file discovery functionality integrated in FileScanOrchestrator."""
 
     @pytest.fixture
     def config(self):
@@ -23,11 +24,16 @@ class TestFileDiscoveryService:
         )
 
     @pytest.fixture
-    def discovery_service(self, config):
-        return FileDiscoveryService(config)
+    def mock_state_manager(self):
+        """Create a mock StateManager for testing."""
+        return MagicMock(spec=StateManager)
+
+    @pytest.fixture
+    def orchestrator(self, config, mock_state_manager):
+        return FileScanOrchestrator(config, mock_state_manager)
 
     @pytest.mark.asyncio
-    async def test_discover_all_files_success(self, discovery_service):
+    async def test_discover_all_files_success(self, orchestrator):
         """Test successful file discovery."""
         with (
             patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
@@ -44,7 +50,7 @@ class TestFileDiscoveryService:
                 )
             ]
 
-            files = await discovery_service.discover_all_files()
+            files = await orchestrator._discover_all_files()
 
             # Should find 2 files (excluding .mp4 and test_file)
             assert len(files) == 2
@@ -53,16 +59,16 @@ class TestFileDiscoveryService:
             assert any("file2.MXF" in path for path in file_paths)
 
     @pytest.mark.asyncio
-    async def test_discover_source_not_exists(self, discovery_service):
+    async def test_discover_source_not_exists(self, orchestrator):
         """Test when source directory doesn't exist."""
         with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             mock_exists.return_value = False
 
-            files = await discovery_service.discover_all_files()
+            files = await orchestrator._discover_all_files()
             assert len(files) == 0
 
     @pytest.mark.asyncio
-    async def test_discover_source_not_directory(self, discovery_service):
+    async def test_discover_source_not_directory(self, orchestrator):
         """Test when source path is not a directory."""
         with (
             patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
@@ -71,20 +77,20 @@ class TestFileDiscoveryService:
             mock_exists.return_value = True
             mock_isdir.return_value = False
 
-            files = await discovery_service.discover_all_files()
+            files = await orchestrator._discover_all_files()
             assert len(files) == 0
 
     @pytest.mark.asyncio
-    async def test_discover_handles_exception(self, discovery_service):
+    async def test_discover_handles_exception(self, orchestrator):
         """Test that exceptions are handled gracefully."""
         with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             mock_exists.side_effect = Exception("Test error")
 
-            files = await discovery_service.discover_all_files()
+            files = await orchestrator._discover_all_files()
             assert len(files) == 0  # Should return empty set on error
 
     @pytest.mark.asyncio
-    async def test_filters_ignored_files(self, discovery_service):
+    async def test_filters_ignored_files(self, orchestrator):
         """Test that ignored files are filtered out."""
         with (
             patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
@@ -106,7 +112,7 @@ class TestFileDiscoveryService:
                 )
             ]
 
-            files = await discovery_service.discover_all_files()
+            files = await orchestrator._discover_all_files()
 
             assert len(files) == 1
             file_paths = {f.path for f in files}

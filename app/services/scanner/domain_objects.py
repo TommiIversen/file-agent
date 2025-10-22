@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -23,9 +23,6 @@ class FilePath:
 
     async def exists(self) -> bool:
         return await aiofiles.os.path.exists(self.path)
-
-    async def is_directory(self) -> bool:
-        return await aiofiles.os.path.isdir(self.path)
 
     def is_mxf_file(self) -> bool:
         return self.extension == ".mxf"
@@ -70,16 +67,8 @@ class FileMetadata:
         except (OSError, IOError):
             return None
 
-    def is_stable(self, stable_duration: timedelta, last_seen: datetime) -> bool:
-        """Check if file has been stable for the required duration."""
-        time_since_last_change = datetime.now() - last_seen
-        return time_since_last_change >= stable_duration
-
     def is_empty(self) -> bool:
         return self.size == 0
-
-    def size_mb(self) -> float:
-        return self.size / (1024 * 1024)
 
 
 @dataclass
@@ -92,6 +81,7 @@ class ScanConfiguration:
     enable_growing_file_support: bool
     growing_file_min_size_mb: int
     keep_files_hours: int  # Renamed: now applies to ALL file types, not just completed
+
     # Add missing growing file settings
     growing_file_poll_interval_seconds: int = 5
     growing_file_safety_margin_mb: int = 50

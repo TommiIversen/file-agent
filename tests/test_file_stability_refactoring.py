@@ -147,5 +147,4 @@ class TestFileStabilityRefactoring:
         
         # Verify required components are still present
         assert hasattr(orchestrator, 'state_manager')
-        assert hasattr(orchestrator, 'discovery_service')
         assert hasattr(orchestrator, 'cleanup_service')
