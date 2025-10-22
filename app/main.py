@@ -118,8 +118,15 @@ app = FastAPI(
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
-
     logging.info(f"Static files mounted at /static from {static_path}")
+
+# Mount logs directory for log file access
+logs_path = settings.log_directory
+if logs_path.exists():
+    app.mount("/logs", StaticFiles(directory=str(logs_path)), name="logs")
+    logging.info(f"Log files mounted at /logs from {logs_path}")
+else:
+    logging.warning(f"Log directory does not exist: {logs_path}")
 
 
 # Request logging middleware
