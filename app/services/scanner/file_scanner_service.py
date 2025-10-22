@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from app.config import Settings
 from app.services.state_manager import StateManager
 from .domain_objects import ScanConfiguration
-from .file_scanner import FileScanOrchestrator
+from .file_scanner import FileScanner
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -31,7 +31,7 @@ class FileScannerService:
             growing_file_chunk_size_kb=settings.growing_file_chunk_size_kb,
         )
 
-        self.orchestrator = FileScanOrchestrator(
+        self.orchestrator = FileScanner(
             config, state_manager, storage_monitor, settings
         )
 

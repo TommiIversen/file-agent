@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
 
 
-class FileScanOrchestrator:
+class FileScanner:
 
     def __init__(
             self,
