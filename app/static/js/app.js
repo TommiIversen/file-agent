@@ -117,7 +117,8 @@ class FileTransferApp {
         this.stores = {
             connection: Alpine.store('connection'),
             files: Alpine.store('files'),
-            storage: Alpine.store('storage')
+            storage: Alpine.store('storage'),
+            ui: Alpine.store('ui')
         };
 
         // Validate stores

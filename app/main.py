@@ -18,7 +18,7 @@ from .dependencies import (
     get_storage_checker,
 )
 from .logging_config import setup_logging
-from .routers import views
+from .routers import views, api
 
 settings = Settings()
 
@@ -153,6 +153,7 @@ async def log_requests(request: Request, call_next):
 
 
 # Include routers
+app.include_router(api.router, prefix="/api")
 app.include_router(state.router)
 app.include_router(websockets.router)
 app.include_router(storage.router)
