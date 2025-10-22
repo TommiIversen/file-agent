@@ -7,10 +7,9 @@ import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, AsyncMock
 from app.services.scanner.domain_objects import (
-    FilePath,
-    FileMetadata,
     ScanConfiguration,
 )
+from app.services.scanner.file_scanner import FilePath, FileMetadata
 
 
 class TestFilePath:
