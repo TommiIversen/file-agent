@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from app.config import Settings
 from app.services.state_manager import StateManager
 from .domain_objects import ScanConfiguration
-from .file_scan_orchestrator import FileScanOrchestrator
+from .file_scanner import FileScanOrchestrator
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService

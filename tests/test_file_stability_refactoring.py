@@ -10,7 +10,7 @@ import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
 
-from app.services.scanner.file_scan_orchestrator import FileScanOrchestrator
+from app.services.scanner.file_scanner import FileScanOrchestrator
 from app.services.scanner.domain_objects import ScanConfiguration, FileMetadata, FilePath
 from app.services.state_manager import StateManager
 from app.models import FileStatus

@@ -4,7 +4,7 @@ Tests for file discovery functionality - now integrated in FileScanOrchestrator.
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from app.services.scanner.file_scan_orchestrator import FileScanOrchestrator
+from app.services.scanner.file_scanner import FileScanOrchestrator
 from app.services.scanner.domain_objects import ScanConfiguration
 from app.services.state_manager import StateManager
 
