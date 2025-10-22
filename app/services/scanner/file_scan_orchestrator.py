@@ -13,7 +13,6 @@ from app.models import FileStatus, TrackedFile
 from app.services.growing_file_detector import GrowingFileDetector
 from app.services.state_manager import StateManager
 from .domain_objects import FilePath, FileMetadata, ScanConfiguration
-from .file_cleanup_service import FileCleanupService
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -34,7 +33,6 @@ class FileScanOrchestrator:
         self.settings = settings
         self._running = False
 
-        self.cleanup_service = FileCleanupService(config, state_manager)
 
         self.growing_file_detector = None
         if config.enable_growing_file_support and settings:
@@ -91,10 +89,10 @@ class FileScanOrchestrator:
         scan_start = datetime.now()
 
         current_files = await self._discover_all_files()
-        await self.cleanup_service.cleanup_missing_files(current_files)
+        await self._cleanup_missing_files(current_files)
 
         # StateManager handles its own cleanup - no need for separate tracking cleanup
-        await self.cleanup_service.cleanup_old_files()
+        await self._cleanup_old_files()
 
         current_files = await self._discover_all_files()
         await self._process_discovered_files(current_files)
@@ -102,6 +100,45 @@ class FileScanOrchestrator:
 
         scan_duration = (datetime.now() - scan_start).total_seconds()
         logging.debug(f"Scan iteration completed in {scan_duration:.2f}s")
+
+    async def _cleanup_missing_files(self, current_files: Set[FilePath]) -> int:
+        """Clean up files that no longer exist in the source directory."""
+        try:
+            current_file_paths = {fp.path for fp in current_files}
+
+            removed_count = await self.state_manager.cleanup_missing_files(
+                current_file_paths
+            )
+
+            if removed_count > 0:
+                logging.info(
+                    f"Cleanup: Removed {removed_count} files that no longer exist"
+                )
+
+            return removed_count
+
+        except Exception as e:
+            logging.error(f"Error cleaning up missing files: {e}")
+            return 0
+
+    async def _cleanup_old_files(self) -> int:
+        """Clean up old files from memory based on configured retention period."""
+        try:
+            removed_count = await self.state_manager.cleanup_old_files(
+                max_age_hours=self.config.keep_files_hours,
+            )
+
+            if removed_count > 0:
+                logging.info(
+                    f"Cleanup: Removed {removed_count} old files from memory "
+                    f"(older than {self.config.keep_files_hours} hours)"
+                )
+
+            return removed_count
+
+        except Exception as e:
+            logging.error(f"Error cleaning up old files: {e}")
+            return 0
 
     async def _discover_all_files(self) -> Set[FilePath]:
         """Discover all MXF files in the source directory."""

@@ -140,11 +140,6 @@ class TestFileStabilityRefactoring:
         assert updated_file.status == FileStatus.READY
 
     async def test_no_file_stability_tracker_instance(self, orchestrator):
-        """Test that FileScanOrchestrator no longer has a FileStabilityTracker instance."""
-        
         # Verify FileStabilityTracker is not present
         assert not hasattr(orchestrator, 'stability_tracker')
-        
-        # Verify required components are still present
         assert hasattr(orchestrator, 'state_manager')
-        assert hasattr(orchestrator, 'cleanup_service')
