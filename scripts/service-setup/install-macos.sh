@@ -291,6 +291,13 @@ EOF
     log_success "Uninstall script created: $UNINSTALL_SCRIPT"
 }
 
+# Copy restart script to user's Desktop for convenience
+if [[ -n "$HOME" && -f "$PROJECT_DIR/scripts/service-setup/restart-macos.sh" ]]; then
+    cp "$PROJECT_DIR/scripts/service-setup/restart-macos.sh" "$HOME/Desktop/restart-fileagent.sh"
+    chmod +x "$HOME/Desktop/restart-fileagent.sh"
+    log_success "Restart script copied to your Desktop as restart-fileagent.sh"
+fi
+
 # Show status and next steps
 show_completion_info() {
     log_success "🎉 File Transfer Agent macOS service setup complete!"
@@ -305,7 +312,11 @@ show_completion_info() {
     echo "  • View Status: launchctl list | grep $SERVICE_NAME"
     echo "  • Stop Service: launchctl unload $INSTALL_DIR/$PLIST_NAME"
     echo "  • Start Service: launchctl load $INSTALL_DIR/$PLIST_NAME"
+    echo "  • Restart Service: "
+    echo "    launchctl unload $INSTALL_DIR/$PLIST_NAME"
+    echo "    launchctl load $INSTALL_DIR/$PLIST_NAME"
     echo "  • View Logs: tail -f $PROJECT_DIR/logs/file-agent.log"
+    echo "  • View Error Logs: tail -f $PROJECT_DIR/logs/file-agent-error.log"
     echo
     log_info "Web Interface:"
     echo "  • URL: http://localhost:8000"

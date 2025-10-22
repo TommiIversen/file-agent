@@ -88,6 +88,70 @@ The installer will:
 - Create a macOS launchd service
 - Start the service automatically
 
+### Service Management
+
+Once installed as a service, you can manage it with these commands:
+
+#### macOS Service Commands
+
+```bash
+# Check service status
+launchctl list | grep com.fileagent.service
+
+# Stop the service
+sudo launchctl unload /Library/LaunchDaemons/com.fileagent.service.plist
+# (or for user service: launchctl unload ~/Library/LaunchAgents/com.fileagent.service.plist)
+
+# Start the service
+sudo launchctl load /Library/LaunchDaemons/com.fileagent.service.plist
+# (or for user service: launchctl load ~/Library/LaunchAgents/com.fileagent.service.plist)
+
+# Restart the service (stop + start)
+sudo launchctl unload /Library/LaunchDaemons/com.fileagent.service.plist
+sudo launchctl load /Library/LaunchDaemons/com.fileagent.service.plist
+
+# View service logs
+tail -f logs/file-agent.log
+tail -f logs/file-agent-error.log
+
+# Uninstall the service
+./scripts/service-setup/uninstall-macos.sh
+```
+
+#### Manual Application Control
+
+If you're running the app manually (not as a service):
+
+```bash
+# Start manually (development mode)
+python3 -m uvicorn app.main:app --reload
+
+# Start manually (production mode)
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Stop manual app
+Ctrl+C (in the terminal where it's running)
+```
+
+#### Troubleshooting
+
+```bash
+# Check Python version
+python3 --version
+
+# Test app startup manually
+cd /path/to/file-agent
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+
+# Check if port 8000 is in use
+lsof -i :8000
+
+# Check service file exists
+ls -la /Library/LaunchDaemons/com.fileagent.service.plist
+# or for user service:
+ls -la ~/Library/LaunchAgents/com.fileagent.service.plist
+```
+
 ### Development Tools
 
 ```bash
