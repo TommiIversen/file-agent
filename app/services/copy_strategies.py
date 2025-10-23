@@ -195,64 +195,38 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             dest_dir.mkdir(parents=True, exist_ok=True)
             logging.debug(f"Ensured destination directory exists: {dest_dir}")
 
-            copy_dest_path = dest_path
-
             success = await self._copy_growing_file(
                 source_path, dest_path, tracked_file
             )
 
             if success:
-                logging.info(
-                    f"Growing copy phase complete. Finishing final part for: {os.path.basename(source_path)}"
-                )
+                # Verify the completed copy
+                if await _verify_file_integrity(source_path, dest_path):
+                    try:
+                        os.remove(source_path)
+                        logging.debug(
+                            f"Source file deleted: {os.path.basename(source_path)}"
+                        )
+                    except (OSError, PermissionError) as e:
+                        logging.warning(
+                            f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}"
+                        )
 
-                await self.state_manager.update_file_status_by_id(
-                    tracked_file.id, FileStatus.COPYING
-                )
-
-                try:
-                    final_success = await self._finish_normal_copy(
-                        source_path, str(copy_dest_path), tracked_file
+                    await self.state_manager.update_file_status_by_id(
+                        tracked_file.id,
+                        FileStatus.COMPLETED,
+                        copy_progress=100.0,
+                        destination_path=dest_path,
                     )
-                except FileNotFoundError:
-                    # Source file disappeared during copying - let this bubble up
-                    # so error classifier can properly handle it as REMOVED
-                    raise
-                except NetworkError:
-                    # Network error during finish phase - let this bubble up for immediate failure
-                    raise
 
-                if final_success:
-                    if await _verify_file_integrity(
-                            source_path, str(copy_dest_path)
-                    ):
-                        try:
-                            os.remove(source_path)
-                            logging.debug(
-                                f"Source file deleted: {os.path.basename(source_path)}"
-                            )
-                        except (OSError, PermissionError) as e:
-                            logging.warning(
-                                f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}"
-                            )
-
-                        await self.state_manager.update_file_status_by_id(
-                            tracked_file.id,
-                            FileStatus.COMPLETED,
-                            copy_progress=100.0,
-                            destination_path=dest_path,
-                        )
-
-                        logging.info(
-                            f"Growing copy completed: {os.path.basename(source_path)}"
-                        )
-                        return True
-                    else:
-                        logging.error(
-                            f"Growing copy verification failed: {source_path}"
-                        )
-                        return False
+                    logging.info(
+                        f"Growing copy completed: {os.path.basename(source_path)}"
+                    )
+                    return True
                 else:
+                    logging.error(
+                        f"Growing copy verification failed: {source_path}"
+                    )
                     return False
             else:
                 return False
@@ -364,13 +338,16 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             poll_interval: float, pause_ms: int, network_detector: NetworkErrorDetector
     ) -> int:
         """
-        Main growing copy loop extracted for better testability.
+        Intelligent growing copy loop that adapts behavior based on file growth.
+        
+        Phase 1: Growing phase - uses safety margin and delays
+        Phase 2: Finished growing - copies at full speed without delays/margin
+        
         Returns the final bytes_copied count.
         """
+        file_finished_growing = False
+        
         while True:
-            # NOTE: Pause detection removed in fail-and-rediscover strategy
-            # Files now fail immediately instead of pausing during network issues
-            
             current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
             if not current_tracked_file:
                 logging.warning(f"File disappeared during copy: {source_path}")
@@ -382,27 +359,58 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 logging.warning(f"Cannot access source file: {source_path}")
                 break
 
-            if current_file_size > last_file_size:
-                no_growth_cycles = 0
-                last_file_size = current_file_size
+            # Check if file is still growing
+            if not file_finished_growing:
+                if current_file_size > last_file_size:
+                    no_growth_cycles = 0
+                    last_file_size = current_file_size
+                else:
+                    no_growth_cycles += 1
+
+                    if no_growth_cycles >= max_no_growth_cycles:
+                        logging.info(
+                            f"🎯 GROWTH STOPPED: {os.path.basename(source_path)} - switching to full speed copy"
+                        )
+                        file_finished_growing = True
+                        # Continue the loop but with different behavior
+
+            # Determine copy target and speed based on distance to write head
+            if file_finished_growing:
+                # Phase 2: Copy everything at full speed (no safety margin)
+                safe_copy_to = current_file_size
+                status = FileStatus.COPYING
+                use_pause = False  # No throttling when file is finished
             else:
-                no_growth_cycles += 1
-
-                if no_growth_cycles >= max_no_growth_cycles:
-                    logging.info(
-                        f"File stopped growing: {os.path.basename(source_path)}"
-                    )
-                    break
-
-            safe_copy_to = max(0, current_file_size - safety_margin_bytes)
+                # Phase 1: Respect safety margin while file is growing
+                safe_copy_to = max(0, current_file_size - safety_margin_bytes)
+                status = FileStatus.GROWING_COPY
+                
+                # Smart speed control: Only throttle if we're close to write head
+                distance_from_write_head = current_file_size - bytes_copied
+                buffer_zone = safety_margin_bytes * 2  # 2x safety margin = comfort zone
+                
+                if distance_from_write_head > buffer_zone:
+                    # We're far from write head - full speed even while growing
+                    use_pause = False
+                    logging.debug(f"🚀 FULL SPEED: {distance_from_write_head/1024/1024:.1f}MB ahead of write head")
+                else:
+                    # Close to write head - throttle to avoid overtaking
+                    use_pause = True
+                    logging.debug(f"🐌 THROTTLED: Only {distance_from_write_head/1024/1024:.1f}MB from write head")
 
             if safe_copy_to > bytes_copied:
+                # Log speed decision for transparency
+                speed_mode = "🚀 FULL" if not use_pause else "🐌 THROTTLED"
+                phase = "FINISH" if file_finished_growing else "GROWING"
+                logging.debug(f"{speed_mode} | {phase} | Copy {safe_copy_to - bytes_copied} bytes")
+                
                 bytes_copied = await self._copy_chunk_range(
                     source_path, dst, bytes_copied, safe_copy_to, chunk_size,
-                    tracked_file, current_file_size, pause_ms, network_detector
+                    tracked_file, current_file_size, pause_ms if use_pause else 0, 
+                    network_detector, status
                 )
-            else:
-                # No new data to copy, just update progress
+            elif not file_finished_growing:
+                # No new data to copy in growing phase, just update progress
                 copy_ratio = (
                     (bytes_copied / current_file_size) * 100
                     if current_file_size > 0
@@ -417,17 +425,28 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     file_size=current_file_size,
                 )
 
-            await asyncio.sleep(poll_interval)
+            # Check if we're done
+            if file_finished_growing and bytes_copied >= current_file_size:
+                logging.info(f"✅ COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)")
+                break
+
+            # Only sleep if we're still in growing phase
+            if not file_finished_growing:
+                await asyncio.sleep(poll_interval)
 
         return bytes_copied
 
     async def _copy_chunk_range(
             self, source_path: str, dst, start_bytes: int, end_bytes: int, 
             chunk_size: int, tracked_file: TrackedFile, current_file_size: int,
-            pause_ms: int, network_detector: NetworkErrorDetector
+            pause_ms: int, network_detector: NetworkErrorDetector, status: FileStatus = FileStatus.GROWING_COPY
     ) -> int:
         """
         Copy a range of bytes from source to destination with network error detection.
+        
+        Args:
+            status: FileStatus to use for progress updates (GROWING_COPY or COPYING)
+        
         Returns the final bytes copied count.
         """
         bytes_copied = start_bytes
@@ -486,7 +505,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,
-                    FileStatus.GROWING_COPY,
+                    status,  # Use dynamic status (GROWING_COPY or COPYING)
                     copy_progress=copy_ratio,
                     bytes_copied=bytes_copied,
                     file_size=current_file_size,
@@ -497,91 +516,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     await asyncio.sleep(pause_ms / 1000)
 
         return bytes_copied
-
-    async def _finish_normal_copy(
-            self, source_path: str, dest_path: str, tracked_file: TrackedFile
-    ) -> bool:
-        try:
-            source = Path(source_path)
-            dest = Path(dest_path)
-
-            final_size = source.stat().st_size
-            bytes_already_copied = dest.stat().st_size
-
-            if bytes_already_copied >= final_size:
-                logging.info(
-                    f"No remaining data to copy for {source.name}. Finalizing."
-                )
-                return True
-
-            logging.info(
-                f"Finishing copy for {source.name}. Copied: {bytes_already_copied}, Total: {final_size}"
-            )
-
-            chunk_size = self.settings.chunk_size_kb * 1024
-
-            # Initialize network error detector for finish phase
-            network_detector = NetworkErrorDetector(
-                destination_path=dest_path,
-                check_interval_bytes=chunk_size * 5  # Check every 5 chunks
-            )
-
-            # Resume from where growing copy left off
-            async with aiofiles.open(source, "rb") as src:
-                async with aiofiles.open(dest, "ab") as dst:  # 'ab' for append mode
-                    # Seek to the position where we should continue reading
-                    await src.seek(bytes_already_copied)
-                    while True:
-                        chunk = await src.read(chunk_size)
-                        if not chunk:
-                            break
-
-                        try:
-                            await dst.write(chunk)
-                        except Exception as write_error:
-                            # Check if write error is network-related
-                            network_detector.check_write_error(write_error, "finish copy chunk write")
-                            # If not network error, re-raise original error
-                            raise write_error
-                            
-                        bytes_already_copied += len(chunk)
-
-                        # Check network connectivity periodically
-                        try:
-                            await network_detector.check_destination_connectivity(bytes_already_copied)
-                        except NetworkError as ne:
-                            logging.error(f"Network connectivity lost during finish copy: {ne}")
-                            raise ne
-
-                        progress = (
-                            (bytes_already_copied / final_size) * 100
-                            if final_size > 0
-                            else 100
-                        )
-
-                        await self.state_manager.update_file_status_by_id(
-                            tracked_file.id,
-                            FileStatus.COPYING,
-                            copy_progress=progress,
-                            bytes_copied=bytes_already_copied,
-                        )
-
-            return True
-
-        except FileNotFoundError as e:
-            # Source file disappeared during copying - re-raise so error classifier can handle it
-            logging.error(
-                f"Source file no longer exists while finishing copy for {source.name}: {e}"
-            )
-            raise e
-        except NetworkError:
-            # Re-raise network errors for immediate failure handling
-            raise
-        except Exception as e:
-            logging.error(
-                f"Error finishing normal copy for {source.name}: {e}", exc_info=True
-            )
-            return False
 
 
 class CopyStrategyFactory:
