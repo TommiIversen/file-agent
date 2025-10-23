@@ -22,20 +22,7 @@ document.addEventListener('alpine:init', () => {
         actionMessage: null,
         actionSuccess: false,
         
-        // Log viewer data
-        logFiles: [],
-        loadingLogFiles: false,
-        logFilesError: null,
-        selectedLogFile: null,
-        logContent: null,
-        loadingLogContent: false,
-        
-        // Chunked loading data
-        logChunks: [],
-        currentChunkInfo: null,
-        loadingChunk: false,
-        chunkError: null,
-        viewMode: 'full', // 'full' or 'chunked'
+    // Log viewer state is now handled in logViewerStore.js
         
         /**
          * Initialize the UI store
@@ -59,22 +46,7 @@ document.addEventListener('alpine:init', () => {
             this.showSettingsModal = false;
         },
         
-        /**
-         * Open log viewer modal and load log files
-         */
-        async openLogViewerModal() {
-            this.showLogViewerModal = true;
-            await this.loadLogFiles();
-        },
-        
-        /**
-         * Close log viewer modal
-         */
-        closeLogViewerModal() {
-            this.showLogViewerModal = false;
-            this.selectedLogFile = null;
-            this.logContent = null;
-        },
+        // Log viewer modal open/close now handled in logViewerStore.js
         
         /**
          * Load settings data from API
@@ -478,26 +450,4 @@ window.restartApplication = function() {
     Alpine.store('ui').restartApplication();
 };
 
-window.openLogViewerModal = function() {
-    Alpine.store('ui').openLogViewerModal();
-};
-
-window.closeLogViewerModal = function() {
-    Alpine.store('ui').closeLogViewerModal();
-};
-
-window.loadLogFile = function(logFile) {
-    Alpine.store('ui').loadLogFile(logFile);
-};
-
-window.loadMoreForward = function() {
-    Alpine.store('ui').loadMoreForward();
-};
-
-window.loadMoreBackward = function() {
-    Alpine.store('ui').loadMoreBackward();
-};
-
-window.downloadLogFile = function(filename) {
-    Alpine.store('ui').downloadLogFile(filename);
-};
+// Log viewer global functions are now in logViewerStore.js
