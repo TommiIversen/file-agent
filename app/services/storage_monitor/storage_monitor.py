@@ -353,9 +353,7 @@ class StorageMonitorService:
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
             )
 
-            await self._job_queue.handle_destination_recovery()
-            
-            # Also process files waiting for network
+            # Process files waiting for network when destination comes back online
             await self._job_queue.process_waiting_network_files()
 
             logging.info("✅ Intelligent resume initiated successfully")
