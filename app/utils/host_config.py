@@ -54,7 +54,7 @@ def get_hostname_settings_file() -> str:
                 
                 logging.info(f"Added hostname header to {host_settings}")
             else:
-                logging.warning(f"Base settings.env not found, falling back to default")
+                logging.warning("Base settings.env not found, falling back to default")
                 return "settings.env"
         else:
             logging.debug(f"Using existing host-specific configuration: {host_settings}")

@@ -1,8 +1,7 @@
 """Test network recovery re-evaluation of growing files"""
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, MagicMock
+from unittest.mock import AsyncMock, Mock
 
 from app.models import FileStatus, TrackedFile
 from app.services.job_queue import JobQueueService

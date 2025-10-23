@@ -4,7 +4,7 @@ Testing the refactored functions ensures our primitive obsession fixes work corr
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from app.services.scanner.domain_objects import (

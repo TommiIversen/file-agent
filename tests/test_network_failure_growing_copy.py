@@ -2,10 +2,8 @@
 Test network failure handling through fail-fast detection
 """
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from app.models import FileStatus, TrackedFile
 from app.services.job_queue import JobQueueService
 from app.services.state_manager import StateManager
 from app.config import Settings
