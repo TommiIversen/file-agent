@@ -224,42 +224,54 @@ class DestinationChecker:
                         checked_at=datetime.now(),
                         error_message=error_msg,
                     )
+                
+                # StorageMonitor confirms destination is good
+                logging.debug("Destination availability confirmed by StorageMonitor")
+                return DestinationCheckResult(
+                    is_available=True, checked_at=datetime.now()
+                )
             else:
+                # No StorageMonitor - perform direct check with async safety
                 logging.warning(
                     "StorageMonitor not available - performing direct directory check"
                 )
-                if not self.destination_path.exists():
-                    try:
-                        self.destination_path.mkdir(parents=True, exist_ok=True)
-                        logging.info(
-                            f"Created missing destination directory: {self.destination_path}"
-                        )
-                    except Exception as e:
-                        error_msg = f"Destination directory does not exist and could not create: {self.destination_path} - {e}"
-                        logging.error(error_msg)
+                
+                def _sync_directory_check():
+                    if not self.destination_path.exists():
+                        try:
+                            self.destination_path.mkdir(parents=True, exist_ok=True)
+                            logging.info(
+                                f"Created missing destination directory: {self.destination_path}"
+                            )
+                        except Exception as e:
+                            error_msg = f"Destination directory does not exist and could not create: {self.destination_path} - {e}"
+                            logging.error(error_msg)
+                            return False, error_msg
+                    
+                    if not self.destination_path.is_dir():
+                        error_msg = f"Destination is not a directory: {self.destination_path}"
+                        return False, error_msg
+                    
+                    return True, None
+                
+                try:
+                    success, error_msg = await asyncio.to_thread(_sync_directory_check)
+                    if not success:
                         return DestinationCheckResult(
                             is_available=False,
                             checked_at=datetime.now(),
                             error_message=error_msg,
                         )
-
-                if not self.destination_path.is_dir():
-                    error_msg = (
-                        f"Destination is not a directory: {self.destination_path}"
-                    )
-                    logging.warning(error_msg)
+                except Exception as e:
+                    error_msg = f"Directory check failed: {e}"
+                    logging.error(error_msg)
                     return DestinationCheckResult(
                         is_available=False,
                         checked_at=datetime.now(),
                         error_message=error_msg,
                     )
 
-            if self._storage_monitor:
-                logging.debug("Destination availability confirmed by StorageMonitor")
-                return DestinationCheckResult(
-                    is_available=True, checked_at=datetime.now()
-                )
-            else:
+                # Directory exists, now test write access
                 test_file = (
                         self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 )
@@ -268,8 +280,9 @@ class DestinationChecker:
                     async with aiofiles.open(test_file, "w") as f:
                         await f.write("availability_test")
 
+                    # Cleanup test file using modern asyncio.to_thread
                     try:
-                        test_file.unlink()
+                        await asyncio.to_thread(test_file.unlink)
                     except Exception as cleanup_error:
                         logging.debug(
                             f"Could not cleanup test file (ignoring): {cleanup_error}"

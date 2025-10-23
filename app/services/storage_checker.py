@@ -68,26 +68,46 @@ class StorageChecker:
         )
 
     async def _check_accessibility(self, path: str) -> bool:
+        """Check if path is accessible using modern asyncio.to_thread."""
         try:
-            path_obj = Path(path)
-            return path_obj.exists() and path_obj.is_dir()
+            def _sync_check():
+                path_obj = Path(path)
+                return path_obj.exists() and path_obj.is_dir()
+            
+            return await asyncio.wait_for(
+                asyncio.to_thread(_sync_check),
+                timeout=5.0  # 5 second timeout
+            )
+        except asyncio.TimeoutError:
+            logging.warning(f"Accessibility check timed out for {path}")
+            return False
         except Exception as e:
             logging.debug(f"Accessibility check failed for {path}: {e}")
             return False
 
     async def _get_disk_usage(self, path: str) -> Tuple[float, float, float]:
+        """Get disk usage using modern asyncio.to_thread."""
         try:
-            total_bytes, used_bytes, free_bytes = shutil.disk_usage(path)
-
-            gb_divisor = 1024 ** 3
-            total_gb = total_bytes / gb_divisor
-            used_gb = used_bytes / gb_divisor
-            free_gb = free_bytes / gb_divisor
+            def _sync_disk_usage():
+                total_bytes, used_bytes, free_bytes = shutil.disk_usage(path)
+                gb_divisor = 1024 ** 3
+                total_gb = total_bytes / gb_divisor
+                used_gb = used_bytes / gb_divisor
+                free_gb = free_bytes / gb_divisor
+                return free_gb, total_gb, used_gb
+                
+            free_gb, total_gb, used_gb = await asyncio.wait_for(
+                asyncio.to_thread(_sync_disk_usage),
+                timeout=10.0  # 10 second timeout
+            )
 
             logging.debug(
                 f"Disk usage for {path}: {free_gb:.1f}GB free of {total_gb:.1f}GB total"
             )
             return free_gb, total_gb, used_gb
+        except asyncio.TimeoutError:
+            logging.error(f"Disk usage check timed out for {path}")
+            raise StorageAccessError(f"Disk usage check timed out for {path}")
         except Exception as e:
             logging.error(f"Cannot get disk usage for {path}: {e}")
             raise StorageAccessError(f"Disk usage check failed: {e}")
@@ -119,9 +139,16 @@ class StorageChecker:
             raise StorageAccessError(f"Cannot create test file in {directory}: {e}")
 
     async def _cleanup_test_file(self, test_file_path: str) -> None:
+        """Cleanup test file using modern asyncio.to_thread."""
         try:
-            if os.path.exists(test_file_path):
-                os.remove(test_file_path)
+            def _sync_cleanup():
+                if os.path.exists(test_file_path):
+                    os.remove(test_file_path)
+                    return True
+                return False
+                    
+            removed = await asyncio.to_thread(_sync_cleanup)
+            if removed:
                 logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
             logging.warning(f"Could not clean up test file {test_file_path}: {e}")
