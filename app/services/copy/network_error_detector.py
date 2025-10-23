@@ -3,14 +3,17 @@ Network Error Detector for immediate failure detection in copy strategies.
 
 This module provides utilities to detect network errors early in copy operations,
 enabling fail-fast behavior instead of waiting for the full operation to fail.
+
+Strategy:
+1. Primary detection: Analyze copy operation errors for network patterns
+2. Secondary check: Lightweight read-only connectivity checks (no test file writing)
+3. Fail-fast: Immediately classify and escalate network errors
 """
 
 import errno
 import logging
-import os
 import time
 from pathlib import Path
-from typing import Optional
 
 
 class NetworkError(Exception):
@@ -41,13 +44,13 @@ class NetworkErrorDetector:
         53, 67, 1231   # Windows-specific network error codes
     }
     
-    def __init__(self, destination_path: str, check_interval_bytes: int = 1024 * 1024):
+    def __init__(self, destination_path: str, check_interval_bytes: int = 10 * 1024 * 1024):
         """
         Initialize network error detector.
         
         Args:
             destination_path: Path to destination to monitor
-            check_interval_bytes: Check connectivity every N bytes copied
+            check_interval_bytes: Check connectivity every N bytes copied (default: 10MB)
         """
         self.destination_path = Path(destination_path)
         self.check_interval_bytes = check_interval_bytes
@@ -60,7 +63,11 @@ class NetworkErrorDetector:
         
     def check_destination_connectivity(self, bytes_copied: int) -> None:
         """
-        Check if destination is still accessible.
+        Check if destination is still accessible using lightweight read-only operations.
+        
+        This approach avoids creating test files on the network during large
+        copy operations, reducing I/O conflicts and improving performance.
+        Uses directory listing instead of file creation for connectivity checks.
         
         Raises NetworkError if destination appears to be unreachable.
         """
@@ -68,20 +75,21 @@ class NetworkErrorDetector:
             return
             
         try:
-            # Quick connectivity check - try to access destination directory
+            # Lightweight connectivity check - only read operations, no writing
             dest_parent = self.destination_path.parent
+            
+            # Quick stat check - just read directory metadata
             if not dest_parent.exists():
                 raise NetworkError(f"Destination directory no longer accessible: {dest_parent}")
                 
-            # Try to touch a test file in destination directory
-            test_file = dest_parent / f".network_test_{os.getpid()}"
+            # Try to list directory contents (read-only operation)
             try:
-                test_file.touch()
-                test_file.unlink()  # Clean up immediately
+                # This will fail fast if network is down, but doesn't write anything
+                list(dest_parent.iterdir())
             except Exception as e:
                 error_str = str(e).lower()
                 if self._is_network_error_string(error_str):
-                    raise NetworkError(f"Network connectivity lost: {e}")
+                    raise NetworkError(f"Network connectivity lost during directory read: {e}")
                 # If it's not a network error, continue (might be permissions etc.)
                 
             self.last_check_bytes = bytes_copied
