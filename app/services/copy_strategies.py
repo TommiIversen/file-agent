@@ -18,8 +18,21 @@ from app.utils.progress_utils import calculate_transfer_rate
 
 async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
     try:
-        source_size = os.path.getsize(source_path)
-        dest_size = os.path.getsize(dest_path)
+        import asyncio
+        
+        def _sync_get_sizes():
+            source_size = os.path.getsize(source_path)
+            dest_size = os.path.getsize(dest_path)
+            return source_size, dest_size
+        
+        try:
+            source_size, dest_size = await asyncio.wait_for(
+                asyncio.to_thread(_sync_get_sizes),
+                timeout=2.0  # 2 second timeout
+            )
+        except asyncio.TimeoutError:
+            logging.error(f"File size check timed out for {source_path} -> {dest_path}")
+            return False
 
         if source_size != dest_size:
             logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
@@ -144,7 +157,20 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         temp_dest_path = None
 
         try:
-            current_size = os.path.getsize(source_path)
+            import asyncio
+            
+            def _sync_get_size():
+                return os.path.getsize(source_path)
+            
+            try:
+                current_size = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_get_size),
+                    timeout=1.0  # 1 second timeout
+                )
+            except asyncio.TimeoutError:
+                logging.error(f"File size check timed out for {source_path}")
+                return False
+                
             min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
 
             if current_size < min_size_bytes:
@@ -161,7 +187,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     )
 
                     try:
-                        current_size = os.path.getsize(source_path)
+                        current_size = await asyncio.wait_for(
+                            asyncio.to_thread(_sync_get_size),
+                            timeout=1.0  # 1 second timeout
+                        )
+                    except asyncio.TimeoutError:
+                        logging.error(f"File size check timed out for {source_path}")
+                        return False
                         size_mb = current_size / (1024 * 1024)
 
                         logging.debug(
@@ -192,8 +224,15 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 logging.warning(f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}...")
 
             dest_dir = Path(dest_path).parent
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            logging.debug(f"Ensured destination directory exists: {dest_dir}")
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(lambda: dest_dir.mkdir(parents=True, exist_ok=True)),
+                    timeout=2.0  # 2 second timeout
+                )
+                logging.debug(f"Ensured destination directory exists: {dest_dir}")
+            except asyncio.TimeoutError:
+                logging.error(f"Directory creation timed out for: {dest_dir}")
+                return False
 
             success = await self._copy_growing_file(
                 source_path, dest_path, tracked_file
@@ -345,6 +384,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         
         Returns the final bytes_copied count.
         """
+        import asyncio
+        
+        def _sync_get_size():
+            return os.path.getsize(source_path)
+        
         file_finished_growing = False
         
         while True:
@@ -354,7 +398,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 return bytes_copied
 
             try:
-                current_file_size = os.path.getsize(source_path)
+                current_file_size = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_get_size),
+                    timeout=1.0  # 1 second timeout
+                )
+            except asyncio.TimeoutError:
+                logging.warning(f"File size check timed out for: {source_path}")
+                break
             except OSError:
                 logging.warning(f"Cannot access source file: {source_path}")
                 break
