@@ -53,11 +53,11 @@ class TestFailFastNetworkErrorDetection:
         # Create a temporary directory that we can control
         import tempfile
         with tempfile.TemporaryDirectory() as temp_dir:
-            test_dest = Path(temp_dir) / "test_file.mxf"
+            test_dest = Path(temp_dir) / "test_file.mxv"
             detector = NetworkErrorDetector(str(test_dest), check_interval_bytes=100)
             
             # First check should pass
-            detector.check_destination_connectivity(150)  # Trigger check
+            await detector.check_destination_connectivity(150)  # Trigger check
             
             # Now simulate destination becoming unavailable by removing directory
             import shutil
@@ -65,7 +65,7 @@ class TestFailFastNetworkErrorDetection:
             
             # Next check should fail
             with pytest.raises(NetworkError) as exc_info:
-                detector.check_destination_connectivity(300)  # Trigger another check
+                await detector.check_destination_connectivity(300)  # Trigger another check
                 
             assert "no longer accessible" in str(exc_info.value)
 

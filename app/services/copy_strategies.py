@@ -457,7 +457,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                 # Check network connectivity periodically for fail-fast behavior
                 try:
-                    network_detector.check_destination_connectivity(bytes_copied)
+                    await network_detector.check_destination_connectivity(bytes_copied)
                 except NetworkError as ne:
                     logging.error(f"Network connectivity lost during growing copy: {ne}")
                     raise ne
@@ -548,7 +548,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                         # Check network connectivity periodically
                         try:
-                            network_detector.check_destination_connectivity(bytes_already_copied)
+                            await network_detector.check_destination_connectivity(bytes_already_copied)
                         except NetworkError as ne:
                             logging.error(f"Network connectivity lost during finish copy: {ne}")
                             raise ne
