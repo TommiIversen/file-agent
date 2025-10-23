@@ -75,8 +75,11 @@ async def lifespan(app: FastAPI):
     logging.info("FileCopierService workers startet som background task")
 
     # Initialize WebSocketManager (subscription happens automatically)
-    get_websocket_manager()  # Initialize singleton
+    websocket_manager = get_websocket_manager()  # Initialize singleton
     logging.info("WebSocketManager initialiseret og subscribed til StateManager")
+    
+    # Initialize scanner status in WebSocketManager after file scanner is started
+    websocket_manager.initialize_scanner_status(file_scanner)
 
     # Start StorageMonitorService som background task
     storage_monitor = get_storage_monitor()

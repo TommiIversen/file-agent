@@ -273,8 +273,20 @@
             </div>
         </div>
 
-        <!-- Sort Options - flyttet fra Files List til main container -->
-        <div class="flex justify-end">
+        <!-- Sort Options og Scanner Status -->
+        <div class="flex justify-between items-center">
+            <!-- Scanner Status (venstre) -->
+            <div class="flex items-center">
+                <div class="status-indicator rounded-full mr-2"
+                     :class="$store.ui?.scanner?.scanning ? 'bg-green-500' : ($store.ui?.scanner?.paused ? 'bg-orange-500' : 'bg-gray-500')"></div>
+                <span class="text-xs text-gray-300">
+                    <span x-show="$store.ui?.scanner?.scanning">🔍 Scanner Active</span>
+                    <span x-show="$store.ui?.scanner?.paused">⏸️ Scanner Paused</span>
+                    <span x-show="!$store.ui?.scanner?.scanning && !$store.ui?.scanner?.paused">❓ Scanner Unknown</span>
+                </span>
+            </div>
+            
+            <!-- Sort Options (højre) -->
             <div class="flex items-center space-x-4">
                 <span class="text-gray-300 text-sm">Sorter efter:</span>
                 <select x-model="$store.files.sortBy"

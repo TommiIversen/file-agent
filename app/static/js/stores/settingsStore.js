@@ -33,6 +33,7 @@ document.addEventListener('alpine:init', () => {
         async openSettingsModal() {
             this.showSettingsModal = true;
             await this.loadSettings();
+            await this.loadScannerStatus(); // Reload scanner status when modal opens
         },
         closeSettingsModal() {
             this.showSettingsModal = false;
@@ -153,6 +154,16 @@ document.addEventListener('alpine:init', () => {
                 }
                 const status = await response.json();
                 this.scannerPaused = status.paused;
+                
+                // Update UI store with scanner status
+                const uiStore = Alpine.store('ui');
+                if (uiStore) {
+                    uiStore.updateScannerStatus({
+                        scanning: status.scanning || !status.paused,
+                        paused: status.paused
+                    });
+                }
+                
                 console.log('✅ Scanner status loaded:', status);
             } catch (error) {
                 console.error('❌ Failed to load scanner status:', error);
@@ -176,6 +187,16 @@ document.addEventListener('alpine:init', () => {
                 const result = await response.json();
                 if (result.success) {
                     this.scannerPaused = result.paused;
+                    
+                    // Update UI store with new scanner status
+                    const uiStore = Alpine.store('ui');
+                    if (uiStore) {
+                        uiStore.updateScannerStatus({
+                            scanning: result.scanning || !result.paused,
+                            paused: result.paused
+                        });
+                    }
+                    
                     this.actionSuccess = true;
                     this.actionMessage = this.scannerPaused ? 'Scanner paused successfully' : 'Scanner resumed successfully';
                     console.log(`✅ Scanner ${this.scannerPaused ? 'paused' : 'resumed'} successfully`);

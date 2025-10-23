@@ -45,6 +45,7 @@ class WebSocketManager:
         self.state_manager = state_manager
         self._storage_monitor = storage_monitor
         self._connections: List[WebSocket] = []
+        self._scanner_status = {"scanning": True, "paused": False}  # Track scanner status
 
         self.state_manager.subscribe(self._handle_state_change)
 
@@ -99,6 +100,7 @@ class WebSocketManager:
                     "files": [_serialize_tracked_file(f) for f in all_files],
                     "statistics": statistics,
                     "storage": storage_data,
+                    "scanner": self._scanner_status,
                     "timestamp": self._get_timestamp(),
                 },
             }
@@ -233,3 +235,37 @@ class WebSocketManager:
 
         except Exception as e:
             logging.error(f"Error broadcasting mount status: {e}")
+
+    async def broadcast_scanner_status(self, scanning: bool, paused: bool) -> None:
+        """Broadcast scanner status changes to all connected clients"""
+        if not self._connections:
+            return
+
+        self._scanner_status = {"scanning": scanning, "paused": paused}
+        
+        try:
+            message_data = {
+                "type": "scanner_status",
+                "data": {
+                    "scanning": scanning,
+                    "paused": paused,
+                    "timestamp": self._get_timestamp(),
+                },
+            }
+
+            await self._broadcast_message(message_data)
+
+            logging.debug(f"Broadcasted scanner status: scanning={scanning}, paused={paused}")
+
+        except Exception as e:
+            logging.error(f"Error broadcasting scanner status: {e}")
+
+    def initialize_scanner_status(self, file_scanner_service) -> None:
+        """Initialize scanner status from file scanner service after startup"""
+        try:
+            is_scanning = file_scanner_service.is_scanning()
+            self._scanner_status = {"scanning": is_scanning, "paused": not is_scanning}
+            logging.info(f"Scanner status initialized: scanning={is_scanning}, paused={not is_scanning}")
+        except Exception as e:
+            logging.error(f"Failed to initialize scanner status: {e}")
+            self._scanner_status = {"scanning": False, "paused": True}

@@ -56,6 +56,10 @@ class MessageHandler {
                     this.handleMountStatus(message.data);
                     break;
 
+                case 'scanner_status':
+                    this.handleScannerStatus(message.data);
+                    break;
+
                 case 'system_status':
                     this.handleSystemStatus(message.data);
                     break;
@@ -101,6 +105,15 @@ class MessageHandler {
                 this.storageStore.overall_status = data.storage.overall_status;
             }
             console.log('Storage data loaded from initial state');
+        }
+
+        // Update scanner status if available
+        if (data.scanner) {
+            const uiStore = Alpine.store('ui');
+            if (uiStore) {
+                uiStore.updateScannerStatus(data.scanner);
+            }
+            console.log('Scanner status loaded from initial state:', data.scanner);
         }
 
         console.log(`Initial state loaded: ${data.files?.length || 0} files`);
@@ -173,6 +186,24 @@ class MessageHandler {
         }
 
         this.storageStore.handleMountStatus(data);
+    }
+
+    /**
+     * Handle scanner status updates
+     */
+    handleScannerStatus(data) {
+        console.log('Scanner status update received:', data);
+
+        const uiStore = Alpine.store('ui');
+        if (!uiStore) {
+            console.error('UIStore not available for scanner status update');
+            return;
+        }
+
+        uiStore.updateScannerStatus({
+            scanning: data.scanning,
+            paused: data.paused
+        });
     }
 
     /**
