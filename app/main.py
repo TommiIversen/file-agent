@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     websocket_manager = get_websocket_manager()  # Initialize singleton
     logging.info("WebSocketManager initialiseret og subscribed til StateManager")
     
-    # Initialize scanner status in WebSocketManager after file scanner is started
+    # Initialize scanner status in WebSocketManager with race condition handling
     websocket_manager.initialize_scanner_status(file_scanner)
 
     # Start StorageMonitorService som background task

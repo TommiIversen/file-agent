@@ -263,7 +263,16 @@ class WebSocketManager:
     def initialize_scanner_status(self, file_scanner_service) -> None:
         """Initialize scanner status from file scanner service after startup"""
         try:
+            # Check if scanner is running, but handle race condition gracefully
             is_scanning = file_scanner_service.is_scanning()
+            
+            # If scanner task was just created, it might not be running yet
+            # In that case, assume it will be running soon (optimistic initialization)
+            if not is_scanning:
+                # Check if we have a background task that should be starting the scanner
+                logging.debug("Scanner not yet running at initialization - will update when it starts")
+                is_scanning = True  # Assume scanner will start successfully
+                
             self._scanner_status = {"scanning": is_scanning, "paused": not is_scanning}
             logging.info(f"Scanner status initialized: scanning={is_scanning}, paused={not is_scanning}")
         except Exception as e:

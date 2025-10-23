@@ -39,6 +39,16 @@ class FileScannerService:
 
     async def start_scanning(self) -> None:
         await self.orchestrator.start_scanning()
+        
+        # Broadcast correct scanner status when actually started
+        try:
+            from app.dependencies import get_websocket_manager
+            ws_manager = get_websocket_manager()
+            is_scanning = self.is_scanning()
+            await ws_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
+            logging.debug(f"Broadcasted scanner status on start: scanning={is_scanning}")
+        except Exception as e:
+            logging.warning(f"Failed to broadcast scanner status on start: {e}")
 
     def stop_scanning(self) -> None:
         self.orchestrator.stop_scanning()
