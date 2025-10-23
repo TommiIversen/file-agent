@@ -42,3 +42,17 @@ class FileScannerService:
 
     def stop_scanning(self) -> None:
         self.orchestrator.stop_scanning()
+        
+    def pause_scanning(self) -> None:
+        """Pause the file scanner (stop polling for new jobs)"""
+        self.orchestrator.stop_scanning()
+        logging.info("File scanner paused via API")
+        
+    async def resume_scanning(self) -> None:
+        """Resume the file scanner (start polling for new jobs)"""
+        await self.orchestrator.start_scanning()
+        logging.info("File scanner resumed via API")
+        
+    def is_scanning(self) -> bool:
+        """Check if the scanner is currently running"""
+        return self.orchestrator._running

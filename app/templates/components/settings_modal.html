@@ -323,7 +323,27 @@
             <!-- Administrative Actions -->
             <div class="bg-gradient-to-r from-purple-700 to-blue-700 bg-opacity-60 rounded-lg p-4 border border-purple-500">
                 <h3 class="text-lg font-semibold text-white mb-3">⚡ Administrative Actions</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Pause/Resume Scanner -->
+                    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
+                        <h4 class="text-white font-semibold mb-2">⏸️ Scanner Control</h4>
+                        <p class="text-gray-300 text-sm mb-3">Pause or resume file scanning for new jobs</p>
+                        <button @click="toggleScanner()" 
+                                :disabled="$store.settings?.scannerToggling"
+                                class="w-full disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200"
+                                :class="$store.settings?.scannerPaused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
+                            <span x-show="!$store.settings?.scannerToggling">
+                                <span x-show="$store.settings?.scannerPaused">▶️ Resume Scanner</span>
+                                <span x-show="!$store.settings?.scannerPaused">⏸️ Pause Scanner</span>
+                            </span>
+                            <span x-show="$store.settings?.scannerToggling">
+                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                <span x-show="$store.settings?.scannerPaused">Resuming...</span>
+                                <span x-show="!$store.settings?.scannerPaused">Pausing...</span>
+                            </span>
+                        </button>
+                    </div>
+                    
                     <!-- Reload Config -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
                         <h4 class="text-white font-semibold mb-2">🔄 Reload Configuration</h4>

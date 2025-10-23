@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from ..config import Settings
 from ..dependencies import get_settings
+from ..dependencies import get_file_scanner
 
 router = APIRouter()
 
@@ -418,3 +419,25 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
     except Exception as e:
         logging.error(f"Unexpected error preparing download for {filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+# --- FileScanner Pause/Resume Endpoints ---
+
+@router.post("/scanner/pause")
+async def pause_file_scanner(scanner=Depends(get_file_scanner)):
+    """Pause the file scanner (stop polling for new jobs)"""
+    scanner.pause_scanning()
+    return {"success": True, "paused": True, "scanning": scanner.is_scanning()}
+
+
+@router.post("/scanner/resume")
+async def resume_file_scanner(scanner=Depends(get_file_scanner)):
+    """Resume the file scanner (start polling for new jobs)"""
+    await scanner.resume_scanning()
+    return {"success": True, "paused": False, "scanning": scanner.is_scanning()}
+
+
+@router.get("/scanner/status")
+async def get_scanner_status(scanner=Depends(get_file_scanner)):
+    """Get current scanner status"""
+    return {"scanning": scanner.is_scanning(), "paused": not scanner.is_scanning()}

@@ -21,8 +21,13 @@ document.addEventListener('alpine:init', () => {
         actionMessage: null,
         actionSuccess: false,
 
+        // Scanner control
+        scannerPaused: false,
+        scannerToggling: false,
+
         init() {
             console.log('⚙️ Settings Store initialized');
+            this.loadScannerStatus();
         },
 
         async openSettingsModal() {
@@ -138,6 +143,57 @@ document.addEventListener('alpine:init', () => {
                     this.actionMessage = null;
                 }, 5000);
             }
+        },
+        async loadScannerStatus() {
+            try {
+                console.log('📡 Loading scanner status...');
+                const response = await fetch('/api/scanner/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const status = await response.json();
+                this.scannerPaused = status.paused;
+                console.log('✅ Scanner status loaded:', status);
+            } catch (error) {
+                console.error('❌ Failed to load scanner status:', error);
+            }
+        },
+        async toggleScanner() {
+            if (this.scannerToggling) return;
+            this.scannerToggling = true;
+            this.actionMessage = null;
+            try {
+                const endpoint = this.scannerPaused ? '/api/scanner/resume' : '/api/scanner/pause';
+                const action = this.scannerPaused ? 'Resuming' : 'Pausing';
+                console.log(`${action} scanner...`);
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.scannerPaused = result.paused;
+                    this.actionSuccess = true;
+                    this.actionMessage = this.scannerPaused ? 'Scanner paused successfully' : 'Scanner resumed successfully';
+                    console.log(`✅ Scanner ${this.scannerPaused ? 'paused' : 'resumed'} successfully`);
+                } else {
+                    this.actionSuccess = false;
+                    this.actionMessage = `Failed to ${this.scannerPaused ? 'resume' : 'pause'} scanner`;
+                    console.error(`❌ Failed to ${this.scannerPaused ? 'resume' : 'pause'} scanner`);
+                }
+            } catch (error) {
+                console.error(`❌ Failed to toggle scanner:`, error);
+                this.actionSuccess = false;
+                this.actionMessage = 'Network error: ' + error.message;
+            } finally {
+                this.scannerToggling = false;
+                setTimeout(() => {
+                    this.actionMessage = null;
+                }, 5000);
+            }
         }
     });
 });
@@ -154,4 +210,7 @@ window.reloadConfig = function() {
 };
 window.restartApplication = function() {
     Alpine.store('settings').restartApplication();
+};
+window.toggleScanner = function() {
+    Alpine.store('settings').toggleScanner();
 };
