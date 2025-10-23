@@ -157,7 +157,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         temp_dest_path = None
 
         try:
-            import asyncio
             
             def _sync_get_size():
                 return os.path.getsize(source_path)

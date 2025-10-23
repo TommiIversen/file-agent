@@ -163,30 +163,43 @@ class StorageChecker:
         Returns:
             Antal filer der blev slettet
         """
-        cleaned_count = 0
         try:
-            # Find alle test-filer der matcher vores prefix
-            pattern = os.path.join(directory, f"{self._test_file_prefix}*.tmp")
-            test_files = glob.glob(pattern)
+            def _sync_cleanup_files():
+                cleaned_count = 0
+                # Find alle test-filer der matcher vores prefix
+                pattern = os.path.join(directory, f"{self._test_file_prefix}*.tmp")
+                test_files = glob.glob(pattern)
+                
+                logging.debug(f"Found {len(test_files)} old test files to clean up in {directory}")
+                
+                for test_file in test_files:
+                    try:
+                        if os.path.exists(test_file):
+                            os.remove(test_file)
+                            cleaned_count += 1
+                            logging.debug(f"Cleaned up old test file: {test_file}")
+                    except Exception as e:
+                        logging.warning(f"Could not clean up old test file {test_file}: {e}")
+                        
+                return cleaned_count
             
-            logging.debug(f"Found {len(test_files)} old test files to clean up in {directory}")
+            # Use async wrapper to prevent blocking
+            cleaned_count = await asyncio.wait_for(
+                asyncio.to_thread(_sync_cleanup_files),
+                timeout=5.0  # 5 second timeout
+            )
             
-            for test_file in test_files:
-                try:
-                    if os.path.exists(test_file):
-                        os.remove(test_file)
-                        cleaned_count += 1
-                        logging.debug(f"Cleaned up old test file: {test_file}")
-                except Exception as e:
-                    logging.warning(f"Could not clean up old test file {test_file}: {e}")
-                    
             if cleaned_count > 0:
                 logging.info(f"Cleaned up {cleaned_count} old test files from {directory}")
                 
+            return cleaned_count
+            
+        except asyncio.TimeoutError:
+            logging.warning(f"Cleanup of old test files timed out for {directory}")
+            return 0
         except Exception as e:
             logging.error(f"Error during old test files cleanup in {directory}: {e}")
-            
-        return cleaned_count
+            return 0
 
     async def cleanup_all_test_files(self, source_dir: str, dest_dir: str = None) -> int:
         """
@@ -205,8 +218,16 @@ class StorageChecker:
         total_cleaned += await self.cleanup_old_test_files(source_dir)
         
         # Cleanup destination directory hvis angivet
-        if dest_dir and os.path.exists(dest_dir):
-            total_cleaned += await self.cleanup_old_test_files(dest_dir)
+        if dest_dir:
+            try:
+                dest_exists = await asyncio.wait_for(
+                    asyncio.to_thread(lambda: os.path.exists(dest_dir)),
+                    timeout=1.0  # 1 second timeout
+                )
+                if dest_exists:
+                    total_cleaned += await self.cleanup_old_test_files(dest_dir)
+            except asyncio.TimeoutError:
+                logging.warning(f"Destination directory check timed out for {dest_dir}")
             
         return total_cleaned
 
