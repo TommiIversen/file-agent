@@ -384,12 +384,20 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
         def generate_file_stream():
             """Generate file content in chunks for streaming"""
             try:
-                with open(log_file_path, 'rb') as f:
-                    while True:
-                        chunk = f.read(8192)  # 8KB chunks
-                        if not chunk:
-                            break
-                        yield chunk
+                if is_current_log:
+                    # For active log files, read the entire content at once to avoid
+                    # issues with file growing during download
+                    with open(log_file_path, 'rb') as f:
+                        content = f.read()
+                    yield content
+                else:
+                    # For archived log files, stream in chunks
+                    with open(log_file_path, 'rb') as f:
+                        while True:
+                            chunk = f.read(8192)  # 8KB chunks
+                            if not chunk:
+                                break
+                            yield chunk
             except Exception as e:
                 logging.error(f"Error streaming log file {filename}: {e}")
                 # Can't raise HTTPException in generator, so yield error message
@@ -402,12 +410,15 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
         headers = {
             'Content-Disposition': f'attachment; filename="{filename}"',
             'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Length': str(file_size)
         }
+        
+        # Only add Content-Length for non-active files to avoid streaming issues
+        if not is_current_log:
+            headers['Content-Length'] = str(file_size)
         
         # Add warning for current log files
         if is_current_log:
-            headers['X-Warning'] = 'Current active log file - content may change during download'
+            headers['X-Warning'] = 'Current active log file - snapshot taken at download time'
         
         return StreamingResponse(
             generate_file_stream(),
