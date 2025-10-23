@@ -36,6 +36,40 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Configure macOS Application Firewall
+configure_firewall() {
+    PYTHON_PATH=$(which python3)
+    
+    # Tjek om vi kører som root
+    if [[ $EUID -eq 0 ]]; then
+        log_info "Konfigurerer macOS firewall..."
+        
+        # Stien til firewall-værktøjet
+        FIREWALL_CMD="/usr/libexec/ApplicationFirewall/socketfilterfw"
+        
+        # 1. Tilføj applikationen til firewall-listen
+        # Vi tjekker først, om den allerede er der
+        if ! $FIREWALL_CMD --listapps | grep -q "$PYTHON_PATH"; then
+            log_info "Tilføjer $PYTHON_PATH til firewall..."
+            $FIREWALL_CMD --add "$PYTHON_PATH"
+        else
+            log_info "$PYTHON_PATH er allerede i firewall-listen."
+        fi
+        
+        # 2. Sørg for at applikationen er sat til "Tillad"
+        log_info "Sikrer, at $PYTHON_PATH har tilladelse til indgående forbindelser..."
+        $FIREWALL_CMD --unblockapp "$PYTHON_PATH"
+        
+        log_success "Firewall konfigureret til at tillade $PYTHON_PATH"
+        
+    else
+        log_warning "Scriptet køres ikke som root."
+        log_warning "Firewallen blev IKKE konfigureret automatisk."
+        log_warning "Du skal muligvis manuelt 'Tillad' indgående forbindelser, når systemet spørger."
+    fi
+}
+
+
 # Check if running as root for system service
 check_permissions() {
     if [[ $EUID -eq 0 ]]; then
@@ -341,6 +375,8 @@ main() {
     check_permissions
     check_prerequisites
     install_dependencies
+    configure_firewall
+
     test_application
     
     # Create install directory if it doesn't exist
