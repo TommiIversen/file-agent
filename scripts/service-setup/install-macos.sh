@@ -109,14 +109,14 @@ test_application() {
     cd "$PROJECT_DIR"
     
     # Test that the app can start
-    timeout 10s python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 &
+    timeout 10s python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
     APP_PID=$!
     
     # Wait a moment for startup
     sleep 5
     
     # Check if app is responding
-    if curl -s http://localhost:8001/health > /dev/null 2>&1; then
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
         log_success "Application startup test successful"
         kill $APP_PID 2>/dev/null || true
     else
