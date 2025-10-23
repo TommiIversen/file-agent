@@ -7,7 +7,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from .api import state, websockets, storage
+from .api import websockets, storage
 from .config import Settings
 from .dependencies import (
     get_file_scanner,
@@ -164,7 +164,6 @@ async def log_requests(request: Request, call_next):
 
 # Include routers
 app.include_router(api.router, prefix="/api")
-app.include_router(state.router)
 app.include_router(websockets.router)
 app.include_router(storage.router)
 app.include_router(views.router)
