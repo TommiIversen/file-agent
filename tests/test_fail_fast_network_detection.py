@@ -5,10 +5,9 @@ Tests that copy strategies immediately fail when network errors are detected
 instead of waiting for the full operation to complete.
 """
 
-import asyncio
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -80,8 +79,6 @@ class TestFailFastNetworkErrorDetection:
         
         # Configure the copy_file method to raise NetworkError
         async def mock_copy_file(*args, **kwargs):
-            from app.services.copy.file_copy_executor import CopyResult
-            from datetime import datetime
             
             # Simulate network error during copy
             raise NetworkError("Network connectivity lost during copy")

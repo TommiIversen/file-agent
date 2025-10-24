@@ -13,7 +13,6 @@ Scenario:
 """
 
 import asyncio
-import os
 import tempfile
 from pathlib import Path
 import pytest
@@ -93,7 +92,7 @@ class TestDuplicateFilenameBug:
         # Simuler at filen bliver completed og slettet
         await state_manager.update_file_status_by_id(first_file.id, FileStatus.COMPLETED)
         test_file_path.unlink()  # Slet source filen
-        print(f"✅ First file marked as completed and source deleted")
+        print("✅ First file marked as completed and source deleted")
         
         # === ANDEN FIL (SAMME NAVN) ===
         print(f"\n🎬 Phase 2: Creating second file with same name: {test_filename}")
@@ -106,7 +105,7 @@ class TestDuplicateFilenameBug:
         await file_scanner.orchestrator._execute_scan_iteration()
         
         # === VERIFICERING ===
-        print(f"\n🔍 Phase 3: Verifying behavior")
+        print("\n🔍 Phase 3: Verifying behavior")
         
         # Hent alle filer igen
         all_files = await state_manager.get_all_files()
@@ -121,7 +120,7 @@ class TestDuplicateFilenameBug:
             file = all_files[0]
             if file.id == first_file.id:
                 print(f"🐛 BUG DETECTED: Same file ID reused ({file.id})")
-                print(f"🐛 Old file was updated instead of creating new file")
+                print("🐛 Old file was updated instead of creating new file")
                 print(f"🐛 Status: {file.status}, Size: {file.file_size}")
                 
                 # Dette er den bug vi vil fikse - samme ID bliver genbrugt
@@ -148,7 +147,7 @@ class TestDuplicateFilenameBug:
         assert completed_file.id != new_file.id, "Completed and new file should have different IDs"
         assert completed_file.file_size != new_file.file_size, "Files should have different sizes"
         
-        print(f"✅ SUCCESS: Two separate TrackedFile records created")
+        print("✅ SUCCESS: Two separate TrackedFile records created")
         print(f"  Completed file: ID={completed_file.id}, Size={completed_file.file_size}")
         print(f"  New file: ID={new_file.id}, Size={new_file.file_size}")
 
@@ -201,7 +200,7 @@ class TestDuplicateFilenameBug:
                 await asyncio.sleep(0.1)
         
         # === FINAL VERIFICATION ===
-        print(f"\n🔍 Final verification")
+        print("\n🔍 Final verification")
         all_files = await state_manager.get_all_files()
         print(f"📊 Total files tracked: {len(all_files)}")
         

@@ -2,9 +2,9 @@ import logging
 import os
 import sys
 import asyncio
-from typing import Dict, Any, List
-from pathlib import Path
 from datetime import datetime
+
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi import Depends
@@ -78,11 +78,6 @@ async def restart_application():
     try:
         logging.info("Application restart requested", extra={"operation": "api_restart_app"})
         
-        # Import here to avoid circular imports
-        import os
-        import sys
-        import asyncio
-        
         # Schedule restart after a short delay to allow response to be sent
         async def delayed_restart():
             await asyncio.sleep(2)  # Give time for response to be sent
@@ -117,10 +112,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
     
     try:
         logging.info("Log files list requested", extra={"operation": "api_list_log_files"})
-        
-        import asyncio
-        from pathlib import Path
-        from datetime import datetime
+
         
         logs_directory = settings.log_directory
         
@@ -197,9 +189,7 @@ async def get_log_content(filename: str, settings: Settings = Depends(get_settin
     via StaticFiles due to concurrent writes causing Content-Length errors.
     """
     try:
-        import asyncio
-        from datetime import datetime
-        
+
         logs_directory = Path("logs")
         log_file_path = logs_directory / filename
         

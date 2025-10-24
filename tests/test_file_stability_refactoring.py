@@ -6,12 +6,11 @@ for file stability tracking instead of the removed FileStabilityTracker.
 """
 
 import pytest
-import asyncio
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app.services.scanner.file_scanner import FileScanner, get_file_metadata
+from app.services.scanner.file_scanner import FileScanner
 from app.services.scanner.domain_objects import ScanConfiguration
 from app.services.state_manager import StateManager
 from app.models import FileStatus
