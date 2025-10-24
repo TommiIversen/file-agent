@@ -17,6 +17,7 @@ document.addEventListener('alpine:init', () => {
         isLoading: false,
         isAccessible: false,
         items: [],
+        treeStructure: [],  // Nested tree structure from backend
         totalItems: 0,
         totalFiles: 0,
         totalDirectories: 0,
@@ -73,6 +74,7 @@ document.addEventListener('alpine:init', () => {
             this.isLoading = false;
             this.isAccessible = false;
             this.items = [];
+            this.treeStructure = [];
             this.totalItems = 0;
             this.totalFiles = 0;
             this.totalDirectories = 0;
@@ -119,6 +121,7 @@ document.addEventListener('alpine:init', () => {
                 this.currentPath = data.path;
                 this.isAccessible = data.is_accessible;
                 this.items = data.items || [];
+                this.treeStructure = data.tree || [];  // New nested tree structure
                 this.totalItems = data.total_items || 0;
                 this.totalFiles = data.total_files || 0;
                 this.totalDirectories = data.total_directories || 0;
@@ -146,59 +149,57 @@ document.addEventListener('alpine:init', () => {
          * Get filtered and sorted items for display
          */
         get displayItems() {
-            let filtered = this.items;
-            
-            // Filter hidden files if not showing them
-            if (!this.showHidden) {
-                filtered = filtered.filter(item => !item.is_hidden);
-            }
-            
             if (this.viewMode === 'tree') {
-                // Tree view: show hierarchical structure with indentation
-                return this._getTreeViewItems(filtered);
+                // Tree view: use nested structure from backend
+                return this._getFlattenedTreeItems(this.treeStructure);
             } else {
-                // Flat view: show all items in a flat list
+                // Flat view: use flat items list
+                let filtered = this.items;
+                
+                // Filter hidden files if not showing them
+                if (!this.showHidden) {
+                    filtered = filtered.filter(item => !item.is_hidden);
+                }
+                
                 return this._getFlatViewItems(filtered);
             }
         },
         
         /**
-         * Get items for tree view with proper hierarchy and visibility
+         * Flatten nested tree structure for display with expand/collapse logic
          */
-        _getTreeViewItems(items) {
-            // Sort items by depth first, then by name within each level
-            const sorted = items.sort((a, b) => {
-                // First by depth level
-                if (a.depth_level !== b.depth_level) {
-                    return a.depth_level - b.depth_level;
-                }
-                
-                // Then by directory vs file (directories first)
-                if (a.is_directory !== b.is_directory) {
-                    return a.is_directory ? -1 : 1;
-                }
-                
-                // Finally by name
-                return a.name.localeCompare(b.name);
-            });
+        _getFlattenedTreeItems(treeItems, depth = 0) {
+            const flatItems = [];
             
-            const visibleItems = [];
-            const processedPaths = new Set();
+            if (!treeItems || !Array.isArray(treeItems)) {
+                return flatItems;
+            }
             
-            for (const item of sorted) {
-                // Skip if already processed (shouldn't happen but safety check)
-                if (processedPaths.has(item.path)) {
+            for (const item of treeItems) {
+                // Filter hidden files if not showing them
+                if (!this.showHidden && item.is_hidden) {
                     continue;
                 }
                 
-                // Check if item should be visible based on parent expansion
-                if (this._isItemVisibleInTree(item)) {
-                    visibleItems.push(item);
-                    processedPaths.add(item.path);
+                // Add current item with calculated depth
+                const flatItem = {
+                    ...item,
+                    depth_level: depth
+                };
+                flatItems.push(flatItem);
+                
+                // Add children if directory is expanded and has children
+                if (item.is_directory && 
+                    item.children && 
+                    item.children.length > 0 && 
+                    this.isDirectoryExpanded(item.path)) {
+                    
+                    const childItems = this._getFlattenedTreeItems(item.children, depth + 1);
+                    flatItems.push(...childItems);
                 }
             }
             
-            return visibleItems;
+            return flatItems;
         },
         
         /**

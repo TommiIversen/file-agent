@@ -13,8 +13,11 @@ Responsibilities:
 Dependencies: Only Settings - no other service dependencies to maintain SRP
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+import stat
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -41,6 +44,9 @@ class DirectoryItem(BaseModel):
     depth_level: int = Field(default=0, description="Depth level in directory tree (0 = root)")
     relative_path: str = Field(default="", description="Relative path from scan root")
     
+    # Nested structure for true tree representation
+    children: Optional[List['DirectoryItem']] = Field(default=None, description="Child items (for directories)")
+    
     model_config = {
         "json_encoders": {
             datetime: lambda v: v.isoformat() if v else None
@@ -53,7 +59,8 @@ class DirectoryScanResult(BaseModel):
     
     path: str = Field(..., description="Scanned directory path")
     is_accessible: bool = Field(..., description="Whether directory was accessible")
-    items: List[DirectoryItem] = Field(default_factory=list, description="Found files and directories")
+    items: List[DirectoryItem] = Field(default_factory=list, description="Found files and directories (flat list)")
+    tree: List[DirectoryItem] = Field(default_factory=list, description="Found items as nested tree structure")
     total_items: int = Field(default=0, description="Total number of items found")
     total_files: int = Field(default=0, description="Number of files found")
     total_directories: int = Field(default=0, description="Number of directories found")
@@ -67,6 +74,52 @@ class DirectoryScanResult(BaseModel):
             self.total_items = len(self.items)
             self.total_files = sum(1 for item in self.items if not item.is_directory)
             self.total_directories = sum(1 for item in self.items if item.is_directory)
+            
+        # Build tree structure from flat items list
+        if self.items and not self.tree:
+            self.tree = self._build_tree_structure()
+    
+    def _build_tree_structure(self) -> List[DirectoryItem]:
+        """Build nested tree structure from flat items list."""
+        if not self.items:
+            return []
+        
+        # Group items by parent path
+        items_by_parent = {}
+        root_items = []
+        
+        for item in self.items:
+            if item.depth_level == 0:
+                # Root level items
+                root_items.append(item)
+            else:
+                # Group by parent path
+                parent = item.parent_path or ""
+                if parent not in items_by_parent:
+                    items_by_parent[parent] = []
+                items_by_parent[parent].append(item)
+        
+        # Recursively build tree
+        def add_children(item: DirectoryItem) -> DirectoryItem:
+            if item.is_directory and item.path in items_by_parent:
+                # Create new item with children
+                item_copy = item.model_copy()
+                item_copy.children = []
+                for child in items_by_parent[item.path]:
+                    item_copy.children.append(add_children(child))
+                return item_copy
+            else:
+                # Leaf node - no children
+                item_copy = item.model_copy()
+                item_copy.children = None if not item.is_directory else []
+                return item_copy
+        
+        # Build tree from root items
+        tree = []
+        for root_item in root_items:
+            tree.append(add_children(root_item))
+        
+        return tree
 
 
 class DirectoryScannerService:
@@ -343,8 +396,20 @@ class DirectoryScannerService:
             else:
                 relative_path = item_name
             
-            # Check if item is directory
-            is_directory = await aiofiles.os.path.isdir(item_path_str)
+            # Check if item is directory with more robust detection
+            try:
+                # First check with isdir
+                is_directory = await aiofiles.os.path.isdir(item_path_str)
+                
+                # If isdir says it's a directory, double-check with stat
+                if is_directory:
+                    stat_result = await aiofiles.os.stat(item_path_str)
+                    # Use stat.S_ISDIR to verify it's actually a directory
+                    is_directory = stat.S_ISDIR(stat_result.st_mode)
+                
+            except (OSError, AttributeError):
+                # If we can't determine, assume it's a file
+                is_directory = False
             
             # Get file size (only for files)
             size_bytes = None

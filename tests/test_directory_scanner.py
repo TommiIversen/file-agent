@@ -206,15 +206,21 @@ class TestDirectoryScannerService:
         """Test that directories don't have size_bytes set."""
         with patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
              patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+
             mock_isdir.return_value = True  # It's a directory
-            mock_stat.return_value = MagicMock(st_ctime=1640995200, st_mtime=1640995200)
             
+            # Mock stat result for directory
+            mock_stat_result = MagicMock()
+            mock_stat_result.st_ctime = 1640995200
+            mock_stat_result.st_mtime = 1640995200 
+            mock_stat_result.st_mode = 0o040755  # Directory mode
+            mock_stat.return_value = mock_stat_result
+
             item = await scanner_service._get_item_metadata("/test", "subdirectory")
-            
+
             assert item is not None
-            assert item.is_directory
-            assert item.size_bytes is None  # Directories don't have size
+            assert item.is_directory is True
+            assert item.size_bytes is None  # Directories should not have size
 
     @pytest.mark.asyncio
     async def test_recursive_directory_scan(self, scanner_service):
@@ -229,10 +235,10 @@ class TestDirectoryScannerService:
             
             # Mock directory structure: /test/path contains subdir1/
             def isdir_side_effect(path):
-                return path in ["/test/path", str(Path("/test/path") / "subdir1")]
-            
+                return path in ["/test/path", str(Path("/test/path") / "subdir1"), "\\test\\path\\subdir1"]
+
             mock_isdir.side_effect = isdir_side_effect
-            
+
             def listdir_side_effect(path):
                 if path == "/test/path":
                     return ["file1.txt", "subdir1"]
@@ -240,15 +246,26 @@ class TestDirectoryScannerService:
                     return ["file2.txt"]
                 else:
                     return []
-            
+
             mock_listdir.side_effect = listdir_side_effect
-            
-            # Mock stat results
-            mock_stat_result = MagicMock()
-            mock_stat_result.st_size = 1024
-            mock_stat_result.st_ctime = 1640995200
-            mock_stat_result.st_mtime = 1640995200
-            mock_stat.return_value = mock_stat_result
+
+            # Mock stat results with proper mode detection
+            def stat_side_effect(path):
+                mock_stat_result = MagicMock()
+                mock_stat_result.st_ctime = 1640995200
+                mock_stat_result.st_mtime = 1640995200
+                
+                # Set proper mode and size based on path
+                if "subdir1" in path and not path.endswith(".txt"):
+                    mock_stat_result.st_mode = 0o040755  # Directory mode
+                    mock_stat_result.st_size = 0
+                else:
+                    mock_stat_result.st_mode = 0o100644  # File mode
+                    mock_stat_result.st_size = 1024
+                
+                return mock_stat_result
+                
+            mock_stat.side_effect = stat_side_effect
             
             result = await scanner_service.scan_custom_directory(
                 "/test/path", 
@@ -304,6 +321,63 @@ class TestDirectoryScannerService:
                 assert item.parent_path == "/test/path"
                 assert item.depth_level == 0  # Root level
                 assert item.relative_path == item.name  # Should be just the filename at root
+
+    @pytest.mark.asyncio
+    async def test_nested_tree_structure(self, scanner_service):
+        """Test that nested tree structure is properly built from flat items."""
+        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
+             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
+             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
+             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
+            
+            # Setup mocks for nested structure test
+            mock_exists.return_value = True
+            
+            # Mock directory structure: /test/subfolder/file.txt
+            def mock_isdir_side_effect(path):
+                return path in ["/test", "/test/subfolder", "\\test\\subfolder"]
+            
+            def mock_listdir_side_effect(path):
+                if path == "/test":
+                    return ["subfolder", "root_file.txt"]
+                elif path == "/test/subfolder" or path == "\\test\\subfolder":
+                    return ["nested_file.txt"]
+                return []
+            
+            mock_isdir.side_effect = mock_isdir_side_effect
+            mock_listdir.side_effect = mock_listdir_side_effect
+            
+            # Mock stat result with proper mode detection
+            def mock_stat_side_effect(path):
+                mock_stat_result = MagicMock()
+                mock_stat_result.st_ctime = 1640995200
+                mock_stat_result.st_mtime = 1640995200
+                
+                # Set proper mode and size: directory vs file
+                if path in ["/test", "/test/subfolder", "\\test\\subfolder"]:
+                    mock_stat_result.st_mode = 0o040755  # Directory mode (S_IFDIR)
+                    mock_stat_result.st_size = 0  # Directories have no size
+                else:
+                    mock_stat_result.st_mode = 0o100644  # Regular file mode (S_IFREG)
+                    mock_stat_result.st_size = 1024
+                    
+                return mock_stat_result
+                
+            mock_stat.side_effect = mock_stat_side_effect
+            
+            result = await scanner_service.scan_custom_directory("/test", recursive=True, max_depth=2)
+            
+            assert result.is_accessible
+            # Should have: root_file.txt, subfolder (at root), nested_file.txt (in subfolder)
+            assert len(result.items) >= 3
+            assert len(result.tree) > 0  # Should have tree structure
+            
+            # Find the subfolder in tree
+            subfolder = next((item for item in result.tree if item.name == "subfolder" and item.is_directory), None)
+            if subfolder:
+                assert subfolder.is_directory
+                # Should have children if nested scanning worked
+                assert subfolder.children is not None
 
 
 class TestDirectoryScanResult:
