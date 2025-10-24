@@ -60,7 +60,7 @@ class FileScanner:
         self.storage_monitor = storage_monitor
         self.settings = settings
         self._running = False
-
+        self._scan_task: Optional[asyncio.Task] = None
 
         self.growing_file_detector = None
         if config.enable_growing_file_support and settings:
@@ -83,35 +83,55 @@ class FileScanner:
         if self.growing_file_detector:
             await self.growing_file_detector.start_monitoring()
 
-        try:
-            await self._scan_folder_loop()
-        except asyncio.CancelledError:
-            logging.info("File Scanner was cancelled")
-            raise
-        except Exception as e:
-            logging.error(f"Error in scanning loop: {e}")
-            raise
-        finally:
-            if self.growing_file_detector:
-                await self.growing_file_detector.stop_monitoring()
+        # Start scanning loop as background task instead of blocking
+        self._scan_task = asyncio.create_task(self._scan_folder_loop())
+        
+        # Return immediately - don't wait for the task to complete
+        logging.info("Scanner task started in background")
 
-            self._running = False
-            logging.info("File Scanner stopped")
-
-    def stop_scanning(self) -> None:
+    async def stop_scanning(self) -> None:
+        if not self._running:
+            logging.warning("Scanner is not running")
+            return
+            
         self._running = False
         logging.info("File Scanner stop requested")
+        
+        # Cancel and cleanup scan task
+        if self._scan_task and not self._scan_task.done():
+            self._scan_task.cancel()
+            try:
+                await self._scan_task
+            except asyncio.CancelledError:
+                logging.debug("Scanner task cancelled successfully")
+            except Exception as e:
+                logging.error(f"Error during scanner task cancellation: {e}")
+                
+        # Stop growing file detector
+        if self.growing_file_detector:
+            await self.growing_file_detector.stop_monitoring()
+            
+        self._scan_task = None
+        logging.info("File Scanner stopped")
 
     async def _scan_folder_loop(self) -> None:
-        while self._running:
-            try:
-                await self._execute_scan_iteration()
-                await asyncio.sleep(self.config.polling_interval_seconds)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logging.error(f"Error in scan iteration: {e}")
-                await asyncio.sleep(5)
+        try:
+            while self._running:
+                try:
+                    await self._execute_scan_iteration()
+                    await asyncio.sleep(self.config.polling_interval_seconds)
+                except asyncio.CancelledError:
+                    logging.info("Scanner loop cancelled")
+                    break
+                except Exception as e:
+                    logging.error(f"Error in scan iteration: {e}")
+                    await asyncio.sleep(5)
+        finally:
+            # Cleanup when loop exits
+            if self.growing_file_detector:
+                await self.growing_file_detector.stop_monitoring()
+            self._running = False
+            logging.info("Scanner loop completed")
 
     async def _execute_scan_iteration(self) -> None:
         scan_start = datetime.now()

@@ -54,7 +54,7 @@ class FileScannerService:
                 logging.warning(f"Failed to broadcast scanner status on start: {e}")
 
     async def stop_scanning(self) -> None:
-        self.orchestrator.stop_scanning()
+        await self.orchestrator.stop_scanning()
 
         if self._websocket_manager:
             try:
