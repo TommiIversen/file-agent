@@ -13,6 +13,7 @@ from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
 from .services.copy_strategies import CopyStrategyFactory
+from .services.directory_scanner import DirectoryScannerService
 from .services.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
@@ -287,6 +288,23 @@ def get_job_processor() -> JobProcessor:
         )
 
     return _singletons["job_processor"]
+
+
+def get_directory_scanner() -> DirectoryScannerService:
+    """
+    Hent DirectoryScannerService singleton instance.
+    
+    SRP compliant service for directory scanning with async timeout protection.
+    Only depends on Settings - no other service dependencies.
+
+    Returns:
+        DirectoryScannerService instance (oprettes kun én gang)
+    """
+    if "directory_scanner" not in _singletons:
+        settings = get_settings()
+        _singletons["directory_scanner"] = DirectoryScannerService(settings)
+
+    return _singletons["directory_scanner"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:
