@@ -125,7 +125,7 @@ async def resume_file_scanner(
     ws_manager=Depends(get_websocket_manager)
 ):
     """Resume the file scanner (start polling for new jobs)"""
-    await scanner.stop_scanning()
+    await scanner.start_scanning()
     is_scanning = scanner.is_scanning()
 
     print(" REsume")
