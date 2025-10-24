@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import Tuple
+
+import aiofiles.os
 
 from .base_mounter import BaseMounter
 
@@ -17,6 +18,17 @@ class MacOSMounter(BaseMounter):
     async def attempt_mount(self, share_url: str) -> bool:
         """Attempt to mount network share using macOS osascript."""
         try:
+            # First check if already mounted to avoid duplicate mounts
+            expected_mount_point = self.get_mount_point_from_url(share_url)
+            is_mounted, is_accessible = await self.verify_mount_accessible(expected_mount_point)
+            
+            if is_mounted and is_accessible:
+                logging.info(f"Share already mounted and accessible: {share_url} -> {expected_mount_point}")
+                return True
+            elif is_mounted and not is_accessible:
+                logging.warning(f"Share mounted but not accessible: {share_url} -> {expected_mount_point}")
+                # Continue with mount attempt - might fix accessibility issues
+            
             logging.info(f"Attempting macOS mount: {share_url}")
 
             cmd = ["osascript", "-e", f'mount volume "{share_url}"']
@@ -25,7 +37,13 @@ class MacOSMounter(BaseMounter):
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
-            _, stderr = await process.communicate()
+            try:
+                _, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+            except asyncio.TimeoutError:
+                logging.error(f"Mount operation timed out for {share_url}")
+                process.kill()
+                await process.wait()
+                return False
 
             if process.returncode == 0:
                 logging.info(f"Successfully mounted {share_url}")
@@ -42,15 +60,27 @@ class MacOSMounter(BaseMounter):
     async def verify_mount_accessible(self, local_path: str) -> Tuple[bool, bool]:
         """Verify if mount point is accessible and writable on macOS."""
         try:
-            path_obj = Path(local_path)
+            # Use aiofiles.os for async path operations with timeout
+            try:
+                path_exists = await asyncio.wait_for(
+                    aiofiles.os.path.exists(local_path), 
+                    timeout=5.0
+                )
+                if not path_exists:
+                    logging.debug(f"Mount point does not exist: {local_path}")
+                    return False, False
 
-            if not path_obj.exists():
-                logging.debug(f"Mount point does not exist: {local_path}")
+                path_is_dir = await asyncio.wait_for(
+                    aiofiles.os.path.isdir(local_path), 
+                    timeout=5.0
+                )
+                if not path_is_dir:
+                    logging.debug(f"Mount point is not a directory: {local_path}")
+                    return True, False
+                    
+            except asyncio.TimeoutError:
+                logging.warning(f"Path check timed out for: {local_path}")
                 return False, False
-
-            if not path_obj.is_dir():
-                logging.debug(f"Mount point is not a directory: {local_path}")
-                return True, False
 
             try:
                 process = await asyncio.create_subprocess_exec(
@@ -60,7 +90,13 @@ class MacOSMounter(BaseMounter):
                     stderr=asyncio.subprocess.PIPE,
                 )
 
-                _, stderr = await process.communicate()
+                try:
+                    _, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    logging.warning(f"ls command timed out for: {local_path}")
+                    process.kill()
+                    await process.wait()
+                    return True, False
 
                 if process.returncode == 0:
                     logging.debug(f"Mount point accessible: {local_path}")
