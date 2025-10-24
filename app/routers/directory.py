@@ -30,11 +30,17 @@ router = APIRouter(
 
 @router.get("/scan/source", response_model=DirectoryScanResult)
 async def scan_source_directory(
+    recursive: bool = True,
+    max_depth: int = 3,
     scanner: DirectoryScannerService = Depends(get_directory_scanner)
 ) -> DirectoryScanResult:
     """
     Scan the configured source directory for files and folders.
     
+    Args:
+        recursive: Whether to scan subdirectories recursively (default: True)
+        max_depth: Maximum recursion depth (default: 3)
+        
     Returns structured metadata including file sizes, timestamps, and directory info.
     Includes hidden files and handles network timeouts gracefully.
     
@@ -45,8 +51,9 @@ async def scan_source_directory(
         HTTPException: On unexpected errors (timeouts are handled gracefully)
     """
     try:
-        logging.info("API: Starting source directory scan")
-        result = await scanner.scan_source_directory()
+        scan_mode = f"recursive (depth={max_depth})" if recursive else "flat"
+        logging.info(f"API: Starting source directory scan ({scan_mode})")
+        result = await scanner.scan_source_directory(recursive=recursive, max_depth=max_depth)
         
         logging.info(
             f"API: Source scan completed - {result.total_items} items found, "
@@ -65,11 +72,17 @@ async def scan_source_directory(
 
 @router.get("/scan/destination", response_model=DirectoryScanResult)
 async def scan_destination_directory(
+    recursive: bool = True,
+    max_depth: int = 3,
     scanner: DirectoryScannerService = Depends(get_directory_scanner)
 ) -> DirectoryScanResult:
     """
     Scan the configured destination directory for files and folders.
     
+    Args:
+        recursive: Whether to scan subdirectories recursively (default: True)
+        max_depth: Maximum recursion depth (default: 3)
+        
     Returns structured metadata including file sizes, timestamps, and directory info.
     Includes hidden files and handles network timeouts gracefully.
     
@@ -80,8 +93,9 @@ async def scan_destination_directory(
         HTTPException: On unexpected errors (timeouts are handled gracefully)
     """
     try:
-        logging.info("API: Starting destination directory scan")
-        result = await scanner.scan_destination_directory()
+        scan_mode = f"recursive (depth={max_depth})" if recursive else "flat"
+        logging.info(f"API: Starting destination directory scan ({scan_mode})")
+        result = await scanner.scan_destination_directory(recursive=recursive, max_depth=max_depth)
         
         logging.info(
             f"API: Destination scan completed - {result.total_items} items found, "
@@ -101,6 +115,8 @@ async def scan_destination_directory(
 @router.get("/scan/custom")
 async def scan_custom_directory(
     path: str,
+    recursive: bool = True,
+    max_depth: int = 3,
     scanner: DirectoryScannerService = Depends(get_directory_scanner)
 ) -> DirectoryScanResult:
     """
@@ -108,6 +124,8 @@ async def scan_custom_directory(
     
     Args:
         path: Directory path to scan
+        recursive: Whether to scan subdirectories recursively (default: True)
+        max_depth: Maximum recursion depth (default: 3)
         
     Returns:
         DirectoryScanResult: Scan results with file/folder metadata
@@ -122,8 +140,9 @@ async def scan_custom_directory(
         )
     
     try:
-        logging.info(f"API: Starting custom directory scan: {path}")
-        result = await scanner.scan_custom_directory(path.strip())
+        scan_mode = f"recursive (depth={max_depth})" if recursive else "flat"
+        logging.info(f"API: Starting custom directory scan ({scan_mode}): {path}")
+        result = await scanner.scan_custom_directory(path.strip(), recursive=recursive, max_depth=max_depth)
         
         logging.info(
             f"API: Custom scan completed for {path} - {result.total_items} items found, "

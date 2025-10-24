@@ -76,34 +76,47 @@ class DirectoryScannerService:
         self._settings = settings
         self._scan_timeout = 30.0  # 30 second timeout for directory scans
         self._item_timeout = 5.0   # 5 second timeout per item metadata fetch
+        self._max_depth = 10       # Maximum recursion depth to prevent infinite loops
         
         logging.info("DirectoryScannerService initialized with SRP compliance")
     
-    async def scan_source_directory(self) -> DirectoryScanResult:
+    async def scan_source_directory(self, recursive: bool = True, max_depth: int = 3) -> DirectoryScanResult:
         """Scan the configured source directory."""
         return await self._scan_directory(
             self._settings.source_directory,
-            description="source"
+            description="source",
+            recursive=recursive,
+            max_depth=max_depth
         )
     
-    async def scan_destination_directory(self) -> DirectoryScanResult:
+    async def scan_destination_directory(self, recursive: bool = True, max_depth: int = 3) -> DirectoryScanResult:
         """Scan the configured destination directory.""" 
         return await self._scan_directory(
             self._settings.destination_directory,
-            description="destination"
+            description="destination",
+            recursive=recursive,
+            max_depth=max_depth
         )
     
-    async def scan_custom_directory(self, directory_path: str) -> DirectoryScanResult:
+    async def scan_custom_directory(self, directory_path: str, recursive: bool = True, max_depth: int = 3) -> DirectoryScanResult:
         """Scan a custom directory path."""
-        return await self._scan_directory(directory_path, description="custom")
+        return await self._scan_directory(
+            directory_path, 
+            description="custom",
+            recursive=recursive,
+            max_depth=max_depth
+        )
     
-    async def _scan_directory(self, directory_path: str, description: str = "directory") -> DirectoryScanResult:
+    async def _scan_directory(self, directory_path: str, description: str = "directory", 
+                            recursive: bool = True, max_depth: int = 3) -> DirectoryScanResult:
         """
         Internal method to scan a directory with timeout protection.
         
         Args:
             directory_path: Path to scan
             description: Description for logging
+            recursive: Whether to scan subdirectories recursively
+            max_depth: Maximum recursion depth
             
         Returns:
             DirectoryScanResult with scan results
@@ -111,11 +124,12 @@ class DirectoryScannerService:
         start_time = datetime.now()
         
         try:
-            logging.info(f"Starting {description} directory scan: {directory_path}")
+            scan_mode = "recursive" if recursive else "flat"
+            logging.info(f"Starting {description} directory scan ({scan_mode}): {directory_path}")
             
             # Wrap the entire scan operation in a timeout
             result = await asyncio.wait_for(
-                self._perform_directory_scan(directory_path),
+                self._perform_directory_scan(directory_path, recursive=recursive, max_depth=max_depth),
                 timeout=self._scan_timeout
             )
             
@@ -152,12 +166,28 @@ class DirectoryScannerService:
                 error_message=str(e)
             )
     
-    async def _perform_directory_scan(self, directory_path: str) -> DirectoryScanResult:
+    async def _perform_directory_scan(self, directory_path: str, recursive: bool = True, 
+                                     max_depth: int = 3, current_depth: int = 0) -> DirectoryScanResult:
         """
         Perform the actual directory scan operation.
         
+        Args:
+            directory_path: Path to scan
+            recursive: Whether to scan subdirectories
+            max_depth: Maximum recursion depth
+            current_depth: Current recursion level
+        
         This method does the heavy lifting of scanning directories and collecting metadata.
         """
+        # Check depth limit
+        if current_depth > max_depth:
+            logging.debug(f"Max depth ({max_depth}) reached at {directory_path}")
+            return DirectoryScanResult(
+                path=directory_path,
+                is_accessible=False,
+                error_message=f"Maximum scan depth ({max_depth}) exceeded"
+            )
+        
         # Check if directory exists and is accessible
         try:
             path_exists = await asyncio.wait_for(
@@ -226,6 +256,35 @@ class DirectoryScannerService:
                     logging.debug(f"Error getting metadata for {entry_name}: {e}")
                     # Skip items we can't read
                     continue
+            
+            # Recursive scanning if enabled and depth allows
+            if recursive and current_depth < max_depth:
+                # Find directories for recursive scanning
+                subdirectories = [item for item in items if item.is_directory and not item.is_hidden]
+                
+                for subdir in subdirectories:
+                    try:
+                        # Recursively scan subdirectory
+                        subdir_result = await asyncio.wait_for(
+                            self._perform_directory_scan(
+                                subdir.path, 
+                                recursive=True, 
+                                max_depth=max_depth, 
+                                current_depth=current_depth + 1
+                            ),
+                            timeout=self._scan_timeout // (current_depth + 2)  # Reduced timeout for deeper levels
+                        )
+                        
+                        # Add subdirectory items to our list
+                        if subdir_result.is_accessible and subdir_result.items:
+                            items.extend(subdir_result.items)
+                            
+                    except asyncio.TimeoutError:
+                        logging.warning(f"Recursive scan timed out for subdirectory: {subdir.path}")
+                        continue
+                    except Exception as e:
+                        logging.debug(f"Error during recursive scan of {subdir.path}: {e}")
+                        continue
             
             return DirectoryScanResult(
                 path=directory_path,

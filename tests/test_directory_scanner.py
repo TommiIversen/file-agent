@@ -132,9 +132,14 @@ class TestDirectoryScannerService:
             expected_result = DirectoryScanResult(path="/test/source", is_accessible=True)
             mock_scan.return_value = expected_result
             
-            result = await scanner_service.scan_source_directory()
+            result = await scanner_service.scan_source_directory(recursive=True, max_depth=2)
             
-            mock_scan.assert_called_once_with("/test/source", description="source")
+            mock_scan.assert_called_once_with(
+                "/test/source", 
+                description="source", 
+                recursive=True, 
+                max_depth=2
+            )
             assert result == expected_result
 
     @pytest.mark.asyncio
@@ -144,9 +149,14 @@ class TestDirectoryScannerService:
             expected_result = DirectoryScanResult(path="/test/destination", is_accessible=True)
             mock_scan.return_value = expected_result
             
-            result = await scanner_service.scan_destination_directory()
+            result = await scanner_service.scan_destination_directory(recursive=False, max_depth=1)
             
-            mock_scan.assert_called_once_with("/test/destination", description="destination")
+            mock_scan.assert_called_once_with(
+                "/test/destination", 
+                description="destination", 
+                recursive=False, 
+                max_depth=1
+            )
             assert result == expected_result
 
     @pytest.mark.asyncio
@@ -205,6 +215,65 @@ class TestDirectoryScannerService:
             assert item is not None
             assert item.is_directory
             assert item.size_bytes is None  # Directories don't have size
+
+    @pytest.mark.asyncio
+    async def test_recursive_directory_scan(self, scanner_service):
+        """Test recursive directory scanning."""
+        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
+             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
+             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
+             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
+            
+            # Setup mocks for successful recursive scan
+            mock_exists.return_value = True
+            
+            # Mock directory structure: /test/path contains subdir1/
+            def isdir_side_effect(path):
+                return path in ["/test/path", str(Path("/test/path") / "subdir1")]
+            
+            mock_isdir.side_effect = isdir_side_effect
+            
+            def listdir_side_effect(path):
+                if path == "/test/path":
+                    return ["file1.txt", "subdir1"]
+                elif str(path).endswith("subdir1"):
+                    return ["file2.txt"]
+                else:
+                    return []
+            
+            mock_listdir.side_effect = listdir_side_effect
+            
+            # Mock stat results
+            mock_stat_result = MagicMock()
+            mock_stat_result.st_size = 1024
+            mock_stat_result.st_ctime = 1640995200
+            mock_stat_result.st_mtime = 1640995200
+            mock_stat.return_value = mock_stat_result
+            
+            result = await scanner_service.scan_custom_directory(
+                "/test/path", 
+                recursive=True, 
+                max_depth=2
+            )
+            
+            assert result.is_accessible
+            # Should find: file1.txt, subdir1/, file2.txt (from recursive scan)
+            assert result.total_items == 3
+            assert result.total_files == 2  # file1.txt, file2.txt
+            assert result.total_directories == 1  # subdir1
+
+    @pytest.mark.asyncio
+    async def test_max_depth_limit(self, scanner_service):
+        """Test that max depth limit is respected."""
+        result = await scanner_service._perform_directory_scan(
+            "/test/path", 
+            recursive=True, 
+            max_depth=2, 
+            current_depth=3  # Exceeds max_depth
+        )
+        
+        assert not result.is_accessible
+        assert "Maximum scan depth" in result.error_message
 
 
 class TestDirectoryScanResult:

@@ -27,6 +27,8 @@ document.addEventListener('alpine:init', () => {
         sortBy: 'name', // 'name', 'size', 'created', 'modified', 'type'
         sortDirection: 'asc', // 'asc' or 'desc'
         showHidden: false,
+        recursive: true, // Enable recursive scanning by default
+        maxDepth: 3,     // Default recursion depth
         
         /**
          * Open modal for source directory browsing
@@ -89,10 +91,18 @@ document.addEventListener('alpine:init', () => {
                 const endpoint = this.scanType === 'source' 
                     ? '/api/directory/scan/source'
                     : '/api/directory/scan/destination';
-                    
-                console.log(`DirectoryBrowser: Scanning ${this.scanType} directory...`);
                 
-                const response = await fetch(endpoint);
+                // Add query parameters for recursive scanning
+                const params = new URLSearchParams({
+                    recursive: this.recursive.toString(),
+                    max_depth: this.maxDepth.toString()
+                });
+                
+                const url = `${endpoint}?${params}`;
+                    
+                console.log(`DirectoryBrowser: Scanning ${this.scanType} directory (recursive=${this.recursive}, depth=${this.maxDepth})...`);
+                
+                const response = await fetch(url);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -110,7 +120,7 @@ document.addEventListener('alpine:init', () => {
                 this.scanDuration = data.scan_duration_seconds || 0;
                 this.errorMessage = data.error_message;
                 
-                console.log(`DirectoryBrowser: Scan completed - ${this.totalItems} items found`);
+                console.log(`DirectoryBrowser: Scan completed - ${this.totalItems} items found (${this.totalFiles} files, ${this.totalDirectories} dirs)`);
                 
             } catch (error) {
                 console.error('DirectoryBrowser: Scan failed:', error);
@@ -188,6 +198,23 @@ document.addEventListener('alpine:init', () => {
          */
         toggleHidden() {
             this.showHidden = !this.showHidden;
+        },
+        
+        /**
+         * Toggle recursive scanning
+         */
+        toggleRecursive() {
+            this.recursive = !this.recursive;
+        },
+        
+        /**
+         * Set maximum recursion depth
+         */
+        setMaxDepth(depth) {
+            const newDepth = parseInt(depth, 10);
+            if (newDepth >= 1 && newDepth <= 10) {
+                this.maxDepth = newDepth;
+            }
         },
         
         /**
