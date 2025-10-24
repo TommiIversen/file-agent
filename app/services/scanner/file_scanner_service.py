@@ -8,6 +8,7 @@ from .file_scanner import FileScanner
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
+    from app.services.websocket_manager import WebSocketManager
 
 
 class FileScannerService:
@@ -17,7 +18,10 @@ class FileScannerService:
             settings: Settings,
             state_manager: StateManager,
             storage_monitor: "StorageMonitorService" = None,
+            websocket_manager: "WebSocketManager" = None,
     ):
+        self._websocket_manager = websocket_manager
+        
         config = ScanConfiguration(
             source_directory=settings.source_directory,
             polling_interval_seconds=settings.polling_interval_seconds,
@@ -41,28 +45,26 @@ class FileScannerService:
         await self.orchestrator.start_scanning()
         
         # Broadcast correct scanner status when actually started
-        try:
-            from app.dependencies import get_websocket_manager
-            ws_manager = get_websocket_manager()
-            is_scanning = self.is_scanning()
-            await ws_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
-            logging.debug(f"Broadcasted scanner status on start: scanning={is_scanning}")
-        except Exception as e:
-            logging.warning(f"Failed to broadcast scanner status on start: {e}")
+        if self._websocket_manager:
+            try:
+                is_scanning = self.is_scanning()
+                await self._websocket_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
+                logging.debug(f"Broadcasted scanner status on start: scanning={is_scanning}")
+            except Exception as e:
+                logging.warning(f"Failed to broadcast scanner status on start: {e}")
 
-    def stop_scanning(self) -> None:
+    async def stop_scanning(self) -> None:
         self.orchestrator.stop_scanning()
-        
-    def pause_scanning(self) -> None:
-        """Pause the file scanner (stop polling for new jobs)"""
-        self.orchestrator.stop_scanning()
-        logging.info("File scanner paused via API")
-        
-    async def resume_scanning(self) -> None:
-        """Resume the file scanner (start polling for new jobs)"""
-        await self.orchestrator.start_scanning()
-        logging.info("File scanner resumed via API")
-        
+
+        if self._websocket_manager:
+            try:
+                is_scanning = self.is_scanning()
+                await self._websocket_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
+                logging.debug(f"Broadcasted scanner status on stop: scanning={is_scanning}")
+            except Exception as e:
+                logging.warning(f"Failed to broadcast scanner status on stop: {e}")
+
+
     def is_scanning(self) -> bool:
         """Check if the scanner is currently running"""
         return self.orchestrator._running

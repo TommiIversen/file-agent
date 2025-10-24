@@ -30,14 +30,14 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
             if not logs_directory.exists():
                 return None, "Log directory does not exist"
 
-            log_files = []
+            log_files_async = []
 
             # Find all log files in the directory
             for log_file in logs_directory.glob("*.log*"):
                 if log_file.is_file():
                     try:
                         stat = log_file.stat()
-                        log_files.append({
+                        log_files_async.append({
                             "filename": log_file.name,
                             "size_bytes": stat.st_size,
                             "size_mb": round(stat.st_size / (1024 * 1024), 2),
@@ -48,7 +48,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
                     except Exception as e:
                         logging.warning(f"Failed to get stats for {log_file}: {e}")
 
-            return log_files, None
+            return log_files_async, None
 
         # Execute with timeout to prevent blocking the event loop
         try:

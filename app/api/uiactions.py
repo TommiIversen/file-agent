@@ -6,12 +6,13 @@ import asyncio
 from fastapi import APIRouter
 from fastapi import Depends
 
-from ..config import Settings
-from ..dependencies import get_settings
-from ..dependencies import get_file_scanner
-from ..dependencies import get_websocket_manager
+from app.config import Settings
+from app.dependencies import get_settings
+from app.dependencies import get_file_scanner
+from app.dependencies import get_websocket_manager
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["uiactions"])
+
 
 
 @router.get("/settings", response_model=Settings)
@@ -110,12 +111,11 @@ async def pause_file_scanner(
     ws_manager=Depends(get_websocket_manager)
 ):
     """Pause the file scanner (stop polling for new jobs)"""
-    scanner.pause_scanning()
+    await scanner.stop_scanning()
     is_scanning = scanner.is_scanning()
-    
-    # Broadcast status change via WebSocket
-    await ws_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
-    
+
+    print(" Pause")
+
     return {"success": True, "paused": True, "scanning": is_scanning}
 
 
@@ -125,12 +125,10 @@ async def resume_file_scanner(
     ws_manager=Depends(get_websocket_manager)
 ):
     """Resume the file scanner (start polling for new jobs)"""
-    await scanner.resume_scanning()
+    await scanner.stop_scanning()
     is_scanning = scanner.is_scanning()
-    
-    # Broadcast status change via WebSocket
-    await ws_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
-    
+
+    print(" REsume")
     return {"success": True, "paused": False, "scanning": is_scanning}
 
 

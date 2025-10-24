@@ -53,7 +53,8 @@ def get_state_manager() -> StateManager:
 def get_file_scanner() -> FileScannerService:
     """
     Hent FileScannerService singleton instance.
-    Enhanced: Now injects StorageMonitorService following Central Storage Authority pattern.
+    Enhanced: Now injects StorageMonitorService following Central Storage Authority pattern
+    and WebSocketManager for proper dependency injection.
 
     Returns:
         FileScannerService instance (oprettes kun én gang)
@@ -62,8 +63,9 @@ def get_file_scanner() -> FileScannerService:
         settings = get_settings()
         state_manager = get_state_manager()
         storage_monitor = get_storage_monitor()  # Inject Central Storage Authority
+        websocket_manager = get_websocket_manager()  # Inject WebSocket manager
         _singletons["file_scanner"] = FileScannerService(
-            settings, state_manager, storage_monitor
+            settings, state_manager, storage_monitor, websocket_manager
         )
 
     return _singletons["file_scanner"]
