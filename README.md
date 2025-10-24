@@ -166,4 +166,8 @@ ruff check . --select B
 
 # Find style issues
 ruff check . --select E,W
+
+# Fix issues automatically
+ruff check . --fix
+
 ```
