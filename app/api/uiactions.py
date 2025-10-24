@@ -9,7 +9,6 @@ from fastapi import Depends
 from app.config import Settings
 from app.dependencies import get_settings
 from app.dependencies import get_file_scanner
-from app.dependencies import get_websocket_manager
 
 router = APIRouter(prefix="/api", tags=["uiactions"])
 
@@ -107,32 +106,19 @@ async def restart_application():
 
 @router.post("/scanner/pause")
 async def pause_file_scanner(
-    scanner=Depends(get_file_scanner),
-    ws_manager=Depends(get_websocket_manager)
+    scanner=Depends(get_file_scanner)
 ):
     """Pause the file scanner (stop polling for new jobs)"""
     await scanner.stop_scanning()
     is_scanning = scanner.is_scanning()
-
-    print(" Pause")
-
     return {"success": True, "paused": True, "scanning": is_scanning}
 
 
 @router.post("/scanner/resume")
 async def resume_file_scanner(
-    scanner=Depends(get_file_scanner),
-    ws_manager=Depends(get_websocket_manager)
+    scanner=Depends(get_file_scanner)
 ):
     """Resume the file scanner (start polling for new jobs)"""
     await scanner.start_scanning()
     is_scanning = scanner.is_scanning()
-
-    print(" REsume")
     return {"success": True, "paused": False, "scanning": is_scanning}
-
-
-@router.get("/scanner/status")
-async def get_scanner_status(scanner=Depends(get_file_scanner)):
-    """Get current scanner status"""
-    return {"scanning": scanner.is_scanning(), "paused": not scanner.is_scanning()}

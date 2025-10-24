@@ -21,19 +21,13 @@ document.addEventListener('alpine:init', () => {
         actionMessage: null,
         actionSuccess: false,
 
-        // Scanner control
-        scannerPaused: false,
-        scannerToggling: false,
-
         init() {
             console.log('⚙️ Settings Store initialized');
-            this.loadScannerStatus();
         },
 
         async openSettingsModal() {
             this.showSettingsModal = true;
             await this.loadSettings();
-            await this.loadScannerStatus(); // Reload scanner status when modal opens
         },
         closeSettingsModal() {
             this.showSettingsModal = false;
@@ -145,37 +139,22 @@ document.addEventListener('alpine:init', () => {
                 }, 5000);
             }
         },
-        async loadScannerStatus() {
-            try {
-                console.log('📡 Loading scanner status...');
-                const response = await fetch('/api/scanner/status');
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                const status = await response.json();
-                this.scannerPaused = status.paused;
-                
-                // Update UI store with scanner status
-                const uiStore = Alpine.store('ui');
-                if (uiStore) {
-                    uiStore.updateScannerStatus({
-                        scanning: status.scanning || !status.paused,
-                        paused: status.paused
-                    });
-                }
-                
-                console.log('✅ Scanner status loaded:', status);
-            } catch (error) {
-                console.error('❌ Failed to load scanner status:', error);
-            }
-        },
+
         async toggleScanner() {
-            if (this.scannerToggling) return;
-            this.scannerToggling = true;
+            const uiStore = Alpine.store('ui');
+            if (!uiStore) {
+                console.error('UI store not available');
+                return;
+            }
+
+            // Get current state from UI store (single source of truth)
+            const isCurrentlyPaused = uiStore.scanner.paused;
+            const endpoint = isCurrentlyPaused ? '/api/scanner/resume' : '/api/scanner/pause';
+            const action = isCurrentlyPaused ? 'Resuming' : 'Pausing';
+            
             this.actionMessage = null;
+            
             try {
-                const endpoint = this.scannerPaused ? '/api/scanner/resume' : '/api/scanner/pause';
-                const action = this.scannerPaused ? 'Resuming' : 'Pausing';
                 console.log(`${action} scanner...`);
                 
                 const response = await fetch(endpoint, {
@@ -184,33 +163,24 @@ document.addEventListener('alpine:init', () => {
                         'Content-Type': 'application/json'
                     }
                 });
+                
                 const result = await response.json();
+                
                 if (result.success) {
-                    this.scannerPaused = result.paused;
-                    
-                    // Update UI store with new scanner status
-                    const uiStore = Alpine.store('ui');
-                    if (uiStore) {
-                        uiStore.updateScannerStatus({
-                            scanning: result.scanning || !result.paused,
-                            paused: result.paused
-                        });
-                    }
-                    
+                    // WebSocket will automatically update uiStore - no manual sync needed
                     this.actionSuccess = true;
-                    this.actionMessage = this.scannerPaused ? 'Scanner paused successfully' : 'Scanner resumed successfully';
-                    console.log(`✅ Scanner ${this.scannerPaused ? 'paused' : 'resumed'} successfully`);
+                    this.actionMessage = isCurrentlyPaused ? 'Scanner resumed successfully' : 'Scanner paused successfully';
+                    console.log(`✅ Scanner ${isCurrentlyPaused ? 'resumed' : 'paused'} successfully`);
                 } else {
                     this.actionSuccess = false;
-                    this.actionMessage = `Failed to ${this.scannerPaused ? 'resume' : 'pause'} scanner`;
-                    console.error(`❌ Failed to ${this.scannerPaused ? 'resume' : 'pause'} scanner`);
+                    this.actionMessage = `Failed to ${action.toLowerCase()} scanner`;
+                    console.error(`❌ Failed to ${action.toLowerCase()} scanner`);
                 }
             } catch (error) {
                 console.error(`❌ Failed to toggle scanner:`, error);
                 this.actionSuccess = false;
                 this.actionMessage = 'Network error: ' + error.message;
             } finally {
-                this.scannerToggling = false;
                 setTimeout(() => {
                     this.actionMessage = null;
                 }, 5000);
