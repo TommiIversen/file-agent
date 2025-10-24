@@ -38,7 +38,7 @@ class MacOSMounter(BaseMounter):
             )
 
             try:
-                _, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+                _, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
             except asyncio.TimeoutError:
                 logging.error(f"Mount operation timed out for {share_url}")
                 process.kill()
