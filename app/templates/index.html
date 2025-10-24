@@ -15,6 +15,7 @@
     <script src="/static/js/stores/uiStore.js"></script>
     <script src="/static/js/stores/logViewerStore.js"></script>
     <script src="/static/js/stores/settingsStore.js"></script>
+    <script src="/static/js/stores/directoryBrowserStore.js"></script>
 
 
     <!-- Services -->
@@ -128,12 +129,19 @@
                     <h3 class="text-lg font-semibold flex items-center">
                         📁 Source Storage
                     </h3>
-                    <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full mr-2"
-                             :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
-                        <span class="text-sm font-medium"
-                              :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
-                              x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
+                    <div class="flex items-center space-x-2">
+                        <!-- Browse Button -->
+                        <button @click="$store.directoryBrowser.openSourceBrowser()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                            📂 Browse
+                        </button>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2"
+                                 :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
+                            <span class="text-sm font-medium"
+                                  :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
+                                  x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -185,12 +193,19 @@
                     <h3 class="text-lg font-semibold flex items-center">
                         🎯 Destination Storage
                     </h3>
-                    <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full mr-2"
-                             :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
-                        <span class="text-sm font-medium"
-                              :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
-                              x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
+                    <div class="flex items-center space-x-2">
+                        <!-- Browse Button -->
+                        <button @click="$store.directoryBrowser.openDestinationBrowser()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                            📂 Browse
+                        </button>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2"
+                                 :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
+                            <span class="text-sm font-medium"
+                                  :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
+                                  x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -437,6 +452,9 @@
 
 <!-- Settings Modal -->
 {% include "components/settings_modal.html" %}
+
+<!-- Directory Browser Modal -->
+{% include "components/directory_browser_modal.html" %}
 
 <!-- Error Container for initialization failures -->
 <div id="error-container" style="display: none;" class="fixed top-4 right-4 max-w-md z-50"></div>
