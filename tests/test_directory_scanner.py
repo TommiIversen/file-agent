@@ -275,6 +275,36 @@ class TestDirectoryScannerService:
         assert not result.is_accessible
         assert "Maximum scan depth" in result.error_message
 
+    @pytest.mark.asyncio
+    async def test_hierarchy_fields_in_items(self, scanner_service):
+        """Test that hierarchy fields are properly set in directory items."""
+        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
+             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
+             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
+             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
+            
+            # Setup mocks for hierarchy test
+            mock_exists.return_value = True
+            mock_isdir.side_effect = lambda path: path == "/test/path"
+            mock_listdir.return_value = ["file1.txt", "file2.mxv"]
+            
+            mock_stat_result = MagicMock()
+            mock_stat_result.st_size = 1024
+            mock_stat_result.st_ctime = 1640995200
+            mock_stat_result.st_mtime = 1640995200
+            mock_stat.return_value = mock_stat_result
+            
+            result = await scanner_service.scan_custom_directory("/test/path", recursive=False)
+            
+            assert result.is_accessible
+            assert len(result.items) == 2
+            
+            # Check hierarchy fields
+            for item in result.items:
+                assert item.parent_path == "/test/path"
+                assert item.depth_level == 0  # Root level
+                assert item.relative_path == item.name  # Should be just the filename at root
+
 
 class TestDirectoryScanResult:
     """Test DirectoryScanResult model functionality."""

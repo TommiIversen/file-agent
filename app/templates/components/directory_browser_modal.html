@@ -119,8 +119,32 @@
                     </template>
                 </div>
                 
-                <!-- Right: Sort Options -->
+                <!-- Right: View Mode and Sort Options -->
                 <div class="flex items-center space-x-3">
+                    <!-- View Mode Toggle -->
+                    <div class="flex items-center space-x-2 text-sm text-gray-300">
+                        <span>Visning:</span>
+                        <button @click="$store.directoryBrowser.toggleViewMode()"
+                                class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                            <span x-text="$store.directoryBrowser.viewMode === 'tree' ? '🌳 Træ' : '📋 Flad'"></span>
+                        </button>
+                    </div>
+                    
+                    <!-- Tree Controls (only show in tree mode) -->
+                    <template x-if="$store.directoryBrowser.viewMode === 'tree'">
+                        <div class="flex items-center space-x-2">
+                            <button @click="$store.directoryBrowser.expandAllDirectories()"
+                                    class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                                ➕ Udvid alle
+                            </button>
+                            <button @click="$store.directoryBrowser.collapseAllDirectories()"
+                                    class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                                ➖ Luk alle
+                            </button>
+                        </div>
+                    </template>
+                    
+                    <span class="text-gray-400">|</span>
                     <span class="text-gray-400 text-sm">Sorter efter:</span>
                     <select x-model="$store.directoryBrowser.sortBy"
                             @change="$store.directoryBrowser.setSortBy($event.target.value)"
@@ -213,15 +237,77 @@
                     <!-- File/Folder Rows -->
                     <div class="divide-y divide-gray-700">
                         <template x-for="item in $store.directoryBrowser.displayItems" :key="item.path">
-                            <div class="grid grid-cols-12 gap-2 p-3 hover:bg-gray-750 transition-colors duration-150 group">
+                            <div class="grid grid-cols-12 gap-2 p-3 hover:bg-gray-750 transition-colors duration-150 group"
+                                 :style="$store.directoryBrowser.viewMode === 'tree' ? $store.directoryBrowser.getTreeIndentation(item) : {}">
                                 
-                                <!-- Name Column -->
+                                <!-- Name Column with Tree Structure -->
                                 <div class="col-span-5 flex items-center space-x-2 min-w-0">
-                                    <span class="text-lg" x-text="$store.directoryBrowser.getFileIcon(item)"></span>
-                                    <span class="text-white truncate" 
-                                          :class="item.is_hidden ? 'opacity-60 italic' : ''"
-                                          x-text="item.name"
-                                          :title="item.name"></span>
+                                    
+                                    <!-- Tree indentation and expand/collapse button -->
+                                    <template x-if="$store.directoryBrowser.viewMode === 'tree'">
+                                        <div class="flex items-center space-x-1">
+                                            <!-- Tree decoration lines -->
+                                            <template x-if="item.depth_level > 0">
+                                                <span class="text-gray-500 text-xs select-none" 
+                                                      x-text="$store.directoryBrowser.getTreeDecorations(item)"></span>
+                                            </template>
+                                            
+                                            <!-- Expand/collapse button for directories -->
+                                            <template x-if="item.is_directory">
+                                                <button @click="$store.directoryBrowser.toggleDirectory(item.path)"
+                                                        class="w-4 h-4 flex items-center justify-center text-blue-400 hover:text-blue-300 transition-colors duration-150"
+                                                        :aria-expanded="$store.directoryBrowser.isDirectoryExpanded(item.path) || (!$store.directoryBrowser.expandedDirectories.has(item.path) && $store.directoryBrowser.defaultExpanded)">
+                                                    <svg class="w-3 h-3" :class="($store.directoryBrowser.isDirectoryExpanded(item.path) || (!$store.directoryBrowser.expandedDirectories.has(item.path) && $store.directoryBrowser.defaultExpanded)) ? 'transform rotate-90' : ''" 
+                                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                    </svg>
+                                                </button>
+                                            </template>
+                                            
+                                            <!-- Spacer for files (no expand button) -->
+                                            <template x-if="!item.is_directory">
+                                                <div class="w-4"></div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- File/folder icon -->
+                                    <div class="flex-shrink-0">
+                                        <template x-if="item.is_directory">
+                                            <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
+                                            </svg>
+                                        </template>
+                                        <template x-if="!item.is_directory">
+                                            <template x-if="item.name.toLowerCase().endsWith('.mxv') || item.name.toLowerCase().endsWith('.mxf')">
+                                                <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M2 6a2 2 0 012-2h6l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
+                                                    <path d="M6 10V8h8v2H6zm0 2v2h8v-2H6z"></path>
+                                                </svg>
+                                            </template>
+                                            <template x-if="!(item.name.toLowerCase().endsWith('.mxv') || item.name.toLowerCase().endsWith('.mxf'))">
+                                                <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path>
+                                                </svg>
+                                            </template>
+                                        </template>
+                                    </div>
+                                    <span class="text-lg flex-shrink-0" x-text="$store.directoryBrowser.getFileIcon(item)"></span>
+                                    
+                                    <!-- Name with proper wrapping -->
+                                    <div class="min-w-0 flex-1">
+                                        <span class="text-white truncate block" 
+                                              :class="item.is_hidden ? 'opacity-60 italic' : ''"
+                                              x-text="item.name"
+                                              :title="item.relative_path || item.name"></span>
+                                        
+                                        <!-- Show relative path for deeper items in tree mode -->
+                                        <template x-if="$store.directoryBrowser.viewMode === 'tree' && item.depth_level > 0 && item.relative_path">
+                                            <div class="text-xs text-gray-500 truncate" 
+                                                 x-text="item.relative_path"
+                                                 :title="item.path"></div>
+                                        </template>
+                                    </div>
                                 </div>
                                 
                                 <!-- Type Column -->

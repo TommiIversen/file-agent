@@ -29,6 +29,11 @@ document.addEventListener('alpine:init', () => {
         showHidden: false,
         recursive: true, // Enable recursive scanning by default
         maxDepth: 3,     // Default recursion depth
+        viewMode: 'tree', // 'tree' or 'flat' view mode
+        
+        // Tree view state
+        expandedDirectories: new Set(), // Set of expanded directory paths
+        defaultExpanded: true,          // Whether directories should be expanded by default
         
         /**
          * Open modal for source directory browsing
@@ -120,6 +125,11 @@ document.addEventListener('alpine:init', () => {
                 this.scanDuration = data.scan_duration_seconds || 0;
                 this.errorMessage = data.error_message;
                 
+                // Initialize tree view state
+                if (this.defaultExpanded && this.viewMode === 'tree') {
+                    this.expandAllDirectories();
+                }
+                
                 console.log(`DirectoryBrowser: Scan completed - ${this.totalItems} items found (${this.totalFiles} files, ${this.totalDirectories} dirs)`);
                 
             } catch (error) {
@@ -143,12 +153,68 @@ document.addEventListener('alpine:init', () => {
                 filtered = filtered.filter(item => !item.is_hidden);
             }
             
-            // Sort items
-            filtered.sort((a, b) => {
+            if (this.viewMode === 'tree') {
+                // Tree view: show hierarchical structure with indentation
+                return this._getTreeViewItems(filtered);
+            } else {
+                // Flat view: show all items in a flat list
+                return this._getFlatViewItems(filtered);
+            }
+        },
+        
+        /**
+         * Get items for tree view with proper hierarchy and visibility
+         */
+        _getTreeViewItems(items) {
+            // Sort items by depth first, then by name within each level
+            const sorted = items.sort((a, b) => {
+                // First by depth level
+                if (a.depth_level !== b.depth_level) {
+                    return a.depth_level - b.depth_level;
+                }
+                
+                // Then by directory vs file (directories first)
+                if (a.is_directory !== b.is_directory) {
+                    return a.is_directory ? -1 : 1;
+                }
+                
+                // Finally by name
+                return a.name.localeCompare(b.name);
+            });
+            
+            const visibleItems = [];
+            const processedPaths = new Set();
+            
+            for (const item of sorted) {
+                // Skip if already processed (shouldn't happen but safety check)
+                if (processedPaths.has(item.path)) {
+                    continue;
+                }
+                
+                // Check if item should be visible based on parent expansion
+                if (this._isItemVisibleInTree(item)) {
+                    visibleItems.push(item);
+                    processedPaths.add(item.path);
+                }
+            }
+            
+            return visibleItems;
+        },
+        
+        /**
+         * Get items for flat view with standard sorting
+         */
+        _getFlatViewItems(items) {
+            // Sort items normally for flat view
+            return items.sort((a, b) => {
                 let comparison = 0;
                 
                 switch (this.sortBy) {
                     case 'name':
+                        // Directories first, then by name
+                        if (a.is_directory !== b.is_directory) {
+                            return a.is_directory ? -1 : 1;
+                        }
                         comparison = a.name.localeCompare(b.name);
                         break;
                     case 'size':
@@ -175,8 +241,66 @@ document.addEventListener('alpine:init', () => {
                 
                 return this.sortDirection === 'asc' ? comparison : -comparison;
             });
+        },
+        
+        /**
+         * Check if an item should be visible in tree view based on parent expansion
+         */
+        _isItemVisibleInTree(item) {
+            // Root level items are always visible
+            if (item.depth_level === 0) {
+                return true;
+            }
             
-            return filtered;
+            // For deeper items, check if all parent directories are expanded
+            if (item.parent_path) {
+                // Use default expanded state if not explicitly set
+                const isParentExpanded = this.expandedDirectories.has(item.parent_path);
+                const shouldUseDefault = !this.expandedDirectories.has(item.parent_path) && this.defaultExpanded;
+                
+                return isParentExpanded || shouldUseDefault;
+            }
+            
+            return this.defaultExpanded;
+        },
+        
+        /**
+         * Get indentation style for tree view item
+         */
+        getTreeIndentation(item) {
+            const paddingLeft = item.depth_level * 20; // 20px per level
+            return {
+                paddingLeft: `${paddingLeft}px`
+            };
+        },
+        
+        /**
+         * Get tree expand/collapse icon for directory
+         */
+        getTreeIcon(item) {
+            if (!item.is_directory) {
+                return null; // No icon for files
+            }
+            
+            const isExpanded = this.isDirectoryExpanded(item.path) || 
+                             (!this.expandedDirectories.has(item.path) && this.defaultExpanded);
+            
+            return isExpanded ? '📂' : '📁';
+        },
+        
+        /**
+         * Get tree line decorations (lines connecting tree items)
+         */
+        getTreeDecorations(item, index) {
+            // This could be enhanced to show connecting lines
+            // For now, just return basic indentation markers
+            const decorations = [];
+            
+            for (let i = 0; i < item.depth_level; i++) {
+                decorations.push('│');
+            }
+            
+            return decorations.join(' ');
         },
         
         /**
@@ -215,6 +339,57 @@ document.addEventListener('alpine:init', () => {
             if (newDepth >= 1 && newDepth <= 10) {
                 this.maxDepth = newDepth;
             }
+        },
+        
+        /**
+         * Toggle view mode between tree and flat
+         */
+        toggleViewMode() {
+            this.viewMode = this.viewMode === 'tree' ? 'flat' : 'tree';
+            
+            // If switching to tree mode and we have default expanded, expand all directories
+            if (this.viewMode === 'tree' && this.defaultExpanded) {
+                this.expandAllDirectories();
+            }
+        },
+        
+        /**
+         * Toggle directory expansion
+         */
+        toggleDirectory(directoryPath) {
+            if (this.expandedDirectories.has(directoryPath)) {
+                this.expandedDirectories.delete(directoryPath);
+            } else {
+                this.expandedDirectories.add(directoryPath);
+            }
+            // Force reactivity by creating new Set
+            this.expandedDirectories = new Set(this.expandedDirectories);
+        },
+        
+        /**
+         * Check if directory is expanded
+         */
+        isDirectoryExpanded(directoryPath) {
+            return this.expandedDirectories.has(directoryPath);
+        },
+        
+        /**
+         * Expand all directories
+         */
+        expandAllDirectories() {
+            const directories = this.items.filter(item => item.is_directory);
+            directories.forEach(dir => {
+                this.expandedDirectories.add(dir.path);
+            });
+            this.expandedDirectories = new Set(this.expandedDirectories);
+        },
+        
+        /**
+         * Collapse all directories
+         */
+        collapseAllDirectories() {
+            this.expandedDirectories.clear();
+            this.expandedDirectories = new Set();
         },
         
         /**

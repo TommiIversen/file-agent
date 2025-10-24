@@ -36,6 +36,11 @@ class DirectoryItem(BaseModel):
     created_time: Optional[datetime] = Field(None, description="Creation time")
     modified_time: Optional[datetime] = Field(None, description="Last modification time")
     
+    # Hierarchy fields for tree view
+    parent_path: Optional[str] = Field(None, description="Parent directory path")
+    depth_level: int = Field(default=0, description="Depth level in directory tree (0 = root)")
+    relative_path: str = Field(default="", description="Relative path from scan root")
+    
     model_config = {
         "json_encoders": {
             datetime: lambda v: v.isoformat() if v else None
@@ -235,7 +240,12 @@ class DirectoryScannerService:
             for entry_name in dir_entries:
                 try:
                     item = await asyncio.wait_for(
-                        self._get_item_metadata(directory_path, entry_name),
+                        self._get_item_metadata(
+                            directory_path, 
+                            entry_name, 
+                            scan_root=directory_path if current_depth == 0 else None,
+                            current_depth=current_depth
+                        ),
                         timeout=self._item_timeout
                     )
                     if item:
@@ -305,13 +315,16 @@ class DirectoryScannerService:
                 error_message=f"Failed to list directory contents: {e}"
             )
     
-    async def _get_item_metadata(self, parent_path: str, item_name: str) -> Optional[DirectoryItem]:
+    async def _get_item_metadata(self, parent_path: str, item_name: str, 
+                               scan_root: str = None, current_depth: int = 0) -> Optional[DirectoryItem]:
         """
         Get metadata for a single file or directory item.
         
         Args:
             parent_path: Parent directory path
             item_name: Name of the item
+            scan_root: Root path of the scan (for relative path calculation)
+            current_depth: Current depth in the tree
             
         Returns:
             DirectoryItem with metadata or None if failed
@@ -319,6 +332,16 @@ class DirectoryScannerService:
         try:
             item_path = Path(parent_path) / item_name
             item_path_str = str(item_path)
+            
+            # Calculate hierarchy information
+            if scan_root:
+                try:
+                    relative_path = str(item_path.relative_to(Path(scan_root)))
+                except ValueError:
+                    # If path is not relative to scan_root, use full path
+                    relative_path = item_path_str
+            else:
+                relative_path = item_name
             
             # Check if item is directory
             is_directory = await aiofiles.os.path.isdir(item_path_str)
@@ -353,7 +376,10 @@ class DirectoryScannerService:
                 is_hidden=is_hidden,
                 size_bytes=size_bytes,
                 created_time=created_time,
-                modified_time=modified_time
+                modified_time=modified_time,
+                parent_path=parent_path,
+                depth_level=current_depth,
+                relative_path=relative_path
             )
             
         except Exception as e:
