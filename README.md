@@ -152,6 +152,47 @@ ls -la /Library/LaunchDaemons/com.fileagent.service.plist
 ls -la ~/Library/LaunchAgents/com.fileagent.service.plist
 ```
 
+# Tailwind CSS Setup for File Agent
+
+This project now uses the standalone Tailwind CSS executable instead of the CDN version for better performance and offline development.
+
+## Files Created
+
+- `tailwind.css` - Input CSS file with Tailwind directives and custom styles
+- `tailwind-build.bat` - One-time build script
+- `tailwind-watch.bat` - Development watch script
+- `app/static/css/tailwind.css` - Generated output CSS file (auto-generated)
+
+## Usage
+
+### First Time Setup / Production Build
+
+Run the build script to download Tailwind CSS and generate the CSS file:
+
+```batch
+.\tailwind-build.bat
+```
+
+This will:
+1. Download `tailwindcss-windows-x64.exe` if not present
+2. Generate the optimized CSS file at `app/static/css/tailwind.css`
+3. Include only the CSS classes actually used in your HTML templates
+
+### Development with Watch Mode
+
+For development, use the watch script to automatically rebuild CSS when files change:
+
+```batch
+.\tailwind-watch.bat
+```
+
+This will:
+1. Download Tailwind CSS if needed
+2. Start watching for changes in HTML templates and JS files
+3. Automatically rebuild CSS when changes are detected
+4. Run until you stop it with Ctrl+C
+
+
 ### Development Tools
 
 ```bash

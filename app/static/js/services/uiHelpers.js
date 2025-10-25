@@ -186,7 +186,7 @@ class UIHelpers {
      */
     static getFileName(filePath) {
         if (!filePath) return '';
-        return filePath.split(/[/\]/).pop();
+        return filePath.split(/[/\\]/).pop();
     }
 
     /**

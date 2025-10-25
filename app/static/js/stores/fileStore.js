@@ -211,8 +211,8 @@ document.addEventListener('alpine:init', () => {
                         return bCompleted - aCompleted;
 
                     case 'filename':
-                        const aName = a.file_path.split(/[/\]/).pop().toLowerCase();
-                        const bName = b.file_path.split(/[/\]/).pop().toLowerCase();
+                        const aName = a.file_path.split(/[/\\]/).pop().toLowerCase();
+                        const bName = b.file_path.split(/[/\\]/).pop().toLowerCase();
                         return aName.localeCompare(bName);
 
                     case 'size':
