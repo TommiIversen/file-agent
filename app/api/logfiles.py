@@ -20,67 +20,50 @@ router = APIRouter(prefix="/api", tags=["logfile"])
 @router.get("/log-files")
 async def list_log_files(settings: Settings = Depends(get_settings)):
     """List available log files"""
-
     try:
         logging.info("Log files list requested", extra={"operation": "api_list_log_files"})
 
-
         logs_directory = settings.log_directory
 
-        # Use async wrapper for all file operations to prevent blocking
-        def _sync_get_log_files():
-            if not logs_directory.exists():
-                return None, "Log directory does not exist"
-
-            log_files_async = []
-
-            # Find all log files in the directory
-            for log_file in logs_directory.glob("*.log*"):
-                if log_file.is_file():
-                    try:
-                        stat = log_file.stat()
-                        log_files_async.append({
-                            "filename": log_file.name,
-                            "size_bytes": stat.st_size,
-                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                            "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                            "url": f"/logs/{log_file.name}",
-                            "is_current": log_file.name == Path(settings.log_file_path).name
-                        })
-                    except Exception as e:
-                        logging.warning(f"Failed to get stats for {log_file}: {e}")
-
-            return log_files_async, None
-
-        # Execute with timeout to prevent blocking the event loop
-        try:
-            log_files, error_msg = await asyncio.wait_for(
-                asyncio.to_thread(_sync_get_log_files),
-                timeout=3.0  # 3 second timeout
-            )
-        except asyncio.TimeoutError:
-            logging.warning("Log files listing timed out")
+        if not await aiofiles.os.path.isdir(logs_directory):
             return {
                 "success": False,
-                "message": "Log directory scan timed out",
+                "message": "Log directory does not exist",
                 "log_files": []
             }
 
-        if error_msg:
+        log_files_async = []
+        try:
+            async for entry in await aiofiles.os.scandir(logs_directory):
+                if entry.is_file() and ".log" in entry.name:
+                    try:
+                        stat = await aiofiles.os.stat(entry.path)
+                        log_files_async.append({
+                            "filename": entry.name,
+                            "size_bytes": stat.st_size,
+                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                            "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            "url": f"/logs/{entry.name}",
+                            "is_current": entry.name == Path(settings.log_file_path).name
+                        })
+                    except Exception as e:
+                        logging.warning(f"Failed to get stats for {entry.name}: {e}")
+        except Exception as e:
+            logging.error(f"Error scanning log directory: {e}")
             return {
                 "success": False,
-                "message": error_msg,
+                "message": "Error scanning log directory",
                 "log_files": []
             }
 
         # Sort by modification time, newest first
-        log_files.sort(key=lambda x: x["modified_time"], reverse=True)
+        log_files_async.sort(key=lambda x: x["modified_time"], reverse=True)
 
         return {
             "success": True,
-            "message": f"Found {len(log_files)} log files",
+            "message": f"Found {len(log_files_async)} log files",
             "log_directory": str(logs_directory),
-            "log_files": log_files
+            "log_files": log_files_async
         }
 
     except Exception as e:
