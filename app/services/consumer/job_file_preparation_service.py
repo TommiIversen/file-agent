@@ -3,8 +3,12 @@ Job File Preparation Service - prepares files for copy operations.
 """
 
 import logging
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+import aiofiles.os
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -102,18 +106,15 @@ class JobFilePreparationService:
         Re-evaluate if a file is currently growing for accurate strategy selection.
         This is critical for files that went WAITING_FOR_NETWORK -> READY.
         """
-        import os
-        from datetime import datetime
-        
         # Handle None tracked_file gracefully
         if not tracked_file:
             return tracked_file
         
         try:
-            if not os.path.exists(tracked_file.file_path):
+            if not await aiofiles.os.path.exists(tracked_file.file_path):
                 return tracked_file
                 
-            current_size = os.path.getsize(tracked_file.file_path)
+            current_size = await aiofiles.os.path.getsize(tracked_file.file_path)
             current_time = datetime.now()
             
             # If file size has changed from last known size, it's growing
