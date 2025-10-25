@@ -229,32 +229,30 @@ class DestinationChecker:
                     "StorageMonitor not available - performing direct directory check"
                 )
                 
-                def _sync_directory_check():
-                    if not self.destination_path.exists():
+                try:
+                    if not await aiofiles.os.path.exists(self.destination_path):
                         try:
-                            self.destination_path.mkdir(parents=True, exist_ok=True)
+                            await aiofiles.os.makedirs(self.destination_path, exist_ok=True)
                             logging.info(
                                 f"Created missing destination directory: {self.destination_path}"
                             )
                         except Exception as e:
                             error_msg = f"Destination directory does not exist and could not create: {self.destination_path} - {e}"
                             logging.error(error_msg)
-                            return False, error_msg
+                            return DestinationCheckResult(
+                                is_available=False,
+                                checked_at=datetime.now(),
+                                error_message=error_msg,
+                            )
                     
-                    if not self.destination_path.is_dir():
+                    if not await aiofiles.os.path.isdir(self.destination_path):
                         error_msg = f"Destination is not a directory: {self.destination_path}"
-                        return False, error_msg
-                    
-                    return True, None
-                
-                try:
-                    success, error_msg = await asyncio.to_thread(_sync_directory_check)
-                    if not success:
                         return DestinationCheckResult(
                             is_available=False,
                             checked_at=datetime.now(),
                             error_message=error_msg,
                         )
+
                 except Exception as e:
                     error_msg = f"Directory check failed: {e}"
                     logging.error(error_msg)
