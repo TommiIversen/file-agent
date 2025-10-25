@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import aiofiles
+import aiofiles.os
 from starlette.responses import StreamingResponse
 
 from ..config import Settings
@@ -98,90 +100,39 @@ async def get_log_content(filename: str, settings: Settings = Depends(get_settin
     via StaticFiles due to concurrent writes causing Content-Length errors.
     """
     try:
-
         logs_directory = Path("logs")
         log_file_path = logs_directory / filename
 
         # Security check - ensure the file is within the logs directory
-        def _sync_security_check():
-            return str(log_file_path.resolve()).startswith(str(logs_directory.resolve()))
+        if not str(log_file_path.resolve()).startswith(str(logs_directory.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid file path")
 
-        try:
-            is_secure = await asyncio.wait_for(
-                asyncio.to_thread(_sync_security_check),
-                timeout=1.0
-            )
-            if not is_secure:
-                raise HTTPException(status_code=400, detail="Invalid file path")
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=500, detail="Security check timed out")
-
-        # Use async wrapper for file operations
-        def _sync_read_log_file():
-            if not log_file_path.exists():
-                return None, "Log file not found", None
-
-            if not log_file_path.is_file():
-                return None, "Path is not a file", None
-
-            # Check if this is the current active log file
-            current_log_name = Path(settings.log_file_path).name
-            is_current_log = filename == current_log_name
-
-            try:
-                # For active log files, read with special handling
-                if is_current_log:
-                    # Read the file in chunks to handle concurrent writes better
-                    content_chunks = []
-                    with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
-                        while True:
-                            chunk = f.read(8192)  # Read in 8KB chunks
-                            if not chunk:
-                                break
-                            content_chunks.append(chunk)
-                    content = ''.join(content_chunks)
-                else:
-                    # For archived log files, normal read is fine
-                    with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
-                        content = f.read()
-
-                # Get file stats
-                stat = log_file_path.stat()
-
-                return {
-                    "content": content,
-                    "stat": stat,
-                    "is_current_log": is_current_log
-                }, None, None
-
-            except Exception as e:
-                return None, f"Error reading log file: {str(e)}", None
-
-        # Execute with timeout to prevent blocking
-        try:
-            result, error_msg, _ = await asyncio.wait_for(
-                asyncio.to_thread(_sync_read_log_file),
-                timeout=5.0  # 5 second timeout for file read
-            )
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=500, detail="Log file read timed out")
-
-        if error_msg == "Log file not found":
+        if not await aiofiles.os.path.exists(log_file_path):
             raise HTTPException(status_code=404, detail="Log file not found")
-        elif error_msg == "Path is not a file":
+
+        if not await aiofiles.os.path.isfile(log_file_path):
             raise HTTPException(status_code=400, detail="Path is not a file")
-        elif error_msg:
-            raise HTTPException(status_code=500, detail=error_msg)
+
+        current_log_name = Path(settings.log_file_path).name
+        is_current_log = filename == current_log_name
+
+        try:
+            async with aiofiles.open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = await f.read()
+            stat = await aiofiles.os.stat(log_file_path)
+        except Exception as e:
+            logging.error(f"Error reading log file {filename}: {e}")
+            raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
 
         return {
             "success": True,
             "filename": filename,
-            "content": result["content"],
-            "size_bytes": result["stat"].st_size,
-            "size_mb": round(result["stat"].st_size / (1024 * 1024), 2),
-            "modified_time": datetime.fromtimestamp(result["stat"].st_mtime).isoformat(),
-            "is_current": result["is_current_log"],
-            "lines": result["content"].count('\n') + 1 if result["content"] else 0
+            "content": content,
+            "size_bytes": stat.st_size,
+            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+            "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "is_current": is_current_log,
+            "lines": content.count('\n') + 1 if content else 0
         }
 
     except HTTPException:
@@ -219,10 +170,10 @@ async def get_log_content_chunk(
         if not str(log_file_path.resolve()).startswith(str(logs_directory.resolve())):
             raise HTTPException(status_code=400, detail="Invalid file path")
 
-        if not log_file_path.exists():
+        if not await aiofiles.os.path.exists(log_file_path):
             raise HTTPException(status_code=404, detail="Log file not found")
 
-        if not log_file_path.is_file():
+        if not await aiofiles.os.path.isfile(log_file_path):
             raise HTTPException(status_code=400, detail="Path is not a file")
 
         # Validate parameters
@@ -235,47 +186,29 @@ async def get_log_content_chunk(
         if direction not in ["forward", "backward"]:
             raise HTTPException(status_code=400, detail="Direction must be 'forward' or 'backward'")
 
-        # Check if this is the current active log file
         current_log_name = Path(settings.log_file_path).name
         is_current_log = filename == current_log_name
 
-        # Read the file and split into lines
         try:
-            if is_current_log:
-                # For active log files, read with special handling
-                content_chunks = []
-                with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    while True:
-                        chunk = f.read(8192)
-                        if not chunk:
-                            break
-                        content_chunks.append(chunk)
-                content = ''.join(content_chunks)
-            else:
-                # For archived log files, normal read is fine
-                with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
-
+            async with aiofiles.open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                all_lines = await f.readlines()
         except Exception as e:
             logging.error(f"Error reading log file {filename}: {e}")
             raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
 
-        # Split into lines
-        all_lines = content.split('\n')
         total_lines = len(all_lines)
 
         # Calculate chunk based on direction
         if direction == "forward":
-            # Read from offset downward
             start_idx = min(offset, total_lines)
             end_idx = min(start_idx + limit, total_lines)
-            lines = all_lines[start_idx:end_idx]
+            lines = [line.rstrip('\n') for line in all_lines[start_idx:end_idx]]
             actual_offset = start_idx
         else:
             # Read from offset upward (backward)
             end_idx = min(offset + 1, total_lines)
             start_idx = max(0, end_idx - limit)
-            lines = all_lines[start_idx:end_idx]
+            lines = [line.rstrip('\n') for line in all_lines[start_idx:end_idx]]
             actual_offset = start_idx
 
         # Calculate pagination info
@@ -283,7 +216,7 @@ async def get_log_content_chunk(
         has_more_backward = actual_offset > 0
 
         # Get file stats
-        stat = log_file_path.stat()
+        stat = await aiofiles.os.stat(log_file_path)
 
         return {
             "success": True,
@@ -328,40 +261,29 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
         if not str(log_file_path.resolve()).startswith(str(logs_directory.resolve())):
             raise HTTPException(status_code=400, detail="Invalid file path")
 
-        if not log_file_path.exists():
+        if not await aiofiles.os.path.isfile(log_file_path):
             raise HTTPException(status_code=404, detail="Log file not found")
 
-        if not log_file_path.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a file")
-
-        # Check if this is the current active log file
         current_log_name = Path(settings.log_file_path).name
         is_current_log = filename == current_log_name
 
-        def generate_file_stream():
+        async def generate_file_stream():
             """Generate file content in chunks for streaming"""
             try:
-                if is_current_log:
-                    # For active log files, read the entire content at once to avoid
-                    # issues with file growing during download
-                    with open(log_file_path, 'rb') as f:
-                        content = f.read()
-                    yield content
-                else:
-                    # For archived log files, stream in chunks
-                    with open(log_file_path, 'rb') as f:
-                        while True:
-                            chunk = f.read(8192)  # 8KB chunks
-                            if not chunk:
-                                break
-                            yield chunk
+                async with aiofiles.open(log_file_path, 'rb') as f:
+                    while True:
+                        chunk = await f.read(8192)  # 8KB chunks
+                        if not chunk:
+                            break
+                        yield chunk
             except Exception as e:
                 logging.error(f"Error streaming log file {filename}: {e}")
-                # Can't raise HTTPException in generator, so yield error message
-                yield f"Error reading file: {str(e)}".encode('utf-8')
+                # In an async generator, we can't easily propagate exceptions to the client
+                # after the response has started. Logging is the safest option.
+                pass
 
-        # Get file size for Content-Length header
-        file_size = log_file_path.stat().st_size
+        stat = await aiofiles.os.stat(log_file_path)
+        file_size = stat.st_size
 
         # Create headers for download
         headers = {
