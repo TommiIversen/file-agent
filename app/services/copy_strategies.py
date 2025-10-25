@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 import aiofiles
+import aiofiles.os
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -18,21 +19,8 @@ from app.utils.progress_utils import calculate_transfer_rate
 
 async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
     try:
-        import asyncio
-        
-        def _sync_get_sizes():
-            source_size = os.path.getsize(source_path)
-            dest_size = os.path.getsize(dest_path)
-            return source_size, dest_size
-        
-        try:
-            source_size, dest_size = await asyncio.wait_for(
-                asyncio.to_thread(_sync_get_sizes),
-                timeout=2.0  # 2 second timeout
-            )
-        except asyncio.TimeoutError:
-            logging.error(f"File size check timed out for {source_path} -> {dest_path}")
-            return False
+        source_size = await aiofiles.os.path.getsize(source_path)
+        dest_size = await aiofiles.os.path.getsize(dest_path)
 
         if source_size != dest_size:
             logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
@@ -45,7 +33,6 @@ async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
         return False
 
 
-
 class FileCopyStrategy(ABC):
     def __init__(
             self,
@@ -55,7 +42,6 @@ class FileCopyStrategy(ABC):
     ):
         self.settings = settings
         self.state_manager = state_manager
-
         self.file_copy_executor = file_copy_executor
 
     @abstractmethod
@@ -113,7 +99,7 @@ class NormalFileCopyStrategy(FileCopyStrategy):
                     return False
 
                 try:
-                    os.remove(source_path)
+                    await aiofiles.os.remove(source_path)
                     logging.debug(f"Source file deleted: {source.name}")
                 except (OSError, PermissionError) as e:
                     logging.warning(
@@ -145,7 +131,6 @@ class NormalFileCopyStrategy(FileCopyStrategy):
             return False
 
 
-
 class GrowingFileCopyStrategy(FileCopyStrategy):
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
@@ -157,13 +142,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         temp_dest_path = None
 
         try:
-            
-            def _sync_get_size():
-                return os.path.getsize(source_path)
-            
             try:
                 current_size = await asyncio.wait_for(
-                    asyncio.to_thread(_sync_get_size),
+                    aiofiles.os.path.getsize(source_path),
                     timeout=1.0  # 1 second timeout
                 )
             except asyncio.TimeoutError:
@@ -187,18 +168,18 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                     try:
                         current_size = await asyncio.wait_for(
-                            asyncio.to_thread(_sync_get_size),
+                            aiofiles.os.path.getsize(source_path),
                             timeout=1.0  # 1 second timeout
                         )
-                    except asyncio.TimeoutError:
-                        logging.error(f"File size check timed out for {source_path}")
-                        return False
                         size_mb = current_size / (1024 * 1024)
 
                         logging.debug(
                             f"📏 SIZE CHECK: {os.path.basename(source_path)} "
                             f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
                         )
+                    except asyncio.TimeoutError:
+                        logging.error(f"File size check timed out for {source_path}")
+                        return False
                     except OSError as e:
                         logging.error(f"Failed to check file size: {e}")
                         return False
@@ -213,8 +194,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)"
             )
             
-            # CRITICAL: Ensure we have the latest tracked file reference from state manager
-            # to avoid UUID mismatches in resume scenarios
             latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
             if latest_tracked_file:
                 tracked_file = latest_tracked_file
@@ -224,13 +203,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
             dest_dir = Path(dest_path).parent
             try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(lambda: dest_dir.mkdir(parents=True, exist_ok=True)),
-                    timeout=2.0  # 2 second timeout
-                )
+                await aiofiles.os.makedirs(dest_dir, exist_ok=True)
                 logging.debug(f"Ensured destination directory exists: {dest_dir}")
-            except asyncio.TimeoutError:
-                logging.error(f"Directory creation timed out for: {dest_dir}")
+            except Exception as e:
+                logging.error(f"Directory creation failed for: {dest_dir}: {e}")
                 return False
 
             success = await self._copy_growing_file(
@@ -238,10 +214,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             )
 
             if success:
-                # Verify the completed copy
                 if await _verify_file_integrity(source_path, dest_path):
                     try:
-                        os.remove(source_path)
+                        await aiofiles.os.remove(source_path)
                         logging.debug(
                             f"Source file deleted: {os.path.basename(source_path)}"
                         )
@@ -270,28 +245,19 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 return False
 
         except FileNotFoundError:
-            # Source file disappeared during copying - let this bubble up to error classifier
             raise
         except NetworkError:
-            # Network error during copy - let this bubble up for immediate failure
             raise
         except Exception as e:
-            # Check if this exception might be network-related before giving up
             error_str = str(e).lower()
-            
-            # Check for network error patterns in the exception
             network_indicators = {
                 "invalid argument", "errno 22", "network path was not found", "winerror 53",
                 "the network name cannot be found", "winerror 67", "access is denied",
                 "input/output error", "errno 5", "connection refused", "network is unreachable"
             }
-            
             is_network_error = any(indicator in error_str for indicator in network_indicators)
-            
-            # Check errno if available
             if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
                 is_network_error = True
-                
             if is_network_error:
                 logging.error(f"Network error detected in growing copy strategy: {e}")
                 raise NetworkError(f"Network error during growing copy: {e}")
@@ -299,9 +265,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             logging.error(f"Error in growing copy strategy: {e}")
             return False
         finally:
-            if temp_dest_path and os.path.exists(temp_dest_path):
+            if temp_dest_path and await aiofiles.os.path.exists(temp_dest_path):
                 try:
-                    os.remove(temp_dest_path)
+                    await aiofiles.os.remove(temp_dest_path)
                 except Exception as e:
                     logging.warning(
                         f"Failed to cleanup temp file {temp_dest_path}: {e}"
@@ -321,16 +287,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             no_growth_cycles = 0
             max_no_growth_cycles = self.settings.growing_file_growth_timeout_seconds // poll_interval
 
-            # Fresh copy approach - fail-and-rediscover strategy eliminates resume complexity
             logging.info(
                 f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
                 f"starting fresh copy"
             )
 
-            # Initialize network error detector for fail-fast behavior
             network_detector = NetworkErrorDetector(
                 destination_path=dest_path,
-                check_interval_bytes=chunk_size * 10  # Check every 10 chunks
+                check_interval_bytes=chunk_size * 10
             )
             
             async with aiofiles.open(dest_path, "wb") as dst:
@@ -343,25 +307,17 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             return True
 
         except NetworkError:
-            # Re-raise network errors for immediate failure handling
             raise
         except Exception as e:
-            # Check if this exception might be network-related before giving up
             error_str = str(e).lower()
-            
-            # Check for network error patterns in the exception
             network_indicators = {
                 "invalid argument", "errno 22", "network path was not found", "winerror 53",
                 "the network name cannot be found", "winerror 67", "access is denied",
                 "input/output error", "errno 5", "connection refused", "network is unreachable"
             }
-            
             is_network_error = any(indicator in error_str for indicator in network_indicators)
-            
-            # Check errno if available
             if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
                 is_network_error = True
-                
             if is_network_error:
                 logging.error(f"Network error detected in growing copy: {e}")
                 raise NetworkError(f"Network error during growing copy: {e}")
@@ -377,17 +333,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
     ) -> int:
         """
         Intelligent growing copy loop that adapts behavior based on file growth.
-        
         Phase 1: Growing phase - uses safety margin and delays
         Phase 2: Finished growing - copies at full speed without delays/margin
-        
         Returns the final bytes_copied count.
         """
-        import asyncio
-        
-        def _sync_get_size():
-            return os.path.getsize(source_path)
-        
         file_finished_growing = False
         
         while True:
@@ -398,8 +347,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
             try:
                 current_file_size = await asyncio.wait_for(
-                    asyncio.to_thread(_sync_get_size),
-                    timeout=1.0  # 1 second timeout
+                    aiofiles.os.path.getsize(source_path),
+                    timeout=1.0
                 )
             except asyncio.TimeoutError:
                 logging.warning(f"File size check timed out for: {source_path}")
@@ -408,7 +357,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 logging.warning(f"Cannot access source file: {source_path}")
                 break
 
-            # Check if file is still growing
             if not file_finished_growing:
                 if current_file_size > last_file_size:
                     no_growth_cycles = 0
@@ -421,34 +369,26 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                             f"🎯 GROWTH STOPPED: {os.path.basename(source_path)} - switching to full speed copy"
                         )
                         file_finished_growing = True
-                        # Continue the loop but with different behavior
 
-            # Determine copy target and speed based on distance to write head
             if file_finished_growing:
-                # Phase 2: Copy everything at full speed (no safety margin)
                 safe_copy_to = current_file_size
                 status = FileStatus.COPYING
-                use_pause = False  # No throttling when file is finished
+                use_pause = False
             else:
-                # Phase 1: Respect safety margin while file is growing
                 safe_copy_to = max(0, current_file_size - safety_margin_bytes)
                 status = FileStatus.GROWING_COPY
                 
-                # Smart speed control: Only throttle if we're close to write head
                 distance_from_write_head = current_file_size - bytes_copied
-                buffer_zone = safety_margin_bytes * 2  # 2x safety margin = comfort zone
+                buffer_zone = safety_margin_bytes * 2
                 
                 if distance_from_write_head > buffer_zone:
-                    # We're far from write head - full speed even while growing
                     use_pause = False
                     logging.debug(f"🚀 FULL SPEED: {distance_from_write_head/1024/1024:.1f}MB ahead of write head")
                 else:
-                    # Close to write head - throttle to avoid overtaking
                     use_pause = True
                     logging.debug(f"🐌 THROTTLED: Only {distance_from_write_head/1024/1024:.1f}MB from write head")
 
             if safe_copy_to > bytes_copied:
-                # Log speed decision for transparency
                 speed_mode = "🚀 FULL" if not use_pause else "🐌 THROTTLED"
                 phase = "FINISH" if file_finished_growing else "GROWING"
                 logging.debug(f"{speed_mode} | {phase} | Copy {safe_copy_to - bytes_copied} bytes")
@@ -459,7 +399,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     network_detector, status
                 )
             elif not file_finished_growing:
-                # No new data to copy in growing phase, just update progress
                 copy_ratio = (
                     (bytes_copied / current_file_size) * 100
                     if current_file_size > 0
@@ -474,12 +413,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     file_size=current_file_size,
                 )
 
-            # Check if we're done
             if file_finished_growing and bytes_copied >= current_file_size:
                 logging.info(f"✅ COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)")
                 break
 
-            # Only sleep if we're still in growing phase
             if not file_finished_growing:
                 await asyncio.sleep(poll_interval)
 
@@ -492,10 +429,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
     ) -> int:
         """
         Copy a range of bytes from source to destination with network error detection.
-        
         Args:
             status: FileStatus to use for progress updates (GROWING_COPY or COPYING)
-        
         Returns the final bytes copied count.
         """
         bytes_copied = start_bytes
@@ -514,16 +449,13 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 try:
                     await dst.write(chunk)
                 except Exception as write_error:
-                    # Check if write error is network-related for immediate failure
                     network_detector.check_write_error(write_error, "growing copy chunk write")
-                    # If not network error, re-raise original error
                     raise write_error
                     
                 chunk_len = len(chunk)
                 bytes_copied += chunk_len
                 bytes_to_copy -= chunk_len
 
-                # Check network connectivity periodically for fail-fast behavior
                 try:
                     await network_detector.check_destination_connectivity(bytes_copied)
                 except NetworkError as ne:
@@ -554,7 +486,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,
-                    status,  # Use dynamic status (GROWING_COPY or COPYING)
+                    status,
                     copy_progress=copy_ratio,
                     bytes_copied=bytes_copied,
                     file_size=current_file_size,
@@ -578,7 +510,6 @@ class CopyStrategyFactory:
         self.state_manager = state_manager
         self.file_copy_executor = FileCopyExecutor(settings)
 
-        # Simple strategy initialization - no resume logic in fail-and-rediscover approach
         self.normal_strategy = NormalFileCopyStrategy(
             settings, state_manager, self.file_copy_executor
         )
