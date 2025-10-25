@@ -1,8 +1,9 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
 from typing import Optional, Tuple
+
+import aiofiles.os
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -54,11 +55,11 @@ class GrowingFileDetector:
             
         try:
             # Get current file info
-            if not os.path.exists(tracked_file.file_path):
+            if not await aiofiles.os.path.exists(tracked_file.file_path):
                 logging.info(f"File no longer exists during growth check: {tracked_file.file_path}")
                 return FileStatus.REMOVED, None
 
-            current_size = os.path.getsize(tracked_file.file_path)
+            current_size = await aiofiles.os.path.getsize(tracked_file.file_path)
             current_time = datetime.now()
 
             # Initialize growth tracking fields if this is first check
