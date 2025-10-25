@@ -1,28 +1,12 @@
-"""
-Ultra-simple logging configuration for File Transfer Agent
-
-Principles:
-- ONE logger for entire app
-- Console + File output (with nightly rotation)
-- Beautiful Rich console output with colors and formatting
-- Keep X days of logs
-"""
-
 import logging
 import logging.handlers
-
-from rich.console import Console
 from rich.logging import RichHandler
+from rich.console import Console
 
 from .config import Settings
 
 
 def setup_logging(settings: Settings) -> None:
-    """
-    Setup beautiful logging: Rich console + rotating file
-    """
-
-    # Ensure log directory exists
     log_dir = settings.log_directory
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,14 +66,3 @@ def setup_logging(settings: Settings) -> None:
         f"Level: [yellow]{settings.log_level}[/], "
         f"Retention: [blue]{settings.log_retention_days}[/] days"
     )
-
-# Simple usage - just use logging directly in your code:
-#
-# import logging
-#
-# # In any file, just call:
-# logging.info("File discovered", extra={"file_path": "/path/to/file.mxf"})
-# logging.error("Copy failed", exc_info=True)
-# logging.debug("Debug info")
-#
-# The logging system automatically shows file/class/line information!
