@@ -6,14 +6,13 @@ import asyncio
 import logging
 import time
 import uuid
-import glob
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import aiofiles
+import aiofiles.os
 
 
 @dataclass
@@ -70,20 +69,19 @@ class DestinationChecker:
     async def test_write_access(self, dest_path: Optional[Path] = None) -> bool:
         """Test write access to destination directory."""
         target_path = dest_path or self.destination_path
+        test_file = target_path / f".file_agent_write_test_{uuid.uuid4().hex[:8]}"
 
         try:
-            test_file = target_path / f".file_agent_write_test_{uuid.uuid4().hex[:8]}"
-
             async with aiofiles.open(test_file, "w") as f:
                 await f.write("write_test")
 
             try:
-                test_file.unlink()
+                await aiofiles.os.remove(test_file)
                 logging.debug(f"Write access test successful: {target_path}")
                 return True
             except Exception as cleanup_error:
                 logging.warning(f"Could not cleanup test file: {cleanup_error}")
-                return True
+                return True  # Write was successful, so we return True
 
         except Exception as e:
             logging.warning(f"Write access test failed for {target_path}: {e}")
@@ -126,39 +124,34 @@ class DestinationChecker:
     async def cleanup_old_test_files(self) -> int:
         """
         Ryd op i gamle test-filer i destination directory.
-        
+
         Returns:
             Antal filer der blev slettet
         """
         cleaned_count = 0
         try:
-            # Find alle test-filer der matcher vores pattern (.file_agent_test_* og .file_agent_write_test_*)
-            patterns = [
-                str(self.destination_path / ".file_agent_test_*"),
-                str(self.destination_path / ".file_agent_write_test_*")
-            ]
-            
-            test_files = []
-            for pattern in patterns:
-                test_files.extend(glob.glob(pattern))
-            
-            logging.debug(f"Found {len(test_files)} old test files to clean up in {self.destination_path}")
-            
-            for test_file in test_files:
-                try:
-                    if os.path.exists(test_file):
-                        os.remove(test_file)
+            if not await aiofiles.os.path.isdir(self.destination_path):
+                logging.debug(f"Cleanup directory does not exist: {self.destination_path}")
+                return 0
+
+            patterns = [".file_agent_test_", ".file_agent_write_test_"]
+            logging.debug(f"Scanning for old test files in {self.destination_path}")
+
+            async for entry in await aiofiles.os.scandir(self.destination_path):
+                if entry.is_file() and any(entry.name.startswith(p) for p in patterns):
+                    try:
+                        await aiofiles.os.remove(entry.path)
                         cleaned_count += 1
-                        logging.debug(f"Cleaned up old test file: {test_file}")
-                except Exception as e:
-                    logging.warning(f"Could not clean up old test file {test_file}: {e}")
-                    
+                        logging.debug(f"Cleaned up old test file: {entry.path}")
+                    except Exception as e:
+                        logging.warning(f"Could not clean up old test file {entry.path}: {e}")
+
             if cleaned_count > 0:
                 logging.info(f"Cleaned up {cleaned_count} old test files from {self.destination_path}")
-                
+
         except Exception as e:
             logging.error(f"Error during old test files cleanup in {self.destination_path}: {e}")
-            
+
         return cleaned_count
 
     async def _trigger_storage_update_if_changed(self, current_available: bool) -> None:
@@ -280,9 +273,9 @@ class DestinationChecker:
                     async with aiofiles.open(test_file, "w") as f:
                         await f.write("availability_test")
 
-                    # Cleanup test file using modern asyncio.to_thread
+                    # Cleanup test file using aiofiles
                     try:
-                        await asyncio.to_thread(test_file.unlink)
+                        await aiofiles.os.remove(test_file)
                     except Exception as cleanup_error:
                         logging.debug(
                             f"Could not cleanup test file (ignoring): {cleanup_error}"
