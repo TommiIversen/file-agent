@@ -10,7 +10,7 @@ import aiofiles.os
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
-from app.services.copy.file_copy_executor import FileCopyExecutor, CopyProgress
+from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.state_manager import StateManager
 from app.utils.progress_utils import calculate_transfer_rate
