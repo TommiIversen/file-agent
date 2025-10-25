@@ -68,14 +68,13 @@ class StorageChecker:
         )
 
     async def _check_accessibility(self, path: str) -> bool:
-        """Check if path is accessible using modern asyncio.to_thread."""
+        """Check if path is accessible using aiofiles."""
         try:
-            def _sync_check():
-                path_obj = Path(path)
-                return path_obj.exists() and path_obj.is_dir()
-            
+            async def _async_check():
+                return await aiofiles.os.path.exists(path) and await aiofiles.os.path.isdir(path)
+
             return await asyncio.wait_for(
-                asyncio.to_thread(_sync_check),
+                _async_check(),
                 timeout=5.0  # 5 second timeout
             )
         except asyncio.TimeoutError:
