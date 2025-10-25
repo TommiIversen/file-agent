@@ -162,7 +162,8 @@ class StorageChecker:
                 logging.debug(f"Cleanup directory does not exist or is not a directory: {directory}")
                 return 0
 
-            async for entry in await aiofiles.os.scandir(directory):
+            entries = await aiofiles.os.scandir(directory)
+            for entry in entries:
                 if entry.is_file() and entry.name.startswith(self._test_file_prefix) and entry.name.endswith(".tmp"):
                     try:
                         await aiofiles.os.remove(entry.path)

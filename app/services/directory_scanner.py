@@ -385,55 +385,37 @@ class DirectoryScannerService:
         try:
             item_path = Path(parent_path) / item_name
             item_path_str = str(item_path)
+
+            # --- Optimization: Call stat once ---
+            try:
+                stat_result = await aiofiles.os.stat(item_path_str)
+            except (OSError, AttributeError):
+                # If stat fails, we can't get any metadata, so return None
+                logging.debug(f"Failed to stat {item_path_str}, skipping.")
+                return None
+
+            # --- Use the single stat_result for all metadata ---
+            is_directory = stat.S_ISDIR(stat_result.st_mode)
+            size_bytes = stat_result.st_size if not is_directory else None
             
+            try:
+                created_time = datetime.fromtimestamp(stat_result.st_ctime)
+                modified_time = datetime.fromtimestamp(stat_result.st_mtime)
+            except ValueError:
+                created_time = None
+                modified_time = None
+
             # Calculate hierarchy information
             if scan_root:
                 try:
                     relative_path = str(item_path.relative_to(Path(scan_root)))
                 except ValueError:
-                    # If path is not relative to scan_root, use full path
                     relative_path = item_path_str
             else:
                 relative_path = item_name
-            
-            # Check if item is directory with more robust detection
-            try:
-                # First check with isdir
-                is_directory = await aiofiles.os.path.isdir(item_path_str)
-                
-                # If isdir says it's a directory, double-check with stat
-                if is_directory:
-                    stat_result = await aiofiles.os.stat(item_path_str)
-                    # Use stat.S_ISDIR to verify it's actually a directory
-                    is_directory = stat.S_ISDIR(stat_result.st_mode)
-                
-            except (OSError, AttributeError):
-                # If we can't determine, assume it's a file
-                is_directory = False
-            
-            # Get file size (only for files)
-            size_bytes = None
-            if not is_directory:
-                try:
-                    stat_result = await aiofiles.os.stat(item_path_str)
-                    size_bytes = stat_result.st_size
-                except (OSError, AttributeError):
-                    size_bytes = None
-            
-            # Get timestamps
-            created_time = None
-            modified_time = None
-            try:
-                stat_result = await aiofiles.os.stat(item_path_str)
-                created_time = datetime.fromtimestamp(stat_result.st_ctime)
-                modified_time = datetime.fromtimestamp(stat_result.st_mtime)
-            except (OSError, AttributeError, ValueError):
-                # Skip timestamp errors
-                pass
-            
-            # Determine if hidden (starts with . on Unix-like systems)
+
             is_hidden = item_name.startswith('.')
-            
+
             return DirectoryItem(
                 name=item_name,
                 path=item_path_str,
@@ -446,7 +428,7 @@ class DirectoryScannerService:
                 depth_level=current_depth,
                 relative_path=relative_path
             )
-            
+
         except Exception as e:
             logging.debug(f"Failed to get metadata for {item_name}: {e}")
             return None
