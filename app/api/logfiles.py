@@ -34,7 +34,8 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
 
         log_files_async = []
         try:
-            async for entry in await aiofiles.os.scandir(logs_directory):
+            entries = await aiofiles.os.scandir(logs_directory)
+            for entry in entries:
                 if entry.is_file() and ".log" in entry.name:
                     try:
                         stat = await aiofiles.os.stat(entry.path)
