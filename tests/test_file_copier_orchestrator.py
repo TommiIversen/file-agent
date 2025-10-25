@@ -12,6 +12,7 @@ from unittest.mock import Mock, AsyncMock, MagicMock
 from app.services.file_copier import FileCopierService
 from app.services.job_queue import JobQueueService
 from app.config import Settings
+from app.services.copy_strategies import GrowingFileCopyStrategy
 
 
 class TestFileCopierServiceOrchestrator:
@@ -44,8 +45,7 @@ class TestFileCopierServiceOrchestrator:
         """Mock orchestrator for testing with legacy compatibility."""
         # Create properly mocked JobProcessor with all needed attributes
         job_processor = MagicMock()
-        job_processor.copy_strategy_factory = MagicMock()
-        job_processor.copy_executor = MagicMock()
+        job_processor.copy_strategy = MagicMock(spec=GrowingFileCopyStrategy)
 
         orchestrator = FileCopierService(
             settings=mock_settings,
@@ -81,11 +81,10 @@ class TestFileCopierServiceOrchestrator:
         # Check that all required services are created
         assert orchestrator.settings == mock_settings
         assert orchestrator.job_queue is not None
-        assert orchestrator.copy_strategy_factory is not None
+        assert orchestrator.job_processor.copy_strategy is not None
         assert orchestrator.statistics_tracker is not None
         assert orchestrator.error_handler is not None
         assert orchestrator.destination_checker is not None
-        assert orchestrator.file_copy_executor is not None
         assert orchestrator.job_processor is not None
 
         # Check orchestrator state
@@ -163,7 +162,7 @@ class TestFileCopierServiceOrchestrator:
     def test_orchestrator_service_composition(self, orchestrator):
         """Test that all services are properly composed."""
         # Verify types of composed services (mocked for orchestrator test)
-        assert orchestrator.copy_strategy_factory is not None
+        assert orchestrator.job_processor.copy_strategy is not None
         assert orchestrator.statistics_tracker is not None
         assert orchestrator.error_handler is not None
         assert orchestrator.destination_checker is not None
@@ -172,8 +171,7 @@ class TestFileCopierServiceOrchestrator:
         # Instead of comparing types, just verify both exist since different mock types might be used
         assert orchestrator.job_processor.job_queue is not None
         assert orchestrator.job_queue is not None
-        assert orchestrator.job_processor.copy_strategy_factory is not None
-        assert orchestrator.copy_strategy_factory is not None
+        assert orchestrator.job_processor.copy_strategy is not None
 
     @pytest.mark.asyncio
     async def test_orchestrator_graceful_shutdown(self, orchestrator):

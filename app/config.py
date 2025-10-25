@@ -55,8 +55,7 @@ class Settings(BaseSettings):
     # File history management  
     keep_files_hours: int = 336  # Keep ALL files in memory for 14 days (14*24=336 hours) - provides complete UI log
 
-    # Growing file support
-    enable_growing_file_support: bool = False  # Enable growing file copy support
+    # Growing file support (now default)
     growing_file_min_size_mb: int = 100  # Minimum size in MB to start growing copy
     growing_file_safety_margin_mb: int = 50  # Stay this many MB behind write head
     growing_file_poll_interval_seconds: int = 5  # Check file growth every N seconds

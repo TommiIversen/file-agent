@@ -13,6 +13,7 @@ from datetime import datetime
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob
+from app.services.copy_strategies import GrowingFileCopyStrategy
 
 
 @pytest.fixture
@@ -20,12 +21,13 @@ def preparer():
     """Simple file preparer for testing."""
     settings = MagicMock(source_directory="/src", destination_directory="/dst")
     state_manager = AsyncMock()
-    copy_strategy_factory = MagicMock()
+    copy_strategy = AsyncMock(spec=GrowingFileCopyStrategy)
+    copy_strategy.__class__.__name__ = "GrowingFileCopyStrategy"
     template_engine = MagicMock()
     template_engine.is_enabled.return_value = True
 
     return JobFilePreparationService(
-        settings, state_manager, copy_strategy_factory, template_engine
+        settings, state_manager, copy_strategy, template_engine
     )
 
 
@@ -39,10 +41,8 @@ class TestJobFilePreparationService:
             file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
         )
         job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
-        strategy = MagicMock(__class__=MagicMock(__name__="StandardCopyStrategy"))
 
         preparer.state_manager.get_file_by_path.return_value = tracked_file
-        preparer.copy_strategy_factory.get_strategy.return_value = strategy
 
         # Mock the utils functions
         with (
@@ -60,8 +60,8 @@ class TestJobFilePreparationService:
 
         assert result is not None
         assert result.tracked_file == tracked_file
-        assert result.strategy_name == "StandardCopyStrategy"
-        assert result.initial_status == FileStatus.COPYING
+        assert result.strategy_name == "GrowingFileCopyStrategy"
+        assert result.initial_status == FileStatus.GROWING_COPY
         assert result.destination_path == Path("/dst/test.mxf")
 
     @pytest.mark.asyncio
@@ -79,23 +79,14 @@ class TestJobFilePreparationService:
 
         job = DummyJob()
         preparer.state_manager.get_file_by_path.return_value = None
-        # Patch the copy_strategy_factory to return None for get_strategy
-        preparer.copy_strategy_factory.get_strategy.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)
 
-        # Update assertion to match actual behavior: the implementation returns a PreparedFile
-        # with tracked_file=None rather than None when the file is not found
         assert result is not None
         assert result.tracked_file is None
-        assert result.strategy_name == "NoneType"  # Type of None is NoneType
+        assert result.strategy_name == "GrowingFileCopyStrategy"
 
-    def test_determine_initial_status_growing(self, preparer):
+    def test_determine_initial_status(self, preparer):
         """Test status determination for growing strategy."""
-        status = preparer._determine_initial_status("GrowingFileCopyStrategy")
+        status = preparer._determine_initial_status()
         assert status == FileStatus.GROWING_COPY
-
-    def test_determine_initial_status_standard(self, preparer):
-        """Test status determination for standard strategy."""
-        status = preparer._determine_initial_status("StandardCopyStrategy")
-        assert status == FileStatus.COPYING

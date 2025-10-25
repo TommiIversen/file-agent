@@ -8,6 +8,7 @@ error classification, and global vs local error patterns.
 import pytest
 import asyncio
 from datetime import datetime
+from unittest.mock import Mock
 
 from app.config import Settings
 from app.services.error_handling.copy_error_handler import (
@@ -21,13 +22,13 @@ from app.services.error_handling.copy_error_handler import (
 @pytest.fixture
 def settings():
     """Create test settings"""
-    return Settings(
-        source_directory="C:/source",
-        destination_directory="C:/dest",
-        max_retry_attempts=3,
-        retry_delay_seconds=1,
-        global_retry_delay_seconds=5,
-    )
+    settings = Mock(spec=Settings)
+    settings.source_directory = "C:/source"
+    settings.destination_directory = "C:/dest"
+    settings.max_retry_attempts = 3
+    settings.retry_delay_seconds = 1
+    settings.global_retry_delay_seconds = 5
+    return settings
 
 
 @pytest.fixture

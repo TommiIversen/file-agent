@@ -445,12 +445,6 @@ class StateManager:
                     f"cancelled scheduled retry [UUID: {file_id[:8]}...]"
                 )
 
-            if status == FileStatus.READY_TO_START_GROWING:
-                tracked_file.is_growing_file = True
-            elif status in [FileStatus.READY, FileStatus.COMPLETED]:
-                if "is_growing_file" not in kwargs:
-                    tracked_file.is_growing_file = False
-
             for key, value in kwargs.items():
                 if hasattr(tracked_file, key):
                     setattr(tracked_file, key, value)
@@ -524,8 +518,7 @@ class StateManager:
             growing_files = [
                 f
                 for f in current_files_list
-                if f.is_growing_file
-                   or f.status
+                if f.status
                    in [
                        FileStatus.GROWING,
                        FileStatus.READY_TO_START_GROWING,

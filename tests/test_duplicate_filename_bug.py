@@ -44,9 +44,7 @@ class TestDuplicateFilenameBug:
             source_directory=str(source_dir),
             destination_directory=str(dest_dir),
             file_stable_time_seconds=1,
-            polling_interval_seconds=1,
-            enable_growing_file_support=True,
-            growing_file_min_size_mb=1
+            polling_interval_seconds=1
         )
 
     @pytest.fixture

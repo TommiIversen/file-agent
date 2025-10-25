@@ -186,7 +186,7 @@ class UIHelpers {
      */
     static getFileName(filePath) {
         if (!filePath) return '';
-        return filePath.split(/[/\\]/).pop();
+        return filePath.split(/[/\]/).pop();
     }
 
     /**
@@ -248,8 +248,7 @@ class UIHelpers {
      * Check if file is a growing file
      */
     static isGrowingFile(file) {
-        return file && (file.is_growing_file === true ||
-            ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status));
+        return file && ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status);
     }
 
     /**

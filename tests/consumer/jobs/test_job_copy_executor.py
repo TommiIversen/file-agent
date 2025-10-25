@@ -13,6 +13,7 @@ from datetime import datetime
 from app.services.consumer.job_copy_executor import JobCopyExecutor
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile
+from app.services.copy_strategies import GrowingFileCopyStrategy
 
 
 @pytest.fixture
@@ -20,9 +21,9 @@ def executor():
     """Simple copy executor for testing."""
     settings = MagicMock()
     state_manager = AsyncMock()
-    copy_strategy_factory = MagicMock()
+    copy_strategy = AsyncMock(spec=GrowingFileCopyStrategy)
 
-    return JobCopyExecutor(settings, state_manager, copy_strategy_factory)
+    return JobCopyExecutor(settings, state_manager, copy_strategy)
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def prepared_file():
     )
     return PreparedFile(
         tracked_file=tracked_file,
-        strategy_name="StandardCopyStrategy",
+        strategy_name="GrowingFileCopyStrategy",
         initial_status=FileStatus.COPYING,
         destination_path=Path("/dst/test.mxf"),
     )
@@ -60,24 +61,18 @@ class TestJobCopyExecutor:
     @pytest.mark.asyncio
     async def test_execute_copy_success(self, executor, prepared_file):
         """Test successful copy execution."""
-        strategy = AsyncMock()
-        strategy.copy_file.return_value = True
-        strategy.__class__.__name__ = "StandardCopyStrategy"
-        executor.copy_strategy_factory.get_strategy.return_value = strategy
+        executor.copy_strategy.copy_file.return_value = True
 
         with patch("pathlib.Path.exists", return_value=False):
             result = await executor.execute_copy(prepared_file)
 
         assert result is True
-        strategy.copy_file.assert_called_once()
+        executor.copy_strategy.copy_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_execute_copy_failure(self, executor, prepared_file):
         """Test failed copy execution."""
-        strategy = AsyncMock()
-        strategy.copy_file.return_value = False
-        strategy.__class__.__name__ = "StandardCopyStrategy"
-        executor.copy_strategy_factory.get_strategy.return_value = strategy
+        executor.copy_strategy.copy_file.return_value = False
 
         with patch("pathlib.Path.exists", return_value=False):
             result = await executor.execute_copy(prepared_file)
@@ -99,12 +94,7 @@ class TestJobCopyExecutor:
 
     def test_get_copy_executor_info(self, executor):
         """Test configuration info retrieval."""
-        executor.copy_strategy_factory.get_available_strategies.return_value = [
-            "strategy1",
-            "strategy2",
-        ]
-
         info = executor.get_copy_executor_info()
 
-        assert info["copy_strategies_available"] == 2
+        assert info["copy_strategy"] == "GrowingFileCopyStrategy"
         assert info["state_manager_available"] is True

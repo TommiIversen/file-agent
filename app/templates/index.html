@@ -376,14 +376,14 @@
 
 
                     <!-- Status -->
-                    <div class="w-24 text-center">
+                    <div class="w-32 text-center">
                         <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
                              :class="UIHelpers.getStatusBadgeColor(file.status)"
                              x-text="UIHelpers.getFriendlyStatus(file.status)">
                         </div>
                     </div>
 
-                    <div class="w-48 text-center text-xs">
+                    <div class="w-40 text-center text-xs">
                         <div class="text-white text-xs"
                              x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
                     </div>

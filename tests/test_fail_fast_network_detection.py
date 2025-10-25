@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkError, NetworkErrorDetector
-from app.services.copy_strategies import NormalFileCopyStrategy, GrowingFileCopyStrategy
+from app.services.copy_strategies import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.state_manager import StateManager
 
@@ -68,45 +68,6 @@ class TestFailFastNetworkErrorDetection:
                 
             assert "no longer accessible" in str(exc_info.value)
 
-    @pytest.mark.asyncio 
-    async def test_normal_copy_strategy_propagates_network_error(self):
-        """Test that NormalFileCopyStrategy properly propagates NetworkError from FileCopyExecutor."""
-        settings = Settings()
-        state_manager = AsyncMock(spec=StateManager)
-        
-        # Mock file copy executor to raise NetworkError during copy
-        file_copy_executor = AsyncMock(spec=FileCopyExecutor)
-        
-        # Configure the copy_file method to raise NetworkError
-        async def mock_copy_file(*args, **kwargs):
-            
-            # Simulate network error during copy
-            raise NetworkError("Network connectivity lost during copy")
-            
-        file_copy_executor.copy_file = mock_copy_file
-        
-        strategy = NormalFileCopyStrategy(
-            settings=settings,
-            state_manager=state_manager,
-            file_copy_executor=file_copy_executor
-        )
-        
-        tracked_file = TrackedFile(
-            file_path="c:\\test\\source.mxf",
-            file_size=1000000,
-            is_growing_file=False
-        )
-        
-        # NetworkError should bubble up from strategy, not be caught as generic exception
-        with pytest.raises(NetworkError) as exc_info:
-            await strategy.copy_file(
-                "c:\\test\\source.mxf",
-                "c:\\test\\dest.mxf", 
-                tracked_file
-            )
-            
-        assert "Network connectivity lost" in str(exc_info.value)
-
     @pytest.mark.asyncio
     async def test_growing_copy_strategy_fails_fast_on_network_error(self):
         """Test that GrowingFileCopyStrategy chunk copy immediately fails when network error is detected."""
@@ -130,7 +91,6 @@ class TestFailFastNetworkErrorDetection:
         tracked_file = TrackedFile(
             file_path="c:\\test\\growing.mxv",
             file_size=2000000,  # 2MB file
-            is_growing_file=True
         )
         
         # Test the chunk copy method directly instead of the full growing copy loop
@@ -185,7 +145,6 @@ class TestFailFastNetworkErrorDetection:
         tracked_file = TrackedFile(
             file_path="c:\\test\\growing.mxv",
             file_size=2000000,
-            is_growing_file=True
         )
         
         # Mock a general exception with errno 22 that should be caught as network error
@@ -193,7 +152,7 @@ class TestFailFastNetworkErrorDetection:
         
         # Mock the _copy_growing_file method to raise errno 22
         with patch.object(strategy, '_copy_growing_file', side_effect=errno_22_error):
-            with patch('os.path.getsize', return_value=2000000):  # Mock file size check
+            with patch('app.services.copy_strategies.aiofiles.os.path.getsize', return_value=2000000):  # Mock file size check
                 with patch('pathlib.Path.exists', return_value=False):
                     with patch('pathlib.Path.mkdir'):
                         # Should catch errno 22 and convert to NetworkError

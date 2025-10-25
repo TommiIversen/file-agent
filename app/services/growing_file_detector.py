@@ -278,18 +278,9 @@ class GrowingFileDetector:
                             # NOTE: PAUSED file checks removed in fail-and-rediscover strategy
                             # Files now fail immediately instead of pausing during network issues
                             
-                            update_kwargs = {
-                                "is_growing_file": recommended_status
-                                                   in [
-                                                       FileStatus.GROWING,
-                                                       FileStatus.READY_TO_START_GROWING,
-                                                   ],
-                            }
-
                             await self.state_manager.update_file_status_by_id(
                                 file_id=tracked_file.id,
                                 status=recommended_status,
-                                **update_kwargs,
                             )
                             logging.debug(
                                 f"GROWING UPDATE: {tracked_file.file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"

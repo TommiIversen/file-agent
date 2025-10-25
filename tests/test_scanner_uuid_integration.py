@@ -34,8 +34,6 @@ class TestScannerUUIDIntegration:
             source_directory="/test/source",
             file_stable_time_seconds=2,
             polling_interval_seconds=5,
-            enable_growing_file_support=False,
-            growing_file_min_size_mb=100,
             keep_files_hours=336,
         )
 

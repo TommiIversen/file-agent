@@ -62,10 +62,8 @@ class FileScanner:
         self._running = False
         self._scan_task: Optional[asyncio.Task] = None
 
-        self.growing_file_detector = None
-        if config.enable_growing_file_support and settings:
-            self.growing_file_detector = GrowingFileDetector(settings, state_manager)
-            logging.info("Growing file support enabled")
+        self.growing_file_detector = GrowingFileDetector(settings, state_manager)
+        logging.info("Growing file support enabled")
 
         logging.info("FileScanOrchestrator initialized")
         logging.info(f"Monitoring: {config.source_directory}")
@@ -80,8 +78,7 @@ class FileScanner:
         self._running = True
         logging.info("File Scanner started")
 
-        if self.growing_file_detector:
-            await self.growing_file_detector.start_monitoring()
+        await self.growing_file_detector.start_monitoring()
 
         # Start scanning loop as background task instead of blocking
         self._scan_task = asyncio.create_task(self._scan_folder_loop())
@@ -108,8 +105,7 @@ class FileScanner:
                 logging.error(f"Error during scanner task cancellation: {e}")
                 
         # Stop growing file detector
-        if self.growing_file_detector:
-            await self.growing_file_detector.stop_monitoring()
+        await self.growing_file_detector.stop_monitoring()
             
         self._scan_task = None
         logging.info("File Scanner stopped")
@@ -128,8 +124,7 @@ class FileScanner:
                     await asyncio.sleep(5)
         finally:
             # Cleanup when loop exits
-            if self.growing_file_detector:
-                await self.growing_file_detector.stop_monitoring()
+            await self.growing_file_detector.stop_monitoring()
             self._running = False
             logging.info("Scanner loop completed")
 
@@ -285,12 +280,9 @@ class FileScanner:
             discovered_files = await self.state_manager.get_files_by_status(
                 FileStatus.DISCOVERED
             )
-            growing_files = []
-
-            if self.growing_file_detector:
-                growing_files = await self.state_manager.get_files_by_status(
-                    FileStatus.GROWING
-                )
+            growing_files = await self.state_manager.get_files_by_status(
+                FileStatus.GROWING
+            )
 
             all_files_to_check = discovered_files + growing_files
 
@@ -301,12 +293,7 @@ class FileScanner:
                 if metadata is None:
                     continue
 
-                if self.growing_file_detector:
-                    await self._handle_growing_file_logic(metadata, tracked_file)
-                else:
-                    await self._handle_traditional_stability_logic(
-                        metadata, tracked_file
-                    )
+                await self._handle_growing_file_logic(metadata, tracked_file)
 
         except Exception as e:
             logging.error(f"Error in stability check: {e}")
@@ -335,37 +322,3 @@ class FileScanner:
                 f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
             )
 
-    async def _handle_traditional_stability_logic(
-            self, metadata: Dict[str, Any], tracked_file
-    ) -> None:
-        file_path = str(metadata['path'])
-
-        # Check if file has changed and update metadata if needed
-        file_changed = await self.state_manager.update_file_metadata(
-            tracked_file.id, metadata['size'], metadata['last_write_time']
-        )
-
-        if file_changed:
-            # File changed, status reset to DISCOVERED and stability timer reset
-            await self.state_manager.update_file_status_by_id(
-                file_id=tracked_file.id,
-                status=FileStatus.DISCOVERED,
-            )
-            logging.debug(
-                f"SIZE/TIME UPDATE: {file_path} -> {metadata['size']} bytes [UUID: {tracked_file.id[:8]}...]"
-            )
-            return  # Don't check stability if file just changed
-
-        # Check if file is stable using StateManager
-        is_stable = await self.state_manager.is_file_stable(
-            tracked_file.id, self.config.file_stable_time_seconds
-        )
-        
-        if is_stable:
-            await self.state_manager.update_file_status_by_id(
-                file_id=tracked_file.id,
-                status=FileStatus.READY,
-            )
-            logging.info(
-                f"STABLE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]"
-            )

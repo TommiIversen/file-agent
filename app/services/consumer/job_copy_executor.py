@@ -12,7 +12,7 @@ from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
 from app.services.copy.network_error_detector import NetworkError
-from app.services.copy_strategies import CopyStrategyFactory
+from app.services.copy_strategies import GrowingFileCopyStrategy
 from app.services.state_manager import StateManager
 
 
@@ -23,12 +23,12 @@ class JobCopyExecutor:
             self,
             settings: Settings,
             state_manager: StateManager,
-            copy_strategy_factory: CopyStrategyFactory,
+            copy_strategy: GrowingFileCopyStrategy,
             error_classifier: Optional[JobErrorClassifier] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
-        self.copy_strategy_factory = copy_strategy_factory
+        self.copy_strategy = copy_strategy
         self.error_classifier = error_classifier
 
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
@@ -43,19 +43,16 @@ class JobCopyExecutor:
     async def execute_copy(self, prepared_file: PreparedFile) -> bool:
         """Execute copy operation using the selected strategy."""
         try:
-            strategy = self.copy_strategy_factory.get_strategy(prepared_file.tracked_file)
             source_path = Path(prepared_file.tracked_file.file_path)
             dest_path = Path(str(prepared_file.destination_path))
 
-            self._log_resume_scenario(source_path, dest_path, strategy)
-
-            copy_success = await strategy.copy_file(
+            copy_success = await self.copy_strategy.copy_file(
                 str(source_path),
                 str(dest_path),
                 prepared_file.tracked_file,
             )
 
-            self._log_copy_result(prepared_file, copy_success, strategy, dest_path.exists())
+            self._log_copy_result(prepared_file, copy_success)
             return copy_success
 
         except FileNotFoundError:
@@ -68,42 +65,12 @@ class JobCopyExecutor:
             logging.error(f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}")
             return False
 
-    def _log_resume_scenario(self, source_path: Path, dest_path: Path, strategy):
-        """Log resume scenario details."""
-        if not dest_path.exists():
-            logging.info(f"Fresh copy: {dest_path.name}")
-            return
-
-        try:
-            dest_size = dest_path.stat().st_size
-            source_size = source_path.stat().st_size
-            completion_pct = (dest_size / source_size) * 100 if source_size > 0 else 0
-
-            strategy_name = strategy.__class__.__name__
-            is_resumable = "Resumable" in strategy_name
-
-            logging.info(
-                f"Resume scenario: {dest_path.name} "
-                f"({dest_size:,}/{source_size:,} bytes = {completion_pct:.1f}%) "
-                f"using {'resumable' if is_resumable else 'non-resumable'} strategy"
-            )
-        except FileNotFoundError:
-            # Source file disappeared, let this bubble up to be handled properly
-            raise
-
-    def _log_copy_result(self, prepared_file, success: bool, strategy, dest_existed: bool):
-        """Log copy operation result with resume metrics if applicable."""
+    def _log_copy_result(self, prepared_file, success: bool):
+        """Log copy operation result."""
         file_name = Path(prepared_file.tracked_file.file_path).name
 
         if success:
             logging.info(f"Copy completed: {file_name}")
-            if hasattr(strategy, "get_resume_metrics") and dest_existed:
-                metrics = strategy.get_resume_metrics()
-                if metrics:
-                    logging.info(
-                        f"Resume metrics: {file_name} - "
-                        f"preserved {metrics.preservation_percentage:.1f}% of data"
-                    )
         else:
             logging.error(f"Copy failed: {file_name}")
 
@@ -117,7 +84,6 @@ class JobCopyExecutor:
             error, prepared_file.tracked_file.file_path
         )
 
-        # NOTE: PAUSED_COPYING removed in fail-and-rediscover strategy
         if status == FileStatus.REMOVED:
             await self._handle_remove_error(prepared_file, reason, error)
             return False  # File is gone, don't retry
@@ -138,9 +104,6 @@ class JobCopyExecutor:
         file_name = Path(prepared_file.tracked_file.file_path).name
         logging.info(f"File removed during copy: {file_name} - {reason}")
 
-    # NOTE: _handle_pause_error removed in fail-and-rediscover strategy
-    # Network errors now cause immediate FAILED status instead of pause
-
     async def _handle_fail_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
         """Handle errors that should result in immediate failure."""
         await self.state_manager.update_file_status_by_id(
@@ -157,7 +120,6 @@ class JobCopyExecutor:
     def get_copy_executor_info(self) -> dict:
         """Get copy executor configuration details."""
         return {
-            "copy_strategies_available": len(self.copy_strategy_factory.get_available_strategies()),
+            "copy_strategy": self.copy_strategy.__class__.__name__,
             "state_manager_available": self.state_manager is not None,
-            "copy_strategy_factory_available": self.copy_strategy_factory is not None,
         }

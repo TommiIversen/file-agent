@@ -78,12 +78,6 @@
                 <h3 class="text-lg font-semibold text-white mb-3">📈 Growing File Support</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
-                        <span class="text-gray-300">Enable Growing Files:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.enable_growing_file_support ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_growing_file_support ? '✅ Enabled' : '❌ Disabled'"></div>
-                    </div>
-                    <div>
                         <span class="text-gray-300">Min File Size:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              x-text="($store.settings?.settingsData?.growing_file_min_size_mb || 0) + ' MB'"></div>
@@ -221,7 +215,7 @@
             
             <!-- Platform Specific -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">�️ Platform Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3">🖥️ Platform Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">macOS Mount Point:</span>

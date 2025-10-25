@@ -7,6 +7,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from app.services.scanner.file_scanner import FileScanner
 from app.services.scanner.domain_objects import ScanConfiguration
 from app.services.state_manager import StateManager
+from app.config import Settings
 
 
 class TestFileDiscovery:
@@ -18,8 +19,6 @@ class TestFileDiscovery:
             source_directory="test_source",
             polling_interval_seconds=10,
             file_stable_time_seconds=120,
-            enable_growing_file_support=False,
-            growing_file_min_size_mb=100,
             keep_files_hours=336,
         )
 
@@ -30,7 +29,13 @@ class TestFileDiscovery:
 
     @pytest.fixture
     def orchestrator(self, config, mock_state_manager):
-        return FileScanner(config, mock_state_manager)
+        settings = MagicMock(spec=Settings)
+        settings.growing_file_min_size_mb = 100
+        settings.growing_file_poll_interval_seconds = 5
+        settings.growing_file_safety_margin_mb = 50
+        settings.growing_file_growth_timeout_seconds = 300
+        settings.growing_file_chunk_size_kb = 2048
+        return FileScanner(config, mock_state_manager, settings=settings)
 
     @pytest.mark.asyncio
     async def test_discover_all_files_success(self, orchestrator):

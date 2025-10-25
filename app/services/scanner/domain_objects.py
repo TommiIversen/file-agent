@@ -8,8 +8,6 @@ class ScanConfiguration:
     source_directory: str
     polling_interval_seconds: int
     file_stable_time_seconds: int
-    enable_growing_file_support: bool
-    growing_file_min_size_mb: int
     keep_files_hours: int  # Renamed: now applies to ALL file types, not just completed
 
     # Add missing growing file settings

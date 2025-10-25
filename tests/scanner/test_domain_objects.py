@@ -92,14 +92,10 @@ class TestScanConfiguration:
             source_directory="test_source",
             polling_interval_seconds=10,
             file_stable_time_seconds=120,
-            enable_growing_file_support=False,
-            growing_file_min_size_mb=100,
             keep_files_hours=336,
         )
 
         assert config.source_directory == "test_source"
         assert config.polling_interval_seconds == 10
         assert config.file_stable_time_seconds == 120
-        assert config.enable_growing_file_support is False
-        assert config.growing_file_min_size_mb == 100
         assert config.keep_files_hours == 336

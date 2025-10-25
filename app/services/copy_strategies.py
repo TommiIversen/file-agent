@@ -4,7 +4,6 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
 
 import aiofiles
 import aiofiles.os
@@ -55,86 +54,10 @@ class FileCopyStrategy(ABC):
         pass
 
 
-class NormalFileCopyStrategy(FileCopyStrategy):
-
-    def supports_file(self, tracked_file: TrackedFile) -> bool:
-        return not tracked_file.is_growing_file
-
-    async def copy_file(
-            self, source_path: str, dest_path: str, tracked_file: TrackedFile
-    ) -> bool:
-        source = Path(source_path)
-        dest = Path(dest_path)
-
-        try:
-            logging.info(f"Starting normal copy via executor: {source.name}")
-
-            await self.state_manager.update_file_status_by_id(
-                tracked_file.id, FileStatus.COPYING, copy_progress=0.0
-            )
-
-            def progress_callback(progress: CopyProgress):
-                asyncio.create_task(
-                    self.state_manager.update_file_status_by_id(
-                        tracked_file.id,
-                        FileStatus.COPYING,
-                        copy_progress=progress.progress_percent,
-                        bytes_copied=progress.bytes_copied,
-                        copy_speed_mbps=progress.current_rate_bytes_per_sec
-                                        / (1024 * 1024),
-                    )
-                )
-
-            copy_result = await self.file_copy_executor.copy_file(
-                source=source, dest=dest, progress_callback=progress_callback
-            )
-
-            if copy_result.success:
-                logging.info(
-                    f"Executor finished successfully for {source.name}. Verifying and finalizing."
-                )
-
-                if not await _verify_file_integrity(source_path, dest_path):
-                    logging.error(f"Post-copy verification failed for {source.name}")
-                    return False
-
-                try:
-                    await aiofiles.os.remove(source_path)
-                    logging.debug(f"Source file deleted: {source.name}")
-                except (OSError, PermissionError) as e:
-                    logging.warning(
-                        f"Could not delete source file (may still be in use): {source.name} - {e}"
-                    )
-
-                await self.state_manager.update_file_status_by_id(
-                    tracked_file.id,
-                    FileStatus.COMPLETED,
-                    copy_progress=100.0,
-                    destination_path=dest_path,
-                )
-
-                logging.info(f"Normal copy completed: {source.name}")
-                return True
-            else:
-                logging.error(
-                    f"Executor failed to copy {source.name}: {copy_result.error_message}"
-                )
-                return False
-
-        except NetworkError:
-            # Re-raise network errors for immediate failure handling
-            raise
-        except Exception as e:
-            logging.error(
-                f"Error in normal copy strategy for {source.name}: {e}", exc_info=True
-            )
-            return False
-
-
 class GrowingFileCopyStrategy(FileCopyStrategy):
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
-        return tracked_file.is_growing_file
+        return True
 
     async def copy_file(
             self, source_path: str, dest_path: str, tracked_file: TrackedFile
@@ -151,14 +74,17 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 logging.error(f"File size check timed out for {source_path}")
                 return False
                 
+            # Check if this is a growing file based on its status history
+            is_growing_file = self._is_file_currently_growing(tracked_file)
             min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
 
-            if current_size < min_size_bytes:
+            # Only wait for minimum size if this is actually a growing file
+            if is_growing_file and current_size < min_size_bytes:
                 size_mb = current_size / (1024 * 1024)
                 logging.info(
                     f"⏳ WAITING FOR SIZE: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB) - "
-                    f"waiting for file to reach minimum size..."
+                    f"waiting for growing file to reach minimum size..."
                 )
 
                 while current_size < min_size_bytes:
@@ -187,6 +113,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 logging.info(
                     f"✅ SIZE REACHED: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB >= {self.settings.growing_file_min_size_mb}MB) - starting copy"
+                )
+            elif not is_growing_file:
+                size_mb = current_size / (1024 * 1024)
+                logging.info(
+                    f"📁 STATIC FILE: {os.path.basename(source_path)} "
+                    f"({size_mb:.1f}MB) - starting immediate copy at full speed"
                 )
 
             logging.info(
@@ -277,6 +209,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
+            # Check if this is a static or growing file
+            is_growing_file = self._is_file_currently_growing(tracked_file)
+            
             chunk_size = self.settings.growing_file_chunk_size_kb * 1024
             safety_margin_bytes = self.settings.growing_file_safety_margin_mb * 1024 * 1024
             poll_interval = self.settings.growing_file_poll_interval_seconds
@@ -287,10 +222,20 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             no_growth_cycles = 0
             max_no_growth_cycles = self.settings.growing_file_growth_timeout_seconds // poll_interval
 
-            logging.info(
-                f"🚀 GROWING COPY START: {os.path.basename(source_path)} "
-                f"starting fresh copy"
-            )
+            if is_growing_file:
+                logging.info(
+                    f"🌱 GROWING COPY START: {os.path.basename(source_path)} "
+                    f"starting growing file copy with safety margins"
+                )
+            else:
+                logging.info(
+                    f"⚡ STATIC COPY START: {os.path.basename(source_path)} "
+                    f"starting full-speed static file copy"
+                )
+                # For static files, disable safety margins and delays for maximum speed
+                safety_margin_bytes = 0
+                pause_ms = 0
+                no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
             network_detector = NetworkErrorDetector(
                 destination_path=dest_path,
@@ -337,7 +282,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         Phase 2: Finished growing - copies at full speed without delays/margin
         Returns the final bytes_copied count.
         """
-        file_finished_growing = False
+        # Static files start as "finished growing" to skip safety margins
+        file_finished_growing = (no_growth_cycles >= max_no_growth_cycles)
         
         while True:
             current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
@@ -498,52 +444,55 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
         return bytes_copied
 
-
-class CopyStrategyFactory:
-
-    def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-    ):
-        self.settings = settings
-        self.state_manager = state_manager
-        self.file_copy_executor = FileCopyExecutor(settings)
-
-        self.normal_strategy = NormalFileCopyStrategy(
-            settings, state_manager, self.file_copy_executor
-        )
-        self.growing_strategy = GrowingFileCopyStrategy(
-            settings, state_manager, self.file_copy_executor
-        )
-
-    def get_strategy(self, tracked_file: TrackedFile) -> FileCopyStrategy:
-        import logging
-
-        logger = logging.getLogger("app.services.copy_strategies")
-
-        if self.settings.enable_growing_file_support:
-            supports_growing = self.growing_strategy.supports_file(tracked_file)
-            logger.debug(
-                f"Strategy selection for {tracked_file.file_path}: "
-                f"is_growing_file={tracked_file.is_growing_file}, "
-                f"status={tracked_file.status}, "
-                f"supports_growing={supports_growing}"
-            )
-
-            if supports_growing:
-                logger.info(
-                    f"Selected GrowingFileCopyStrategy for {tracked_file.file_path}"
-                )
-                return self.growing_strategy
-
-        logger.info(f"Selected NormalFileCopyStrategy for {tracked_file.file_path}")
-        return self.normal_strategy
-
-    def get_available_strategies(self) -> Dict[str, FileCopyStrategy]:
-        strategies = {"normal": self.normal_strategy}
-
-        if self.settings.enable_growing_file_support:
-            strategies["growing"] = self.growing_strategy
-
-        return strategies
+    def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
+        """
+        Determine if a file is currently growing based on its status and history.
+        
+        Static files (from normal stability detection) have:
+        - FileStatus.READY 
+        - growth_rate_mbps = 0.0
+        - file_size == first_seen_size (no growth)
+        
+        Growing files have:
+        - Growing-related status OR
+        - Active growth rate OR  
+        - Evidence of size changes
+        
+        Returns:
+            True if file is actively growing or was detected as a growing file
+            False if file is static/completed
+        """
+        # Check current status - growing files have specific statuses
+        if tracked_file.status in [
+            FileStatus.GROWING, 
+            FileStatus.READY_TO_START_GROWING, 
+            FileStatus.GROWING_COPY
+        ]:
+            return True
+            
+        # Check if file is in static copy mode (added by job preparation)
+        if tracked_file.status == FileStatus.COPYING:
+            return False  # Static files use COPYING status
+            
+        # Check if file has a growth rate (indicates it was/is growing)
+        if tracked_file.growth_rate_mbps > 0:
+            return True
+            
+        # Check if file has grown since first seen
+        if (tracked_file.first_seen_size > 0 and 
+            tracked_file.file_size > tracked_file.first_seen_size):
+            return True
+            
+        # Check if previous size differs from current (recent growth)
+        if (tracked_file.previous_file_size > 0 and 
+            tracked_file.file_size != tracked_file.previous_file_size):
+            return True
+        
+        # STATIC FILE DETECTION:
+        # If we reach here, file has:
+        # - READY status (from normal stability check, not growing detection)
+        # - No growth rate
+        # - No size changes since first seen
+        # - No recent size changes
+        # This indicates a static file that went through normal stability detection
+        return False

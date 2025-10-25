@@ -10,7 +10,7 @@ from app.services.consumer.job_file_preparation_service import JobFilePreparatio
 from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.consumer.job_space_manager import JobSpaceManager
-from app.services.copy_strategies import CopyStrategyFactory
+from app.services.copy_strategies import GrowingFileCopyStrategy
 from app.services.job_queue import JobQueueService
 from app.services.state_manager import StateManager
 from app.utils.output_folder_template import OutputFolderTemplateEngine
@@ -24,7 +24,7 @@ class JobProcessor:
             settings: Settings,
             state_manager: StateManager,
             job_queue: JobQueueService,
-            copy_strategy_factory: CopyStrategyFactory,
+            copy_strategy: GrowingFileCopyStrategy,
             space_checker=None,
             space_retry_manager=None,
             error_classifier=None,
@@ -32,7 +32,7 @@ class JobProcessor:
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue = job_queue
-        self.copy_strategy_factory = copy_strategy_factory
+        self.copy_strategy = copy_strategy
 
         self.space_manager = JobSpaceManager(
             settings=settings,
@@ -51,14 +51,14 @@ class JobProcessor:
         self.file_preparation_service = JobFilePreparationService(
             settings=settings,
             state_manager=state_manager,
-            copy_strategy_factory=copy_strategy_factory,
+            copy_strategy=copy_strategy,
             template_engine=self.template_engine,
         )
 
         self.copy_executor = JobCopyExecutor(
             settings=settings,
             state_manager=state_manager,
-            copy_strategy_factory=copy_strategy_factory,
+            copy_strategy=copy_strategy,
             error_classifier=error_classifier,
         )
 

@@ -129,11 +129,6 @@ class TrackedFile(BaseModel):
     )
 
     # Growing file tracking
-    is_growing_file: bool = Field(
-        default=False,
-        description="True hvis denne fil er en growing file der kopieres under skrivning",
-    )
-
     growth_rate_mbps: float = Field(
         default=0.0,
         ge=0.0,

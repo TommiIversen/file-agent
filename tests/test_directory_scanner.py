@@ -97,6 +97,7 @@ class TestDirectoryScannerService:
             mock_stat_result.st_size = 1024
             mock_stat_result.st_ctime = 1640995200  # 2022-01-01
             mock_stat_result.st_mtime = 1640995200  # 2022-01-01
+            mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
             
             result = await scanner_service.scan_custom_directory("/test/path")
@@ -171,6 +172,7 @@ class TestDirectoryScannerService:
             mock_stat_result.st_size = 2048
             mock_stat_result.st_ctime = 1640995200
             mock_stat_result.st_mtime = 1641081600
+            mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
             
             item = await scanner_service._get_item_metadata("/test", "example.mxv")
@@ -193,7 +195,7 @@ class TestDirectoryScannerService:
              patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
             
             mock_isdir.return_value = False
-            mock_stat.return_value = MagicMock(st_size=100, st_ctime=1640995200, st_mtime=1640995200)
+            mock_stat.return_value = MagicMock(st_size=100, st_ctime=1640995200, st_mtime=1640995200, st_mode=0o100644)
             
             item = await scanner_service._get_item_metadata("/test", ".hidden_file")
             
@@ -309,6 +311,7 @@ class TestDirectoryScannerService:
             mock_stat_result.st_size = 1024
             mock_stat_result.st_ctime = 1640995200
             mock_stat_result.st_mtime = 1640995200
+            mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
             
             result = await scanner_service.scan_custom_directory("/test/path", recursive=False)

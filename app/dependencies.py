@@ -12,7 +12,8 @@ from typing import Dict, Any, Optional
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
-from .services.copy_strategies import CopyStrategyFactory
+from .services.copy.file_copy_executor import FileCopyExecutor
+from .services.copy_strategies import GrowingFileCopyStrategy
 from .services.directory_scanner import DirectoryScannerService
 from .services.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
@@ -242,21 +243,28 @@ def get_job_error_classifier() -> JobErrorClassifier:
     return _singletons["job_error_classifier"]
 
 
-def get_copy_strategy_factory() -> CopyStrategyFactory:
+def get_file_copy_executor() -> FileCopyExecutor:
     """
-    Hent CopyStrategyFactory singleton instance.
+    Hent FileCopyExecutor singleton instance.
+    """
+    if "file_copy_executor" not in _singletons:
+        settings = get_settings()
+        _singletons["file_copy_executor"] = FileCopyExecutor(settings)
+    return _singletons["file_copy_executor"]
 
-    Returns:
-        CopyStrategyFactory instance (oprettes kun én gang)
+
+def get_copy_strategy() -> GrowingFileCopyStrategy:
     """
-    if "copy_strategy_factory" not in _singletons:
+    Hent GrowingFileCopyStrategy singleton instance.
+    """
+    if "copy_strategy" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
-        _singletons["copy_strategy_factory"] = CopyStrategyFactory(
-            settings, state_manager
+        file_copy_executor = get_file_copy_executor()
+        _singletons["copy_strategy"] = GrowingFileCopyStrategy(
+            settings, state_manager, file_copy_executor
         )
-
-    return _singletons["copy_strategy_factory"]
+    return _singletons["copy_strategy"]
 
 
 def get_job_processor() -> JobProcessor:
@@ -270,7 +278,7 @@ def get_job_processor() -> JobProcessor:
         settings = get_settings()
         state_manager = get_state_manager()
         job_queue_service = get_job_queue_service()
-        copy_strategy_factory = get_copy_strategy_factory()
+        copy_strategy = get_copy_strategy()
         space_checker = (
             get_space_checker() if settings.enable_pre_copy_space_check else None
         )
@@ -281,7 +289,7 @@ def get_job_processor() -> JobProcessor:
             settings=settings,
             state_manager=state_manager,
             job_queue=job_queue_service,
-            copy_strategy_factory=copy_strategy_factory,
+            copy_strategy=copy_strategy,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
             error_classifier=error_classifier,

@@ -3,7 +3,6 @@ Integration test for Phase 3.4 Service Integration.
 
 Test to verify that the new modular architecture works correctly:
 - FileCopyExecutor for file copying
-- CopyStrategyFactory for configuration
 - JobProcessor for job workflow
 - Integration with existing strategies and error handling
 """
@@ -17,6 +16,9 @@ from app.models import TrackedFile, FileStatus
 from app.services.file_copier import FileCopierService
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
+from app.services.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.file_copy_executor import FileCopyExecutor
+from app.services.consumer.job_processor import JobProcessor
 
 
 @pytest.fixture
@@ -26,7 +28,6 @@ def test_settings():
     settings.source_directory = "/source"
     settings.destination_directory = "/dest"
     settings.use_temporary_file = True
-    settings.enable_growing_file_support = True
     settings.enable_pre_copy_space_check = False
     settings.max_retry_attempts = 3
     settings.retry_delay_seconds = 1
@@ -65,48 +66,49 @@ def mock_job_queue():
 
 
 @pytest.fixture
-def mock_job_processor():
-    """Mock JobProcessor for testing."""
-    from unittest.mock import Mock, AsyncMock
+def mock_copy_strategy():
+    """Mock GrowingFileCopyStrategy."""
+    strategy = Mock(spec=GrowingFileCopyStrategy)
+    strategy.copy_file = AsyncMock(return_value=True)
+    return strategy
 
-    job_processor = Mock()
 
-    # Make async methods awaitable - return mock object with all expected attributes
-    mock_result = Mock()
-    mock_result.success = True
-    mock_result.file_path = "/source/test.mxf"
-    mock_result.error_message = None
-    mock_result.retry_scheduled = False
-    mock_result.space_shortage = False
-    job_processor.process_job = AsyncMock(return_value=mock_result)
-
-    # Add mock sub-components that the properties expect
-    job_processor.copy_strategy_factory = Mock()
-    job_processor.copy_strategy_factory.get_available_strategies = Mock(
-        return_value={"temp": "temp file strategy", "direct": "direct copy strategy"}
-    )
-
-    job_processor.copy_executor = Mock()
+@pytest.fixture
+def mock_file_copy_executor():
+    """Mock FileCopyExecutor."""
+    executor = Mock(spec=FileCopyExecutor)
     mock_copy_result = Mock()
     mock_copy_result.success = True
     mock_copy_result.error = None
-    mock_copy_result.bytes_copied = 1024  # Fake some bytes copied
-    mock_copy_result.elapsed_seconds = 0.5  # Fake elapsed time
-    job_processor.copy_executor.copy_file = AsyncMock(return_value=mock_copy_result)
+    mock_copy_result.bytes_copied = 1024
+    mock_copy_result.elapsed_seconds = 0.5
+    executor.copy_file = AsyncMock(return_value=mock_copy_result)
+    return executor
 
-    return job_processor
+
+@pytest.fixture
+def job_processor(
+    test_settings, mock_state_manager, mock_job_queue, mock_copy_strategy
+):
+    """Create JobProcessor with new integrated architecture."""
+    return JobProcessor(
+        settings=test_settings,
+        state_manager=mock_state_manager,
+        job_queue=mock_job_queue,
+        copy_strategy=mock_copy_strategy,
+    )
 
 
 @pytest.fixture
 def file_copier_service(
-    test_settings, mock_state_manager, mock_job_queue, mock_job_processor
+    test_settings, mock_state_manager, mock_job_queue, job_processor
 ):
     """Create FileCopierService with new integrated architecture."""
     return FileCopierService(
         settings=test_settings,
         state_manager=mock_state_manager,
         job_queue=mock_job_queue,
-        job_processor=mock_job_processor,
+        job_processor=job_processor,
     )
 
 
@@ -118,37 +120,18 @@ class TestServiceIntegration:
         service = file_copier_service
 
         # Verify new services are initialized
-        assert hasattr(
-            service, "copy_strategy_factory"
-        )  # Fixed: was 'new_copy_strategy_factory'
-        assert hasattr(service, "file_copy_executor")
         assert hasattr(service, "job_processor")
+        assert hasattr(service.job_processor, "copy_strategy")
 
         # Verify core attributes exist
         assert hasattr(service, "settings")
         assert hasattr(service, "state_manager")
         assert hasattr(service, "job_queue")
 
-        # Note: Old attributes like destination_checker, error_handler, statistics_tracker
-        # have been moved to JobProcessor and its sub-components in the new architecture
-
     @pytest.mark.asyncio
-    async def test_copy_strategy_factory_integration(self, file_copier_service):
-        """Test CopyStrategyFactory configuration generation."""
-        factory = (
-            file_copier_service.copy_strategy_factory
-        )  # Fixed: was new_copy_strategy_factory
-
-        # Note: The factory interface may differ from original expectations
-        # This test is simplified for the current orchestrator implementation
-        assert factory is not None
-
-        # Skip complex configuration tests - interface has changed in new orchestrator
-
-    @pytest.mark.asyncio
-    async def test_file_copy_executor_integration(self, file_copier_service, tmp_path):
+    async def test_file_copy_executor_integration(self, mock_file_copy_executor, tmp_path):
         """Test FileCopyExecutor with real files."""
-        executor = file_copier_service.file_copy_executor
+        executor = mock_file_copy_executor
 
         # Create test files
         source_file = tmp_path / "source" / "test.txt"
@@ -169,46 +152,31 @@ class TestServiceIntegration:
         # Verify the copy_file method was called with correct arguments
         executor.copy_file.assert_called_once_with(source_file, dest_file)
 
-        # Note: This is a mock-based test, so no actual file operations occur
-        # The real integration testing happens at higher levels
-
     @pytest.mark.asyncio
     async def test_job_processor_integration(
-        self, file_copier_service, mock_state_manager
+        self, job_processor, mock_state_manager
     ):
         """Test JobProcessor workflow with mock file."""
-        processor = file_copier_service.job_processor
-
         # Setup mock tracked file
         tracked_file = TrackedFile(
             file_path="/source/test.mxf",
             file_size=1024 * 1024,  # 1MB
             status=FileStatus.READY,
-            is_growing_file=False,
             discovered_at=datetime.now(),
         )
 
-        mock_state_manager.get_file.return_value = tracked_file
+        mock_state_manager.get_file_by_id.return_value = tracked_file
 
         # Create test job
-        job = {
-            "file_path": "/source/test.mxf",
-            "file_size": 1024 * 1024,
-            "added_to_queue_at": datetime.now(),
-            "retry_count": 0,
-        }
-
-        # Test job processing (will fail due to missing source file, but tests workflow)
-        result = await processor.process_job(job)
+        job = Mock()
+        job.file_path = "/source/test.mxf"
+        job.tracked_file = tracked_file
+        
+        # Test job processing
+        result = await job_processor.process_job(job)
 
         # Verify result structure
-        assert hasattr(result, "success")
-        assert hasattr(result, "file_path")
-        assert hasattr(result, "error_message")
-        assert hasattr(result, "retry_scheduled")
-        assert hasattr(result, "space_shortage")
-
-        # Verify file_path is correct
+        assert result.success is True
         assert result.file_path == "/source/test.mxf"
 
     @pytest.mark.asyncio
@@ -226,33 +194,6 @@ class TestServiceIntegration:
         # Verify data types
         assert isinstance(stats["is_running"], bool)
         assert isinstance(stats["success_rate"], (int, float))
-
-        # Note: This is the legacy format for backwards compatibility
-        # More detailed statistics are available through JobProcessor components
-
-    def test_strategy_compatibility(self, file_copier_service):
-        """Test that both old and new strategy factories work."""
-        # Test strategy factory (current implementation)
-        factory = (
-            file_copier_service.copy_strategy_factory
-        )  # Fixed: was new_copy_strategy_factory
-        strategies = factory.get_available_strategies()
-        assert isinstance(strategies, dict)
-        assert len(strategies) > 0
-
-        # Note: The interface may be different in the current orchestrator implementation
-
-    def test_service_info_methods(self, file_copier_service):
-        """Test that all services provide comprehensive info methods."""
-        # Note: Service info methods are not currently implemented in the orchestrator
-        # The current implementation focuses on basic functionality
-
-        # Test that services exist and are accessible
-        assert (
-            file_copier_service.copy_strategy_factory is not None
-        )  # Fixed: was new_copy_strategy_factory
-        assert file_copier_service.file_copy_executor is not None
-        assert file_copier_service.job_processor is not None
 
 
 class TestNewArchitectureBehavior:
