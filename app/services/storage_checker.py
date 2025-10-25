@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Tuple
 from uuid import uuid4
 import asyncio
-import glob
 
 import aiofiles
+import aiofiles.os
 
 from ..models import StorageInfo, StorageStatus
 
@@ -139,16 +139,10 @@ class StorageChecker:
             raise StorageAccessError(f"Cannot create test file in {directory}: {e}")
 
     async def _cleanup_test_file(self, test_file_path: str) -> None:
-        """Cleanup test file using modern asyncio.to_thread."""
+        """Cleanup test file using aiofiles."""
         try:
-            def _sync_cleanup():
-                if os.path.exists(test_file_path):
-                    os.remove(test_file_path)
-                    return True
-                return False
-                    
-            removed = await asyncio.to_thread(_sync_cleanup)
-            if removed:
+            if await aiofiles.os.path.exists(test_file_path):
+                await aiofiles.os.remove(test_file_path)
                 logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
             logging.warning(f"Could not clean up test file {test_file_path}: {e}")
@@ -156,79 +150,60 @@ class StorageChecker:
     async def cleanup_old_test_files(self, directory: str) -> int:
         """
         Ryd op i gamle test-filer i det specificerede directory.
-        
+
         Args:
             directory: Stien til directory der skal ryddes op i
-            
+
         Returns:
             Antal filer der blev slettet
         """
+        cleaned_count = 0
         try:
-            def _sync_cleanup_files():
-                cleaned_count = 0
-                # Find alle test-filer der matcher vores prefix
-                pattern = os.path.join(directory, f"{self._test_file_prefix}*.tmp")
-                test_files = glob.glob(pattern)
-                
-                logging.debug(f"Found {len(test_files)} old test files to clean up in {directory}")
-                
-                for test_file in test_files:
+            if not await aiofiles.os.path.isdir(directory):
+                logging.debug(f"Cleanup directory does not exist or is not a directory: {directory}")
+                return 0
+
+            async for entry in await aiofiles.os.scandir(directory):
+                if entry.is_file() and entry.name.startswith(self._test_file_prefix) and entry.name.endswith(".tmp"):
                     try:
-                        if os.path.exists(test_file):
-                            os.remove(test_file)
-                            cleaned_count += 1
-                            logging.debug(f"Cleaned up old test file: {test_file}")
+                        await aiofiles.os.remove(entry.path)
+                        cleaned_count += 1
+                        logging.debug(f"Cleaned up old test file: {entry.path}")
                     except Exception as e:
-                        logging.warning(f"Could not clean up old test file {test_file}: {e}")
-                        
-                return cleaned_count
-            
-            # Use async wrapper to prevent blocking
-            cleaned_count = await asyncio.wait_for(
-                asyncio.to_thread(_sync_cleanup_files),
-                timeout=5.0  # 5 second timeout
-            )
-            
+                        logging.warning(f"Could not clean up old test file {entry.path}: {e}")
+
             if cleaned_count > 0:
                 logging.info(f"Cleaned up {cleaned_count} old test files from {directory}")
-                
-            return cleaned_count
-            
-        except asyncio.TimeoutError:
-            logging.warning(f"Cleanup of old test files timed out for {directory}")
-            return 0
+
         except Exception as e:
             logging.error(f"Error during old test files cleanup in {directory}: {e}")
-            return 0
+
+        return cleaned_count
 
     async def cleanup_all_test_files(self, source_dir: str, dest_dir: str = None) -> int:
         """
         Ryd op i gamle test-filer i både source og destination directories.
-        
+
         Args:
             source_dir: Source directory sti
             dest_dir: Destination directory sti (optional)
-            
+
         Returns:
             Total antal filer der blev slettet
         """
         total_cleaned = 0
-        
+
         # Cleanup source directory
         total_cleaned += await self.cleanup_old_test_files(source_dir)
-        
+
         # Cleanup destination directory hvis angivet
         if dest_dir:
             try:
-                dest_exists = await asyncio.wait_for(
-                    asyncio.to_thread(lambda: os.path.exists(dest_dir)),
-                    timeout=1.0  # 1 second timeout
-                )
-                if dest_exists:
+                if await aiofiles.os.path.isdir(dest_dir):
                     total_cleaned += await self.cleanup_old_test_files(dest_dir)
-            except asyncio.TimeoutError:
-                logging.warning(f"Destination directory check timed out for {dest_dir}")
-            
+            except Exception as e:
+                logging.warning(f"Destination directory check failed for {dest_dir}: {e}")
+
         return total_cleaned
 
     def _evaluate_status(
