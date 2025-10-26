@@ -444,6 +444,9 @@ class StateManager:
     async def update_file_status_by_id(
             self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:
+        status_changed = False
+        event_to_publish = None
+
         async with self._lock:
             tracked_file = self._files_by_id.get(file_id)
             if not tracked_file:
@@ -451,6 +454,20 @@ class StateManager:
                 return None
 
             old_status = tracked_file.status
+
+            if old_status != status:
+                status_changed = True
+                logging.info(
+                    f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
+                )
+                if self._event_bus:
+                    event_to_publish = FileStatusChangedEvent(
+                        file_id=tracked_file.id,
+                        file_path=tracked_file.file_path,
+                        old_status=old_status,
+                        new_status=status,
+                    )
+
             tracked_file.status = status
 
             # NOTE: Cancel retry tasks for terminal statuses in fail-and-rediscover strategy
@@ -472,13 +489,10 @@ class StateManager:
                 tracked_file.started_copying_at = datetime.now()
             elif status == FileStatus.COMPLETED and not tracked_file.completed_at:
                 tracked_file.completed_at = datetime.now()
-            elif status == FileStatus.FAILED and not getattr(tracked_file, 'failed_at', None):
+            elif status == FileStatus.FAILED and not getattr(
+                tracked_file, "failed_at", None
+            ):
                 tracked_file.failed_at = datetime.now()
-
-            if old_status != status:
-                logging.info(
-                    f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
-                )
 
         # Legacy notification system (unchanged)
         await self._notify(
@@ -491,14 +505,8 @@ class StateManager:
         )
 
         # New event publishing system (non-breaking)
-        if self._event_bus:
-            event = FileStatusChangedEvent(
-                file_id=tracked_file.id,
-                file_path=tracked_file.file_path,
-                old_status=old_status,
-                new_status=status,
-            )
-            await self._event_bus.publish(event)
+        if event_to_publish:
+            await self._event_bus.publish(event_to_publish)
 
         return tracked_file
 

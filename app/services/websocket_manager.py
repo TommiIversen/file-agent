@@ -1,10 +1,13 @@
+import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
@@ -32,7 +35,7 @@ def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
     Uses mode='json' to automatically handle datetime objects and other types.
     """
     # Use mode='json' to automatically convert datetime and other objects to JSON-compatible types
-    data = tracked_file.model_dump(mode='json')
+    data = tracked_file.model_dump(mode="json")
     
     # Add computed field for UI convenience
     data["file_size_mb"] = round(tracked_file.file_size / (1024 * 1024), 2)
@@ -41,16 +44,28 @@ def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
 
 
 class WebSocketManager:
-    def __init__(self, state_manager: StateManager, storage_monitor=None):
+    def __init__(
+        self,
+        state_manager: StateManager,
+        event_bus: Optional[DomainEventBus] = None,
+        storage_monitor=None,
+    ):
         self.state_manager = state_manager
         self._storage_monitor = storage_monitor
+        self._event_bus = event_bus
         self._connections: List[WebSocket] = []
         self._scanner_status = {"scanning": True, "paused": False}  # Track scanner status
 
-        self.state_manager.subscribe(self._handle_state_change)
+        # New system: Subscribe to the event bus
+        if self._event_bus:
+            asyncio.create_task(
+                self._event_bus.subscribe(
+                    FileStatusChangedEvent, self.handle_file_status_changed_event
+                )
+            )
+            logging.info("Subscribed to DomainEventBus for real-time event updates")
 
         logging.info("WebSocketManager initialiseret")
-        logging.info("Subscribed til StateManager events for real-time updates")
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -114,6 +129,7 @@ class WebSocketManager:
             logging.error(f"Fejl ved sending af initial state: {e}")
 
     async def _handle_state_change(self, update: FileStateUpdate) -> None:
+        """Handles the legacy FileStateUpdate from the old pub/sub system."""
         if not self._connections:
             return
 
@@ -134,11 +150,34 @@ class WebSocketManager:
             await self._broadcast_message(message_data)
 
             logging.debug(
-                f"Broadcasted state change: {update.file_path} -> {update.new_status}"
+                f"Broadcasted state change (legacy): {update.file_path} -> {update.new_status}"
             )
 
         except Exception as e:
             logging.error(f"Fejl ved broadcasting af state change: {e}")
+
+    async def handle_file_status_changed_event(self, event: FileStatusChangedEvent) -> None:
+        """Handles the FileStatusChangedEvent from the new event bus."""
+        logging.info(f"Received event: {event.file_path} -> {event.new_status.value}")
+        if not self._connections:
+            return
+
+        tracked_file = await self.state_manager.get_file_by_id(event.file_id)
+        if not tracked_file:
+            logging.warning(
+                f"Received FileStatusChangedEvent for unknown file ID: {event.file_id}"
+            )
+            return
+
+        update_for_broadcast = FileStateUpdate(
+            file_path=event.file_path,
+            old_status=event.old_status,
+            new_status=event.new_status,
+            tracked_file=tracked_file,
+            timestamp=event.timestamp,  # Use event timestamp
+        )
+        # Re-use the existing broadcast logic by calling the old handler
+        await self._handle_state_change(update_for_broadcast)
 
     async def _broadcast_message(self, message_data: Dict[str, Any]) -> None:
         if not self._connections:
@@ -242,7 +281,7 @@ class WebSocketManager:
             return
 
         self._scanner_status = {"scanning": scanning, "paused": paused}
-        
+
         try:
             message_data = {
                 "type": "scanner_status",
