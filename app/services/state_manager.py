@@ -4,7 +4,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Callable, Awaitable
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileDiscoveredEvent, FileStatusChangedEvent
+from app.core.events.file_events import (
+    FileDiscoveredEvent,
+    FileStatusChangedEvent,
+    FileReadyEvent,
+)
 from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
 
 
@@ -467,6 +471,12 @@ class StateManager:
                         old_status=old_status,
                         new_status=status,
                     )
+                    # Also publish a specific event if the file is ready
+                    if status == FileStatus.READY:
+                        ready_event = FileReadyEvent(
+                            file_id=tracked_file.id, file_path=tracked_file.file_path
+                        )
+                        asyncio.create_task(self._event_bus.publish(ready_event))
 
             tracked_file.status = status
 

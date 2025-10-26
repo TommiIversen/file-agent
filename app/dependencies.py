@@ -99,8 +99,11 @@ def get_job_queue_service() -> JobQueueService:
     if "job_queue_service" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
+        event_bus = get_event_bus()
         # JobQueueService will create its own queue internally
-        _singletons["job_queue_service"] = JobQueueService(settings, state_manager)
+        _singletons["job_queue_service"] = JobQueueService(
+            settings, state_manager, event_bus=event_bus
+        )
 
     return _singletons["job_queue_service"]
 
