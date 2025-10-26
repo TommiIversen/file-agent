@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import Settings
-from app.models import FileStatus
+from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile, QueueJob
 from app.services.copy_strategies import GrowingFileCopyStrategy
 from app.services.state_manager import StateManager
@@ -50,11 +50,16 @@ class JobFilePreparationService:
             destination_path=destination_path,
         )
 
-    def _determine_initial_status(self, tracked_file) -> FileStatus:
+    def _determine_initial_status(self, tracked_file: Optional[TrackedFile]) -> FileStatus:
         """Determine initial file status based on whether file is static or growing."""
+        if not tracked_file:
+            # If there's no tracked file, it cannot be growing. Default to static copy.
+            # The copy operation will likely fail later, but this method shouldn't crash.
+            return FileStatus.COPYING
+
         # Use the copy strategy's logic to determine if this is a growing file
         is_growing_file = self.copy_strategy._is_file_currently_growing(tracked_file)
-        
+
         if is_growing_file:
             logging.info(f"🌱 File marked for GROWING_COPY: {tracked_file.file_path}")
             return FileStatus.GROWING_COPY

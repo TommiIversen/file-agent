@@ -87,6 +87,17 @@ class TestJobFilePreparationService:
         assert result.strategy_name == "GrowingFileCopyStrategy"
 
     def test_determine_initial_status(self, preparer):
-        """Test status determination for growing strategy."""
-        status = preparer._determine_initial_status()
+        """Test status determination for growing and static files."""
+        # Create a mock tracked_file
+        mock_tracked_file = MagicMock(spec=TrackedFile)
+        mock_tracked_file.file_path = "/mock/file.mxf"
+
+        # Test the growing file case
+        preparer.copy_strategy._is_file_currently_growing.return_value = True
+        status = preparer._determine_initial_status(mock_tracked_file)
         assert status == FileStatus.GROWING_COPY
+
+        # Test the static file case
+        preparer.copy_strategy._is_file_currently_growing.return_value = False
+        status = preparer._determine_initial_status(mock_tracked_file)
+        assert status == FileStatus.COPYING

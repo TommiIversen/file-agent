@@ -3,16 +3,21 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Callable, Awaitable
 
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileDiscoveredEvent, FileStatusChangedEvent
 from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
 
 
 class StateManager:
-    def __init__(self, cooldown_minutes: int = 60):
+    def __init__(
+        self, cooldown_minutes: int = 60, event_bus: Optional[DomainEventBus] = None
+    ):
         self._files_by_id: Dict[str, TrackedFile] = {}
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
         self._cooldown_minutes = cooldown_minutes
-        
+        self._event_bus = event_bus  # Event bus for decoupled communication
+
         # Retry task tracking - only tasks, state is in TrackedFile.retry_info
         self._retry_tasks: Dict[str, asyncio.Task] = {}
 
@@ -138,6 +143,7 @@ class StateManager:
             else:
                 logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
 
+        # Legacy notification system (unchanged)
         await self._notify(
             FileStateUpdate(
                 file_path=file_path,
@@ -146,6 +152,17 @@ class StateManager:
                 tracked_file=tracked_file,
             )
         )
+
+        # New event publishing system (non-breaking)
+        if self._event_bus:
+            event = FileDiscoveredEvent(
+                file_path=tracked_file.file_path,
+                file_size=tracked_file.file_size,
+                last_write_time=tracked_file.last_write_time.timestamp()
+                if tracked_file.last_write_time
+                else datetime.now().timestamp(),
+            )
+            await self._event_bus.publish(event)
 
         return tracked_file
 
@@ -463,6 +480,7 @@ class StateManager:
                     f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
                 )
 
+        # Legacy notification system (unchanged)
         await self._notify(
             FileStateUpdate(
                 file_path=tracked_file.file_path,
@@ -471,6 +489,16 @@ class StateManager:
                 tracked_file=tracked_file,
             )
         )
+
+        # New event publishing system (non-breaking)
+        if self._event_bus:
+            event = FileStatusChangedEvent(
+                file_id=tracked_file.id,
+                file_path=tracked_file.file_path,
+                old_status=old_status,
+                new_status=status,
+            )
+            await self._event_bus.publish(event)
 
         return tracked_file
 

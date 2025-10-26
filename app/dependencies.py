@@ -9,6 +9,8 @@ import asyncio
 from functools import lru_cache
 from typing import Dict, Any, Optional
 
+from app.core.events.event_bus import DomainEventBus
+
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
@@ -35,6 +37,19 @@ def get_settings() -> Settings:
     """Hent Settings singleton instance."""
     return Settings()
 
+def get_event_bus() -> "DomainEventBus":
+    """
+    Hent DomainEventBus singleton instance.
+
+    Returns:
+        DomainEventBus instance (oprettes kun én gang)
+    """
+
+    if "event_bus" not in _singletons:
+        _singletons["event_bus"] = DomainEventBus()
+
+    return _singletons["event_bus"]
+
 
 def get_state_manager() -> StateManager:
     """
@@ -45,8 +60,9 @@ def get_state_manager() -> StateManager:
     """
     if "state_manager" not in _singletons:
         settings = get_settings()
+        event_bus = get_event_bus()
         _singletons["state_manager"] = StateManager(
-            cooldown_minutes=settings.space_error_cooldown_minutes
+            cooldown_minutes=settings.space_error_cooldown_minutes, event_bus=event_bus
         )
 
     return _singletons["state_manager"]
