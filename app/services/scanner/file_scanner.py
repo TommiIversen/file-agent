@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING
 import aiofiles.os
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import (
+    FileDiscoveredEvent,
+    FileStatusChangedEvent,
+    FileReadyEvent,
+)
 from app.models import FileStatus, TrackedFile
 from app.services.growing_file_detector import GrowingFileDetector
 from app.services.state_manager import StateManager
@@ -27,9 +33,9 @@ async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:
 
         stat_result = await aiofiles.os.stat(file_path)
         return {
-            'path': path,
-            'size': stat_result.st_size,
-            'last_write_time': datetime.fromtimestamp(stat_result.st_mtime)
+            "path": path,
+            "size": stat_result.st_size,
+            "last_write_time": datetime.fromtimestamp(stat_result.st_mtime),
         }
     except (OSError, IOError):
         return None
@@ -45,20 +51,20 @@ def should_ignore_file(path: Path) -> bool:
     return "test_file" in path.name.lower() or path.name.startswith(".")
 
 
-
 class FileScanner:
-
     def __init__(
-            self,
-            config: ScanConfiguration,
-            state_manager: StateManager,
-            storage_monitor: Optional["StorageMonitorService"] = None,
-            settings: Optional[Settings] = None,
+        self,
+        config: ScanConfiguration,
+        state_manager: StateManager,
+        storage_monitor: Optional["StorageMonitorService"] = None,
+        settings: Optional[Settings] = None,
+        event_bus: Optional[DomainEventBus] = None,
     ):
         self.config = config
         self.state_manager = state_manager
         self.storage_monitor = storage_monitor
         self.settings = settings
+        self._event_bus = event_bus
         self._running = False
         self._scan_task: Optional[asyncio.Task] = None
 
@@ -82,7 +88,7 @@ class FileScanner:
 
         # Start scanning loop as background task instead of blocking
         self._scan_task = asyncio.create_task(self._scan_folder_loop())
-        
+
         # Return immediately - don't wait for the task to complete
         logging.info("Scanner task started in background")
 
@@ -90,10 +96,10 @@ class FileScanner:
         if not self._running:
             logging.warning("Scanner is not running")
             return
-            
+
         self._running = False
         logging.info("File Scanner stop requested")
-        
+
         # Cancel and cleanup scan task
         if self._scan_task and not self._scan_task.done():
             self._scan_task.cancel()
@@ -103,10 +109,10 @@ class FileScanner:
                 logging.debug("Scanner task cancelled successfully")
             except Exception as e:
                 logging.error(f"Error during scanner task cancellation: {e}")
-                
+
         # Stop growing file detector
         await self.growing_file_detector.stop_monitoring()
-            
+
         self._scan_task = None
         logging.info("File Scanner stopped")
 
@@ -220,15 +226,15 @@ class FileScanner:
             try:
                 file_path = str(path_obj)
 
-                # Check if file should be skipped due to cooldown or other conditions
-                should_skip = await self.state_manager.should_skip_file_processing(file_path)
+                should_skip = await self.state_manager.should_skip_file_processing(
+                    file_path
+                )
                 if should_skip:
                     continue
 
-                # Brug get_active_file_by_path i stedet for get_file_by_path
-                # Dette sikrer at completed files ikke bliver genbrugt når en ny fil 
-                # med samme navn bliver opdaget
-                existing_file = await self.state_manager.get_active_file_by_path(file_path)
+                existing_file = await self.state_manager.get_active_file_by_path(
+                    file_path
+                )
                 if existing_file is not None:
                     await self._check_existing_file_changes(existing_file, file_path)
                     continue
@@ -237,31 +243,40 @@ class FileScanner:
                 if metadata is None:
                     continue
 
-                if metadata['size'] == 0:  # Check if empty
+                if metadata["size"] == 0:  # Check if empty
                     logging.debug(f"Skipping empty file: {path_obj.name}")
                     continue
 
-                tracked_file = await self.state_manager.add_file(
-                    file_path=file_path,
-                    file_size=metadata['size'],
-                    last_write_time=metadata['last_write_time'],
-                )
-
-                # File tracking is now handled entirely by StateManager
-                logging.info(
-                    f"NEW FILE: {path_obj.name} ({metadata['size']} bytes) "
-                    f"[UUID: {tracked_file.id[:8]}...]"
-                )
+                # Publish event instead of calling state_manager directly
+                if self._event_bus:
+                    event = FileDiscoveredEvent(
+                        file_path=file_path,
+                        file_size=metadata["size"],
+                        last_write_time=metadata["last_write_time"].timestamp(),
+                    )
+                    await self._event_bus.publish(event)
+                    logging.info(
+                        f"NEW FILE EVENT: {path_obj.name} ({metadata['size']} bytes)"
+                    )
+                else:
+                    # Fallback to old method if event bus is not available
+                    await self.state_manager.add_file(
+                        file_path=file_path,
+                        file_size=metadata["size"],
+                        last_write_time=metadata["last_write_time"],
+                    )
 
             except Exception as e:
                 logging.error(f"Error processing file {path_obj}: {e}")
 
-    async def _check_existing_file_changes(self, tracked_file, file_path: str) -> None:
+    async def _check_existing_file_changes(
+        self, tracked_file, file_path: str
+    ) -> None:
         metadata = await get_file_metadata(file_path)
         if metadata is None:
             return
 
-        if metadata['size'] != tracked_file.file_size:
+        if metadata["size"] != tracked_file.file_size:
             logging.info(
                 f"SIZE CHANGE: {tracked_file.file_path} "
                 f"({tracked_file.file_size} → {metadata['size']} bytes) "
@@ -271,8 +286,8 @@ class FileScanner:
             await self.state_manager.update_file_status_by_id(
                 file_id=tracked_file.id,
                 status=tracked_file.status,
-                file_size=metadata['size'],
-                last_write_time=metadata['last_write_time'],
+                file_size=metadata["size"],
+                last_write_time=metadata["last_write_time"],
             )
 
     async def _check_file_stability(self) -> None:
@@ -299,25 +314,47 @@ class FileScanner:
             logging.error(f"Error in stability check: {e}")
 
     async def _handle_growing_file_logic(
-            self, metadata: Dict[str, Any], tracked_file: TrackedFile
+        self, metadata: Dict[str, Any], tracked_file: TrackedFile
     ) -> None:
-        file_path = str(metadata['path'])
+        file_path = str(metadata["path"])
 
-        await self.growing_file_detector.update_file_growth_info(tracked_file, metadata['size'])
+        await self.growing_file_detector.update_file_growth_info(
+            tracked_file, metadata["size"]
+        )
 
-        recommended_status, growth_info = await self.growing_file_detector.check_file_growth_status(tracked_file)
+        (
+            recommended_status,
+            growth_info,
+        ) = await self.growing_file_detector.check_file_growth_status(tracked_file)
 
         if recommended_status != tracked_file.status:
-            # Don't override WAITING_FOR_NETWORK status from growth checks
             if tracked_file.status == FileStatus.WAITING_FOR_NETWORK:
                 logging.debug(f"Preserving WAITING_FOR_NETWORK status for {file_path}")
                 return
-                
-            await self.state_manager.update_file_status_by_id(
-                file_id=tracked_file.id,
-                status=recommended_status,
-                file_size=metadata['size'],
-            )
+
+            # Publish event instead of calling state_manager directly
+            if self._event_bus:
+                event = FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=file_path,
+                    old_status=tracked_file.status,
+                    new_status=recommended_status,
+                )
+                await self._event_bus.publish(event)
+
+                if recommended_status == FileStatus.READY:
+                    await self._event_bus.publish(
+                        FileReadyEvent(
+                            file_id=tracked_file.id, file_path=tracked_file.file_path
+                        )
+                    )
+            else:
+                # Fallback to old method
+                await self.state_manager.update_file_status_by_id(
+                    file_id=tracked_file.id,
+                    status=recommended_status,
+                    file_size=metadata["size"],
+                )
             logging.info(
                 f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
             )

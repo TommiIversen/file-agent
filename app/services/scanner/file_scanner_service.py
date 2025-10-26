@@ -1,7 +1,8 @@
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
 from app.services.state_manager import StateManager
 from .domain_objects import ScanConfiguration
 from .file_scanner import FileScanner
@@ -12,16 +13,17 @@ if TYPE_CHECKING:
 
 
 class FileScannerService:
-
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            storage_monitor: "StorageMonitorService" = None,
-            websocket_manager: "WebSocketManager" = None,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        storage_monitor: "StorageMonitorService" = None,
+        websocket_manager: "WebSocketManager" = None,
+        event_bus: Optional[DomainEventBus] = None,
     ):
         self._websocket_manager = websocket_manager
-        
+        self._event_bus = event_bus
+
         config = ScanConfiguration(
             source_directory=settings.source_directory,
             polling_interval_seconds=settings.polling_interval_seconds,
@@ -34,7 +36,7 @@ class FileScannerService:
         )
 
         self.orchestrator = FileScanner(
-            config, state_manager, storage_monitor, settings
+            config, state_manager, storage_monitor, settings, event_bus=self._event_bus
         )
 
         logging.info("FileScannerService initialized with refactored architecture")
