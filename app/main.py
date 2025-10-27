@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
     logging.info("File Transfer Agent shutting down...")
 
     # Stop alle background tasks gracefully
-    file_scanner.stop_scanning()
+    await file_scanner.stop_scanning()
     job_queue_service.stop_producer()
     await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
