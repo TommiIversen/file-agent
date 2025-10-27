@@ -80,14 +80,23 @@ class JobQueueService:
     async def handle_file_ready(self, event: FileReadyEvent) -> None:
         """Handles the FileReadyEvent from the event bus."""
         try:
+            tracked_file = await self.state_manager.get_file_by_id(event.file_id)
+            if not tracked_file:
+                logging.warning(
+                    f"Received FileReadyEvent for unknown file ID: {event.file_id}"
+                )
+                return
+
+            # Guard against re-queuing files that are already being processed.
+            if tracked_file.status != FileStatus.READY:
+                logging.warning(
+                    f"Ignoring FileReadyEvent for {event.file_path} because its status is "
+                    f"'{tracked_file.status.value}' instead of READY."
+                )
+                return
+
             if await self._is_network_available():
-                tracked_file = await self.state_manager.get_file_by_id(event.file_id)
-                if tracked_file:
-                    await self._add_job_to_queue(tracked_file)
-                else:
-                    logging.warning(
-                        f"Received FileReadyEvent for unknown file ID: {event.file_id}"
-                    )
+                await self._add_job_to_queue(tracked_file)
             else:
                 await self.state_manager.update_file_status_by_id(
                     file_id=event.file_id,

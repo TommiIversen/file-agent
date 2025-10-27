@@ -286,8 +286,9 @@ def get_copy_strategy() -> GrowingFileCopyStrategy:
         settings = get_settings()
         state_manager = get_state_manager()
         file_copy_executor = get_file_copy_executor()
+        event_bus = get_event_bus()
         _singletons["copy_strategy"] = GrowingFileCopyStrategy(
-            settings, state_manager, file_copy_executor
+            settings, state_manager, file_copy_executor, event_bus=event_bus
         )
     return _singletons["copy_strategy"]
 
@@ -309,6 +310,7 @@ def get_job_processor() -> JobProcessor:
         )
         space_retry_manager = get_space_retry_manager() if space_checker else None
         error_classifier = get_job_error_classifier()
+        event_bus = get_event_bus()
 
         _singletons["job_processor"] = JobProcessor(
             settings=settings,
@@ -318,6 +320,7 @@ def get_job_processor() -> JobProcessor:
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
             error_classifier=error_classifier,
+            event_bus=event_bus,
         )
 
     return _singletons["job_processor"]

@@ -4,11 +4,13 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import aiofiles
 import aiofiles.os
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
 from app.models import FileStatus, TrackedFile
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
@@ -38,10 +40,12 @@ class FileCopyStrategy(ABC):
             settings: Settings,
             state_manager: StateManager,
             file_copy_executor: FileCopyExecutor,
+            event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
         self.file_copy_executor = file_copy_executor
+        self._event_bus = event_bus
 
     @abstractmethod
     async def copy_file(
@@ -429,6 +433,16 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 copy_speed_mbps = transfer_rate / (
                         1024 * 1024
                 )
+
+                if self._event_bus:
+                    from app.core.events.file_events import FileCopyProgressEvent
+                    progress_event = FileCopyProgressEvent(
+                        file_id=tracked_file.id,
+                        bytes_copied=bytes_copied,
+                        total_bytes=current_file_size,
+                        copy_speed_mbps=copy_speed_mbps,
+                    )
+                    asyncio.create_task(self._event_bus.publish(progress_event))
 
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,

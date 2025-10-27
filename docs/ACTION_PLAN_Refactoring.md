@@ -1,6 +1,16 @@
 # File-Agent Refactoring Action Plan
 *Handlingsplan for Arkitektonisk Evolution - 22. oktober 2025*
 
+## 📈 **Current Status (27. Oktober 2025)**
+
+- **Fase 1 & 2 er implementeret:** Event Bus'en er bygget og fuldt integreret. `StateManager` modtager og publicerer events.
+- **Fase 3 er påbegyndt:**
+  - ✅ `JobQueueService` er nu 100% event-drevet via `FileReadyEvent`.
+  - ✅ `WebSocketManager` er event-drevet og lytter på `FileStatusChangedEvent` for real-time UI updates.
+  - ✅ `FileScanner` er blevet refaktoreret til at være den primære kilde til `FileDiscoveredEvent`, hvilket er en forbedring af den oprindelige plan.
+- **Parallel-kørsel:** Det nye event-system kører parallelt med det gamle pub/sub i `StateManager`, hvilket sikrer stabilitet under overgangen.
+
+
 ## 🎯 **KLAR BESLUTNING: Event Bus Først!**
 
 Efter omfattende arkitektonisk analyse er strategien **krystalklart defineret:**

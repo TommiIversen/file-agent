@@ -57,6 +57,15 @@ class FileCopyFailedEvent(DomainEvent):
 
 
 @dataclass(frozen=True)
+class FileCopyProgressEvent(DomainEvent):
+    """Event published periodically during a file copy operation."""
+    file_id: str
+    bytes_copied: int
+    total_bytes: int
+    copy_speed_mbps: float
+
+
+@dataclass(frozen=True)
 class NetworkFailureDetectedEvent(DomainEvent):
     """Event published when a network failure is detected by any part of the system."""
     detected_by: str

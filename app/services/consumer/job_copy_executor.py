@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
 from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
@@ -25,11 +26,14 @@ class JobCopyExecutor:
             state_manager: StateManager,
             copy_strategy: GrowingFileCopyStrategy,
             error_classifier: Optional[JobErrorClassifier] = None,
+            event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
         self.copy_strategy = copy_strategy
         self.error_classifier = error_classifier
+        # The event_bus is passed to the copy_strategy, so we don't need it here.
+        # However, the JobProcessor is passing it, so we accept it.
 
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
         """Initialize file status for copying operation."""

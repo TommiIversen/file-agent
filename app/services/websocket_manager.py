@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
@@ -58,14 +58,18 @@ class WebSocketManager:
 
         # New system: Subscribe to the event bus
         if self._event_bus:
-            asyncio.create_task(
-                self._event_bus.subscribe(
-                    FileStatusChangedEvent, self.handle_file_status_changed_event
-                )
-            )
-            logging.info("Subscribed to DomainEventBus for real-time event updates")
+            asyncio.create_task(self._subscribe_to_events())
 
         logging.info("WebSocketManager initialiseret")
+
+    async def _subscribe_to_events(self):
+        await self._event_bus.subscribe(
+            FileStatusChangedEvent, self.handle_file_status_changed_event
+        )
+        await self._event_bus.subscribe(
+            FileCopyProgressEvent, self.handle_file_copy_progress
+        )
+        logging.info("Subscribed to DomainEventBus for real-time event updates")
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -178,6 +182,30 @@ class WebSocketManager:
         )
         # Re-use the existing broadcast logic by calling the old handler
         await self._handle_state_change(update_for_broadcast)
+
+    async def handle_file_copy_progress(self, event: FileCopyProgressEvent) -> None:
+        """Handles the FileCopyProgressEvent from the event bus."""
+        if not self._connections:
+            return
+
+        try:
+            progress_percent = (
+                (event.bytes_copied / event.total_bytes) * 100 if event.total_bytes > 0 else 0
+            )
+            message_data = {
+                "type": "file_progress_update",
+                "data": {
+                    "file_id": event.file_id,
+                    "bytes_copied": event.bytes_copied,
+                    "total_bytes": event.total_bytes,
+                    "copy_speed_mbps": round(event.copy_speed_mbps, 2),
+                    "progress_percent": round(progress_percent, 2),
+                    "timestamp": event.timestamp.isoformat(),
+                },
+            }
+            await self._broadcast_message(message_data)
+        except Exception as e:
+            logging.error(f"Error broadcasting progress update: {e}")
 
     async def _broadcast_message(self, message_data: Dict[str, Any]) -> None:
         if not self._connections:
