@@ -160,7 +160,9 @@ class JobQueueService:
                     )
 
                 except Exception as e:
-                    logging.error(f"❌ Error reactivating {tracked_file.file_path}: {e}")
+                    logging.error(
+                        f"❌ Error reactivating {tracked_file.file_path}: {e}"
+                    )
 
             logging.info(
                 f"✅ NETWORK RECOVERY: Completed processing {len(waiting_files)} files"

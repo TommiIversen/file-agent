@@ -214,9 +214,7 @@ class TestCompletedFilesPersistence:
         )
 
         # Run cleanup with 2 hour max age
-        removed_count = await state_manager.cleanup_old_files(
-            max_age_hours=2
-        )
+        removed_count = await state_manager.cleanup_old_files(max_age_hours=2)
 
         # Should remove old file but keep recent one
         assert removed_count == 1
@@ -231,7 +229,7 @@ class TestCompletedFilesPersistence:
         Test simple age-based cleanup of all files.
         """
         from datetime import datetime, timedelta
-        
+
         # Create files with different completion times
         tracked_files = []
         for i in range(3):
@@ -240,18 +238,16 @@ class TestCompletedFilesPersistence:
             await state_manager.update_file_status_by_id(
                 tracked.id, FileStatus.COMPLETED
             )
-            
+
             # Make some files old
             if i < 2:  # First 2 files are old
                 tracked.completed_at = datetime.now() - timedelta(hours=25)
             # Last file is recent (current time)
-            
+
             tracked_files.append(tracked)
 
         # Run cleanup with 24 hour cutoff
-        removed_count = await state_manager.cleanup_old_files(
-            max_age_hours=24
-        )
+        removed_count = await state_manager.cleanup_old_files(max_age_hours=24)
 
         # Should remove 2 old files, keep 1 recent
         assert removed_count == 2

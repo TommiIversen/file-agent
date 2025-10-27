@@ -36,11 +36,11 @@ async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
 
 class FileCopyStrategy(ABC):
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            file_copy_executor: FileCopyExecutor,
-            event_bus: Optional[DomainEventBus] = None,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        file_copy_executor: FileCopyExecutor,
+        event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -49,7 +49,7 @@ class FileCopyStrategy(ABC):
 
     @abstractmethod
     async def copy_file(
-            self, source_path: str, dest_path: str, tracked_file: TrackedFile
+        self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         pass
 
@@ -59,12 +59,11 @@ class FileCopyStrategy(ABC):
 
 
 class GrowingFileCopyStrategy(FileCopyStrategy):
-
     def supports_file(self, tracked_file: TrackedFile) -> bool:
         return True
 
     async def copy_file(
-            self, source_path: str, dest_path: str, tracked_file: TrackedFile
+        self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         temp_dest_path = None
 
@@ -72,12 +71,12 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             try:
                 current_size = await asyncio.wait_for(
                     aiofiles.os.path.getsize(source_path),
-                    timeout=1.0  # 1 second timeout
+                    timeout=1.0,  # 1 second timeout
                 )
             except asyncio.TimeoutError:
                 logging.error(f"File size check timed out for {source_path}")
                 return False
-                
+
             # Check if this is a growing file based on its status history
             is_growing_file = self._is_file_currently_growing(tracked_file)
             min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
@@ -99,7 +98,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     try:
                         current_size = await asyncio.wait_for(
                             aiofiles.os.path.getsize(source_path),
-                            timeout=1.0  # 1 second timeout
+                            timeout=1.0,  # 1 second timeout
                         )
                         size_mb = current_size / (1024 * 1024)
 
@@ -129,13 +128,17 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 f"Starting growing copy: {os.path.basename(source_path)} "
                 f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)"
             )
-            
+
             latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
             if latest_tracked_file:
                 tracked_file = latest_tracked_file
-                logging.debug(f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}")
+                logging.debug(
+                    f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}"
+                )
             else:
-                logging.warning(f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}...")
+                logging.warning(
+                    f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}..."
+                )
 
             dest_dir = Path(dest_path).parent
             try:
@@ -173,9 +176,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     )
                     return True
                 else:
-                    logging.error(
-                        f"Growing copy verification failed: {source_path}"
-                    )
+                    logging.error(f"Growing copy verification failed: {source_path}")
                     return False
             else:
                 return False
@@ -187,17 +188,27 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         except Exception as e:
             error_str = str(e).lower()
             network_indicators = {
-                "invalid argument", "errno 22", "network path was not found", "winerror 53",
-                "the network name cannot be found", "winerror 67", "access is denied",
-                "input/output error", "errno 5", "connection refused", "network is unreachable"
+                "invalid argument",
+                "errno 22",
+                "network path was not found",
+                "winerror 53",
+                "the network name cannot be found",
+                "winerror 67",
+                "access is denied",
+                "input/output error",
+                "errno 5",
+                "connection refused",
+                "network is unreachable",
             }
-            is_network_error = any(indicator in error_str for indicator in network_indicators)
+            is_network_error = any(
+                indicator in error_str for indicator in network_indicators
+            )
             if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
                 is_network_error = True
             if is_network_error:
                 logging.error(f"Network error detected in growing copy strategy: {e}")
                 raise NetworkError(f"Network error during growing copy: {e}")
-            
+
             logging.error(f"Error in growing copy strategy: {e}")
             return False
         finally:
@@ -210,21 +221,25 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     )
 
     async def _copy_growing_file(
-            self, source_path: str, dest_path: str, tracked_file: TrackedFile
+        self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
             # Check if this is a static or growing file
             is_growing_file = self._is_file_currently_growing(tracked_file)
-            
+
             chunk_size = self.settings.growing_file_chunk_size_kb * 1024
-            safety_margin_bytes = self.settings.growing_file_safety_margin_mb * 1024 * 1024
+            safety_margin_bytes = (
+                self.settings.growing_file_safety_margin_mb * 1024 * 1024
+            )
             poll_interval = self.settings.growing_file_poll_interval_seconds
             pause_ms = self.settings.growing_copy_pause_ms
 
             bytes_copied = 0
             last_file_size = 0
             no_growth_cycles = 0
-            max_no_growth_cycles = self.settings.growing_file_growth_timeout_seconds // poll_interval
+            max_no_growth_cycles = (
+                self.settings.growing_file_growth_timeout_seconds // poll_interval
+            )
 
             if is_growing_file:
                 logging.info(
@@ -242,15 +257,23 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
             network_detector = NetworkErrorDetector(
-                destination_path=dest_path,
-                check_interval_bytes=chunk_size * 10
+                destination_path=dest_path, check_interval_bytes=chunk_size * 10
             )
-            
+
             async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
-                    source_path, dst, tracked_file, bytes_copied, last_file_size,
-                    no_growth_cycles, max_no_growth_cycles, safety_margin_bytes,
-                    chunk_size, poll_interval, pause_ms, network_detector
+                    source_path,
+                    dst,
+                    tracked_file,
+                    bytes_copied,
+                    last_file_size,
+                    no_growth_cycles,
+                    max_no_growth_cycles,
+                    safety_margin_bytes,
+                    chunk_size,
+                    poll_interval,
+                    pause_ms,
+                    network_detector,
                 )
 
             return True
@@ -260,25 +283,44 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         except Exception as e:
             error_str = str(e).lower()
             network_indicators = {
-                "invalid argument", "errno 22", "network path was not found", "winerror 53",
-                "the network name cannot be found", "winerror 67", "access is denied",
-                "input/output error", "errno 5", "connection refused", "network is unreachable"
+                "invalid argument",
+                "errno 22",
+                "network path was not found",
+                "winerror 53",
+                "the network name cannot be found",
+                "winerror 67",
+                "access is denied",
+                "input/output error",
+                "errno 5",
+                "connection refused",
+                "network is unreachable",
             }
-            is_network_error = any(indicator in error_str for indicator in network_indicators)
+            is_network_error = any(
+                indicator in error_str for indicator in network_indicators
+            )
             if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
                 is_network_error = True
             if is_network_error:
                 logging.error(f"Network error detected in growing copy: {e}")
                 raise NetworkError(f"Network error during growing copy: {e}")
-            
+
             logging.error(f"Error in growing file copy: {e}")
             return False
 
     async def _growing_copy_loop(
-            self, source_path: str, dst, tracked_file: TrackedFile, 
-            bytes_copied: int, last_file_size: int, no_growth_cycles: int,
-            max_no_growth_cycles: int, safety_margin_bytes: int, chunk_size: int,
-            poll_interval: float, pause_ms: int, network_detector: NetworkErrorDetector
+        self,
+        source_path: str,
+        dst,
+        tracked_file: TrackedFile,
+        bytes_copied: int,
+        last_file_size: int,
+        no_growth_cycles: int,
+        max_no_growth_cycles: int,
+        safety_margin_bytes: int,
+        chunk_size: int,
+        poll_interval: float,
+        pause_ms: int,
+        network_detector: NetworkErrorDetector,
     ) -> int:
         """
         Intelligent growing copy loop that adapts behavior based on file growth.
@@ -287,18 +329,19 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         Returns the final bytes_copied count.
         """
         # Static files start as "finished growing" to skip safety margins
-        file_finished_growing = (no_growth_cycles >= max_no_growth_cycles)
-        
+        file_finished_growing = no_growth_cycles >= max_no_growth_cycles
+
         while True:
-            current_tracked_file = await self.state_manager.get_file_by_id(tracked_file.id)
+            current_tracked_file = await self.state_manager.get_file_by_id(
+                tracked_file.id
+            )
             if not current_tracked_file:
                 logging.warning(f"File disappeared during copy: {source_path}")
                 return bytes_copied
 
             try:
                 current_file_size = await asyncio.wait_for(
-                    aiofiles.os.path.getsize(source_path),
-                    timeout=1.0
+                    aiofiles.os.path.getsize(source_path), timeout=1.0
                 )
             except asyncio.TimeoutError:
                 logging.warning(f"File size check timed out for: {source_path}")
@@ -327,26 +370,39 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
             else:
                 safe_copy_to = max(0, current_file_size - safety_margin_bytes)
                 status = FileStatus.GROWING_COPY
-                
+
                 distance_from_write_head = current_file_size - bytes_copied
                 buffer_zone = safety_margin_bytes * 2
-                
+
                 if distance_from_write_head > buffer_zone:
                     use_pause = False
-                    logging.debug(f"🚀 FULL SPEED: {distance_from_write_head/1024/1024:.1f}MB ahead of write head")
+                    logging.debug(
+                        f"🚀 FULL SPEED: {distance_from_write_head / 1024 / 1024:.1f}MB ahead of write head"
+                    )
                 else:
                     use_pause = True
-                    logging.debug(f"🐌 THROTTLED: Only {distance_from_write_head/1024/1024:.1f}MB from write head")
+                    logging.debug(
+                        f"🐌 THROTTLED: Only {distance_from_write_head / 1024 / 1024:.1f}MB from write head"
+                    )
 
             if safe_copy_to > bytes_copied:
                 speed_mode = "🚀 FULL" if not use_pause else "🐌 THROTTLED"
                 phase = "FINISH" if file_finished_growing else "GROWING"
-                logging.debug(f"{speed_mode} | {phase} | Copy {safe_copy_to - bytes_copied} bytes")
-                
+                logging.debug(
+                    f"{speed_mode} | {phase} | Copy {safe_copy_to - bytes_copied} bytes"
+                )
+
                 bytes_copied = await self._copy_chunk_range(
-                    source_path, dst, bytes_copied, safe_copy_to, chunk_size,
-                    tracked_file, current_file_size, pause_ms if use_pause else 0, 
-                    network_detector, status
+                    source_path,
+                    dst,
+                    bytes_copied,
+                    safe_copy_to,
+                    chunk_size,
+                    tracked_file,
+                    current_file_size,
+                    pause_ms if use_pause else 0,
+                    network_detector,
+                    status,
                 )
             elif not file_finished_growing:
                 copy_ratio = (
@@ -364,7 +420,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 )
 
             if file_finished_growing and bytes_copied >= current_file_size:
-                logging.info(f"✅ COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)")
+                logging.info(
+                    f"✅ COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)"
+                )
                 break
 
             if not file_finished_growing:
@@ -373,9 +431,17 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         return bytes_copied
 
     async def _copy_chunk_range(
-            self, source_path: str, dst, start_bytes: int, end_bytes: int, 
-            chunk_size: int, tracked_file: TrackedFile, current_file_size: int,
-            pause_ms: int, network_detector: NetworkErrorDetector, status: FileStatus = FileStatus.GROWING_COPY
+        self,
+        source_path: str,
+        dst,
+        start_bytes: int,
+        end_bytes: int,
+        chunk_size: int,
+        tracked_file: TrackedFile,
+        current_file_size: int,
+        pause_ms: int,
+        network_detector: NetworkErrorDetector,
+        status: FileStatus = FileStatus.GROWING_COPY,
     ) -> int:
         """
         Copy a range of bytes from source to destination with network error detection.
@@ -399,9 +465,11 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 try:
                     await dst.write(chunk)
                 except Exception as write_error:
-                    network_detector.check_write_error(write_error, "growing copy chunk write")
+                    network_detector.check_write_error(
+                        write_error, "growing copy chunk write"
+                    )
                     raise write_error
-                    
+
                 chunk_len = len(chunk)
                 bytes_copied += chunk_len
                 bytes_to_copy -= chunk_len
@@ -409,7 +477,9 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 try:
                     await network_detector.check_destination_connectivity(bytes_copied)
                 except NetworkError as ne:
-                    logging.error(f"Network connectivity lost during growing copy: {ne}")
+                    logging.error(
+                        f"Network connectivity lost during growing copy: {ne}"
+                    )
                     raise ne
 
                 copy_ratio = (
@@ -423,19 +493,16 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     self._copy_start_time = current_time
                     self._copy_start_bytes = bytes_copied
 
-                elapsed_seconds = (
-                        current_time - self._copy_start_time
-                ).total_seconds()
+                elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
                 transfer_rate = calculate_transfer_rate(
                     bytes_copied - self._copy_start_bytes,
                     elapsed_seconds,
                 )
-                copy_speed_mbps = transfer_rate / (
-                        1024 * 1024
-                )
+                copy_speed_mbps = transfer_rate / (1024 * 1024)
 
                 if self._event_bus:
                     from app.core.events.file_events import FileCopyProgressEvent
+
                     progress_event = FileCopyProgressEvent(
                         file_id=tracked_file.id,
                         bytes_copied=bytes_copied,
@@ -461,47 +528,51 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
         Determine if a file is currently growing based on its status and history.
-        
+
         Static files (from normal stability detection) have:
-        - FileStatus.READY 
+        - FileStatus.READY
         - growth_rate_mbps = 0.0
         - file_size == first_seen_size (no growth)
-        
+
         Growing files have:
         - Growing-related status OR
-        - Active growth rate OR  
+        - Active growth rate OR
         - Evidence of size changes
-        
+
         Returns:
             True if file is actively growing or was detected as a growing file
             False if file is static/completed
         """
         # Check current status - growing files have specific statuses
         if tracked_file.status in [
-            FileStatus.GROWING, 
-            FileStatus.READY_TO_START_GROWING, 
-            FileStatus.GROWING_COPY
+            FileStatus.GROWING,
+            FileStatus.READY_TO_START_GROWING,
+            FileStatus.GROWING_COPY,
         ]:
             return True
-            
+
         # Check if file is in static copy mode (added by job preparation)
         if tracked_file.status == FileStatus.COPYING:
             return False  # Static files use COPYING status
-            
+
         # Check if file has a growth rate (indicates it was/is growing)
         if tracked_file.growth_rate_mbps > 0:
             return True
-            
+
         # Check if file has grown since first seen
-        if (tracked_file.first_seen_size > 0 and 
-            tracked_file.file_size > tracked_file.first_seen_size):
+        if (
+            tracked_file.first_seen_size > 0
+            and tracked_file.file_size > tracked_file.first_seen_size
+        ):
             return True
-            
+
         # Check if previous size differs from current (recent growth)
-        if (tracked_file.previous_file_size > 0 and 
-            tracked_file.file_size != tracked_file.previous_file_size):
+        if (
+            tracked_file.previous_file_size > 0
+            and tracked_file.file_size != tracked_file.previous_file_size
+        ):
             return True
-        
+
         # STATIC FILE DETECTION:
         # If we reach here, file has:
         # - READY status (from normal stability check, not growing detection)

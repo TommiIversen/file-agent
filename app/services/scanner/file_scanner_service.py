@@ -43,13 +43,17 @@ class FileScannerService:
 
     async def start_scanning(self) -> None:
         await self.orchestrator.start_scanning()
-        
+
         # Broadcast correct scanner status when actually started
         if self._websocket_manager:
             try:
                 is_scanning = self.is_scanning()
-                await self._websocket_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
-                logging.debug(f"Broadcasted scanner status on start: scanning={is_scanning}")
+                await self._websocket_manager.broadcast_scanner_status(
+                    scanning=is_scanning, paused=not is_scanning
+                )
+                logging.debug(
+                    f"Broadcasted scanner status on start: scanning={is_scanning}"
+                )
             except Exception as e:
                 logging.warning(f"Failed to broadcast scanner status on start: {e}")
 
@@ -59,11 +63,14 @@ class FileScannerService:
         if self._websocket_manager:
             try:
                 is_scanning = self.is_scanning()
-                await self._websocket_manager.broadcast_scanner_status(scanning=is_scanning, paused=not is_scanning)
-                logging.debug(f"Broadcasted scanner status on stop: scanning={is_scanning}")
+                await self._websocket_manager.broadcast_scanner_status(
+                    scanning=is_scanning, paused=not is_scanning
+                )
+                logging.debug(
+                    f"Broadcasted scanner status on stop: scanning={is_scanning}"
+                )
             except Exception as e:
                 logging.warning(f"Failed to broadcast scanner status on stop: {e}")
-
 
     def is_scanning(self) -> bool:
         """Check if the scanner is currently running"""

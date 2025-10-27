@@ -37,6 +37,7 @@ def get_settings() -> Settings:
     """Hent Settings singleton instance."""
     return Settings()
 
+
 def get_event_bus() -> "DomainEventBus":
     """
     Hent DomainEventBus singleton instance.
@@ -184,7 +185,7 @@ def get_websocket_manager() -> WebSocketManager:
         event_bus = get_event_bus()
         # Note: storage_monitor will be set later to avoid circular dependency
         ws_manager = WebSocketManager(state_manager, event_bus=event_bus)
-        
+
         # Scanner status will be initialized later to avoid circular dependency
         _singletons["websocket_manager"] = ws_manager
 
@@ -247,7 +248,7 @@ def get_storage_monitor() -> StorageMonitorService:
 
         # Set storage_monitor reference in WebSocketManager to avoid circular dependency
         websocket_manager._storage_monitor = _singletons["storage_monitor"]
-        
+
         # Set storage_monitor reference in JobQueueService for network checking
         job_queue_service.storage_monitor = _singletons["storage_monitor"]
 
@@ -329,7 +330,7 @@ def get_job_processor() -> JobProcessor:
 def get_directory_scanner() -> DirectoryScannerService:
     """
     Hent DirectoryScannerService singleton instance.
-    
+
     SRP compliant service for directory scanning with async timeout protection.
     Only depends on Settings - no other service dependencies.
 

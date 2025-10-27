@@ -269,9 +269,7 @@ class FileScanner:
             except Exception as e:
                 logging.error(f"Error processing file {path_obj}: {e}")
 
-    async def _check_existing_file_changes(
-        self, tracked_file, file_path: str
-    ) -> None:
+    async def _check_existing_file_changes(self, tracked_file, file_path: str) -> None:
         metadata = await get_file_metadata(file_path)
         if metadata is None:
             return
@@ -358,4 +356,3 @@ class FileScanner:
             logging.info(
                 f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
             )
-

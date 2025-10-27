@@ -1,6 +1,7 @@
 """
 Central domain event bus (Mediator Pattern).
 """
+
 import asyncio
 import logging
 from collections import defaultdict
@@ -11,6 +12,7 @@ from app.core.events.domain_event import DomainEvent
 # Define a type hint for an event handler
 # An event handler is an async function that takes a DomainEvent and returns None
 EventHandler = Callable[[DomainEvent], asyncio.Future[None]]
+
 
 class DomainEventBus:
     """
@@ -25,7 +27,9 @@ class DomainEventBus:
         self._handlers: Dict[Type[DomainEvent], List[EventHandler]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
-    async def subscribe(self, event_type: Type[DomainEvent], handler: EventHandler) -> None:
+    async def subscribe(
+        self, event_type: Type[DomainEvent], handler: EventHandler
+    ) -> None:
         """
         Subscribes a handler to a specific event type.
 
@@ -35,7 +39,9 @@ class DomainEventBus:
         """
         async with self._lock:
             self._handlers[event_type].append(handler)
-            logging.debug(f"Handler {handler.__name__} subscribed to {event_type.__name__}")
+            logging.debug(
+                f"Handler {handler.__name__} subscribed to {event_type.__name__}"
+            )
 
     async def publish(self, event: DomainEvent) -> None:
         """
@@ -49,7 +55,7 @@ class DomainEventBus:
         """
         event_type = type(event)
         handlers = self._handlers.get(event_type, [])
-        
+
         if not handlers:
             logging.debug(f"No handlers for event {event_type.__name__}")
             return
@@ -58,7 +64,7 @@ class DomainEventBus:
 
         # Create a list of tasks to run all handlers concurrently
         tasks = [self._safe_execute(handler, event) for handler in handlers]
-        
+
         # Wait for all handlers to complete
         await asyncio.gather(*tasks)
 
@@ -72,5 +78,5 @@ class DomainEventBus:
             logging.error(
                 f"Unhandled exception in handler '{handler.__name__}' for event "
                 f"'{type(event).__name__}': {e}",
-                exc_info=True  # Include stack trace in the log
+                exc_info=True,  # Include stack trace in the log
             )

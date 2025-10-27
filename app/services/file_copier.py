@@ -11,13 +11,12 @@ from app.services.state_manager import StateManager
 
 
 class FileCopierService:
-
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            job_queue: JobQueueService,
-            job_processor: JobProcessor,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        job_queue: JobQueueService,
+        job_processor: JobProcessor,
     ):
         self.settings = settings
         self.state_manager = state_manager

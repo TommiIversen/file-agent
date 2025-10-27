@@ -20,15 +20,15 @@ class JobProcessor:
     """Pure orchestrator coordinating job processing workflow across specialized services."""
 
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            job_queue: JobQueueService,
-            copy_strategy: GrowingFileCopyStrategy,
-            space_checker=None,
-            space_retry_manager=None,
-            error_classifier=None,
-            event_bus=None,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        job_queue: JobQueueService,
+        copy_strategy: GrowingFileCopyStrategy,
+        space_checker=None,
+        space_retry_manager=None,
+        error_classifier=None,
+        event_bus=None,
     ):
         self.settings = settings
         self.state_manager = state_manager

@@ -3,6 +3,7 @@ Test for static file copy optimization.
 
 Tests that static files are copied at full speed without growing file delays.
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -70,7 +71,9 @@ class TestStaticFileCopyOptimization:
         )
 
         result = copy_strategy._is_file_currently_growing(static_file)
-        assert result is False, "File with no growth history should be detected as static"
+        assert result is False, (
+            "File with no growth history should be detected as static"
+        )
 
     def test_growing_file_detection_status(self, copy_strategy):
         """Test that a file with growing status is detected as growing."""
@@ -132,18 +135,22 @@ class TestStaticFileCopyOptimization:
         state_manager.get_file_by_id.return_value = static_file
 
         # Mock file operations
-        with patch('aiofiles.os.path.getsize', return_value=75 * 1024 * 1024):
-            with patch('aiofiles.os.makedirs'):
-                with patch('aiofiles.open'):
-                    with patch.object(copy_strategy, '_growing_copy_loop', return_value=75 * 1024 * 1024) as mock_loop:
-                        with patch('app.services.copy_strategies._verify_file_integrity', return_value=True):
-                            with patch('aiofiles.os.remove'):
-                                
+        with patch("aiofiles.os.path.getsize", return_value=75 * 1024 * 1024):
+            with patch("aiofiles.os.makedirs"):
+                with patch("aiofiles.open"):
+                    with patch.object(
+                        copy_strategy,
+                        "_growing_copy_loop",
+                        return_value=75 * 1024 * 1024,
+                    ) as mock_loop:
+                        with patch(
+                            "app.services.copy_strategies._verify_file_integrity",
+                            return_value=True,
+                        ):
+                            with patch("aiofiles.os.remove"):
                                 # Call the copy method
                                 result = await copy_strategy.copy_file(
-                                    "/test/static.mxf",
-                                    "/dest/static.mxf", 
-                                    static_file
+                                    "/test/static.mxf", "/dest/static.mxf", static_file
                                 )
 
         # Verify copy was successful
@@ -152,21 +159,25 @@ class TestStaticFileCopyOptimization:
         # Verify that _growing_copy_loop was called with static file optimizations
         mock_loop.assert_called_once()
         args = mock_loop.call_args[0]
-        
+
         # Check arguments passed to _growing_copy_loop
         # args: source_path, dst, tracked_file, bytes_copied, last_file_size, no_growth_cycles, max_no_growth_cycles, safety_margin_bytes, chunk_size, poll_interval, pause_ms, network_detector
-        
+
         safety_margin_bytes = args[7]  # 8th argument
         pause_ms = args[10]  # 11th argument
         no_growth_cycles = args[5]  # 6th argument
         max_no_growth_cycles = args[6]  # 7th argument
 
         # For static files, these should be optimized
-        assert safety_margin_bytes == 0, f"Static file should have 0 safety margin, got {safety_margin_bytes}"
+        assert safety_margin_bytes == 0, (
+            f"Static file should have 0 safety margin, got {safety_margin_bytes}"
+        )
         assert pause_ms == 0, f"Static file should have 0 pause, got {pause_ms}"
-        assert no_growth_cycles == max_no_growth_cycles, "Static file should skip growth detection"
+        assert no_growth_cycles == max_no_growth_cycles, (
+            "Static file should skip growth detection"
+        )
 
-    @pytest.mark.asyncio 
+    @pytest.mark.asyncio
     async def test_growing_file_copy_parameters(self, copy_strategy, state_manager):
         """Test that growing files get standard copy parameters with safety margins."""
         # Create a growing file
@@ -180,22 +191,28 @@ class TestStaticFileCopyOptimization:
         )
 
         # Mock the state manager
-        state_manager.get_file_by_path.return_value = growing_file  
+        state_manager.get_file_by_path.return_value = growing_file
         state_manager.get_file_by_id.return_value = growing_file
 
         # Mock file operations
-        with patch('aiofiles.os.path.getsize', return_value=150 * 1024 * 1024):
-            with patch('aiofiles.os.makedirs'):
-                with patch('aiofiles.open'):
-                    with patch.object(copy_strategy, '_growing_copy_loop', return_value=150 * 1024 * 1024) as mock_loop:
-                        with patch('app.services.copy_strategies._verify_file_integrity', return_value=True):
-                            with patch('aiofiles.os.remove'):
-                                
-                                # Call the copy method  
+        with patch("aiofiles.os.path.getsize", return_value=150 * 1024 * 1024):
+            with patch("aiofiles.os.makedirs"):
+                with patch("aiofiles.open"):
+                    with patch.object(
+                        copy_strategy,
+                        "_growing_copy_loop",
+                        return_value=150 * 1024 * 1024,
+                    ) as mock_loop:
+                        with patch(
+                            "app.services.copy_strategies._verify_file_integrity",
+                            return_value=True,
+                        ):
+                            with patch("aiofiles.os.remove"):
+                                # Call the copy method
                                 result = await copy_strategy.copy_file(
                                     "/test/growing.mxv",
                                     "/dest/growing.mxv",
-                                    growing_file
+                                    growing_file,
                                 )
 
         # Verify copy was successful
@@ -204,14 +221,16 @@ class TestStaticFileCopyOptimization:
         # Verify that _growing_copy_loop was called with growing file parameters
         mock_loop.assert_called_once()
         args = mock_loop.call_args[0]
-        
+
         safety_margin_bytes = args[7]  # 8th argument
         pause_ms = args[10]  # 11th argument
         no_growth_cycles = args[5]  # 6th argument
 
         # For growing files, these should use safety margins and delays
-        assert safety_margin_bytes > 0, f"Growing file should have safety margin, got {safety_margin_bytes}"
-        assert pause_ms > 0, f"Growing file should have pause, got {pause_ms}" 
+        assert safety_margin_bytes > 0, (
+            f"Growing file should have safety margin, got {safety_margin_bytes}"
+        )
+        assert pause_ms > 0, f"Growing file should have pause, got {pause_ms}"
         assert no_growth_cycles == 0, "Growing file should start with 0 growth cycles"
 
 

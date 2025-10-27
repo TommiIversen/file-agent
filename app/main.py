@@ -36,8 +36,10 @@ async def lifespan(app: FastAPI):
     config_info = settings.config_file_info
     logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
     logging.info(f"Running on hostname: {config_info['hostname']}")
-    if len(config_info['all_available_configs']) > 1:
-        logging.info(f"Available config files: {', '.join(config_info['all_available_configs'])}")
+    if len(config_info["all_available_configs"]) > 1:
+        logging.info(
+            f"Available config files: {', '.join(config_info['all_available_configs'])}"
+        )
 
     logging.info("File Transfer Agent starting up...")
     logging.info(f"Source directory: {settings.source_directory}")
@@ -48,8 +50,7 @@ async def lifespan(app: FastAPI):
     storage_checker = get_storage_checker()
     try:
         cleaned_count = await storage_checker.cleanup_all_test_files(
-            settings.source_directory, 
-            settings.destination_directory
+            settings.source_directory, settings.destination_directory
         )
         if cleaned_count > 0:
             logging.info(f"Startup cleanup: removed {cleaned_count} old test files")
@@ -77,7 +78,7 @@ async def lifespan(app: FastAPI):
     # Initialize WebSocketManager (subscription happens automatically)
     websocket_manager = get_websocket_manager()  # Initialize singleton
     logging.info("WebSocketManager initialiseret")
-    
+
     # Initialize scanner status in WebSocketManager with race condition handling
     websocket_manager.initialize_scanner_status(file_scanner)
 

@@ -36,7 +36,9 @@ class FileStatus(str, Enum):
     SPACE_ERROR = "SpaceError"  # Permanent plads problem, kræver indgriben
 
     # Network management states
-    WAITING_FOR_NETWORK = "WaitingForNetwork"  # Destination er offline, venter på netværk
+    WAITING_FOR_NETWORK = (
+        "WaitingForNetwork"  # Destination er offline, venter på netværk
+    )
 
     # NOTE: Removed PAUSED_* states as part of fail-and-rediscover strategy
     # Network errors now cause immediate FAILED status instead of pause/resume
@@ -157,13 +159,13 @@ class TrackedFile(BaseModel):
         ge=0,
         description="Forrige filstørrelse før sidste size check (til growth detection)",
     )
-    
+
     first_seen_size: int = Field(
         default=0,
         ge=0,
         description="Filstørrelse da filen først blev opdaget (til growth analysis)",
     )
-    
+
     growth_stable_since: Optional[datetime] = Field(
         default=None,
         description="Tidspunkt hvor filen sidst stoppede med at vokse (til stability detection)",
@@ -404,15 +406,15 @@ class SpaceCheckResult(BaseModel):
         """
         if self.has_space:
             return 0.0
-        return (self.required_bytes - self.available_bytes) / (1024 ** 3)
+        return (self.required_bytes - self.available_bytes) / (1024**3)
 
     def get_available_gb(self) -> float:
         """Get available space in GB for display"""
-        return self.available_bytes / (1024 ** 3)
+        return self.available_bytes / (1024**3)
 
     def get_required_gb(self) -> float:
         """Get required space in GB for display"""
-        return self.required_bytes / (1024 ** 3)
+        return self.required_bytes / (1024**3)
 
     model_config = ConfigDict()
 
@@ -420,15 +422,15 @@ class SpaceCheckResult(BaseModel):
 class RetryInfo(BaseModel):
     """
     Information about scheduled retry operations for space-related failures.
-    
+
     Used directly in TrackedFile to maintain single source of truth.
     """
-    
+
     scheduled_at: datetime = Field(..., description="When retry was scheduled")
     retry_at: datetime = Field(..., description="When retry should execute")
     reason: str = Field(..., description="Reason for retry (e.g., 'space shortage')")
     retry_type: str = Field(default="space", description="Type of retry operation")
-    
+
     # Note: asyncio.Task cannot be serialized in Pydantic, so we handle it separately in StateManager
-    
+
     model_config = ConfigDict()

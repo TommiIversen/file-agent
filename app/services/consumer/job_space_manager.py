@@ -15,12 +15,12 @@ class JobSpaceManager:
     """Handles space checking and shortage workflows for job processing."""
 
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            job_queue: JobQueueService,
-            space_checker=None,
-            space_retry_manager=None,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        job_queue: JobQueueService,
+        space_checker=None,
+        space_retry_manager=None,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -33,7 +33,7 @@ class JobSpaceManager:
     def should_check_space(self) -> bool:
         """Check if space checking should be performed."""
         return (
-                self.settings.enable_pre_copy_space_check and self.space_checker is not None
+            self.settings.enable_pre_copy_space_check and self.space_checker is not None
         )
 
     async def check_space_for_job(self, job: QueueJob) -> SpaceCheckResult:
@@ -53,14 +53,14 @@ class JobSpaceManager:
         return self.space_checker.check_space_for_file(file_size)
 
     async def handle_space_shortage(
-            self, job: QueueJob, space_check: SpaceCheckResult
+        self, job: QueueJob, space_check: SpaceCheckResult
     ) -> ProcessResult:
         """Handle space shortage by scheduling retry or marking as failed."""
         file_path = job.file_path
 
         # Check if this is a network accessibility issue vs actual space shortage
         is_network_issue = "not accessible" in space_check.reason.lower()
-        
+
         if is_network_issue:
             logging.warning(
                 f"Network inaccessible for {file_path}: {space_check.reason}",
@@ -70,14 +70,14 @@ class JobSpaceManager:
                     "reason": space_check.reason,
                 },
             )
-            
+
             # Use WAITING_FOR_NETWORK instead of SPACE_ERROR for network issues
             await self.state_manager.update_file_status_by_id(
                 file_id=job.file_id,
                 status=FileStatus.WAITING_FOR_NETWORK,
                 error_message=f"Network unavailable: {space_check.reason}",
             )
-            
+
             return ProcessResult(
                 success=False,
                 file_path=file_path,

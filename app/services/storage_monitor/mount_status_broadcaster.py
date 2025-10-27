@@ -5,12 +5,11 @@ from ...models import MountStatus, MountStatusUpdate
 
 
 class MountStatusBroadcaster:
-
     def __init__(self, notification_handler=None):
         self._notification_handler = notification_handler
 
     async def broadcast_mount_attempt(
-            self, storage_type: str, share_url: str, target_path: str
+        self, storage_type: str, share_url: str, target_path: str
     ) -> None:
         await self._broadcast_status(
             storage_type=storage_type,
@@ -20,11 +19,11 @@ class MountStatusBroadcaster:
         )
 
     async def broadcast_mount_success(
-            self,
-            storage_type: str,
-            share_url: str,
-            target_path: str,
-            mount_path: Optional[str] = None,
+        self,
+        storage_type: str,
+        share_url: str,
+        target_path: str,
+        mount_path: Optional[str] = None,
     ) -> None:
         await self._broadcast_status(
             storage_type=storage_type,
@@ -35,11 +34,11 @@ class MountStatusBroadcaster:
         )
 
     async def broadcast_mount_failure(
-            self,
-            storage_type: str,
-            share_url: str,
-            target_path: str,
-            error_message: str = "Network mount operation failed",
+        self,
+        storage_type: str,
+        share_url: str,
+        target_path: str,
+        error_message: str = "Network mount operation failed",
     ) -> None:
         await self._broadcast_status(
             storage_type=storage_type,
@@ -50,7 +49,7 @@ class MountStatusBroadcaster:
         )
 
     async def broadcast_not_configured(
-            self, storage_type: str, target_path: str
+        self, storage_type: str, target_path: str
     ) -> None:
         await self._broadcast_status(
             storage_type=storage_type,
@@ -60,13 +59,13 @@ class MountStatusBroadcaster:
         )
 
     async def _broadcast_status(
-            self,
-            storage_type: str,
-            mount_status: MountStatus,
-            target_path: str,
-            share_url: Optional[str] = None,
-            mount_path: Optional[str] = None,
-            error_message: Optional[str] = None,
+        self,
+        storage_type: str,
+        mount_status: MountStatus,
+        target_path: str,
+        share_url: Optional[str] = None,
+        mount_path: Optional[str] = None,
+        error_message: Optional[str] = None,
     ) -> None:
         if not self._notification_handler:
             return

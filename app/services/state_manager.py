@@ -51,7 +51,9 @@ class StateManager:
 
     async def handle_file_status_changed(self, event: FileStatusChangedEvent) -> None:
         """Handles the FileStatusChangedEvent."""
-        await self.update_file_status_by_id(file_id=event.file_id, status=event.new_status)
+        await self.update_file_status_by_id(
+            file_id=event.file_id, status=event.new_status
+        )
 
     def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
         candidates = [f for f in self._files_by_id.values() if f.file_path == file_path]
@@ -81,7 +83,9 @@ class StateManager:
 
         return min(candidates, key=sort_key)
 
-    def _get_active_file_for_path_internal(self, file_path: str) -> Optional[TrackedFile]:
+    def _get_active_file_for_path_internal(
+        self, file_path: str
+    ) -> Optional[TrackedFile]:
         active_statuses = {
             FileStatus.DISCOVERED,
             FileStatus.READY,
@@ -116,9 +120,7 @@ class StateManager:
                 FileStatus.SPACE_ERROR: 9,
             }
             priority = active_priority.get(f.status, 99)
-            time_priority = -(
-                f.discovered_at.timestamp() if f.discovered_at else 0
-            )
+            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
             return (priority, time_priority)
 
         return min(candidates, key=sort_key)
@@ -244,9 +246,7 @@ class StateManager:
                     FileStatus.SPACE_ERROR: 9,
                 }
                 priority = active_priority.get(f.status, 99)
-                time_priority = -(
-                    f.discovered_at.timestamp() if f.discovered_at else 0
-                )
+                time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
                 return (priority, time_priority)
 
             return min(candidates, key=sort_key)
@@ -365,7 +365,6 @@ class StateManager:
     async def update_file_status_by_id(
         self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:
-        status_changed = False
         event_to_publish = None
         async with self._lock:
             tracked_file = self._files_by_id.get(file_id)
@@ -374,7 +373,6 @@ class StateManager:
                 return None
             old_status = tracked_file.status
             if old_status != status:
-                status_changed = True
                 logging.info(
                     f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
                 )
@@ -391,7 +389,11 @@ class StateManager:
                         )
                         asyncio.create_task(self._event_bus.publish(ready_event))
             tracked_file.status = status
-            terminal_statuses = {FileStatus.FAILED, FileStatus.COMPLETED, FileStatus.REMOVED}
+            terminal_statuses = {
+                FileStatus.FAILED,
+                FileStatus.COMPLETED,
+                FileStatus.REMOVED,
+            }
             if status in terminal_statuses:
                 await self._cancel_existing_retry_unlocked(file_id)
                 logging.debug(
@@ -517,7 +519,6 @@ class StateManager:
                         f"Retry cancelled - file status changed: {tracked_file.file_path} (status: {tracked_file.status.value})"
                     )
                     return
-                old_status = tracked_file.status
                 tracked_file.status = FileStatus.READY
                 tracked_file.error_message = None
                 tracked_file.retry_info = None  # Clear retry info

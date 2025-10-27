@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api", tags=["storage"])
 
 @router.get("/storage/source", response_model=StorageInfo)
 async def get_source_storage(
-        storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
+    storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
 ) -> StorageInfo:
     """
     Get source storage information.
@@ -51,7 +51,7 @@ async def get_source_storage(
 
 @router.get("/storage/destination", response_model=StorageInfo)
 async def get_destination_storage(
-        storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
+    storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
 ) -> StorageInfo:
     """
     Get destination storage information.

@@ -74,7 +74,6 @@ class TestScannerUUIDIntegration:
         assert removed_file is not None
         assert removed_file.status == FileStatus.REMOVED
 
-
         # 5. Simulate same file returns (scanner discovers it again)
         tracked_file2 = await state_manager.add_file(file_path, 2048)  # Different size
 
@@ -83,7 +82,6 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.file_path == file_path
         assert tracked_file2.file_size == 2048
         assert tracked_file2.id != original_uuid  # NEW UUID!
-
 
     async def test_scanner_handles_existing_removed_files(
         self, state_manager, scan_config, mock_settings
@@ -113,7 +111,6 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.status == FileStatus.DISCOVERED
         assert tracked_file2.file_size == 1500
         assert tracked_file2.id != tracked_file1.id
-
 
         current_file = await state_manager.get_file_by_id(tracked_file2.id)
         assert current_file is not None
@@ -147,7 +144,6 @@ class TestScannerUUIDIntegration:
                 tracked_file.id, FileStatus.READY
             )
             await state_manager.cleanup_missing_files(set())
-
 
     async def test_uuid_based_file_updates_work_with_scanner(
         self, state_manager, scan_config, mock_settings
@@ -216,7 +212,6 @@ class TestScannerUUIDIntegration:
 
         # Verify two distinct entries exist
         assert tracked_file1.id != tracked_file2.id
-
 
     async def test_file_lifecycle_cleanup(self, state_manager):
         # Add file and mark as READY

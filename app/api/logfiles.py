@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -16,12 +15,13 @@ from fastapi import APIRouter, HTTPException, Depends
 router = APIRouter(prefix="/api", tags=["logfile"])
 
 
-
 @router.get("/log-files")
 async def list_log_files(settings: Settings = Depends(get_settings)):
     """List available log files"""
     try:
-        logging.info("Log files list requested", extra={"operation": "api_list_log_files"})
+        logging.info(
+            "Log files list requested", extra={"operation": "api_list_log_files"}
+        )
 
         logs_directory = settings.log_directory
 
@@ -29,7 +29,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
             return {
                 "success": False,
                 "message": "Log directory does not exist",
-                "log_files": []
+                "log_files": [],
             }
 
         log_files_async = []
@@ -39,14 +39,19 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
                 if entry.is_file() and ".log" in entry.name:
                     try:
                         stat = await aiofiles.os.stat(entry.path)
-                        log_files_async.append({
-                            "filename": entry.name,
-                            "size_bytes": stat.st_size,
-                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                            "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                            "url": f"/logs/{entry.name}",
-                            "is_current": entry.name == Path(settings.log_file_path).name
-                        })
+                        log_files_async.append(
+                            {
+                                "filename": entry.name,
+                                "size_bytes": stat.st_size,
+                                "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                                "modified_time": datetime.fromtimestamp(
+                                    stat.st_mtime
+                                ).isoformat(),
+                                "url": f"/logs/{entry.name}",
+                                "is_current": entry.name
+                                == Path(settings.log_file_path).name,
+                            }
+                        )
                     except Exception as e:
                         logging.warning(f"Failed to get stats for {entry.name}: {e}")
         except Exception as e:
@@ -54,7 +59,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
             return {
                 "success": False,
                 "message": "Error scanning log directory",
-                "log_files": []
+                "log_files": [],
             }
 
         # Sort by modification time, newest first
@@ -64,7 +69,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
             "success": True,
             "message": f"Found {len(log_files_async)} log files",
             "log_directory": str(logs_directory),
-            "log_files": log_files_async
+            "log_files": log_files_async,
         }
 
     except Exception as e:
@@ -72,7 +77,7 @@ async def list_log_files(settings: Settings = Depends(get_settings)):
         return {
             "success": False,
             "message": f"Failed to list log files: {str(e)}",
-            "log_files": []
+            "log_files": [],
         }
 
 
@@ -101,12 +106,16 @@ async def get_log_content(filename: str, settings: Settings = Depends(get_settin
         is_current_log = filename == current_log_name
 
         try:
-            async with aiofiles.open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            async with aiofiles.open(
+                log_file_path, "r", encoding="utf-8", errors="replace"
+            ) as f:
                 content = await f.read()
             stat = await aiofiles.os.stat(log_file_path)
         except Exception as e:
             logging.error(f"Error reading log file {filename}: {e}")
-            raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error reading log file: {str(e)}"
+            )
 
         return {
             "success": True,
@@ -116,7 +125,7 @@ async def get_log_content(filename: str, settings: Settings = Depends(get_settin
             "size_mb": round(stat.st_size / (1024 * 1024), 2),
             "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "is_current": is_current_log,
-            "lines": content.count('\n') + 1 if content else 0
+            "lines": content.count("\n") + 1 if content else 0,
         }
 
     except HTTPException:
@@ -132,7 +141,7 @@ async def get_log_content_chunk(
     offset: int = 0,
     limit: int = 1000,
     direction: str = "forward",
-    settings: Settings = Depends(get_settings)
+    settings: Settings = Depends(get_settings),
 ):
     """
     Get log file content in chunks for better performance with large files.
@@ -162,23 +171,31 @@ async def get_log_content_chunk(
 
         # Validate parameters
         if limit <= 0 or limit > 10000:
-            raise HTTPException(status_code=400, detail="Limit must be between 1 and 10000")
+            raise HTTPException(
+                status_code=400, detail="Limit must be between 1 and 10000"
+            )
 
         if offset < 0:
             raise HTTPException(status_code=400, detail="Offset must be >= 0")
 
         if direction not in ["forward", "backward"]:
-            raise HTTPException(status_code=400, detail="Direction must be 'forward' or 'backward'")
+            raise HTTPException(
+                status_code=400, detail="Direction must be 'forward' or 'backward'"
+            )
 
         current_log_name = Path(settings.log_file_path).name
         is_current_log = filename == current_log_name
 
         try:
-            async with aiofiles.open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            async with aiofiles.open(
+                log_file_path, "r", encoding="utf-8", errors="replace"
+            ) as f:
                 all_lines = await f.readlines()
         except Exception as e:
             logging.error(f"Error reading log file {filename}: {e}")
-            raise HTTPException(status_code=500, detail=f"Error reading log file: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error reading log file: {str(e)}"
+            )
 
         total_lines = len(all_lines)
 
@@ -186,13 +203,13 @@ async def get_log_content_chunk(
         if direction == "forward":
             start_idx = min(offset, total_lines)
             end_idx = min(start_idx + limit, total_lines)
-            lines = [line.rstrip('\n') for line in all_lines[start_idx:end_idx]]
+            lines = [line.rstrip("\n") for line in all_lines[start_idx:end_idx]]
             actual_offset = start_idx
         else:
             # Read from offset upward (backward)
             end_idx = min(offset + 1, total_lines)
             start_idx = max(0, end_idx - limit)
-            lines = [line.rstrip('\n') for line in all_lines[start_idx:end_idx]]
+            lines = [line.rstrip("\n") for line in all_lines[start_idx:end_idx]]
             actual_offset = start_idx
 
         # Calculate pagination info
@@ -214,15 +231,19 @@ async def get_log_content_chunk(
                 "total_lines": total_lines,
                 "has_more_forward": has_more_forward,
                 "has_more_backward": has_more_backward,
-                "next_forward_offset": actual_offset + len(lines) if has_more_forward else None,
-                "next_backward_offset": max(0, actual_offset - limit) if has_more_backward else None
+                "next_forward_offset": actual_offset + len(lines)
+                if has_more_forward
+                else None,
+                "next_backward_offset": max(0, actual_offset - limit)
+                if has_more_backward
+                else None,
             },
             "file_info": {
                 "size_bytes": stat.st_size,
                 "size_mb": round(stat.st_size / (1024 * 1024), 2),
                 "modified_time": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                "is_current": is_current_log
-            }
+                "is_current": is_current_log,
+            },
         }
 
     except HTTPException:
@@ -254,7 +275,7 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
         async def generate_file_stream():
             """Generate file content in chunks for streaming"""
             try:
-                async with aiofiles.open(log_file_path, 'rb') as f:
+                async with aiofiles.open(log_file_path, "rb") as f:
                     while True:
                         chunk = await f.read(8192)  # 8KB chunks
                         if not chunk:
@@ -271,22 +292,22 @@ async def download_log_file(filename: str, settings: Settings = Depends(get_sett
 
         # Create headers for download
         headers = {
-            'Content-Disposition': f'attachment; filename="{filename}"',
-            'Content-Type': 'text/plain; charset=utf-8',
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "text/plain; charset=utf-8",
         }
 
         # Only add Content-Length for non-active files to avoid streaming issues
         if not is_current_log:
-            headers['Content-Length'] = str(file_size)
+            headers["Content-Length"] = str(file_size)
 
         # Add warning for current log files
         if is_current_log:
-            headers['X-Warning'] = 'Current active log file - snapshot taken at download time'
+            headers["X-Warning"] = (
+                "Current active log file - snapshot taken at download time"
+            )
 
         return StreamingResponse(
-            generate_file_stream(),
-            headers=headers,
-            media_type='text/plain'
+            generate_file_stream(), headers=headers, media_type="text/plain"
         )
 
     except HTTPException:

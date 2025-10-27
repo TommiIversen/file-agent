@@ -1,8 +1,9 @@
 """
 Test for verifying the complete static file copy flow including status handling.
 """
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -52,12 +53,18 @@ class TestCompleteStaticFileFlow:
         return GrowingFileCopyStrategy(settings, state_manager, file_copy_executor)
 
     @pytest.fixture
-    def job_preparation_service(self, settings, state_manager, copy_strategy, template_engine):
+    def job_preparation_service(
+        self, settings, state_manager, copy_strategy, template_engine
+    ):
         """Create JobFilePreparationService for testing."""
-        return JobFilePreparationService(settings, state_manager, copy_strategy, template_engine)
+        return JobFilePreparationService(
+            settings, state_manager, copy_strategy, template_engine
+        )
 
     @pytest.mark.asyncio
-    async def test_static_file_preparation_sets_copying_status(self, job_preparation_service):
+    async def test_static_file_preparation_sets_copying_status(
+        self, job_preparation_service
+    ):
         """Test that static files get COPYING status during job preparation."""
         # Create a static file
         static_file = TrackedFile(
@@ -71,21 +78,23 @@ class TestCompleteStaticFileFlow:
 
         # Create a queue job
         from datetime import datetime
+
         job = QueueJob(
-            tracked_file=static_file,
-            added_to_queue_at=datetime.now(),
-            retry_count=0
+            tracked_file=static_file, added_to_queue_at=datetime.now(), retry_count=0
         )
 
         # Prepare the file
         prepared_file = await job_preparation_service.prepare_file_for_copy(job)
 
         # Verify the status is set correctly for static files
-        assert prepared_file.initial_status == FileStatus.COPYING, \
+        assert prepared_file.initial_status == FileStatus.COPYING, (
             f"Static file should get COPYING status, got {prepared_file.initial_status}"
+        )
 
     @pytest.mark.asyncio
-    async def test_growing_file_preparation_sets_growing_copy_status(self, job_preparation_service):
+    async def test_growing_file_preparation_sets_growing_copy_status(
+        self, job_preparation_service
+    ):
         """Test that growing files get GROWING_COPY status during job preparation."""
         # Create a growing file
         growing_file = TrackedFile(
@@ -99,42 +108,46 @@ class TestCompleteStaticFileFlow:
 
         # Create a queue job
         from datetime import datetime
+
         job = QueueJob(
-            tracked_file=growing_file,
-            added_to_queue_at=datetime.now(),
-            retry_count=0
+            tracked_file=growing_file, added_to_queue_at=datetime.now(), retry_count=0
         )
 
         # Prepare the file
         prepared_file = await job_preparation_service.prepare_file_for_copy(job)
 
         # Verify the status is set correctly for growing files
-        assert prepared_file.initial_status == FileStatus.GROWING_COPY, \
+        assert prepared_file.initial_status == FileStatus.GROWING_COPY, (
             f"Growing file should get GROWING_COPY status, got {prepared_file.initial_status}"
+        )
 
     def test_static_file_copy_loop_initialization(self, copy_strategy):
         """Test that static files start with file_finished_growing=True."""
         # Simulate static file parameters (no_growth_cycles = max_no_growth_cycles)
-        max_no_growth_cycles = 6  # Example from settings: 30 seconds / 5 second interval
+        max_no_growth_cycles = (
+            6  # Example from settings: 30 seconds / 5 second interval
+        )
         no_growth_cycles = max_no_growth_cycles  # Static files start here
-        
+
         # This simulates what happens in _growing_copy_loop initialization
-        file_finished_growing = (no_growth_cycles >= max_no_growth_cycles)
-        
-        assert file_finished_growing is True, \
+        file_finished_growing = no_growth_cycles >= max_no_growth_cycles
+
+        assert file_finished_growing is True, (
             "Static files should start with file_finished_growing=True to skip safety margins"
+        )
 
     def test_growing_file_copy_loop_initialization(self, copy_strategy):
         """Test that growing files start with file_finished_growing=False."""
         # Simulate growing file parameters (no_growth_cycles = 0)
         max_no_growth_cycles = 6
         no_growth_cycles = 0  # Growing files start here
-        
+
         # This simulates what happens in _growing_copy_loop initialization
-        file_finished_growing = (no_growth_cycles >= max_no_growth_cycles)
-        
-        assert file_finished_growing is False, \
+        file_finished_growing = no_growth_cycles >= max_no_growth_cycles
+
+        assert file_finished_growing is False, (
             "Growing files should start with file_finished_growing=False to use safety margins"
+        )
 
 
 if __name__ == "__main__":

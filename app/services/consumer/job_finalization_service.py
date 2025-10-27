@@ -14,7 +14,12 @@ from app.services.state_manager import StateManager
 class JobFinalizationService:
     """Handles job completion workflows (success, failure, max retries)."""
 
-    def __init__(self, settings: Settings, state_manager: StateManager, job_queue: JobQueueService):
+    def __init__(
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        job_queue: JobQueueService,
+    ):
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue = job_queue
@@ -27,7 +32,7 @@ class JobFinalizationService:
             queue_action=self.job_queue.mark_job_completed,
             progress=100.0,
             error_message=None,
-            log_message=f"Job completed successfully: {job.file_path}"
+            log_message=f"Job completed successfully: {job.file_path}",
         )
 
     async def finalize_failure(self, job: QueueJob, error: Exception) -> None:
@@ -39,24 +44,35 @@ class JobFinalizationService:
             queue_action=lambda j: self.job_queue.mark_job_failed(j, error_message),
             error_message=error_message,
             log_message=f"Job failed permanently: {job.file_path} - {error_message}",
-            is_error=True
+            is_error=True,
         )
 
     async def finalize_max_retries(self, job: QueueJob) -> None:
         """Finalize job that failed after maximum retry attempts."""
-        error_message = f"Failed after {self.settings.max_retry_attempts} retry attempts"
+        error_message = (
+            f"Failed after {self.settings.max_retry_attempts} retry attempts"
+        )
         await self._finalize_job(
             job,
             status=FileStatus.FAILED,
-            queue_action=lambda j: self.job_queue.mark_job_failed(j, "Max retry attempts reached"),
+            queue_action=lambda j: self.job_queue.mark_job_failed(
+                j, "Max retry attempts reached"
+            ),
             error_message=error_message,
             log_message=f"Job failed after max retries: {job.file_path}",
-            is_error=True
+            is_error=True,
         )
 
-    async def _finalize_job(self, job: QueueJob, status: FileStatus, queue_action,
-                            progress: float = None, error_message: str = None,
-                            log_message: str = None, is_error: bool = False) -> None:
+    async def _finalize_job(
+        self,
+        job: QueueJob,
+        status: FileStatus,
+        queue_action,
+        progress: float = None,
+        error_message: str = None,
+        log_message: str = None,
+        is_error: bool = False,
+    ) -> None:
         """Common finalization logic for all job completion scenarios."""
         try:
             await queue_action(job)
@@ -66,7 +82,9 @@ class JobFinalizationService:
                 update_kwargs["copy_progress"] = progress
                 update_kwargs["retry_count"] = 0
 
-            await self.state_manager.update_file_status_by_id(job.file_id, status, **update_kwargs)
+            await self.state_manager.update_file_status_by_id(
+                job.file_id, status, **update_kwargs
+            )
 
             if is_error:
                 logging.error(log_message)

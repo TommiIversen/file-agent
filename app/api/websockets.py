@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/ws", tags=["websockets"])
 
 @router.websocket("/live")
 async def websocket_endpoint(
-        websocket: WebSocket, ws_manager: WebSocketManager = Depends(get_websocket_manager)
+    websocket: WebSocket, ws_manager: WebSocketManager = Depends(get_websocket_manager)
 ):
     await ws_manager.connect(websocket)
 

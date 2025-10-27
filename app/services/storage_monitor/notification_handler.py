@@ -5,12 +5,11 @@ from ...models import StorageInfo, StorageUpdate, MountStatusUpdate
 
 
 class NotificationHandler:
-
     def __init__(self, websocket_manager=None):
         self._websocket_manager = websocket_manager
 
     async def handle_status_change(
-            self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
+        self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> None:
         old_status = old_info.status if old_info else None
         new_status = new_info.status

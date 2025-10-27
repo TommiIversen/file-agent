@@ -2,7 +2,6 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from pathlib import Path
 from typing import Tuple
 from uuid import uuid4
 import asyncio
@@ -22,7 +21,7 @@ class StorageChecker:
         self._test_file_prefix = test_file_prefix
 
     async def check_path(
-            self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
+        self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
     ) -> StorageInfo:
         logging.debug(f"Checking storage path: {path}")
 
@@ -70,12 +69,15 @@ class StorageChecker:
     async def _check_accessibility(self, path: str) -> bool:
         """Check if path is accessible using aiofiles."""
         try:
+
             async def _async_check():
-                return await aiofiles.os.path.exists(path) and await aiofiles.os.path.isdir(path)
+                return await aiofiles.os.path.exists(
+                    path
+                ) and await aiofiles.os.path.isdir(path)
 
             return await asyncio.wait_for(
                 _async_check(),
-                timeout=5.0  # 5 second timeout
+                timeout=5.0,  # 5 second timeout
             )
         except asyncio.TimeoutError:
             logging.warning(f"Accessibility check timed out for {path}")
@@ -87,17 +89,18 @@ class StorageChecker:
     async def _get_disk_usage(self, path: str) -> Tuple[float, float, float]:
         """Get disk usage using modern asyncio.to_thread."""
         try:
+
             def _sync_disk_usage():
                 total_bytes, used_bytes, free_bytes = shutil.disk_usage(path)
-                gb_divisor = 1024 ** 3
+                gb_divisor = 1024**3
                 total_gb = total_bytes / gb_divisor
                 used_gb = used_bytes / gb_divisor
                 free_gb = free_bytes / gb_divisor
                 return free_gb, total_gb, used_gb
-                
+
             free_gb, total_gb, used_gb = await asyncio.wait_for(
                 asyncio.to_thread(_sync_disk_usage),
-                timeout=10.0  # 10 second timeout
+                timeout=10.0,  # 10 second timeout
             )
 
             logging.debug(
@@ -159,28 +162,40 @@ class StorageChecker:
         cleaned_count = 0
         try:
             if not await aiofiles.os.path.isdir(directory):
-                logging.debug(f"Cleanup directory does not exist or is not a directory: {directory}")
+                logging.debug(
+                    f"Cleanup directory does not exist or is not a directory: {directory}"
+                )
                 return 0
 
             entries = await aiofiles.os.scandir(directory)
             for entry in entries:
-                if entry.is_file() and entry.name.startswith(self._test_file_prefix) and entry.name.endswith(".tmp"):
+                if (
+                    entry.is_file()
+                    and entry.name.startswith(self._test_file_prefix)
+                    and entry.name.endswith(".tmp")
+                ):
                     try:
                         await aiofiles.os.remove(entry.path)
                         cleaned_count += 1
                         logging.debug(f"Cleaned up old test file: {entry.path}")
                     except Exception as e:
-                        logging.warning(f"Could not clean up old test file {entry.path}: {e}")
+                        logging.warning(
+                            f"Could not clean up old test file {entry.path}: {e}"
+                        )
 
             if cleaned_count > 0:
-                logging.info(f"Cleaned up {cleaned_count} old test files from {directory}")
+                logging.info(
+                    f"Cleaned up {cleaned_count} old test files from {directory}"
+                )
 
         except Exception as e:
             logging.error(f"Error during old test files cleanup in {directory}: {e}")
 
         return cleaned_count
 
-    async def cleanup_all_test_files(self, source_dir: str, dest_dir: str = None) -> int:
+    async def cleanup_all_test_files(
+        self, source_dir: str, dest_dir: str = None
+    ) -> int:
         """
         Ryd op i gamle test-filer i både source og destination directories.
 
@@ -202,17 +217,19 @@ class StorageChecker:
                 if await aiofiles.os.path.isdir(dest_dir):
                     total_cleaned += await self.cleanup_old_test_files(dest_dir)
             except Exception as e:
-                logging.warning(f"Destination directory check failed for {dest_dir}: {e}")
+                logging.warning(
+                    f"Destination directory check failed for {dest_dir}: {e}"
+                )
 
         return total_cleaned
 
     def _evaluate_status(
-            self,
-            free_gb: float,
-            warning_threshold_gb: float,
-            critical_threshold_gb: float,
-            is_accessible: bool,
-            has_write_access: bool,
+        self,
+        free_gb: float,
+        warning_threshold_gb: float,
+        critical_threshold_gb: float,
+        is_accessible: bool,
+        has_write_access: bool,
     ) -> StorageStatus:
         if not is_accessible:
             return StorageStatus.ERROR

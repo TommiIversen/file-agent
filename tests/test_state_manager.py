@@ -1,19 +1,8 @@
-"""
-Test suite for StateManager.
-
-Tester den centrale state management funktionalitet inklusiv:
-- Thread safety med concurrent operations
-- Pub/sub system
-- Fil lifecycle management
-- Cleanup operationer
-"""
-
 import pytest
 import asyncio
-from typing import List
 
 from app.services.state_manager import StateManager
-from app.models import FileStatus, FileStateUpdate
+from app.models import FileStatus
 from app.dependencies import reset_singletons
 
 
@@ -72,7 +61,6 @@ class TestStateManager:
         )
         assert result is None
 
-
     async def test_get_file_by_id(self, state_manager, sample_file_path):
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         file_by_id = await state_manager.get_file_by_id(tracked_file.id)
@@ -104,8 +92,6 @@ class TestStateManager:
         all_files = await state_manager.get_all_files()
         remaining_ids = {f.id for f in all_files if f.status != FileStatus.REMOVED}
         assert len(remaining_ids) == 1
-
-
 
     async def test_thread_safety_concurrent_operations(self, state_manager):
         """Test thread safety med concurrent add/update/remove operationer."""
@@ -155,25 +141,22 @@ class TestStateManager:
         assert stats["status_counts"]["Copying"] == 1
         assert stats["status_counts"]["Ready"] == 1
 
-
-
     async def test_schedule_retry_success(self, state_manager, sample_file_path):
         """Test successful retry scheduling."""
         # Add file
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
-        
+
         # Schedule retry
         result = await state_manager.schedule_retry(
             tracked_file.id, 0.1, "Test retry", "test"
         )
         assert result is True
-        
+
         # Verify retry info is stored in TrackedFile
         updated_file = await state_manager.get_file_by_id(tracked_file.id)
         assert updated_file.retry_info is not None
         assert updated_file.retry_info.reason == "Test retry"
         assert updated_file.retry_info.retry_type == "test"
-        
 
     async def test_schedule_retry_unknown_file(self, state_manager):
         """Test retry scheduling for unknown file."""
@@ -187,22 +170,21 @@ class TestStateManager:
         # Add file and schedule retry
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         await state_manager.schedule_retry(tracked_file.id, 0.1, "Test retry", "test")
-        
+
         # Cancel retry
         result = await state_manager.cancel_retry(tracked_file.id)
         assert result is True
-
 
     async def test_increment_retry_count(self, state_manager, sample_file_path):
         """Test retry count increment."""
         # Add file
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         assert tracked_file.retry_count == 0
-        
+
         # Increment retry count
         new_count = await state_manager.increment_retry_count(tracked_file.id)
         assert new_count == 1
-        
+
         # Verify file was updated
         updated_file = await state_manager.get_file_by_id(tracked_file.id)
         assert updated_file.retry_count == 1
@@ -217,10 +199,10 @@ class TestStateManager:
         # Add multiple files and schedule retries
         file1 = await state_manager.add_file("/test/file1.mxf", 1024)
         file2 = await state_manager.add_file("/test/file2.mxf", 2048)
-        
+
         await state_manager.schedule_retry(file1.id, 0.1, "Test retry 1", "test")
         await state_manager.schedule_retry(file2.id, 0.1, "Test retry 2", "test")
-        
+
         # Cancel all retries
         cancelled_count = await state_manager.cancel_all_retries()
         assert cancelled_count == 2

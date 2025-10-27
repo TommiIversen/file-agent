@@ -266,7 +266,9 @@ class TestFileCopierServiceIntegration:
         state_manager = StateManager()
         job_queue_service = JobQueueService(settings, state_manager)
         job_processor = MagicMock()
-        file_copier = FileCopierService(settings, state_manager, job_queue_service, job_processor)
+        file_copier = FileCopierService(
+            settings, state_manager, job_queue_service, job_processor
+        )
 
         return {
             "settings": settings,

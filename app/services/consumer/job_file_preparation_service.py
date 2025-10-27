@@ -22,11 +22,11 @@ class JobFilePreparationService:
     """Prepares files for copy operations with strategy selection and path calculation."""
 
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            copy_strategy: GrowingFileCopyStrategy,
-            template_engine: OutputFolderTemplateEngine,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        copy_strategy: GrowingFileCopyStrategy,
+        template_engine: OutputFolderTemplateEngine,
     ):
         self.settings = settings
         self.state_manager = state_manager
@@ -50,7 +50,9 @@ class JobFilePreparationService:
             destination_path=destination_path,
         )
 
-    def _determine_initial_status(self, tracked_file: Optional[TrackedFile]) -> FileStatus:
+    def _determine_initial_status(
+        self, tracked_file: Optional[TrackedFile]
+    ) -> FileStatus:
         """Determine initial file status based on whether file is static or growing."""
         if not tracked_file:
             # If there's no tracked file, it cannot be growing. Default to static copy.
@@ -83,7 +85,9 @@ class JobFilePreparationService:
         """Get file preparation service configuration details."""
         return {
             "template_engine_enabled": self.template_engine.is_enabled(),
-            "template_rules_count": len(self.template_engine.rules) if self.template_engine.is_enabled() else 0,
+            "template_rules_count": len(self.template_engine.rules)
+            if self.template_engine.is_enabled()
+            else 0,
             "copy_strategy": self.copy_strategy.__class__.__name__,
             "source_directory": self.settings.source_directory,
             "destination_directory": self.settings.destination_directory,
