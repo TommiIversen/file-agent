@@ -123,9 +123,6 @@ class StateManager:
 
         return min(candidates, key=sort_key)
 
-    def _get_all_files_for_path(self, file_path: str) -> List[TrackedFile]:
-        return [f for f in self._files_by_id.values() if f.file_path == file_path]
-
     async def add_file(
         self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
@@ -159,14 +156,16 @@ class StateManager:
                 )
             else:
                 logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
-        await self._notify(
-            FileStateUpdate(
-                file_path=file_path,
-                old_status=None,
-                new_status=FileStatus.DISCOVERED,
-                tracked_file=tracked_file,
-            )
-        )
+
+            if self._event_bus:
+                event = FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=None,
+                    new_status=FileStatus.DISCOVERED,
+                )
+                asyncio.create_task(self._event_bus.publish(event))
+
         return tracked_file
 
     async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
@@ -354,20 +353,6 @@ class StateManager:
             )
         return removed_count
 
-    def subscribe(self, callback: Callable[[FileStateUpdate], Awaitable[None]]) -> None:
-        self._subscribers.append(callback)
-        logging.debug(f"Ny subscriber tilmeldt. Total: {len(self._subscribers)}")
-
-    def unsubscribe(
-        self, callback: Callable[[FileStateUpdate], Awaitable[None]]
-    ) -> bool:
-        try:
-            self._subscribers.remove(callback)
-            logging.debug(f"Subscriber afmeldt. Total: {len(self._subscribers)}")
-            return True
-        except ValueError:
-            return False
-
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
             result = self._files_by_id.get(file_id)
@@ -376,19 +361,6 @@ class StateManager:
                     f"🔍 get_file_by_id: UUID {file_id[:8]}... not found in {len(self._files_by_id)} files"
                 )
             return result
-
-    async def get_file_history(self, file_path: str) -> List[TrackedFile]:
-        async with self._lock:
-            files = self._get_all_files_for_path(file_path)
-            return sorted(files, key=lambda f: f.discovered_at, reverse=True)
-
-    async def remove_file_by_id(self, file_id: str) -> bool:
-        async with self._lock:
-            if file_id in self._files_by_id:
-                self._files_by_id.pop(file_id)
-                logging.debug(f"Permanently removed file by ID: {file_id}")
-                return True
-            return False
 
     async def update_file_status_by_id(
         self, file_id: str, status: FileStatus, **kwargs
@@ -439,33 +411,10 @@ class StateManager:
                 tracked_file, "failed_at", None
             ):
                 tracked_file.failed_at = datetime.now()
-        await self._notify(
-            FileStateUpdate(
-                file_path=tracked_file.file_path,
-                old_status=old_status,
-                new_status=status,
-                tracked_file=tracked_file,
-            )
-        )
+
         if event_to_publish:
             await self._event_bus.publish(event_to_publish)
         return tracked_file
-
-    async def _notify(self, update: FileStateUpdate) -> None:
-        if not self._subscribers:
-            return
-        tasks = []
-        for callback in self._subscribers:
-            try:
-                task = asyncio.create_task(callback(update))
-                tasks.append(task)
-            except Exception as e:
-                logging.error(f"Fejl ved oprettelse af subscriber task: {e}")
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logging.error(f"Subscriber {i} fejlede: {result}")
 
     async def get_statistics(self) -> Dict:
         async with self._lock:
@@ -503,67 +452,6 @@ class StateManager:
                 "growing_files": len(growing_files),
                 "subscribers": len(self._subscribers),
             }
-
-    async def get_active_copy_files(self) -> List[TrackedFile]:
-        async with self._lock:
-            current_files = {}
-            for tracked_file in self._files_by_id.values():
-                if tracked_file.status in [
-                    FileStatus.IN_QUEUE,
-                    FileStatus.COPYING,
-                    FileStatus.GROWING_COPY,
-                ]:
-                    current = current_files.get(tracked_file.file_path)
-                    if not current or self._is_more_current(tracked_file, current):
-                        current_files[tracked_file.file_path] = tracked_file
-            return list(current_files.values())
-
-    async def is_file_stable(self, file_id: str, stable_time_seconds: int) -> bool:
-        async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
-            if not tracked_file:
-                return False
-            now = datetime.now()
-            time_since_discovery = now - tracked_file.discovered_at
-            stable_duration = timedelta(seconds=stable_time_seconds)
-            is_stable = time_since_discovery >= stable_duration
-            if is_stable:
-                logging.debug(
-                    f"File is stable: {tracked_file.file_path} (stable for {time_since_discovery.total_seconds():.1f}s)"
-                )
-            return is_stable
-
-    async def update_file_metadata(
-        self, file_id: str, new_size: int, new_write_time: datetime
-    ) -> bool:
-        async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
-            if not tracked_file:
-                logging.warning(
-                    f"Attempted to update metadata for unknown file ID: {file_id}"
-                )
-                return False
-            size_changed = tracked_file.file_size != new_size
-            time_changed = tracked_file.last_write_time != new_write_time
-            if size_changed or time_changed:
-                old_size = tracked_file.file_size
-                tracked_file.file_size = new_size
-                tracked_file.last_write_time = new_write_time
-                tracked_file.discovered_at = datetime.now()  # Reset stability timer
-                logging.info(
-                    f"File changed, resetting stability timer: {tracked_file.file_path} "
-                    f"(size: {old_size} -> {new_size}, write_time updated)"
-                )
-                await self._notify(
-                    FileStateUpdate(
-                        file_path=tracked_file.file_path,
-                        old_status=tracked_file.status,
-                        new_status=tracked_file.status,
-                        tracked_file=tracked_file,
-                    )
-                )
-                return True  # File changed
-            return False  # No change detected
 
     async def schedule_retry(
         self, file_id: str, delay_seconds: int, reason: str, retry_type: str = "space"
@@ -637,14 +525,7 @@ class StateManager:
                     f"Retry executed for {tracked_file.file_path} - reset to READY"
                 )
                 self._retry_tasks.pop(file_id, None)
-                await self._notify(
-                    FileStateUpdate(
-                        file_path=tracked_file.file_path,
-                        old_status=old_status,
-                        new_status=FileStatus.READY,
-                        tracked_file=tracked_file,
-                    )
-                )
+
         except asyncio.CancelledError:
             async with self._lock:
                 tracked_file = self._files_by_id.get(file_id)
@@ -659,11 +540,6 @@ class StateManager:
                 if tracked_file:
                     tracked_file.retry_info = None
                 self._retry_tasks.pop(file_id, None)
-
-    async def get_retry_info(self, file_id: str) -> Optional[RetryInfo]:
-        async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
-            return tracked_file.retry_info if tracked_file else None
 
     async def cancel_all_retries(self) -> int:
         async with self._lock:

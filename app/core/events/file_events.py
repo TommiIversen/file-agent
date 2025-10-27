@@ -2,6 +2,7 @@
 Domain events specific to file operations.
 """
 from dataclasses import dataclass
+from typing import Optional
 
 from app.core.events.domain_event import DomainEvent
 from app.models import FileStatus
@@ -20,7 +21,7 @@ class FileStatusChangedEvent(DomainEvent):
     """Event published when a file's status changes."""
     file_id: str
     file_path: str
-    old_status: FileStatus
+    old_status: Optional[FileStatus]
     new_status: FileStatus
 
 

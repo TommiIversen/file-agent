@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize WebSocketManager (subscription happens automatically)
     websocket_manager = get_websocket_manager()  # Initialize singleton
-    logging.info("WebSocketManager initialiseret og subscribed til StateManager")
+    logging.info("WebSocketManager initialiseret")
     
     # Initialize scanner status in WebSocketManager with race condition handling
     websocket_manager.initialize_scanner_status(file_scanner)
