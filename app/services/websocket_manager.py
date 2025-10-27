@@ -47,7 +47,7 @@ class WebSocketManager:
     def __init__(
         self,
         state_manager: StateManager,
-        event_bus: Optional[DomainEventBus] = None,
+        event_bus: DomainEventBus = None,
         storage_monitor=None,
     ):
         self.state_manager = state_manager

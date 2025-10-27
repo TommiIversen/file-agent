@@ -24,7 +24,7 @@ if not exist "%PROJECT_ROOT%%TAILWIND_EXE%" (
     echo.
     
     REM Download using PowerShell (works on all Windows systems)
-    powershell -Command "Invoke-WebRequest -Uri '%TAILWIND_URL%' -OutFile '%PROJECT_ROOT%%TAILWIND_EXE%'"
+    curl -L -o "%PROJECT_ROOT%%TAILWIND_EXE%" "%TAILWIND_URL%"
     
     if !errorlevel! equ 0 (
         echo [SUCCESS] Downloaded Tailwind CSS successfully!
