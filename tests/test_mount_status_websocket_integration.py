@@ -11,7 +11,7 @@ from unittest.mock import Mock, AsyncMock
 import pytest
 
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
-from app.services.websocket_manager import WebSocketManager
+from app.core.events.event_bus import DomainEventBus
 from app.services.network_mount.mount_service import NetworkMountService
 from app.config import Settings
 from app.models import StorageInfo, StorageStatus, MountStatus, MountStatusUpdate
@@ -30,12 +30,11 @@ class TestMountStatusWebSocketIntegration:
         return settings
 
     @pytest.fixture
-    def mock_websocket_manager(self):
-        """Mock WebSocket manager with mount status broadcasting."""
-        manager = Mock(spec=WebSocketManager)
-        manager.broadcast_storage_status = AsyncMock()
-        manager.broadcast_mount_status = AsyncMock()
-        return manager
+    def mock_event_bus(self):
+        """Mock event bus for handling events."""
+        event_bus = Mock(spec=DomainEventBus)
+        event_bus.publish = AsyncMock()
+        return event_bus
 
     @pytest.fixture
     def mock_network_mount_service_configured(self):
@@ -63,7 +62,7 @@ class TestMountStatusWebSocketIntegration:
         return service
 
     def create_storage_monitor_with_mocks(
-        self, settings, websocket_manager, network_mount_service
+        self, settings, event_bus, network_mount_service
     ):
         """Helper to create StorageMonitorService with all required mocks."""
         # Mock StorageChecker
@@ -87,7 +86,7 @@ class TestMountStatusWebSocketIntegration:
         return StorageMonitorService(
             settings=settings,
             storage_checker=mock_storage_checker,
-            websocket_manager=websocket_manager,
+            event_bus=event_bus,
             network_mount_service=network_mount_service,
         )
 
@@ -95,14 +94,14 @@ class TestMountStatusWebSocketIntegration:
     async def test_mount_success_websocket_broadcast(
         self,
         mock_settings,
-        mock_websocket_manager,
+        mock_event_bus,
         mock_network_mount_service_configured,
     ):
         """Test successful mount operation broadcasts correct WebSocket messages."""
 
         # Create service with configured mount service
         service = self.create_storage_monitor_with_mocks(
-            mock_settings, mock_websocket_manager, mock_network_mount_service_configured
+            mock_settings, mock_event_bus, mock_network_mount_service_configured
         )
 
         # Execute storage check to trigger mount operation
@@ -113,34 +112,43 @@ class TestMountStatusWebSocketIntegration:
             critical_threshold=1.0,
         )
 
-        # Verify mount status broadcasts were made
-        assert mock_websocket_manager.broadcast_mount_status.call_count >= 2
+        # Verify mount status events were published
+        assert mock_event_bus.publish.call_count >= 2
 
-        # Check specific mount status calls
-        calls = mock_websocket_manager.broadcast_mount_status.call_args_list
+        # Check specific mount status events
+        calls = mock_event_bus.publish.call_args_list
 
-        # First call should be ATTEMPTING status
-        attempting_call = calls[0][0][0]  # First positional argument of first call
-        assert attempting_call.storage_type == "destination"
-        assert attempting_call.mount_status == MountStatus.ATTEMPTING
-        assert attempting_call.share_url == "//nas/shared"
-        assert attempting_call.target_path == r"\\nas\shared\dest"
+        # Find MountStatusChangedEvent calls
+        mount_events = []
+        for call in calls:
+            event = call[0][0]  # First positional argument
+            if hasattr(event, 'update') and hasattr(event.update, 'mount_status'):
+                mount_events.append(event.update)
+        
+        assert len(mount_events) >= 2
 
-        # Second call should be SUCCESS status
-        success_call = calls[1][0][0]  # First positional argument of second call
-        assert success_call.storage_type == "destination"
-        assert success_call.mount_status == MountStatus.SUCCESS
-        assert success_call.share_url == "//nas/shared"
-        assert success_call.target_path == r"\\nas\shared\dest"
+        # First event should be ATTEMPTING status
+        attempting_update = mount_events[0]
+        assert attempting_update.storage_type == "destination"
+        assert attempting_update.mount_status == MountStatus.ATTEMPTING
+        assert attempting_update.share_url == "//nas/shared"
+        assert attempting_update.target_path == r"\\nas\shared\dest"
+
+        # Second event should be SUCCESS status
+        success_update = mount_events[1]
+        assert success_update.storage_type == "destination"
+        assert success_update.mount_status == MountStatus.SUCCESS
+        assert success_update.share_url == "//nas/shared"
+        assert success_update.target_path == r"\\nas\shared\dest"
 
     @pytest.mark.asyncio
     async def test_mount_failure_websocket_broadcast(
-        self, mock_settings, mock_websocket_manager, mock_network_mount_service_failed
+        self, mock_settings, mock_event_bus, mock_network_mount_service_failed
     ):
         """Test failed mount operation broadcasts correct WebSocket messages."""
 
         service = self.create_storage_monitor_with_mocks(
-            mock_settings, mock_websocket_manager, mock_network_mount_service_failed
+            mock_settings, mock_event_bus, mock_network_mount_service_failed
         )
 
         # Execute storage check to trigger failed mount operation
@@ -151,32 +159,41 @@ class TestMountStatusWebSocketIntegration:
             critical_threshold=1.0,
         )
 
-        # Verify mount status broadcasts were made
-        assert mock_websocket_manager.broadcast_mount_status.call_count >= 2
+        # Verify mount status events were published
+        assert mock_event_bus.publish.call_count >= 2
 
-        calls = mock_websocket_manager.broadcast_mount_status.call_args_list
+        calls = mock_event_bus.publish.call_args_list
 
-        # First call: ATTEMPTING
-        attempting_call = calls[0][0][0]
-        assert attempting_call.mount_status == MountStatus.ATTEMPTING
+        # Find MountStatusChangedEvent calls
+        mount_events = []
+        for call in calls:
+            event = call[0][0]  # First positional argument
+            if hasattr(event, 'update') and hasattr(event.update, 'mount_status'):
+                mount_events.append(event.update)
+        
+        assert len(mount_events) >= 2
 
-        # Second call: FAILED
-        failed_call = calls[1][0][0]
-        assert failed_call.mount_status == MountStatus.FAILED
-        assert failed_call.error_message == "Network mount operation failed"
+        # First event: ATTEMPTING
+        attempting_update = mount_events[0]
+        assert attempting_update.mount_status == MountStatus.ATTEMPTING
+
+        # Second event: FAILED
+        failed_update = mount_events[1]
+        assert failed_update.mount_status == MountStatus.FAILED
+        assert failed_update.error_message == "Network mount operation failed"
 
     @pytest.mark.asyncio
     async def test_mount_not_configured_websocket_broadcast(
         self,
         mock_settings,
-        mock_websocket_manager,
+        mock_event_bus,
         mock_network_mount_service_not_configured,
     ):
         """Test not configured mount service broadcasts correct WebSocket message."""
 
         service = self.create_storage_monitor_with_mocks(
             mock_settings,
-            mock_websocket_manager,
+            mock_event_bus,
             mock_network_mount_service_not_configured,
         )
 
@@ -188,24 +205,32 @@ class TestMountStatusWebSocketIntegration:
             critical_threshold=1.0,
         )
 
-        # Verify NOT_CONFIGURED status was broadcast
-        mock_websocket_manager.broadcast_mount_status.assert_called_once()
-
-        call = mock_websocket_manager.broadcast_mount_status.call_args[0][0]
-        assert call.mount_status == MountStatus.NOT_CONFIGURED
-        assert call.error_message == "Network mount not configured in settings"
+        # Verify NOT_CONFIGURED status was published as event
+        calls = mock_event_bus.publish.call_args_list
+        
+        # Find the MountStatusChangedEvent
+        mount_event = None
+        for call in calls:
+            event = call[0][0]
+            if hasattr(event, 'update') and hasattr(event.update, 'mount_status'):
+                mount_event = event.update
+                break
+        
+        assert mount_event is not None
+        assert mount_event.mount_status == MountStatus.NOT_CONFIGURED
+        assert mount_event.error_message == "Network mount not configured in settings"
 
     @pytest.mark.asyncio
     async def test_source_storage_no_mount_broadcast(
         self,
         mock_settings,
-        mock_websocket_manager,
+        mock_event_bus,
         mock_network_mount_service_configured,
     ):
         """Test that source storage doesn't trigger mount broadcasts."""
 
         service = self.create_storage_monitor_with_mocks(
-            mock_settings, mock_websocket_manager, mock_network_mount_service_configured
+            mock_settings, mock_event_bus, mock_network_mount_service_configured
         )
 
         # Execute source storage check
@@ -216,52 +241,16 @@ class TestMountStatusWebSocketIntegration:
             critical_threshold=1.0,
         )
 
-        # Verify NO mount status broadcasts for source storage
-        mock_websocket_manager.broadcast_mount_status.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_websocket_manager_mount_status_message_format(self):
-        """Test WebSocketManager formats mount status messages correctly."""
-
-        # Mock WebSocket connections
-        mock_websocket = Mock()
-        mock_websocket.send_text = AsyncMock()
-
-        # Create WebSocketManager with mock connections
-        ws_manager = WebSocketManager(state_manager=Mock(), storage_monitor=Mock())
-        ws_manager._connections = [mock_websocket]
-
-        # Create mount status update
-        mount_update = MountStatusUpdate(
-            storage_type="destination",
-            mount_status=MountStatus.ATTEMPTING,
-            share_url="//nas/shared",
-            mount_path="/Volumes/shared",
-            target_path="/Volumes/shared/ingest",
-            error_message=None,
-        )
-
-        # Test broadcasting
-        await ws_manager.broadcast_mount_status(mount_update)
-
-        # Verify message was sent
-        mock_websocket.send_text.assert_called_once()
-
-        # Parse sent message
-        import json
-
-        sent_message = json.loads(mock_websocket.send_text.call_args[0][0])
-
-        # Verify message structure
-        assert sent_message["type"] == "mount_status"
-        assert sent_message["data"]["storage_type"] == "destination"
-        assert sent_message["data"]["mount_status"] == "ATTEMPTING"
-        assert sent_message["data"]["share_url"] == "//nas/shared"
-        assert sent_message["data"]["mount_path"] == "/Volumes/shared"
-        assert sent_message["data"]["target_path"] == "/Volumes/shared/ingest"
-        assert sent_message["data"]["error_message"] is None
-        assert "timestamp" in sent_message["data"]
-
+        # Verify NO mount status events published for source storage
+        # Check that no MountStatusChangedEvent was published
+        calls = mock_event_bus.publish.call_args_list
+        mount_events = []
+        for call in calls:
+            event = call[0][0]  # First positional argument
+            if hasattr(event, 'update') and hasattr(event.update, 'mount_status'):
+                mount_events.append(event.update)
+        
+        assert len(mount_events) == 0
 
 class TestMountStatusSizeCompliance:
     """Verify mount status integration maintains size compliance."""
@@ -298,21 +287,4 @@ class TestMountStatusSizeCompliance:
         print(f"StorageMonitorService code lines: {len(code_lines)}")
         assert len(code_lines) <= 400, (
             f"StorageMonitorService exceeds 400 lines: {len(code_lines)}"
-        )
-
-    def test_websocket_manager_size_after_mount_support(self):
-        """Verify WebSocketManager stays within limits after mount status support."""
-        from pathlib import Path
-
-        file_path = Path("app/services/websocket_manager.py")
-        with open(file_path, "r") as f:
-            lines = f.readlines()
-
-        code_lines = [
-            line for line in lines if line.strip() and not line.strip().startswith("#")
-        ]
-
-        print(f"WebSocketManager code lines: {len(code_lines)}")
-        assert len(code_lines) <= 400, (
-            f"WebSocketManager exceeds 400 lines: {len(code_lines)}"
         )

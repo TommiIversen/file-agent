@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class DirectoryItem(BaseModel):
@@ -30,7 +30,10 @@ class DirectoryItem(BaseModel):
         default=None, description="Child items (for directories)"
     )
 
-    model_config = {"json_encoders": {datetime: lambda v: v.isoformat() if v else None}}
+    @field_serializer('created_time', 'modified_time', when_used='json')
+    def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        """Serialize datetime fields to ISO format for JSON output."""
+        return value.isoformat() if value else None
 
 
 class DirectoryScanResult(BaseModel):

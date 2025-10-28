@@ -19,6 +19,7 @@ import pytest
 
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 from app.services.network_mount.mount_service import NetworkMountService
+from app.core.events.event_bus import DomainEventBus
 from app.config import Settings
 from app.models import StorageInfo, StorageStatus
 
@@ -40,12 +41,11 @@ class TestStorageNetworkMountIntegration:
         return settings
 
     @pytest.fixture
-    def mock_websocket_manager(self):
-        """Mock WebSocket manager."""
-        manager = Mock()
-        manager.broadcast_storage_status = AsyncMock()
-        manager.broadcast = AsyncMock()  # Add missing broadcast method
-        return manager
+    def mock_event_bus(self):
+        """Mock DomainEventBus for testing."""
+        event_bus = Mock()
+        event_bus.publish = AsyncMock()
+        return event_bus
 
     @pytest.fixture
     def mock_network_mount_service(self):
@@ -58,7 +58,7 @@ class TestStorageNetworkMountIntegration:
 
     @pytest.fixture
     def storage_monitor_with_network_mount(
-        self, mock_settings, mock_websocket_manager, mock_network_mount_service
+        self, mock_settings, mock_event_bus, mock_network_mount_service
     ):
         """Create StorageMonitorService with NetworkMountService integration."""
         # Mock StorageChecker as required by constructor
@@ -99,7 +99,7 @@ class TestStorageNetworkMountIntegration:
         service = StorageMonitorService(
             settings=mock_settings,
             storage_checker=mock_storage_checker,
-            websocket_manager=mock_websocket_manager,
+            event_bus=mock_event_bus,
             network_mount_service=mock_network_mount_service,
         )
         return service

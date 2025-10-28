@@ -10,12 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.services.directory_scanner import (
-    DirectoryScannerService,
-    DirectoryScanResult,
-    DirectoryItem,
-)
+
 from app.config import Settings
+from app.domains.directory_browsing.models import DirectoryItem, DirectoryScanResult
+from app.domains.directory_browsing.service import DirectoryScannerService
 
 
 class TestDirectoryScannerService:
