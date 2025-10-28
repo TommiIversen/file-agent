@@ -8,8 +8,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
+from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
-from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
 
@@ -58,9 +58,8 @@ class WebSocketManager:
         self._scanner_status = {
             "scanning": True,
             "paused": False,
-        }  # Track scanner status
+        }
 
-        # New system: Subscribe to the event bus
         if self._event_bus:
             asyncio.create_task(self._subscribe_to_events())
 
@@ -78,6 +77,9 @@ class WebSocketManager:
         )
         await self._event_bus.subscribe(
             MountStatusChangedEvent, self.handle_mount_status_event
+        )
+        await self._event_bus.subscribe(
+            ScannerStatusChangedEvent, self.handle_scanner_status_event
         )
 
         logging.info("Subscribed to DomainEventBus for real-time event updates")
@@ -235,19 +237,18 @@ class WebSocketManager:
         return datetime.now().isoformat()
 
 
-    async def broadcast_scanner_status(self, scanning: bool, paused: bool) -> None:
-        """Broadcast scanner status changes to all connected clients"""
+    async def handle_scanner_status_event(self, event: ScannerStatusChangedEvent) -> None:
         if not self._connections:
             return
 
-        self._scanner_status = {"scanning": scanning, "paused": paused}
+        self._scanner_status = {"scanning": event.is_scanning, "paused": event.is_paused}
 
         try:
             message_data = {
                 "type": "scanner_status",
                 "data": {
-                    "scanning": scanning,
-                    "paused": paused,
+                    "scanning": event.is_scanning,
+                    "paused": event.is_paused,
                     "timestamp": self._get_timestamp(),
                 },
             }
@@ -255,34 +256,12 @@ class WebSocketManager:
             await self._broadcast_message(message_data)
 
             logging.debug(
-                f"Broadcasted scanner status: scanning={scanning}, paused={paused}"
+                f"Broadcasted scanner status: scanning={event.is_scanning}, paused={event.is_paused}"
             )
 
         except Exception as e:
             logging.error(f"Error broadcasting scanner status: {e}")
 
-    def initialize_scanner_status(self, file_scanner_service) -> None:
-        """Initialize scanner status from file scanner service after startup"""
-        try:
-            # Check if scanner is running, but handle race condition gracefully
-            is_scanning = file_scanner_service.is_scanning()
-
-            # If scanner task was just created, it might not be running yet
-            # In that case, assume it will be running soon (optimistic initialization)
-            if not is_scanning:
-                # Check if we have a background task that should be starting the scanner
-                logging.debug(
-                    "Scanner not yet running at initialization - will update when it starts"
-                )
-                is_scanning = True  # Assume scanner will start successfully
-
-            self._scanner_status = {"scanning": is_scanning, "paused": not is_scanning}
-            logging.info(
-                f"Scanner status initialized: scanning={is_scanning}, paused={not is_scanning}"
-            )
-        except Exception as e:
-            logging.error(f"Failed to initialize scanner status: {e}")
-            self._scanner_status = {"scanning": False, "paused": True}
 
     async def handle_storage_status_event(self, update: StorageStatusChangedEvent) -> None:
         if not self._connections:
@@ -312,7 +291,6 @@ class WebSocketManager:
             logging.error(f"Error broadcasting storage update: {e}")
 
 
-    # NY EVENT HANDLER for Mount
     async def handle_mount_status_event(self, update: MountStatusChangedEvent) -> None:
         if not self._connections:
             return

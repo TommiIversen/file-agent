@@ -72,19 +72,12 @@ def get_state_manager() -> StateManager:
 
 def get_file_scanner() -> FileScannerService:
     if "file_scanner" not in _singletons:
-        settings = get_settings()
-        state_manager = get_state_manager()
-        storage_monitor = get_storage_monitor()  # Inject Central Storage Authority
-        websocket_manager = get_websocket_manager()  # Inject WebSocket manager
-        event_bus = get_event_bus()
         _singletons["file_scanner"] = FileScannerService(
-            settings,
-            state_manager,
-            storage_monitor,
-            websocket_manager,
-            event_bus=event_bus,
+            settings=get_settings(),
+            state_manager=get_state_manager(),
+            storage_monitor=get_storage_monitor(),
+            event_bus=get_event_bus()
         )
-
     return _singletons["file_scanner"]
 
 
