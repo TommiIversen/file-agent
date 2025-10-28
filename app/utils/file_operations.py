@@ -53,14 +53,14 @@ def create_temp_file_path(dest_path: Path) -> Path:
 
 
 def build_destination_path(
-        source_path: Path, source_base: Path, dest_base: Path
+    source_path: Path, source_base: Path, dest_base: Path
 ) -> Path:
     relative_path = calculate_relative_path(source_path, source_base)
     return dest_base / relative_path
 
 
 def build_destination_path_with_template(
-        source_path: Path, source_base: Path, dest_base: Path, template_engine=None
+    source_path: Path, source_base: Path, dest_base: Path, template_engine=None
 ) -> Path:
     filename = source_path.name
 
@@ -73,7 +73,7 @@ def build_destination_path_with_template(
 
 
 def resolve_destination_with_conflicts(
-        source_path: Path, source_base: Path, dest_base: Path
+    source_path: Path, source_base: Path, dest_base: Path
 ) -> Path:
     initial_dest = build_destination_path(source_path, source_base, dest_base)
     return generate_conflict_free_path(initial_dest)

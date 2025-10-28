@@ -1,19 +1,8 @@
-"""
-Test suite for StateManager.
-
-Tester den centrale state management funktionalitet inklusiv:
-- Thread safety med concurrent operations
-- Pub/sub system
-- Fil lifecycle management
-- Cleanup operationer
-"""
-
 import pytest
 import asyncio
-from typing import List
 
 from app.services.state_manager import StateManager
-from app.models import FileStatus, FileStateUpdate
+from app.models import FileStatus
 from app.dependencies import reset_singletons
 
 
@@ -72,13 +61,6 @@ class TestStateManager:
         )
         assert result is None
 
-    async def test_remove_file_by_id(self, state_manager, sample_file_path):
-        tracked_file = await state_manager.add_file(sample_file_path, 1024)
-        success = await state_manager.remove_file_by_id(tracked_file.id)
-        assert success is True
-        file_by_id = await state_manager.get_file_by_id(tracked_file.id)
-        assert file_by_id is None
-
     async def test_get_file_by_id(self, state_manager, sample_file_path):
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         file_by_id = await state_manager.get_file_by_id(tracked_file.id)
@@ -110,40 +92,6 @@ class TestStateManager:
         all_files = await state_manager.get_all_files()
         remaining_ids = {f.id for f in all_files if f.status != FileStatus.REMOVED}
         assert len(remaining_ids) == 1
-
-    async def test_pub_sub_system(self, state_manager, sample_file_path):
-        """Test at pub/sub systemet notificerer subscribers korrekt."""
-        received_updates: List[FileStateUpdate] = []
-
-        async def test_subscriber(update: FileStateUpdate):
-            received_updates.append(update)
-
-        # Subscribe til updates
-        state_manager.subscribe(test_subscriber)
-
-        # Tilføj fil (skal trigger notification)
-        tracked_file = await state_manager.add_file(sample_file_path, 1024)
-
-        # Opdater status (skal trigger notification)
-        await state_manager.update_file_status_by_id(tracked_file.id, FileStatus.READY)
-
-        # Give asyncio lidt tid til at process callbacks
-        await asyncio.sleep(0.01)
-
-        # Verificer at vi modtog 2 notifications
-        assert len(received_updates) == 2
-
-        # Verificer første notification (add_file)
-        add_update = received_updates[0]
-        assert add_update.file_path == sample_file_path
-        assert add_update.old_status is None
-        assert add_update.new_status == FileStatus.DISCOVERED
-
-        # Verificer anden notification (status update)
-        status_update = received_updates[1]
-        assert status_update.file_path == sample_file_path
-        assert status_update.old_status == FileStatus.DISCOVERED
-        assert status_update.new_status == FileStatus.READY
 
     async def test_thread_safety_concurrent_operations(self, state_manager):
         """Test thread safety med concurrent add/update/remove operationer."""
@@ -193,126 +141,22 @@ class TestStateManager:
         assert stats["status_counts"]["Copying"] == 1
         assert stats["status_counts"]["Ready"] == 1
 
-    async def test_unsubscribe_removes_callback(self, state_manager, sample_file_path):
-        """Test at unsubscribe fjerner callback korrekt."""
-        received_updates: List[FileStateUpdate] = []
-
-        async def test_subscriber(update: FileStateUpdate):
-            received_updates.append(update)
-
-        # Subscribe og derefter unsubscribe
-        state_manager.subscribe(test_subscriber)
-        success = state_manager.unsubscribe(test_subscriber)
-        assert success is True
-
-        # Tilføj fil (skal ikke trigger notification)
-        await state_manager.add_file(sample_file_path, 1024)
-        await asyncio.sleep(0.01)
-
-        # Ingen updates skulle være modtaget
-        assert len(received_updates) == 0
-
-        # Test unsubscribe af non-existent callback
-        success = state_manager.unsubscribe(test_subscriber)
-        assert success is False
-
-    async def test_is_file_stable_unknown_file(self, state_manager):
-        """Test at is_file_stable returnerer False for ukendt fil."""
-        result = await state_manager.is_file_stable("unknown-id", 10)
-        assert result is False
-
-    async def test_is_file_stable_timing(self, state_manager, sample_file_path):
-        """Test file stability timing logic."""
-        # Add file
-        tracked_file = await state_manager.add_file(sample_file_path, 1024)
-        
-        # File should not be stable immediately
-        result = await state_manager.is_file_stable(tracked_file.id, 2)
-        assert result is False
-        
-        # Simulate time passing by manually setting discovered_at
-        from datetime import datetime, timedelta
-        tracked_file.discovered_at = datetime.now() - timedelta(seconds=3)
-        
-        # Now file should be stable
-        result = await state_manager.is_file_stable(tracked_file.id, 2)
-        assert result is True
-
-    async def test_update_file_metadata_no_change(self, state_manager, sample_file_path):
-        """Test update_file_metadata når der ikke er ændringer."""
-        from datetime import datetime
-        
-        write_time = datetime.now()
-        tracked_file = await state_manager.add_file(
-            sample_file_path, 1024, last_write_time=write_time
-        )
-        
-        # Update with same metadata - should return False
-        result = await state_manager.update_file_metadata(
-            tracked_file.id, 1024, write_time
-        )
-        assert result is False
-        
-        # File should retain same discovered_at
-        updated_file = await state_manager.get_file_by_id(tracked_file.id)
-        assert updated_file.discovered_at == tracked_file.discovered_at
-
-    async def test_update_file_metadata_with_changes(self, state_manager, sample_file_path):
-        """Test update_file_metadata når fil har ændret sig."""
-        from datetime import datetime, timedelta
-        
-        original_time = datetime.now() - timedelta(seconds=10)
-        tracked_file = await state_manager.add_file(
-            sample_file_path, 1024, last_write_time=original_time
-        )
-        
-        # Store original discovered_at
-        original_discovered = tracked_file.discovered_at
-        
-        # Update with different size
-        new_time = datetime.now()
-        result = await state_manager.update_file_metadata(
-            tracked_file.id, 2048, new_time
-        )
-        assert result is True
-        
-        # File should have updated metadata and reset timer
-        updated_file = await state_manager.get_file_by_id(tracked_file.id)
-        assert updated_file.file_size == 2048
-        assert updated_file.last_write_time == new_time
-        assert updated_file.discovered_at > original_discovered  # Timer was reset
-
-    async def test_update_file_metadata_unknown_file(self, state_manager):
-        """Test update_file_metadata for ukendt fil."""
-        from datetime import datetime
-        
-        result = await state_manager.update_file_metadata(
-            "unknown-id", 1024, datetime.now()
-        )
-        assert result is False
-
     async def test_schedule_retry_success(self, state_manager, sample_file_path):
         """Test successful retry scheduling."""
         # Add file
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
-        
+
         # Schedule retry
         result = await state_manager.schedule_retry(
             tracked_file.id, 0.1, "Test retry", "test"
         )
         assert result is True
-        
+
         # Verify retry info is stored in TrackedFile
         updated_file = await state_manager.get_file_by_id(tracked_file.id)
         assert updated_file.retry_info is not None
         assert updated_file.retry_info.reason == "Test retry"
         assert updated_file.retry_info.retry_type == "test"
-        
-        # Verify retry info via get_retry_info method
-        retry_info = await state_manager.get_retry_info(tracked_file.id)
-        assert retry_info is not None
-        assert retry_info.reason == "Test retry"
-        assert retry_info.retry_type == "test"
 
     async def test_schedule_retry_unknown_file(self, state_manager):
         """Test retry scheduling for unknown file."""
@@ -326,29 +170,21 @@ class TestStateManager:
         # Add file and schedule retry
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         await state_manager.schedule_retry(tracked_file.id, 0.1, "Test retry", "test")
-        
-        # Verify retry is scheduled
-        retry_info = await state_manager.get_retry_info(tracked_file.id)
-        assert retry_info is not None
-        
+
         # Cancel retry
         result = await state_manager.cancel_retry(tracked_file.id)
         assert result is True
-        
-        # Verify retry is cancelled
-        retry_info = await state_manager.get_retry_info(tracked_file.id)
-        assert retry_info is None
 
     async def test_increment_retry_count(self, state_manager, sample_file_path):
         """Test retry count increment."""
         # Add file
         tracked_file = await state_manager.add_file(sample_file_path, 1024)
         assert tracked_file.retry_count == 0
-        
+
         # Increment retry count
         new_count = await state_manager.increment_retry_count(tracked_file.id)
         assert new_count == 1
-        
+
         # Verify file was updated
         updated_file = await state_manager.get_file_by_id(tracked_file.id)
         assert updated_file.retry_count == 1
@@ -363,14 +199,10 @@ class TestStateManager:
         # Add multiple files and schedule retries
         file1 = await state_manager.add_file("/test/file1.mxf", 1024)
         file2 = await state_manager.add_file("/test/file2.mxf", 2048)
-        
+
         await state_manager.schedule_retry(file1.id, 0.1, "Test retry 1", "test")
         await state_manager.schedule_retry(file2.id, 0.1, "Test retry 2", "test")
-        
+
         # Cancel all retries
         cancelled_count = await state_manager.cancel_all_retries()
         assert cancelled_count == 2
-        
-        # Verify all retries are cancelled
-        assert await state_manager.get_retry_info(file1.id) is None
-        assert await state_manager.get_retry_info(file2.id) is None

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -5,6 +6,8 @@ from typing import List, Dict, Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
@@ -28,29 +31,48 @@ def _serialize_storage_info(storage_info) -> dict:
 def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
     """
     Serialize TrackedFile using Pydantic's built-in JSON serialization.
-    
+
     Uses mode='json' to automatically handle datetime objects and other types.
     """
     # Use mode='json' to automatically convert datetime and other objects to JSON-compatible types
-    data = tracked_file.model_dump(mode='json')
-    
+    data = tracked_file.model_dump(mode="json")
+
     # Add computed field for UI convenience
     data["file_size_mb"] = round(tracked_file.file_size / (1024 * 1024), 2)
-    
+
     return data
 
 
 class WebSocketManager:
-    def __init__(self, state_manager: StateManager, storage_monitor=None):
+    def __init__(
+        self,
+        state_manager: StateManager,
+        event_bus: DomainEventBus = None,
+        storage_monitor=None,
+    ):
         self.state_manager = state_manager
         self._storage_monitor = storage_monitor
+        self._event_bus = event_bus
         self._connections: List[WebSocket] = []
-        self._scanner_status = {"scanning": True, "paused": False}  # Track scanner status
+        self._scanner_status = {
+            "scanning": True,
+            "paused": False,
+        }  # Track scanner status
 
-        self.state_manager.subscribe(self._handle_state_change)
+        # New system: Subscribe to the event bus
+        if self._event_bus:
+            asyncio.create_task(self._subscribe_to_events())
 
         logging.info("WebSocketManager initialiseret")
-        logging.info("Subscribed til StateManager events for real-time updates")
+
+    async def _subscribe_to_events(self):
+        await self._event_bus.subscribe(
+            FileStatusChangedEvent, self.handle_file_status_changed_event
+        )
+        await self._event_bus.subscribe(
+            FileCopyProgressEvent, self.handle_file_copy_progress
+        )
+        logging.info("Subscribed to DomainEventBus for real-time event updates")
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -114,6 +136,7 @@ class WebSocketManager:
             logging.error(f"Fejl ved sending af initial state: {e}")
 
     async def _handle_state_change(self, update: FileStateUpdate) -> None:
+        """Handles the legacy FileStateUpdate from the old pub/sub system."""
         if not self._connections:
             return
 
@@ -134,11 +157,62 @@ class WebSocketManager:
             await self._broadcast_message(message_data)
 
             logging.debug(
-                f"Broadcasted state change: {update.file_path} -> {update.new_status}"
+                f"Broadcasted state change (legacy): {update.file_path} -> {update.new_status}"
             )
 
         except Exception as e:
             logging.error(f"Fejl ved broadcasting af state change: {e}")
+
+    async def handle_file_status_changed_event(
+        self, event: FileStatusChangedEvent
+    ) -> None:
+        """Handles the FileStatusChangedEvent from the new event bus."""
+        logging.info(f"Received event: {event.file_path} -> {event.new_status.value}")
+        if not self._connections:
+            return
+
+        tracked_file = await self.state_manager.get_file_by_id(event.file_id)
+        if not tracked_file:
+            logging.warning(
+                f"Received FileStatusChangedEvent for unknown file ID: {event.file_id}"
+            )
+            return
+
+        update_for_broadcast = FileStateUpdate(
+            file_path=event.file_path,
+            old_status=event.old_status,
+            new_status=event.new_status,
+            tracked_file=tracked_file,
+            timestamp=event.timestamp,  # Use event timestamp
+        )
+        # Re-use the existing broadcast logic by calling the old handler
+        await self._handle_state_change(update_for_broadcast)
+
+    async def handle_file_copy_progress(self, event: FileCopyProgressEvent) -> None:
+        """Handles the FileCopyProgressEvent from the event bus."""
+        if not self._connections:
+            return
+
+        try:
+            progress_percent = (
+                (event.bytes_copied / event.total_bytes) * 100
+                if event.total_bytes > 0
+                else 0
+            )
+            message_data = {
+                "type": "file_progress_update",
+                "data": {
+                    "file_id": event.file_id,
+                    "bytes_copied": event.bytes_copied,
+                    "total_bytes": event.total_bytes,
+                    "copy_speed_mbps": round(event.copy_speed_mbps, 2),
+                    "progress_percent": round(progress_percent, 2),
+                    "timestamp": event.timestamp.isoformat(),
+                },
+            }
+            await self._broadcast_message(message_data)
+        except Exception as e:
+            logging.error(f"Error broadcasting progress update: {e}")
 
     async def _broadcast_message(self, message_data: Dict[str, Any]) -> None:
         if not self._connections:
@@ -242,7 +316,7 @@ class WebSocketManager:
             return
 
         self._scanner_status = {"scanning": scanning, "paused": paused}
-        
+
         try:
             message_data = {
                 "type": "scanner_status",
@@ -255,7 +329,9 @@ class WebSocketManager:
 
             await self._broadcast_message(message_data)
 
-            logging.debug(f"Broadcasted scanner status: scanning={scanning}, paused={paused}")
+            logging.debug(
+                f"Broadcasted scanner status: scanning={scanning}, paused={paused}"
+            )
 
         except Exception as e:
             logging.error(f"Error broadcasting scanner status: {e}")
@@ -265,16 +341,20 @@ class WebSocketManager:
         try:
             # Check if scanner is running, but handle race condition gracefully
             is_scanning = file_scanner_service.is_scanning()
-            
+
             # If scanner task was just created, it might not be running yet
             # In that case, assume it will be running soon (optimistic initialization)
             if not is_scanning:
                 # Check if we have a background task that should be starting the scanner
-                logging.debug("Scanner not yet running at initialization - will update when it starts")
+                logging.debug(
+                    "Scanner not yet running at initialization - will update when it starts"
+                )
                 is_scanning = True  # Assume scanner will start successfully
-                
+
             self._scanner_status = {"scanning": is_scanning, "paused": not is_scanning}
-            logging.info(f"Scanner status initialized: scanning={is_scanning}, paused={not is_scanning}")
+            logging.info(
+                f"Scanner status initialized: scanning={is_scanning}, paused={not is_scanning}"
+            )
         except Exception as e:
             logging.error(f"Failed to initialize scanner status: {e}")
             self._scanner_status = {"scanning": False, "paused": True}

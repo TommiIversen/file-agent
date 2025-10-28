@@ -5,7 +5,7 @@
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" 
+     class="fixed inset-0 bg-black/50 flex items-center backdrop-blur-sm justify-center z-50" 
     @click.self="closeSettingsModal()"
     @keydown.escape.window="closeSettingsModal()">
     
@@ -325,15 +325,15 @@
                         <button @click="toggleScanner()" 
                                 :disabled="$store.settings?.scannerToggling"
                                 class="w-full disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200"
-                                :class="$store.settings?.scannerPaused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
+                                :class="$store.ui?.scanner?.paused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
                             <span x-show="!$store.settings?.scannerToggling">
-                                <span x-show="$store.settings?.scannerPaused">▶️ Resume Scanner</span>
-                                <span x-show="!$store.settings?.scannerPaused">⏸️ Pause Scanner</span>
+                                <span x-show="$store.ui?.scanner?.paused">▶️ Resume Scanner</span>
+                                <span x-show="!$store.ui?.scanner?.paused">⏸️ Pause Scanner</span>
                             </span>
                             <span x-show="$store.settings?.scannerToggling">
                                 <span class="inline-block animate-spin mr-2">⟳</span>
-                                <span x-show="$store.settings?.scannerPaused">Resuming...</span>
-                                <span x-show="!$store.settings?.scannerPaused">Pausing...</span>
+                                <span x-show="$store.ui?.scanner?.paused">Resuming...</span>
+                                <span x-show="!$store.ui?.scanner?.paused">Pausing...</span>
                             </span>
                         </button>
                     </div>

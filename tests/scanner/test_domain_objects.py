@@ -10,7 +10,11 @@ from unittest.mock import patch, AsyncMock
 from app.services.scanner.domain_objects import (
     ScanConfiguration,
 )
-from app.services.scanner.file_scanner import get_file_metadata, is_mxf_file, should_ignore_file
+from app.services.scanner.file_scanner import (
+    get_file_metadata,
+    is_mxf_file,
+    should_ignore_file,
+)
 
 
 class TestPathUtilities:
@@ -37,8 +41,6 @@ class TestPathUtilities:
         assert not should_ignore_file(normal_file)
 
 
-
-
 class TestFileMetadataFunction:
     """Test the get_file_metadata function that replaced FileMetadata."""
 
@@ -56,10 +58,10 @@ class TestFileMetadataFunction:
             metadata = await get_file_metadata("/test.mxf")
 
             assert metadata is not None
-            assert metadata['size'] == 1024
-            assert metadata['path'].name == "test.mxf"  # Platform-independent
-            assert isinstance(metadata['path'], Path)
-            assert metadata['last_write_time'] == datetime.fromtimestamp(1609459200)
+            assert metadata["size"] == 1024
+            assert metadata["path"].name == "test.mxf"  # Platform-independent
+            assert isinstance(metadata["path"], Path)
+            assert metadata["last_write_time"] == datetime.fromtimestamp(1609459200)
 
     @pytest.mark.asyncio
     async def test_get_file_metadata_file_not_exists(self):

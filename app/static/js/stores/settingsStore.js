@@ -18,6 +18,7 @@ document.addEventListener('alpine:init', () => {
         reloadingConfig: false,
         restartingApp: false,
         restartCountdown: null,
+        scannerToggling: false,
         actionMessage: null,
         actionSuccess: false,
 
@@ -141,6 +142,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         async toggleScanner() {
+            if (this.scannerToggling) return;
+            
             const uiStore = Alpine.store('ui');
             if (!uiStore) {
                 console.error('UI store not available');
@@ -152,6 +155,7 @@ document.addEventListener('alpine:init', () => {
             const endpoint = isCurrentlyPaused ? '/api/scanner/resume' : '/api/scanner/pause';
             const action = isCurrentlyPaused ? 'Resuming' : 'Pausing';
             
+            this.scannerToggling = true;
             this.actionMessage = null;
             
             try {
@@ -181,6 +185,7 @@ document.addEventListener('alpine:init', () => {
                 this.actionSuccess = false;
                 this.actionMessage = 'Network error: ' + error.message;
             } finally {
+                this.scannerToggling = false;
                 setTimeout(() => {
                     this.actionMessage = null;
                 }, 5000);

@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api", tags=["storage"])
 
 @router.get("/storage/source", response_model=StorageInfo)
 async def get_source_storage(
-        storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
+    storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
 ) -> StorageInfo:
     """
     Get source storage information.
@@ -45,18 +45,13 @@ async def get_source_storage(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Source storage low on space: {source_info.free_space_gb:.1f}GB remaining",
         )
-    elif source_info.status == StorageStatus.UNKNOWN:
-        raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
-            detail="Source storage status being checked - please wait for monitoring to complete",
-        )
 
     return source_info
 
 
 @router.get("/storage/destination", response_model=StorageInfo)
 async def get_destination_storage(
-        storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
+    storage_monitor: StorageMonitorService = Depends(get_storage_monitor),
 ) -> StorageInfo:
     """
     Get destination storage information.
@@ -93,11 +88,6 @@ async def get_destination_storage(
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
             detail=f"Destination storage low on space: {destination_info.free_space_gb:.1f}GB remaining",
-        )
-    elif destination_info.status == StorageStatus.UNKNOWN:
-        raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
-            detail="Destination storage status being checked - please wait for monitoring to complete",
         )
 
     return destination_info

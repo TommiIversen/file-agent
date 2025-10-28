@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from app.services.directory_scanner import (
     DirectoryScannerService,
     DirectoryScanResult,
-    DirectoryItem
+    DirectoryItem,
 )
 from app.config import Settings
 
@@ -45,7 +45,7 @@ class TestDirectoryScannerService:
     async def test_get_service_info(self, scanner_service):
         """Test service info returns proper configuration."""
         info = scanner_service.get_service_info()
-        
+
         assert info["service"] == "DirectoryScannerService"
         assert info["scan_timeout_seconds"] == 30.0
         assert info["item_timeout_seconds"] == 5.0
@@ -55,11 +55,11 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_directory_not_exists(self, scanner_service):
         """Test handling of non-existent directory."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists:
+        with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             mock_exists.return_value = False
-            
+
             result = await scanner_service.scan_custom_directory("/nonexistent/path")
-            
+
             assert isinstance(result, DirectoryScanResult)
             assert not result.is_accessible
             assert result.error_message == "Directory does not exist"
@@ -68,30 +68,34 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_path_is_not_directory(self, scanner_service):
         """Test handling when path exists but is not a directory."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir:
-            
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+        ):
             mock_exists.return_value = True
             mock_isdir.return_value = False
-            
+
             result = await scanner_service.scan_custom_directory("/test/file.txt")
-            
+
             assert not result.is_accessible
             assert result.error_message == "Path is not a directory"
 
     @pytest.mark.asyncio
     async def test_successful_directory_scan(self, scanner_service):
         """Test successful directory scan with mixed files and directories."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.listdir", new_callable=AsyncMock) as mock_listdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             # Setup mocks for successful scan
             mock_exists.return_value = True
-            mock_isdir.side_effect = lambda path: path.endswith("/test/dir") or path == "/test/path"
+            mock_isdir.side_effect = (
+                lambda path: path.endswith("/test/dir") or path == "/test/path"
+            )
             mock_listdir.return_value = ["file1.txt", "file2.mxv", ".hidden", "subdir"]
-            
+
             # Mock stat results
             mock_stat_result = MagicMock()
             mock_stat_result.st_size = 1024
@@ -99,9 +103,9 @@ class TestDirectoryScannerService:
             mock_stat_result.st_mtime = 1640995200  # 2022-01-01
             mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
-            
+
             result = await scanner_service.scan_custom_directory("/test/path")
-            
+
             assert result.is_accessible
             assert result.total_items == 4
             assert len(result.items) == 4
@@ -111,17 +115,18 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_scan_timeout_handling(self, scanner_service):
         """Test that scan timeout is handled gracefully."""
+
         async def slow_operation(path):
             """Mock function that takes too long to respond."""
             await asyncio.sleep(10)  # Longer than 5s item timeout
             return True
-            
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists:
+
+        with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
             # Make the exists call hang to trigger timeout
             mock_exists.side_effect = slow_operation
-            
+
             result = await scanner_service.scan_custom_directory("/test/path")
-            
+
             assert not result.is_accessible
             assert "timed out" in result.error_message.lower()
             assert result.scan_duration_seconds >= 5  # Item timeout, not scan timeout
@@ -129,43 +134,53 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_source_directory_scan(self, scanner_service):
         """Test scanning of configured source directory."""
-        with patch.object(scanner_service, '_scan_directory', new_callable=AsyncMock) as mock_scan:
-            expected_result = DirectoryScanResult(path="/test/source", is_accessible=True)
+        with patch.object(
+            scanner_service, "_scan_directory", new_callable=AsyncMock
+        ) as mock_scan:
+            expected_result = DirectoryScanResult(
+                path="/test/source", is_accessible=True
+            )
             mock_scan.return_value = expected_result
-            
-            result = await scanner_service.scan_source_directory(recursive=True, max_depth=2)
-            
+
+            result = await scanner_service.scan_source_directory(
+                recursive=True, max_depth=2
+            )
+
             mock_scan.assert_called_once_with(
-                "/test/source", 
-                description="source", 
-                recursive=True, 
-                max_depth=2
+                "/test/source", description="source", recursive=True, max_depth=2
             )
             assert result == expected_result
 
     @pytest.mark.asyncio
     async def test_destination_directory_scan(self, scanner_service):
         """Test scanning of configured destination directory."""
-        with patch.object(scanner_service, '_scan_directory', new_callable=AsyncMock) as mock_scan:
-            expected_result = DirectoryScanResult(path="/test/destination", is_accessible=True)
+        with patch.object(
+            scanner_service, "_scan_directory", new_callable=AsyncMock
+        ) as mock_scan:
+            expected_result = DirectoryScanResult(
+                path="/test/destination", is_accessible=True
+            )
             mock_scan.return_value = expected_result
-            
-            result = await scanner_service.scan_destination_directory(recursive=False, max_depth=1)
-            
+
+            result = await scanner_service.scan_destination_directory(
+                recursive=False, max_depth=1
+            )
+
             mock_scan.assert_called_once_with(
-                "/test/destination", 
-                description="destination", 
-                recursive=False, 
-                max_depth=1
+                "/test/destination",
+                description="destination",
+                recursive=False,
+                max_depth=1,
             )
             assert result == expected_result
 
     @pytest.mark.asyncio
     async def test_directory_item_metadata(self, scanner_service):
         """Test metadata collection for individual directory items."""
-        with patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             # Test file item
             mock_isdir.return_value = False
             mock_stat_result = MagicMock()
@@ -174,9 +189,9 @@ class TestDirectoryScannerService:
             mock_stat_result.st_mtime = 1641081600
             mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
-            
+
             item = await scanner_service._get_item_metadata("/test", "example.mxv")
-            
+
             assert item is not None
             assert item.name == "example.mxv"
             # Use Path for cross-platform path handling
@@ -191,14 +206,17 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_hidden_file_detection(self, scanner_service):
         """Test detection of hidden files (starting with .)."""
-        with patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             mock_isdir.return_value = False
-            mock_stat.return_value = MagicMock(st_size=100, st_ctime=1640995200, st_mtime=1640995200, st_mode=0o100644)
-            
+            mock_stat.return_value = MagicMock(
+                st_size=100, st_ctime=1640995200, st_mtime=1640995200, st_mode=0o100644
+            )
+
             item = await scanner_service._get_item_metadata("/test", ".hidden_file")
-            
+
             assert item is not None
             assert item.is_hidden
             assert item.name == ".hidden_file"
@@ -206,15 +224,16 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_directory_item_no_size(self, scanner_service):
         """Test that directories don't have size_bytes set."""
-        with patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-
+        with (
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             mock_isdir.return_value = True  # It's a directory
-            
+
             # Mock stat result for directory
             mock_stat_result = MagicMock()
             mock_stat_result.st_ctime = 1640995200
-            mock_stat_result.st_mtime = 1640995200 
+            mock_stat_result.st_mtime = 1640995200
             mock_stat_result.st_mode = 0o040755  # Directory mode
             mock_stat.return_value = mock_stat_result
 
@@ -227,17 +246,22 @@ class TestDirectoryScannerService:
     @pytest.mark.asyncio
     async def test_recursive_directory_scan(self, scanner_service):
         """Test recursive directory scanning."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.listdir", new_callable=AsyncMock) as mock_listdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             # Setup mocks for successful recursive scan
             mock_exists.return_value = True
-            
+
             # Mock directory structure: /test/path contains subdir1/
             def isdir_side_effect(path):
-                return path in ["/test/path", str(Path("/test/path") / "subdir1"), "\\test\\path\\subdir1"]
+                return path in [
+                    "/test/path",
+                    str(Path("/test/path") / "subdir1"),
+                    "\\test\\path\\subdir1",
+                ]
 
             mock_isdir.side_effect = isdir_side_effect
 
@@ -256,7 +280,7 @@ class TestDirectoryScannerService:
                 mock_stat_result = MagicMock()
                 mock_stat_result.st_ctime = 1640995200
                 mock_stat_result.st_mtime = 1640995200
-                
+
                 # Set proper mode and size based on path
                 if "subdir1" in path and not path.endswith(".txt"):
                     mock_stat_result.st_mode = 0o040755  # Directory mode
@@ -264,17 +288,15 @@ class TestDirectoryScannerService:
                 else:
                     mock_stat_result.st_mode = 0o100644  # File mode
                     mock_stat_result.st_size = 1024
-                
+
                 return mock_stat_result
-                
+
             mock_stat.side_effect = stat_side_effect
-            
+
             result = await scanner_service.scan_custom_directory(
-                "/test/path", 
-                recursive=True, 
-                max_depth=2
+                "/test/path", recursive=True, max_depth=2
             )
-            
+
             assert result.is_accessible
             # Should find: file1.txt, subdir1/, file2.txt (from recursive scan)
             assert result.total_items == 3
@@ -285,77 +307,83 @@ class TestDirectoryScannerService:
     async def test_max_depth_limit(self, scanner_service):
         """Test that max depth limit is respected."""
         result = await scanner_service._perform_directory_scan(
-            "/test/path", 
-            recursive=True, 
-            max_depth=2, 
-            current_depth=3  # Exceeds max_depth
+            "/test/path",
+            recursive=True,
+            max_depth=2,
+            current_depth=3,  # Exceeds max_depth
         )
-        
+
         assert not result.is_accessible
         assert "Maximum scan depth" in result.error_message
 
     @pytest.mark.asyncio
     async def test_hierarchy_fields_in_items(self, scanner_service):
         """Test that hierarchy fields are properly set in directory items."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.listdir", new_callable=AsyncMock) as mock_listdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             # Setup mocks for hierarchy test
             mock_exists.return_value = True
             mock_isdir.side_effect = lambda path: path == "/test/path"
             mock_listdir.return_value = ["file1.txt", "file2.mxv"]
-            
+
             mock_stat_result = MagicMock()
             mock_stat_result.st_size = 1024
             mock_stat_result.st_ctime = 1640995200
             mock_stat_result.st_mtime = 1640995200
             mock_stat_result.st_mode = 0o100644  # Regular file mode
             mock_stat.return_value = mock_stat_result
-            
-            result = await scanner_service.scan_custom_directory("/test/path", recursive=False)
-            
+
+            result = await scanner_service.scan_custom_directory(
+                "/test/path", recursive=False
+            )
+
             assert result.is_accessible
             assert len(result.items) == 2
-            
+
             # Check hierarchy fields
             for item in result.items:
                 assert item.parent_path == "/test/path"
                 assert item.depth_level == 0  # Root level
-                assert item.relative_path == item.name  # Should be just the filename at root
+                assert (
+                    item.relative_path == item.name
+                )  # Should be just the filename at root
 
     @pytest.mark.asyncio
     async def test_nested_tree_structure(self, scanner_service):
         """Test that nested tree structure is properly built from flat items."""
-        with patch('aiofiles.os.path.exists', new_callable=AsyncMock) as mock_exists, \
-             patch('aiofiles.os.path.isdir', new_callable=AsyncMock) as mock_isdir, \
-             patch('aiofiles.os.listdir', new_callable=AsyncMock) as mock_listdir, \
-             patch('aiofiles.os.stat', new_callable=AsyncMock) as mock_stat:
-            
+        with (
+            patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists,
+            patch("aiofiles.os.path.isdir", new_callable=AsyncMock) as mock_isdir,
+            patch("aiofiles.os.listdir", new_callable=AsyncMock) as mock_listdir,
+            patch("aiofiles.os.stat", new_callable=AsyncMock) as mock_stat,
+        ):
             # Setup mocks for nested structure test
             mock_exists.return_value = True
-            
+
             # Mock directory structure: /test/subfolder/file.txt
             def mock_isdir_side_effect(path):
                 return path in ["/test", "/test/subfolder", "\\test\\subfolder"]
-            
+
             def mock_listdir_side_effect(path):
                 if path == "/test":
                     return ["subfolder", "root_file.txt"]
                 elif path == "/test/subfolder" or path == "\\test\\subfolder":
                     return ["nested_file.txt"]
                 return []
-            
+
             mock_isdir.side_effect = mock_isdir_side_effect
             mock_listdir.side_effect = mock_listdir_side_effect
-            
+
             # Mock stat result with proper mode detection
             def mock_stat_side_effect(path):
                 mock_stat_result = MagicMock()
                 mock_stat_result.st_ctime = 1640995200
                 mock_stat_result.st_mtime = 1640995200
-                
+
                 # Set proper mode and size: directory vs file
                 if path in ["/test", "/test/subfolder", "\\test\\subfolder"]:
                     mock_stat_result.st_mode = 0o040755  # Directory mode (S_IFDIR)
@@ -363,20 +391,29 @@ class TestDirectoryScannerService:
                 else:
                     mock_stat_result.st_mode = 0o100644  # Regular file mode (S_IFREG)
                     mock_stat_result.st_size = 1024
-                    
+
                 return mock_stat_result
-                
+
             mock_stat.side_effect = mock_stat_side_effect
-            
-            result = await scanner_service.scan_custom_directory("/test", recursive=True, max_depth=2)
-            
+
+            result = await scanner_service.scan_custom_directory(
+                "/test", recursive=True, max_depth=2
+            )
+
             assert result.is_accessible
             # Should have: root_file.txt, subfolder (at root), nested_file.txt (in subfolder)
             assert len(result.items) >= 3
             assert len(result.tree) > 0  # Should have tree structure
-            
+
             # Find the subfolder in tree
-            subfolder = next((item for item in result.tree if item.name == "subfolder" and item.is_directory), None)
+            subfolder = next(
+                (
+                    item
+                    for item in result.tree
+                    if item.name == "subfolder" and item.is_directory
+                ),
+                None,
+            )
             if subfolder:
                 assert subfolder.is_directory
                 # Should have children if nested scanning worked
@@ -393,24 +430,17 @@ class TestDirectoryScanResult:
             DirectoryItem(name="file2.mxv", path="/test/file2.mxv", is_directory=False),
             DirectoryItem(name="subdir", path="/test/subdir", is_directory=True),
         ]
-        
-        result = DirectoryScanResult(
-            path="/test",
-            is_accessible=True,
-            items=items
-        )
-        
+
+        result = DirectoryScanResult(path="/test", is_accessible=True, items=items)
+
         assert result.total_items == 3
         assert result.total_files == 2
         assert result.total_directories == 1
 
     def test_directory_scan_result_empty(self):
         """Test empty scan result."""
-        result = DirectoryScanResult(
-            path="/empty",
-            is_accessible=True
-        )
-        
+        result = DirectoryScanResult(path="/empty", is_accessible=True)
+
         assert result.total_items == 0
         assert result.total_files == 0
         assert result.total_directories == 0
@@ -427,9 +457,9 @@ class TestDirectoryItem:
             path="/test/test.mxv",
             is_directory=False,
             size_bytes=1024,
-            created_time=datetime(2022, 1, 1, 12, 0, 0)
+            created_time=datetime(2022, 1, 1, 12, 0, 0),
         )
-        
+
         assert item.name == "test.mxv"
         assert item.path == "/test/test.mxv"
         assert not item.is_directory
@@ -439,12 +469,9 @@ class TestDirectoryItem:
     def test_directory_item_hidden_flag(self):
         """Test hidden flag detection."""
         item = DirectoryItem(
-            name=".hidden",
-            path="/test/.hidden",
-            is_directory=False,
-            is_hidden=True
+            name=".hidden", path="/test/.hidden", is_directory=False, is_hidden=True
         )
-        
+
         assert item.is_hidden
 
     def test_directory_item_json_encoding(self):
@@ -453,13 +480,13 @@ class TestDirectoryItem:
             name="test.txt",
             path="/test/test.txt",
             is_directory=False,
-            created_time=datetime(2022, 1, 1, 12, 0, 0)
+            created_time=datetime(2022, 1, 1, 12, 0, 0),
         )
-        
+
         # Test that model can be converted to dict (FastAPI compatibility)
         item_dict = item.model_dump()
         assert "created_time" in item_dict
-        
+
         # Test JSON serialization
         item_json = item.model_dump_json()
         assert '"created_time":"2022-01-01T12:00:00"' in item_json

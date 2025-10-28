@@ -13,7 +13,6 @@ Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 st
 - _files_by_id: Dict[str, TrackedFile]      # Core storage
 - add_file() 
 - get_file_by_id()
-- remove_file_by_id()
 - update_file_status_by_id()
 ```
 
@@ -25,15 +24,13 @@ Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 st
 - get_all_files_for_path()                  # Path-based queries
 - _get_current_file_for_path()              # Priority-based selection
 - get_statistics()                          # Aggregation queries
-- get_active_copy_files()                   # Status-specific filters
 ```
 
 **3. Business Logic Engine - ~150 linjer**
 ```python
 # Domain-specific logic:
 - should_skip_file_processing()             # Cooldown logic
-- is_file_stable()                          # Stability detection
-- update_file_metadata()                    # Change detection
+
 - _is_more_current()                        # Priority logic
 - _is_space_error_in_cooldown()            # Space error logic
 ```
@@ -61,7 +58,6 @@ Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 st
 # Housekeeping operations:
 - cleanup_missing_files()                   # File removal
 - cleanup_old_files()                       # Age-based cleanup
-- get_file_history()                        # Historical queries
 ```
 
 ---
@@ -136,16 +132,7 @@ class FileDiscoverySlice:
         # Encapsulates cooldown and skip logic
         pass
     
-    async def is_file_stable(self, file_id: str, stable_time: int) -> bool:
-        """Scanner-specific stability detection"""
-        # Encapsulates stability detection logic  
-        pass
-    
-    async def update_file_metadata_and_check_changes(self, file_id: str, 
-                                                   size: int, write_time: datetime) -> bool:
-        """Scanner-specific metadata update with change detection"""
-        # Encapsulates change detection logic
-        pass
+
 ```
 
 **Fordele:**
@@ -177,8 +164,6 @@ class FileDiscoverySlice:
     # Flyt alle scanner-relevante metoder fra StateManager
     - get_active_file_by_path()
     - should_skip_file_processing()  
-    - is_file_stable()
-    - update_file_metadata()
 ```
 
 ### **Fase 3: Extract Remaining Slices**

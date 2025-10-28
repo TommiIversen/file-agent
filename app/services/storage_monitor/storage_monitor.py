@@ -12,14 +12,13 @@ from ...models import StorageInfo, StorageStatus
 
 
 class StorageMonitorService:
-
     def __init__(
-            self,
-            settings: Settings,
-            storage_checker: StorageChecker,
-            websocket_manager=None,
-            network_mount_service=None,
-            job_queue=None,
+        self,
+        settings: Settings,
+        storage_checker: StorageChecker,
+        websocket_manager=None,
+        network_mount_service=None,
+        job_queue=None,
     ):
         self._settings = settings
         self._storage_checker = storage_checker
@@ -65,7 +64,9 @@ class StorageMonitorService:
         logging.info("Storage monitoring stopped")
 
     async def _monitoring_loop(self) -> None:
-        logging.info(f"Storage monitoring loop starting - checking every {self._settings.storage_check_interval_seconds}s")
+        logging.info(
+            f"Storage monitoring loop starting - checking every {self._settings.storage_check_interval_seconds}s"
+        )
         try:
             while self._is_running:
                 try:
@@ -96,11 +97,11 @@ class StorageMonitorService:
         )
 
     async def _check_single_storage(
-            self,
-            storage_type: str,
-            path: str,
-            warning_threshold: float,
-            critical_threshold: float,
+        self,
+        storage_type: str,
+        path: str,
+        warning_threshold: float,
+        critical_threshold: float,
     ) -> None:
         try:
             new_info = await self._storage_checker.check_path(
@@ -269,7 +270,7 @@ class StorageMonitorService:
         return status
 
     def _is_destination_recovery(
-            self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
+        self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> bool:
         if storage_type != "destination":
             return False
@@ -279,8 +280,8 @@ class StorageMonitorService:
 
         problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
         is_recovery = (
-                old_info.status in problematic_states
-                and new_info.status == StorageStatus.OK
+            old_info.status in problematic_states
+            and new_info.status == StorageStatus.OK
         )
 
         if is_recovery:
@@ -292,7 +293,7 @@ class StorageMonitorService:
         return is_recovery
 
     def _is_destination_unavailable(
-            self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
+        self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> bool:
         if storage_type != "destination":
             return False
@@ -302,8 +303,8 @@ class StorageMonitorService:
 
         problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
         is_unavailable = (
-                old_info.status == StorageStatus.OK
-                and new_info.status in problematic_states
+            old_info.status == StorageStatus.OK
+            and new_info.status in problematic_states
         )
 
         if is_unavailable:
@@ -315,7 +316,7 @@ class StorageMonitorService:
         return is_unavailable
 
     async def _handle_destination_unavailable(
-            self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
+        self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
     ) -> None:
         if not self._job_queue:
             logging.warning("⚠️ Job queue not available - cannot pause operations")
@@ -337,7 +338,7 @@ class StorageMonitorService:
             logging.error(f"ERROR: Error during destination pause handling: {e}")
 
     async def _handle_destination_recovery(
-            self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
+        self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
     ) -> None:
         if not self._job_queue:
             logging.warning(

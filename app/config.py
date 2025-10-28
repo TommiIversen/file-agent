@@ -50,9 +50,11 @@ class Settings(BaseSettings):
     space_retry_delay_seconds: int = 300  # 5 minutes between space retries
     max_space_retries: int = 6  # Max 30 minutes waiting for space
     minimum_free_space_after_copy_gb: float = 2.0  # Minimum space to leave after copy
-    space_error_cooldown_minutes: int = 60  # Cooldown period for SPACE_ERROR files (1 hour)
+    space_error_cooldown_minutes: int = (
+        60  # Cooldown period for SPACE_ERROR files (1 hour)
+    )
 
-    # File history management  
+    # File history management
     keep_files_hours: int = 336  # Keep ALL files in memory for 14 days (14*24=336 hours) - provides complete UI log
 
     # Growing file support (now default)
@@ -90,9 +92,9 @@ class Settings(BaseSettings):
     def config_file_info(self) -> dict:
         """Return information about which configuration file is being used."""
         from .utils.host_config import get_hostname, list_all_settings_files
-        
+
         return {
             "hostname": get_hostname(),
             "active_config_file": get_hostname_settings_file(),
-            "all_available_configs": list_all_settings_files()
+            "all_available_configs": list_all_settings_files(),
         }

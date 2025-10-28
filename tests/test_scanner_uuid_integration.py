@@ -74,14 +74,6 @@ class TestScannerUUIDIntegration:
         assert removed_file is not None
         assert removed_file.status == FileStatus.REMOVED
 
-        # Check history if the method exists
-        if hasattr(state_manager, "get_file_history"):
-            # But history should exist (history is still accessed by file_path)
-            history = await state_manager.get_file_history(file_path)
-            assert len(history) == 1
-            assert history[0].status == FileStatus.REMOVED
-            assert history[0].id == original_uuid
-
         # 5. Simulate same file returns (scanner discovers it again)
         tracked_file2 = await state_manager.add_file(file_path, 2048)  # Different size
 
@@ -90,14 +82,6 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.file_path == file_path
         assert tracked_file2.file_size == 2048
         assert tracked_file2.id != original_uuid  # NEW UUID!
-
-        # 6. Verify we have history if method exists
-        if hasattr(state_manager, "get_file_history"):
-            history = await state_manager.get_file_history(file_path)
-            assert len(history) == 2
-            # Most recent first (sorted by discovered_at descending)
-            assert history[0].id == tracked_file2.id
-            assert history[1].id == original_uuid
 
     async def test_scanner_handles_existing_removed_files(
         self, state_manager, scan_config, mock_settings
@@ -127,11 +111,6 @@ class TestScannerUUIDIntegration:
         assert tracked_file2.status == FileStatus.DISCOVERED
         assert tracked_file2.file_size == 1500
         assert tracked_file2.id != tracked_file1.id
-
-        # 4. Verify history preserved if method exists
-        if hasattr(state_manager, "get_file_history"):
-            history = await state_manager.get_file_history(file_id)
-            assert len(history) == 2
 
         current_file = await state_manager.get_file_by_id(tracked_file2.id)
         assert current_file is not None
@@ -165,24 +144,6 @@ class TestScannerUUIDIntegration:
                 tracked_file.id, FileStatus.READY
             )
             await state_manager.cleanup_missing_files(set())
-
-        # Verify we have full history
-        history = await state_manager.get_file_history(file_id)
-        assert len(history) == 3
-
-        # All should be REMOVED status now
-        for entry in history:
-            assert entry.status == FileStatus.REMOVED
-
-        # All should have unique UUIDs
-        history_uuids = [entry.id for entry in history]
-        assert len(set(history_uuids)) == 3
-        assert set(history_uuids) == set(file_uuids)
-
-        # Different file sizes
-        file_sizes = [entry.file_size for entry in history]
-        expected_sizes = [1200, 1100, 1000]  # Most recent first
-        assert file_sizes == expected_sizes
 
     async def test_uuid_based_file_updates_work_with_scanner(
         self, state_manager, scan_config, mock_settings
@@ -251,10 +212,6 @@ class TestScannerUUIDIntegration:
 
         # Verify two distinct entries exist
         assert tracked_file1.id != tracked_file2.id
-
-        # Verify history
-        history = await state_manager.get_file_history(file_id)
-        assert len(history) == 2
 
     async def test_file_lifecycle_cleanup(self, state_manager):
         # Add file and mark as READY

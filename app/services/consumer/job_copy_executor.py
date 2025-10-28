@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
 from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
@@ -20,16 +21,19 @@ class JobCopyExecutor:
     """Executes copy operations with status management and intelligent error handling."""
 
     def __init__(
-            self,
-            settings: Settings,
-            state_manager: StateManager,
-            copy_strategy: GrowingFileCopyStrategy,
-            error_classifier: Optional[JobErrorClassifier] = None,
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        copy_strategy: GrowingFileCopyStrategy,
+        error_classifier: Optional[JobErrorClassifier] = None,
+        event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
         self.copy_strategy = copy_strategy
         self.error_classifier = error_classifier
+        # The event_bus is passed to the copy_strategy, so we don't need it here.
+        # However, the JobProcessor is passing it, so we accept it.
 
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
         """Initialize file status for copying operation."""
@@ -62,7 +66,9 @@ class JobCopyExecutor:
             # Let NetworkError bubble up to be handled by error classifier
             raise
         except Exception as e:
-            logging.error(f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}")
+            logging.error(
+                f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}"
+            )
             return False
 
     def _log_copy_result(self, prepared_file, success: bool):
@@ -74,7 +80,9 @@ class JobCopyExecutor:
         else:
             logging.error(f"Copy failed: {file_name}")
 
-    async def handle_copy_failure(self, prepared_file: PreparedFile, error: Exception) -> bool:
+    async def handle_copy_failure(
+        self, prepared_file: PreparedFile, error: Exception
+    ) -> bool:
         """Handle copy failure with intelligent error classification."""
         if not self.error_classifier:
             await self._handle_fail_error(prepared_file, "Copy operation failed", error)
@@ -91,7 +99,9 @@ class JobCopyExecutor:
             await self._handle_fail_error(prepared_file, reason, error)
             return False
 
-    async def _handle_remove_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+    async def _handle_remove_error(
+        self, prepared_file: PreparedFile, reason: str, error: Exception
+    ) -> None:
         """Handle errors where source file disappeared."""
         await self.state_manager.update_file_status_by_id(
             prepared_file.tracked_file.id,
@@ -104,7 +114,9 @@ class JobCopyExecutor:
         file_name = Path(prepared_file.tracked_file.file_path).name
         logging.info(f"File removed during copy: {file_name} - {reason}")
 
-    async def _handle_fail_error(self, prepared_file: PreparedFile, reason: str, error: Exception) -> None:
+    async def _handle_fail_error(
+        self, prepared_file: PreparedFile, reason: str, error: Exception
+    ) -> None:
         """Handle errors that should result in immediate failure."""
         await self.state_manager.update_file_status_by_id(
             prepared_file.tracked_file.id,

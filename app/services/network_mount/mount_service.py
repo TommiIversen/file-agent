@@ -41,9 +41,9 @@ class NetworkMountService:
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
         """Ensure network mount is available and accessible."""
         if (
-                not self._config.is_auto_mount_enabled()
-                or not self._mounter
-                or not share_url
+            not self._config.is_auto_mount_enabled()
+            or not self._mounter
+            or not share_url
         ):
             return False
 

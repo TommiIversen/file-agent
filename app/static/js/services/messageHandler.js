@@ -44,6 +44,10 @@ class MessageHandler {
                     this.handleFileUpdate(message.data);
                     break;
 
+                case 'file_progress_update':
+                    this.handleFileProgressUpdate(message.data);
+                    break;
+
                 case 'statistics_update':
                     this.handleStatisticsUpdate(message.data);
                     break;
@@ -142,6 +146,21 @@ class MessageHandler {
         if (data.file.status) {
             console.log(`File ${data.file_path} (ID: ${data.file.id}) status: ${data.file.status}`);
         }
+    }
+
+    /**
+     * Handle file progress updates
+     */
+    handleFileProgressUpdate(data) {
+        if (!this.fileStore) {
+            // Don't log an error, as this can happen frequently
+            return;
+        }
+        this.fileStore.updateFile(data.file_id, {
+            copy_progress: data.progress_percent,
+            bytes_copied: data.bytes_copied,
+            copy_speed_mbps: data.copy_speed_mbps,
+        });
     }
 
     /**

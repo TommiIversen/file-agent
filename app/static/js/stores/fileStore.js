@@ -32,20 +32,35 @@ document.addEventListener('alpine:init', () => {
             console.log(`File added: ${file.file_path} (ID: ${file.id})`);
         },
 
-        updateFile(fileId, file) {  // Ændret parameter navn for klarhed
-            if (!fileId || !file || !file.id) {
-                console.error('updateFile called with invalid parameters:', { fileId, file });
+        updateFile(fileId, partialFile) {
+            if (!fileId || !partialFile) {
+                console.error('updateFile called with invalid parameters:', { fileId, partialFile });
                 return;
             }
             
             if (this.items.has(fileId)) {
-                this.items.set(fileId, file);
-                this.updateStatisticsFromFiles();
-                console.log(`File updated: ${file.file_path} (ID: ${fileId}) - Status: ${file.status}`);
+                const existingFile = this.items.get(fileId);
+                // Merge the new properties into the existing file object
+                Object.assign(existingFile, partialFile);
+                
+                // If the status is changing, log it
+                if (partialFile.status) {
+                    console.log(`File updated: ${existingFile.file_path} (ID: ${fileId}) - Status: ${partialFile.status}`);
+                }
+
+                // We might still want to update statistics if the status changed
+                if (partialFile.status) {
+                    this.updateStatisticsFromFiles();
+                }
+
             } else {
-                // File doesn't exist yet - add it automatically
-                console.log(`Auto-adding unknown file during update: ${file.file_path} (ID: ${fileId})`);
-                this.addFile(file);
+                // If it's a full file object, add it. Otherwise, ignore.
+                if (partialFile.id && partialFile.file_path) {
+                    console.log(`Auto-adding unknown file during update: ${partialFile.file_path} (ID: ${fileId})`);
+                    this.addFile(partialFile);
+                } else {
+                    console.warn(`Ignoring partial update for unknown file: ${fileId}`);
+                }
             }
         },
 
@@ -211,8 +226,8 @@ document.addEventListener('alpine:init', () => {
                         return bCompleted - aCompleted;
 
                     case 'filename':
-                        const aName = a.file_path.split(/[/\\]/).pop().toLowerCase();
-                        const bName = b.file_path.split(/[/\\]/).pop().toLowerCase();
+                        const aName = a.file_path.split(/[\/]/).pop().toLowerCase();
+                        const bName = b.file_path.split(/[\/]/).pop().toLowerCase();
                         return aName.localeCompare(bName);
 
                     case 'size':

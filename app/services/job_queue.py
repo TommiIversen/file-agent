@@ -4,17 +4,25 @@ from datetime import datetime
 from typing import Optional, List
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileReadyEvent
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob, JobResult
 from app.services.state_manager import StateManager
 
 
 class JobQueueService:
-
-    def __init__(self, settings: Settings, state_manager: StateManager, storage_monitor=None):
+    def __init__(
+        self,
+        settings: Settings,
+        state_manager: StateManager,
+        event_bus: Optional[DomainEventBus] = None,
+        storage_monitor=None,
+    ):
         self.settings = settings
         self.state_manager = state_manager
         self.storage_monitor = storage_monitor  # Add storage monitor reference
+        self._event_bus = event_bus
         self.job_queue: Optional[asyncio.Queue[QueueJob]] = None
 
         self._total_jobs_added = 0
@@ -38,7 +46,16 @@ class JobQueueService:
 
         self._running = True
 
-        self.state_manager.subscribe(self._handle_state_change)
+        if self._event_bus:
+            asyncio.create_task(
+                self._event_bus.subscribe(FileReadyEvent, self.handle_file_ready)
+            )
+            logging.info("Subscribed to FileReadyEvent on the event bus")
+        else:
+            # This should not happen in normal operation with DI, but it's a safeguard.
+            logging.error(
+                "DomainEventBus not injected, JobQueueService will not be able to queue new files!"
+            )
 
         logging.info("Job Queue Producer startet")
 
@@ -60,61 +77,74 @@ class JobQueueService:
         self._running = False
         logging.info("Job Queue Producer stop request")
 
-    async def _handle_state_change(self, update) -> None:
+    async def handle_file_ready(self, event: FileReadyEvent) -> None:
+        """Handles the FileReadyEvent from the event bus."""
         try:
-            if update.new_status in [
-                FileStatus.READY,
-                FileStatus.READY_TO_START_GROWING,
-                # REMOVED GROWING_COPY - causes infinite loop during normal operation
-            ]:
-                # Check if network is available before queueing
-                if await self._is_network_available():
-                    await self._add_job_to_queue(update.tracked_file)
-                else:
-                    # Network is down - keep file as READY but don't queue
-                    await self.state_manager.update_file_status_by_id(
-                        file_id=update.tracked_file.id,
-                        status=FileStatus.WAITING_FOR_NETWORK,
-                        error_message="Network unavailable - waiting for recovery",
-                    )
-                    logging.info(
-                        f"⏸️ NETWORK DOWN: {update.tracked_file.file_path} ready but waiting for network"
-                    )
+            tracked_file = await self.state_manager.get_file_by_id(event.file_id)
+            if not tracked_file:
+                logging.warning(
+                    f"Received FileReadyEvent for unknown file ID: {event.file_id}"
+                )
+                return
 
+            # Guard against re-queuing files that are already being processed.
+            if tracked_file.status != FileStatus.READY:
+                logging.warning(
+                    f"Ignoring FileReadyEvent for {event.file_path} because its status is "
+                    f"'{tracked_file.status.value}' instead of READY."
+                )
+                return
+
+            if await self._is_network_available():
+                await self._add_job_to_queue(tracked_file)
+            else:
+                await self.state_manager.update_file_status_by_id(
+                    file_id=event.file_id,
+                    status=FileStatus.WAITING_FOR_NETWORK,
+                    error_message="Network unavailable - waiting for recovery",
+                )
+                logging.info(
+                    f"⏸️ NETWORK DOWN: {event.file_path} ready but waiting for network"
+                )
         except Exception as e:
-            logging.error(f"Fejl ved håndtering af state change: {e}")
-    
+            logging.error(f"Error handling FileReadyEvent: {e}")
+
     async def _is_network_available(self) -> bool:
         """Check if destination network is available"""
         if not self.storage_monitor:
             return True  # Assume available if no storage monitor
-            
+
         try:
             storage_state = self.storage_monitor._storage_state
             dest_info = storage_state.get_destination_info()
-            
+
             if not dest_info:
                 return False  # No destination info = not available
-                
+
             # Available if status is OK or WARNING (WARNING still allows copying)
             from app.models import StorageStatus
+
             return dest_info.status in [StorageStatus.OK, StorageStatus.WARNING]
-            
+
         except Exception as e:
             logging.error(f"Error checking network availability: {e}")
             return True  # Default to available on error
-    
+
     async def process_waiting_network_files(self) -> None:
         """Process all files waiting for network when network becomes available"""
         try:
-            waiting_files = await self.state_manager.get_files_by_status(FileStatus.WAITING_FOR_NETWORK)
-            
+            waiting_files = await self.state_manager.get_files_by_status(
+                FileStatus.WAITING_FOR_NETWORK
+            )
+
             if not waiting_files:
                 logging.info("🌐 NETWORK RECOVERY: No files waiting for network")
                 return
-                
-            logging.info(f"🌐 NETWORK RECOVERY: Processing {len(waiting_files)} files waiting for network")
-            
+
+            logging.info(
+                f"🌐 NETWORK RECOVERY: Processing {len(waiting_files)} files waiting for network"
+            )
+
             for tracked_file in waiting_files:
                 try:
                     # Transition back to DISCOVERED so they are re-evaluated for growing status
@@ -123,15 +153,21 @@ class JobQueueService:
                         status=FileStatus.DISCOVERED,
                         error_message=None,
                     )
-                    
+
                     # They will be re-evaluated through normal scanner discovery flow
-                    logging.info(f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation")
-                    
+                    logging.info(
+                        f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation"
+                    )
+
                 except Exception as e:
-                    logging.error(f"❌ Error reactivating {tracked_file.file_path}: {e}")
-                    
-            logging.info(f"✅ NETWORK RECOVERY: Completed processing {len(waiting_files)} files")
-            
+                    logging.error(
+                        f"❌ Error reactivating {tracked_file.file_path}: {e}"
+                    )
+
+            logging.info(
+                f"✅ NETWORK RECOVERY: Completed processing {len(waiting_files)} files"
+            )
+
         except Exception as e:
             logging.error(f"❌ Error processing waiting network files: {e}")
 
@@ -151,8 +187,7 @@ class JobQueueService:
             self._total_jobs_added += 1
 
             await self.state_manager.update_file_status_by_id(
-                file_id=job.file_id,
-                status=FileStatus.IN_QUEUE,
+                file_id=job.file_id, status=FileStatus.IN_QUEUE
             )
 
             logging.info(f"Typed job tilføjet til queue: {job}")
@@ -183,7 +218,7 @@ class JobQueueService:
             return None
 
     async def mark_job_completed(
-            self, job: QueueJob, processing_time: float = 0.0
+        self, job: QueueJob, processing_time: float = 0.0
     ) -> None:
         if self.job_queue is None:
             return
@@ -201,7 +236,7 @@ class JobQueueService:
             logging.error(f"Fejl ved marking job completed: {e}")
 
     async def mark_job_failed(
-            self, job: QueueJob, error_message: str, processing_time: float = 0.0
+        self, job: QueueJob, error_message: str, processing_time: float = 0.0
     ) -> None:
         if self.job_queue is None:
             return

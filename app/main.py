@@ -8,6 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from .api import websockets, storage, logfiles, uiactions
+
+from .domains.directory_browsing import api as directory
+
 from .config import Settings
 from .dependencies import (
     get_file_scanner,
@@ -18,7 +21,7 @@ from .dependencies import (
     get_storage_checker,
 )
 from .logging_config import setup_logging
-from .routers import views, directory
+from .routers import views
 
 settings = Settings()
 
@@ -36,8 +39,10 @@ async def lifespan(app: FastAPI):
     config_info = settings.config_file_info
     logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
     logging.info(f"Running on hostname: {config_info['hostname']}")
-    if len(config_info['all_available_configs']) > 1:
-        logging.info(f"Available config files: {', '.join(config_info['all_available_configs'])}")
+    if len(config_info["all_available_configs"]) > 1:
+        logging.info(
+            f"Available config files: {', '.join(config_info['all_available_configs'])}"
+        )
 
     logging.info("File Transfer Agent starting up...")
     logging.info(f"Source directory: {settings.source_directory}")
@@ -48,8 +53,7 @@ async def lifespan(app: FastAPI):
     storage_checker = get_storage_checker()
     try:
         cleaned_count = await storage_checker.cleanup_all_test_files(
-            settings.source_directory, 
-            settings.destination_directory
+            settings.source_directory, settings.destination_directory
         )
         if cleaned_count > 0:
             logging.info(f"Startup cleanup: removed {cleaned_count} old test files")
@@ -76,8 +80,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize WebSocketManager (subscription happens automatically)
     websocket_manager = get_websocket_manager()  # Initialize singleton
-    logging.info("WebSocketManager initialiseret og subscribed til StateManager")
-    
+    logging.info("WebSocketManager initialiseret")
+
     # Initialize scanner status in WebSocketManager with race condition handling
     websocket_manager.initialize_scanner_status(file_scanner)
 
@@ -93,7 +97,7 @@ async def lifespan(app: FastAPI):
     logging.info("File Transfer Agent shutting down...")
 
     # Stop alle background tasks gracefully
-    file_scanner.stop_scanning()
+    await file_scanner.stop_scanning()
     job_queue_service.stop_producer()
     await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
@@ -167,8 +171,9 @@ app.include_router(uiactions.router)
 app.include_router(websockets.router)
 app.include_router(storage.router)
 app.include_router(logfiles.router)
-app.include_router(directory.router)
+app.include_router(directory.directory_router)
 app.include_router(views.router)
+
 
 
 @app.get("/")

@@ -26,14 +26,14 @@ class SpaceChecker:
                 file_size_bytes, storage_info.error_message
             )
 
-        available_bytes = int(storage_info.free_space_gb * (1024 ** 3))
-        safety_margin_bytes = int(self._settings.copy_safety_margin_gb * (1024 ** 3))
+        available_bytes = int(storage_info.free_space_gb * (1024**3))
+        safety_margin_bytes = int(self._settings.copy_safety_margin_gb * (1024**3))
         minimum_after_copy_bytes = int(
-            self._settings.minimum_free_space_after_copy_gb * (1024 ** 3)
+            self._settings.minimum_free_space_after_copy_gb * (1024**3)
         )
 
         required_bytes = (
-                file_size_bytes + safety_margin_bytes + minimum_after_copy_bytes
+            file_size_bytes + safety_margin_bytes + minimum_after_copy_bytes
         )
 
         has_space = available_bytes >= required_bytes
@@ -67,7 +67,7 @@ class SpaceChecker:
         )
 
     def _create_inaccessible_result(
-            self, file_size_bytes: int, error_message: Optional[str]
+        self, file_size_bytes: int, error_message: Optional[str]
     ) -> SpaceCheckResult:
         reason = f"Destination not accessible: {error_message or 'Unknown error'}"
 
@@ -81,17 +81,17 @@ class SpaceChecker:
         )
 
     def _create_space_reason(
-            self,
-            has_space: bool,
-            available_bytes: int,
-            required_bytes: int,
-            file_size_bytes: int,
-            safety_margin_bytes: int,
-            minimum_after_copy_bytes: int,
+        self,
+        has_space: bool,
+        available_bytes: int,
+        required_bytes: int,
+        file_size_bytes: int,
+        safety_margin_bytes: int,
+        minimum_after_copy_bytes: int,
     ) -> str:
-        available_gb = available_bytes / (1024 ** 3)
-        required_gb = required_bytes / (1024 ** 3)
-        file_gb = file_size_bytes / (1024 ** 3)
+        available_gb = available_bytes / (1024**3)
+        required_gb = required_bytes / (1024**3)
+        file_gb = file_size_bytes / (1024**3)
 
         if has_space:
             return (
@@ -99,7 +99,7 @@ class SpaceChecker:
                 f"{required_gb:.1f}GB required for {file_gb:.1f}GB file"
             )
         else:
-            shortage_gb = (required_bytes - available_bytes) / (1024 ** 3)
+            shortage_gb = (required_bytes - available_bytes) / (1024**3)
             return (
                 f"Insufficient space: {available_gb:.1f}GB available, "
                 f"{required_gb:.1f}GB required (shortage: {shortage_gb:.1f}GB). "

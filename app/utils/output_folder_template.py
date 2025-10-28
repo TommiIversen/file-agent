@@ -28,7 +28,6 @@ class TemplateRule:
 
 
 class OutputFolderTemplateEngine:
-
     def __init__(self, settings: Settings):
         self.settings = settings
         self.logger = logging.getLogger("app.template_engine")
@@ -79,7 +78,7 @@ class OutputFolderTemplateEngine:
 
         # Combine with destination directory
         output_path = (
-                Path(self.settings.destination_directory) / output_subfolder / filename
+            Path(self.settings.destination_directory) / output_subfolder / filename
         )
 
         self.logger.info(f"Template mapping: '{filename}' → '{output_path}'")

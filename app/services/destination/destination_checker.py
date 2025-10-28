@@ -29,10 +29,10 @@ class DestinationChecker:
     """Checks destination availability with TTL-based caching and concurrent access protection."""
 
     def __init__(
-            self,
-            destination_path: Path,
-            cache_ttl_seconds: float = 5.0,
-            storage_monitor=None,
+        self,
+        destination_path: Path,
+        cache_ttl_seconds: float = 5.0,
+        storage_monitor=None,
     ):
         self.destination_path = destination_path
         self.cache_ttl_seconds = cache_ttl_seconds
@@ -131,7 +131,9 @@ class DestinationChecker:
         cleaned_count = 0
         try:
             if not await aiofiles.os.path.isdir(self.destination_path):
-                logging.debug(f"Cleanup directory does not exist: {self.destination_path}")
+                logging.debug(
+                    f"Cleanup directory does not exist: {self.destination_path}"
+                )
                 return 0
 
             patterns = [".file_agent_test_", ".file_agent_write_test_"]
@@ -144,13 +146,19 @@ class DestinationChecker:
                         cleaned_count += 1
                         logging.debug(f"Cleaned up old test file: {entry.path}")
                     except Exception as e:
-                        logging.warning(f"Could not clean up old test file {entry.path}: {e}")
+                        logging.warning(
+                            f"Could not clean up old test file {entry.path}: {e}"
+                        )
 
             if cleaned_count > 0:
-                logging.info(f"Cleaned up {cleaned_count} old test files from {self.destination_path}")
+                logging.info(
+                    f"Cleaned up {cleaned_count} old test files from {self.destination_path}"
+                )
 
         except Exception as e:
-            logging.error(f"Error during old test files cleanup in {self.destination_path}: {e}")
+            logging.error(
+                f"Error during old test files cleanup in {self.destination_path}: {e}"
+            )
 
         return cleaned_count
 
@@ -217,7 +225,7 @@ class DestinationChecker:
                         checked_at=datetime.now(),
                         error_message=error_msg,
                     )
-                
+
                 # StorageMonitor confirms destination is good
                 logging.debug("Destination availability confirmed by StorageMonitor")
                 return DestinationCheckResult(
@@ -228,11 +236,13 @@ class DestinationChecker:
                 logging.warning(
                     "StorageMonitor not available - performing direct directory check"
                 )
-                
+
                 try:
                     if not await aiofiles.os.path.exists(self.destination_path):
                         try:
-                            await aiofiles.os.makedirs(self.destination_path, exist_ok=True)
+                            await aiofiles.os.makedirs(
+                                self.destination_path, exist_ok=True
+                            )
                             logging.info(
                                 f"Created missing destination directory: {self.destination_path}"
                             )
@@ -244,9 +254,11 @@ class DestinationChecker:
                                 checked_at=datetime.now(),
                                 error_message=error_msg,
                             )
-                    
+
                     if not await aiofiles.os.path.isdir(self.destination_path):
-                        error_msg = f"Destination is not a directory: {self.destination_path}"
+                        error_msg = (
+                            f"Destination is not a directory: {self.destination_path}"
+                        )
                         return DestinationCheckResult(
                             is_available=False,
                             checked_at=datetime.now(),
@@ -264,7 +276,7 @@ class DestinationChecker:
 
                 # Directory exists, now test write access
                 test_file = (
-                        self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
+                    self.destination_path / f".file_agent_test_{uuid.uuid4().hex[:8]}"
                 )
 
                 try:

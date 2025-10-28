@@ -41,7 +41,7 @@ class GrowingFileDetector:
         logging.info("Stopping growing file monitoring")
 
     async def check_file_growth_status(
-            self, tracked_file: TrackedFile
+        self, tracked_file: TrackedFile
     ) -> Tuple[FileStatus, Optional[TrackedFile]]:
         """
         Check file growth status using TrackedFile state instead of separate tracking.
@@ -50,13 +50,17 @@ class GrowingFileDetector:
         # CRITICAL: Don't modify files that are waiting for network
         # This prevents the bounce loop between READY and WAITING_FOR_NETWORK
         if tracked_file.status == FileStatus.WAITING_FOR_NETWORK:
-            logging.debug(f"Skipping growth check for {tracked_file.file_path} - waiting for network")
+            logging.debug(
+                f"Skipping growth check for {tracked_file.file_path} - waiting for network"
+            )
             return tracked_file.status, tracked_file
-            
+
         try:
             # Get current file info
             if not await aiofiles.os.path.exists(tracked_file.file_path):
-                logging.info(f"File no longer exists during growth check: {tracked_file.file_path}")
+                logging.info(
+                    f"File no longer exists during growth check: {tracked_file.file_path}"
+                )
                 return FileStatus.REMOVED, None
 
             current_size = await aiofiles.os.path.getsize(tracked_file.file_path)
@@ -74,10 +78,10 @@ class GrowingFileDetector:
                     last_growth_check=current_time,
                     growth_stable_since=current_time,
                 )
-                
+
                 # Get updated file
                 updated_file = await self.state_manager.get_file_by_id(tracked_file.id)
-                
+
                 logging.debug(
                     f"Started tracking growth for {tracked_file.file_path} (size: {current_size / 1024 / 1024:.1f}MB)"
                 )
@@ -85,12 +89,14 @@ class GrowingFileDetector:
 
             # Update file with current size and time
             previous_size = tracked_file.file_size
-            
+
             # Calculate growth rate
             time_diff = (current_time - tracked_file.last_growth_check).total_seconds()
             if time_diff > 0:
                 size_diff = current_size - tracked_file.first_seen_size
-                growth_rate = (size_diff / (1024 * 1024)) / time_diff if time_diff > 0 else 0.0
+                growth_rate = (
+                    (size_diff / (1024 * 1024)) / time_diff if time_diff > 0 else 0.0
+                )
             else:
                 growth_rate = tracked_file.growth_rate_mbps
 
@@ -106,10 +112,12 @@ class GrowingFileDetector:
 
             # NOTE: PAUSED status checks removed in fail-and-rediscover strategy
             # Files now fail immediately instead of pausing during network issues
-            
+
             current_file = await self.state_manager.get_file_by_id(tracked_file.id)
             if not current_file:
-                logging.warning(f"File disappeared during growth check: {tracked_file.file_path}")
+                logging.warning(
+                    f"File disappeared during growth check: {tracked_file.file_path}"
+                )
                 return FileStatus.REMOVED, None
 
             # Update TrackedFile with new information
@@ -145,9 +153,11 @@ class GrowingFileDetector:
                 if not has_grown and current_size < self.min_size_bytes:
                     # Small file that never grew
                     stable_duration = (
-                            current_time - growth_stable_since
-                    ).total_seconds() if growth_stable_since else 0
-                    
+                        (current_time - growth_stable_since).total_seconds()
+                        if growth_stable_since
+                        else 0
+                    )
+
                     if stable_duration >= self.growth_timeout:
                         logging.debug(
                             f"File {tracked_file.file_path} is static and stable, ready for normal copy "
@@ -163,8 +173,10 @@ class GrowingFileDetector:
 
                 # File has grown or is large enough
                 stable_duration = (
-                        current_time - growth_stable_since
-                ).total_seconds() if growth_stable_since else 0
+                    (current_time - growth_stable_since).total_seconds()
+                    if growth_stable_since
+                    else 0
+                )
 
                 if stable_duration >= self.growth_timeout:
                     if has_grown and current_size >= self.min_size_bytes:
@@ -200,7 +212,7 @@ class GrowingFileDetector:
             return FileStatus.FAILED, None
 
     async def update_file_growth_info(
-            self, tracked_file: TrackedFile, new_size: int
+        self, tracked_file: TrackedFile, new_size: int
     ) -> None:
         """Update file growth information using StateManager instead of separate tracking."""
         current_time = datetime.now()
@@ -224,10 +236,12 @@ class GrowingFileDetector:
 
         # NOTE: PAUSED file checks removed in fail-and-rediscover strategy
         # Files now fail immediately instead of pausing during network issues
-        
+
         current_file = await self.state_manager.get_file_by_id(tracked_file.id)
         if not current_file:
-            logging.warning(f"File disappeared during growth info update: {tracked_file.file_path}")
+            logging.warning(
+                f"File disappeared during growth info update: {tracked_file.file_path}"
+            )
             return
 
         # Update TrackedFile with new growth information
@@ -239,7 +253,8 @@ class GrowingFileDetector:
             last_growth_check=current_time,
             growth_rate_mbps=growth_rate,
             growth_stable_since=growth_stable_since,
-            first_seen_size=tracked_file.first_seen_size or new_size,  # Initialize if not set
+            first_seen_size=tracked_file.first_seen_size
+            or new_size,  # Initialize if not set
         )
 
     async def _monitor_growing_files_loop(self):
@@ -250,9 +265,11 @@ class GrowingFileDetector:
                 # Get all files that are being tracked for growth (have last_growth_check set)
                 all_files = await self.state_manager.get_all_files()
                 growing_files = [
-                    f for f in all_files 
-                    if f.last_growth_check is not None 
-                    and f.status not in [
+                    f
+                    for f in all_files
+                    if f.last_growth_check is not None
+                    and f.status
+                    not in [
                         FileStatus.IN_QUEUE,
                         FileStatus.COPYING,
                         FileStatus.GROWING_COPY,
@@ -277,7 +294,7 @@ class GrowingFileDetector:
                         if recommended_status != tracked_file.status:
                             # NOTE: PAUSED file checks removed in fail-and-rediscover strategy
                             # Files now fail immediately instead of pausing during network issues
-                            
+
                             await self.state_manager.update_file_status_by_id(
                                 file_id=tracked_file.id,
                                 status=recommended_status,

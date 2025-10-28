@@ -103,15 +103,14 @@ class FileCopyExecutor:
         )
 
         logging.debug(
-            f"FileCopyExecutor initialized with chunk size: "
-            f"{settings.chunk_size_kb}KB"
+            f"FileCopyExecutor initialized with chunk size: {settings.chunk_size_kb}KB"
         )
 
     async def copy_file(
-            self,
-            source: Path,
-            dest: Path,
-            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+        self,
+        source: Path,
+        dest: Path,
+        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file using the configured strategy (temp file or direct)."""
         if self.settings.use_temporary_file:
@@ -120,10 +119,10 @@ class FileCopyExecutor:
             return await self.copy_direct(source, dest, progress_callback)
 
     async def copy_with_temp_file(
-            self,
-            source: Path,
-            dest: Path,
-            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+        self,
+        source: Path,
+        dest: Path,
+        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file to temporary location, then rename to final destination."""
         start_time = datetime.now()
@@ -198,10 +197,10 @@ class FileCopyExecutor:
             )
 
     async def copy_direct(
-            self,
-            source: Path,
-            dest: Path,
-            progress_callback: Optional[Callable[[CopyProgress], None]] = None,
+        self,
+        source: Path,
+        dest: Path,
+        progress_callback: Optional[Callable[[CopyProgress], None]] = None,
     ) -> CopyResult:
         """Copy file directly to the destination path."""
         start_time = datetime.now()
@@ -257,11 +256,11 @@ class FileCopyExecutor:
             )
 
     async def _perform_copy(
-            self,
-            source: Path,
-            dest: Path,
-            progress_callback: Optional[Callable[[CopyProgress], None]],
-            start_time: datetime,
+        self,
+        source: Path,
+        dest: Path,
+        progress_callback: Optional[Callable[[CopyProgress], None]],
+        start_time: datetime,
     ) -> CopyResult:
         """Perform the actual file copy with progress tracking and network error detection."""
         file_size = source.stat().st_size
@@ -270,13 +269,13 @@ class FileCopyExecutor:
         chunk_size = self.chunk_size
 
         logging.debug(
-            f"Using {chunk_size // 1024}KB chunks for {file_size / (1024 ** 2):.1f}MB file"
+            f"Using {chunk_size // 1024}KB chunks for {file_size / (1024**2):.1f}MB file"
         )
 
         # Initialize network error detector for fail-fast behavior
         network_detector = NetworkErrorDetector(
             destination_path=str(dest),
-            check_interval_bytes=1024 * 1024  # Check every 1MB
+            check_interval_bytes=1024 * 1024,  # Check every 1MB
         )
 
         try:
@@ -296,12 +295,14 @@ class FileCopyExecutor:
                         network_detector.check_write_error(write_error, "chunk write")
                         # If not network error, re-raise original error
                         raise write_error
-                        
+
                     bytes_copied += len(chunk)
 
                     # Check network connectivity periodically for fail-fast behavior
                     try:
-                        await network_detector.check_destination_connectivity(bytes_copied)
+                        await network_detector.check_destination_connectivity(
+                            bytes_copied
+                        )
                     except NetworkError as ne:
                         logging.error(f"Network connectivity lost during copy: {ne}")
                         raise ne

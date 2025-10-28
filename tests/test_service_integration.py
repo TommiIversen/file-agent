@@ -129,7 +129,9 @@ class TestServiceIntegration:
         assert hasattr(service, "job_queue")
 
     @pytest.mark.asyncio
-    async def test_file_copy_executor_integration(self, mock_file_copy_executor, tmp_path):
+    async def test_file_copy_executor_integration(
+        self, mock_file_copy_executor, tmp_path
+    ):
         """Test FileCopyExecutor with real files."""
         executor = mock_file_copy_executor
 
@@ -153,9 +155,7 @@ class TestServiceIntegration:
         executor.copy_file.assert_called_once_with(source_file, dest_file)
 
     @pytest.mark.asyncio
-    async def test_job_processor_integration(
-        self, job_processor, mock_state_manager
-    ):
+    async def test_job_processor_integration(self, job_processor, mock_state_manager):
         """Test JobProcessor workflow with mock file."""
         # Setup mock tracked file
         tracked_file = TrackedFile(
@@ -171,7 +171,7 @@ class TestServiceIntegration:
         job = Mock()
         job.file_path = "/source/test.mxf"
         job.tracked_file = tracked_file
-        
+
         # Test job processing
         result = await job_processor.process_job(job)
 
