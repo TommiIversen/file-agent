@@ -170,7 +170,7 @@ class WebSocketManager:
                     if update.old_status
                     else None,
                     "new_status": update.new_status.value,
-                    "file": _serialize_tracked_file(update.tracked_file),
+                    "file": _serialize_tracked_file(tracked_file),
                     "timestamp": update.timestamp.isoformat(),
                 },
             }
@@ -263,20 +263,23 @@ class WebSocketManager:
             logging.error(f"Error broadcasting scanner status: {e}")
 
 
-    async def handle_storage_status_event(self, update: StorageStatusChangedEvent) -> None:
+    async def handle_storage_status_event(self, event: StorageStatusChangedEvent) -> None:
         if not self._connections:
             return
 
         try:
+
+            update_data = event.update  # <-- HER ER ÆNDRINGEN
+
             message_data = {
                 "type": "storage_update",
                 "data": {
-                    "storage_type": update.storage_type,
-                    "old_status": update.old_status.value
-                    if update.old_status
+                    "storage_type": update_data.storage_type,
+                    "old_status": update_data.old_status.value
+                    if update_data.old_status
                     else None,
-                    "new_status": update.new_status.value,
-                    "storage_info": _serialize_storage_info(update.storage_info),
+                    "new_status": update_data.new_status.value,
+                    "storage_info": _serialize_storage_info(update_data.storage_info),
                     "timestamp": self._get_timestamp(),
                 },
             }
@@ -284,7 +287,7 @@ class WebSocketManager:
             await self._broadcast_message(message_data)
 
             logging.debug(
-                f"Broadcasted storage update: {update.storage_type} -> {update.new_status.value}"
+                f"Broadcasted storage update: {update_data.storage_type} -> {update_data.new_status.value}"
             )
 
         except Exception as e:
