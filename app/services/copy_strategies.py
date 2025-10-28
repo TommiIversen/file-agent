@@ -527,57 +527,14 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
-        Determine if a file is currently growing based on its status and history.
-
-        Static files (from normal stability detection) have:
-        - FileStatus.READY
-        - growth_rate_mbps = 0.0
-        - file_size == first_seen_size (no growth)
-
-        Growing files have:
-        - Growing-related status OR
-        - Active growth rate OR
-        - Evidence of size changes
+        Determine if a file is currently growing based on its status.
 
         Returns:
-            True if file is actively growing or was detected as a growing file
-            False if file is static/completed
+            True if file has a growing-related status.
+            False otherwise.
         """
-        # Check current status - growing files have specific statuses
-        if tracked_file.status in [
+        return tracked_file.status in [
             FileStatus.GROWING,
             FileStatus.READY_TO_START_GROWING,
             FileStatus.GROWING_COPY,
-        ]:
-            return True
-
-        # Check if file is in static copy mode (added by job preparation)
-        if tracked_file.status == FileStatus.COPYING:
-            return False  # Static files use COPYING status
-
-        # Check if file has a growth rate (indicates it was/is growing)
-        if tracked_file.growth_rate_mbps > 0:
-            return True
-
-        # Check if file has grown since first seen
-        if (
-            tracked_file.first_seen_size > 0
-            and tracked_file.file_size > tracked_file.first_seen_size
-        ):
-            return True
-
-        # Check if previous size differs from current (recent growth)
-        if (
-            tracked_file.previous_file_size > 0
-            and tracked_file.file_size != tracked_file.previous_file_size
-        ):
-            return True
-
-        # STATIC FILE DETECTION:
-        # If we reach here, file has:
-        # - READY status (from normal stability check, not growing detection)
-        # - No growth rate
-        # - No size changes since first seen
-        # - No recent size changes
-        # This indicates a static file that went through normal stability detection
-        return False
+        ]

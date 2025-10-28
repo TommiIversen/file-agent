@@ -35,8 +35,18 @@ class FileRepository:
         """Add a new tracked file to the repository."""
         async with self._lock:
             if tracked_file.id in self._files_by_id:
+                logging.error(
+                    f"File with ID {tracked_file.id} already exists in repository. Use update() to modify."
+                )
+                return
+            self._files_by_id[tracked_file.id] = tracked_file
+
+    async def update(self, tracked_file: TrackedFile) -> None:
+        """Update an existing tracked file in the repository."""
+        async with self._lock:
+            if tracked_file.id not in self._files_by_id:
                 logging.warning(
-                    f"File with ID {tracked_file.id} already exists in repository. Overwriting."
+                    f"File with ID {tracked_file.id} does not exist in repository. Cannot update."
                 )
             self._files_by_id[tracked_file.id] = tracked_file
 

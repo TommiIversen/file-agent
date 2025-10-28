@@ -29,8 +29,8 @@ class StateManager:
         # Retry task tracking - only tasks, state is in TrackedFile.retry_info
         self._retry_tasks: Dict[str, asyncio.Task] = {}
 
-        if self._event_bus:
-            asyncio.create_task(self._subscribe_to_events())
+        # if self._event_bus:
+        #     asyncio.create_task(self._subscribe_to_events())
 
         logging.info("StateManager initialiseret med FileRepository")
 
@@ -88,93 +88,6 @@ class StateManager:
 
         return min(candidates, key=sort_key)
 
-    async def _get_active_file_for_path_internal(
-        self, file_path: str
-    ) -> Optional[TrackedFile]:
-        active_statuses = {
-            FileStatus.DISCOVERED,
-            FileStatus.READY,
-            FileStatus.GROWING,
-            FileStatus.READY_TO_START_GROWING,
-            FileStatus.IN_QUEUE,
-            FileStatus.COPYING,
-            FileStatus.GROWING_COPY,
-            FileStatus.WAITING_FOR_SPACE,
-            FileStatus.SPACE_ERROR,
-            FileStatus.WAITING_FOR_NETWORK,
-        }
-        all_files = await self._file_repository.get_all()
-        candidates = [
-            f
-            for f in all_files
-            if f.file_path == file_path and f.status in active_statuses
-        ]
-        if not candidates:
-            return None
-
-        def sort_key(f: TrackedFile):
-            active_priority = {
-                FileStatus.COPYING: 1,
-                FileStatus.IN_QUEUE: 2,
-                FileStatus.GROWING_COPY: 3,
-                FileStatus.READY_TO_START_GROWING: 4,
-                FileStatus.READY: 5,
-                FileStatus.GROWING: 6,
-                FileStatus.DISCOVERED: 7,
-                FileStatus.WAITING_FOR_SPACE: 8,
-                FileStatus.WAITING_FOR_NETWORK: 8,
-                FileStatus.SPACE_ERROR: 9,
-            }
-            priority = active_priority.get(f.status, 99)
-            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
-            return (priority, time_priority)
-
-        return min(candidates, key=sort_key)
-
-    async def add_file(
-        self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
-    ) -> TrackedFile:
-        async with self._lock:
-            existing_active = await self._get_active_file_for_path_internal(file_path)
-            if existing_active:
-                logging.debug(f"Fil allerede tracked som aktiv: {file_path}")
-                return existing_active
-            any_existing = await self._get_current_file_for_path(file_path)
-            tracked_file = TrackedFile(
-                file_path=file_path,
-                file_size=file_size,
-                last_write_time=last_write_time,
-                status=FileStatus.DISCOVERED,
-            )
-            await self._file_repository.add(tracked_file)
-            if any_existing and any_existing.status == FileStatus.REMOVED:
-                logging.info(
-                    f"File returned after REMOVED - creating new entry: {file_path}"
-                )
-                logging.info(
-                    f"Previous REMOVED entry preserved as history: {any_existing.id}"
-                )
-            elif any_existing and any_existing.status in [
-                FileStatus.COMPLETED,
-                FileStatus.FAILED,
-            ]:
-                logging.info(
-                    f"Ny fil med samme navn som completed/failed fil: {file_path} "
-                    f"(Previous: {any_existing.id[:8]}..., New: {tracked_file.id[:8]}...)"
-                )
-            else:
-                logging.info(f"Ny fil tilføjet: {file_path} ({file_size} bytes)")
-
-            if self._event_bus:
-                event = FileStatusChangedEvent(
-                    file_id=tracked_file.id,
-                    file_path=tracked_file.file_path,
-                    old_status=None,
-                    new_status=FileStatus.DISCOVERED,
-                )
-                asyncio.create_task(self._event_bus.publish(event))
-
-        return tracked_file
 
     async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         async with self._lock:
@@ -203,60 +116,6 @@ class StateManager:
             )
         return is_in_cooldown
 
-    async def should_skip_file_processing(
-        self, file_path: str, cooldown_minutes: int = None
-    ) -> bool:
-        async with self._lock:
-            existing_file = await self._get_current_file_for_path(file_path)
-            if not existing_file:
-                return False
-            if cooldown_minutes is None:
-                cooldown_minutes = self._cooldown_minutes
-            if existing_file.status == FileStatus.SPACE_ERROR:
-                return self._is_space_error_in_cooldown(existing_file, cooldown_minutes)
-            return False
-
-    async def get_active_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
-        async with self._lock:
-            active_statuses = {
-                FileStatus.DISCOVERED,
-                FileStatus.READY,
-                FileStatus.GROWING,
-                FileStatus.READY_TO_START_GROWING,
-                FileStatus.IN_QUEUE,
-                FileStatus.COPYING,
-                FileStatus.GROWING_COPY,
-                FileStatus.WAITING_FOR_SPACE,
-                FileStatus.WAITING_FOR_NETWORK,
-                FileStatus.SPACE_ERROR,
-            }
-            all_files = await self._file_repository.get_all()
-            candidates = [
-                f
-                for f in all_files
-                if f.file_path == file_path and f.status in active_statuses
-            ]
-            if not candidates:
-                return None
-
-            def sort_key(f: TrackedFile):
-                active_priority = {
-                    FileStatus.COPYING: 1,
-                    FileStatus.IN_QUEUE: 2,
-                    FileStatus.GROWING_COPY: 3,
-                    FileStatus.READY_TO_START_GROWING: 4,
-                    FileStatus.READY: 5,
-                    FileStatus.GROWING: 6,
-                    FileStatus.DISCOVERED: 7,
-                    FileStatus.WAITING_FOR_SPACE: 8,
-                    FileStatus.WAITING_FOR_NETWORK: 8,
-                    FileStatus.SPACE_ERROR: 9,
-                }
-                priority = active_priority.get(f.status, 99)
-                time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
-                return (priority, time_priority)
-
-            return min(candidates, key=sort_key)
 
     async def get_all_files(self) -> List[TrackedFile]:
         async with self._lock:

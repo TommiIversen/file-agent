@@ -222,7 +222,7 @@ class FileDiscoverySlice:
         # Update file status
         file.status = FileStatus.READY
         
-        await self._file_repository.add(file)  # Repository.add handles updates too
+        await self._file_repository.update(file)  # Use update for existing files
         
         # Publish ready event
         if self._event_bus:
@@ -335,7 +335,7 @@ class FileDiscoverySlice:
         if last_growth_check is not None:
             file.last_growth_check = last_growth_check
 
-        await self._file_repository.add(file)
+        await self._file_repository.update(file)
         return True
 
     async def mark_file_growing(self, file_id: str) -> bool:
@@ -348,7 +348,7 @@ class FileDiscoverySlice:
             return False
 
         file.status = FileStatus.GROWING
-        await self._file_repository.add(file)
+        await self._file_repository.update(file)
         
         logging.info(f"File marked as growing: {file.file_path}")
         return True
@@ -363,7 +363,7 @@ class FileDiscoverySlice:
             return False
 
         file.status = FileStatus.READY_TO_START_GROWING
-        await self._file_repository.add(file)
+        await self._file_repository.update(file)
         
         # Publish ready event
         if self._event_bus:

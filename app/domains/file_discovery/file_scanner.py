@@ -14,7 +14,7 @@ from app.models import FileStatus, TrackedFile
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from .domain_objects import ScanConfiguration
-from .commands import AddFileCommand, MarkFileStableCommand
+from .commands import AddFileCommand, MarkFileStableCommand, MarkFileGrowingCommand, MarkFileReadyToStartGrowingCommand
 from .queries import ShouldSkipFileProcessingQuery, GetActiveFileByPathQuery, GetFilesByStatusQuery
 from .growing_file_detector import GrowingFileDetector
 
@@ -290,9 +290,9 @@ class FileScanner:
                     continue
 
                 # Use GrowingFileDetector to check file growth status
-                recommended_status, updated_file = await self.growing_file_detector.check_file_growth_status(tracked_file)
+                recommended_status = await self.growing_file_detector.check_file_growth_status(tracked_file)
                 
-                if recommended_status != tracked_file.status and updated_file:
+                if recommended_status != tracked_file.status:
                     # File status changed based on growth analysis
                     if recommended_status == FileStatus.READY:
                         command = MarkFileStableCommand(
@@ -303,8 +303,21 @@ class FileScanner:
                         logging.info(
                             f"STABILITY UPDATE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]"
                         )
+                    elif recommended_status == FileStatus.GROWING:
+                        command = MarkFileGrowingCommand(
+                            file_id=tracked_file.id,
+                            file_path=tracked_file.file_path
+                        )
+                        await self._command_bus.execute(command)
+                        logging.info(
+                            f"GROWING UPDATE: {file_path} -> GROWING [UUID: {tracked_file.id[:8]}...]"
+                        )
                     elif recommended_status == FileStatus.READY_TO_START_GROWING:
-                        # This is handled by the GrowingFileDetector itself
+                        command = MarkFileReadyToStartGrowingCommand(
+                            file_id=tracked_file.id,
+                            file_path=tracked_file.file_path
+                        )
+                        await self._command_bus.execute(command)
                         logging.info(
                             f"GROWING UPDATE: {file_path} -> READY_TO_START_GROWING [UUID: {tracked_file.id[:8]}...]"
                         )
