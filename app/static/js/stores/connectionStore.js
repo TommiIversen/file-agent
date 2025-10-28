@@ -116,7 +116,31 @@ document.addEventListener('alpine:init', () => {
         },
 
         onConnected() {
-            console.log('WebSocket connected - waiting for initial_state message...');
+            console.log('WebSocket connected. Fetching initial state...');
+            this.fetchInitialState();
+        },
+
+        async fetchInitialState() {
+            try {
+                const response = await fetch('/api/initial-state');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch initial state: ${response.status} ${response.statusText}`);
+                }
+                const initialStateData = await response.json();
+
+                // Pass the initial state to the message handler as if it came from the WebSocket
+                // This reuses the existing data handling logic
+                window.messageHandler?.handleMessage({
+                    type: 'initial_state',
+                    data: initialStateData
+                });
+
+                console.log('Successfully fetched and processed initial state.');
+
+            } catch (error) {
+                console.error('Error fetching initial state:', error);
+                this.updateStatus('disconnected', 'Kunne ikke hente start-data');
+            }
         },
 
         get statusColor() {

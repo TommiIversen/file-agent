@@ -1,7 +1,5 @@
-import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Tuple
 
 import aiofiles.os
 
@@ -9,8 +7,7 @@ from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from .commands import UpdateFileGrowthInfoCommand, MarkFileGrowingCommand, MarkFileReadyToStartGrowingCommand
-from .queries import GetFilesNeedingGrowthMonitoringQuery
+from .commands import UpdateFileGrowthInfoCommand
 
 
 class GrowingFileDetector:

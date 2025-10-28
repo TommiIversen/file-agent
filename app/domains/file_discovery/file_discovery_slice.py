@@ -3,13 +3,12 @@ File Discovery Domain Slice
 Implements the vertical slice for file discovery operations using CQRS pattern.
 Matches the original StateManager logic for file discovery and status management.
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List, Set
+from typing import Optional, List
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent, FileStatusChangedEvent
+from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent
 from app.core.file_repository import FileRepository
 from app.models import TrackedFile, FileStatus
 

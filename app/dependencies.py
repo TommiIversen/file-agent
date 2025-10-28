@@ -26,13 +26,14 @@ from .services.space_retry_manager import SpaceRetryManager
 from .services.state_manager import StateManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
-from .services.websocket_manager import WebSocketManager
+from .domains.presentation.websocket_manager import WebSocketManager
 
 
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 
 from app.domains.directory_browsing.service import DirectoryScannerService
+from app.domains.presentation.event_handlers import PresentationEventHandlers
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 from app.domains.file_discovery.command_handlers import (
     AddFileCommandHandler, 
@@ -229,17 +230,9 @@ def get_space_retry_manager() -> SpaceRetryManager:
 
 
 def get_websocket_manager() -> WebSocketManager:
+    """Gets the singleton instance of the pure WebSocketManager."""
     if "websocket_manager" not in _singletons:
-        file_repository = get_file_repository()
-        event_bus = get_event_bus()
-        # Note: storage_monitor will be set later to avoid circular dependency
-        ws_manager = WebSocketManager(
-            file_repository=file_repository, 
-            event_bus=event_bus)
-
-        # Scanner status will be initialized later to avoid circular dependency
-        _singletons["websocket_manager"] = ws_manager
-
+        _singletons["websocket_manager"] = WebSocketManager()
     return _singletons["websocket_manager"]
 
 
@@ -277,9 +270,6 @@ def get_storage_monitor() -> StorageMonitorService:
             network_mount_service=network_mount_service,
             job_queue=job_queue_service,  # Enable universal recovery
         )
-
-        # Set storage_monitor reference in WebSocketManager to avoid circular dependency
-        websocket_manager._storage_monitor = _singletons["storage_monitor"]
 
         # Set storage_monitor reference in JobQueueService for network checking
         job_queue_service.storage_monitor = _singletons["storage_monitor"]
@@ -350,6 +340,17 @@ def get_directory_scanner() -> DirectoryScannerService:
     if "directory_scanner" not in _singletons:
         _singletons["directory_scanner"] = DirectoryScannerService(get_settings())
     return _singletons["directory_scanner"]
+
+def get_presentation_event_handlers() -> PresentationEventHandlers:
+    if "presentation_event_handlers" not in _singletons:
+        websocket_manager = get_websocket_manager()
+        file_repository = get_file_repository()
+        _singletons["presentation_event_handlers"] = PresentationEventHandlers(
+            websocket_manager=websocket_manager, file_repository=file_repository
+        )
+    return _singletons["presentation_event_handlers"]
+
+
 
 
 async def initialize_cqrs_system():

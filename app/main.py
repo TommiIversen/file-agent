@@ -7,12 +7,20 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from .api import websockets, storage, logfiles, uiactions
+from app.domains.presentation.registration import register_presentation_domain
 
+from .domains.presentation import websockets_endpoint
+
+from .api import storage, logfiles, uiactions
+
+from .domains.presentation.api_endpoints import presentation_router
 from .domains.directory_browsing import api as directory
+
+
 
 from .config import Settings
 from .dependencies import (
+    get_event_bus,
     get_job_queue_service,
     get_file_copier,
     get_websocket_manager,
@@ -45,9 +53,11 @@ async def lifespan(app: FastAPI):
     logging.info("Registrerer CQRS handlers...")
     query_bus = get_query_bus()
     command_bus = get_command_bus()
+    event_bus = get_event_bus()
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
+    await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
     # Initialize File Discovery CQRS handlers
     await initialize_cqrs_system()
@@ -107,7 +117,6 @@ async def lifespan(app: FastAPI):
     storage_monitor = get_storage_monitor()
     storage_task = asyncio.create_task(storage_monitor.start_monitoring())
     _background_tasks.append(storage_task)
-    logging.info("StorageMonitorService startet som background task")
 
     yield
 
@@ -186,10 +195,11 @@ async def log_requests(request: Request, call_next):
 
 # Include routers
 app.include_router(uiactions.router)
-app.include_router(websockets.router)
+app.include_router(websockets_endpoint.router)
 app.include_router(storage.router)
 app.include_router(logfiles.router)
 app.include_router(directory.directory_router)
+app.include_router(presentation_router)
 app.include_router(views.router)
 
 

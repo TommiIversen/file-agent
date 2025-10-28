@@ -10,7 +10,7 @@ import aiofiles.os
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.models import FileStatus, TrackedFile
+from app.models import FileStatus
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from .domain_objects import ScanConfiguration
