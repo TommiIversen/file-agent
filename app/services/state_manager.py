@@ -285,8 +285,7 @@ class StateManager:
             ):
                 tracked_file.failed_at = datetime.now()
             
-            # Save the updated file back to repository
-            await self._file_repository.add(tracked_file)
+            await self._file_repository.update(tracked_file)
 
         if event_to_publish:
             await self._event_bus.publish(event_to_publish)
@@ -351,8 +350,7 @@ class StateManager:
             )
             self._retry_tasks[file_id] = retry_task
             
-            # Save the updated file with retry info
-            await self._file_repository.add(tracked_file)
+            await self._file_repository.update(tracked_file)
             
             logging.info(
                 f"Scheduled {retry_type} retry for {tracked_file.file_path} in {delay_seconds}s: {reason}"
@@ -378,7 +376,7 @@ class StateManager:
         tracked_file = await self._file_repository.get_by_id(file_id)
         if tracked_file and tracked_file.retry_info:
             tracked_file.retry_info = None
-            await self._file_repository.add(tracked_file)
+            await self._file_repository.update(tracked_file)
             retry_cancelled = True
         if retry_cancelled:
             logging.debug(f"Cancelled retry for file ID: {file_id}")

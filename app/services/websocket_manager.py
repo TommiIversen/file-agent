@@ -10,7 +10,7 @@ from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
 
 
 def _serialize_storage_info(storage_info) -> dict:
@@ -47,13 +47,14 @@ def _serialize_tracked_file(tracked_file) -> Dict[str, Any]:
 class WebSocketManager:
     def __init__(
         self,
-        state_manager: StateManager,
+        file_repository: FileRepository,
         event_bus: DomainEventBus = None,
         storage_monitor=None,
     ):
-        self.state_manager = state_manager
+        self.file_repository = file_repository
         self._storage_monitor = storage_monitor
         self._event_bus = event_bus
+        self._lock = asyncio.Lock()
         self._connections: List[WebSocket] = []
         self._scanner_status = {
             "scanning": True,
@@ -64,6 +65,67 @@ class WebSocketManager:
             asyncio.create_task(self._subscribe_to_events())
 
         logging.info("WebSocketManager initialiseret")
+
+    def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
+        active_statuses = {
+            FileStatus.COPYING: 1,
+            FileStatus.IN_QUEUE: 2,
+            FileStatus.GROWING_COPY: 3,
+            FileStatus.READY_TO_START_GROWING: 4,
+            FileStatus.READY: 5,
+            FileStatus.GROWING: 6,
+            FileStatus.DISCOVERED: 7,
+            FileStatus.WAITING_FOR_SPACE: 8,
+            FileStatus.WAITING_FOR_NETWORK: 8,
+            FileStatus.COMPLETED: 9,
+            FileStatus.FAILED: 10,
+            FileStatus.REMOVED: 11,
+            FileStatus.SPACE_ERROR: 12,
+        }
+        priority1 = active_statuses.get(file1.status, 99)
+        priority2 = active_statuses.get(file2.status, 99)
+        if priority1 != priority2:
+            return priority1 < priority2
+        time1 = file1.discovered_at.timestamp() if file1.discovered_at else 0
+        time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
+        return time1 > time2
+
+    async def get_statistics(self) -> Dict:
+        async with self._lock:
+            current_files = {}
+            all_files = await self.file_repository.get_all()
+            for tracked_file in all_files:
+                current = current_files.get(tracked_file.file_path)
+                if not current or self._is_more_current(tracked_file, current):
+                    current_files[tracked_file.file_path] = tracked_file
+            current_files_list = list(current_files.values())
+            total_files = len(current_files_list)
+            status_counts = {}
+            for status in FileStatus:
+                status_counts[status.value] = len(
+                    [f for f in current_files_list if f.status == status]
+                )
+            total_size = sum(f.file_size for f in current_files_list)
+            copying_files = [
+                f for f in current_files_list if f.status == FileStatus.COPYING
+            ]
+            growing_files = [
+                f
+                for f in current_files_list
+                if f.status
+                in [
+                    FileStatus.GROWING,
+                    FileStatus.READY_TO_START_GROWING,
+                    FileStatus.GROWING_COPY,
+                ]
+            ]
+            return {
+                "total_files": total_files,
+                "status_counts": status_counts,
+                "total_size_bytes": total_size,
+                "active_copies": len(copying_files),
+                "growing_files": len(growing_files),
+            }
 
     async def _subscribe_to_events(self):
         await self._event_bus.subscribe(
@@ -104,8 +166,8 @@ class WebSocketManager:
 
     async def _send_initial_state(self, websocket: WebSocket) -> None:
         try:
-            all_files = await self.state_manager.get_all_files()
-            statistics = await self.state_manager.get_statistics()
+            all_files = await self.file_repository.get_all()
+            statistics = await self.get_statistics()
 
             storage_data = None
             if self._storage_monitor:
@@ -269,7 +331,7 @@ class WebSocketManager:
 
         try:
 
-            update_data = event.update  # <-- HER ER ÆNDRINGEN
+            update_data = event.update
 
             message_data = {
                 "type": "storage_update",
