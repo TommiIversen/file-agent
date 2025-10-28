@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
+from app.core.file_repository import FileRepository
 
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
@@ -19,7 +20,7 @@ from .services.copy_strategies import GrowingFileCopyStrategy
 from .services.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
-from .services.scanner.file_scanner_service import FileScannerService
+from .domains.file_discovery.file_scanner_service import FileScannerService
 from .services.space_checker import SpaceChecker
 from .services.space_retry_manager import SpaceRetryManager
 from .services.state_manager import StateManager
@@ -59,12 +60,21 @@ def get_event_bus() -> "DomainEventBus":
     return _singletons["event_bus"]
 
 
+def get_file_repository() -> FileRepository:
+    if "file_repository" not in _singletons:
+        _singletons["file_repository"] = FileRepository()
+    return _singletons["file_repository"]
+
+
 def get_state_manager() -> StateManager:
     if "state_manager" not in _singletons:
         settings = get_settings()
         event_bus = get_event_bus()
+        file_repository = get_file_repository()
         _singletons["state_manager"] = StateManager(
-            cooldown_minutes=settings.space_error_cooldown_minutes, event_bus=event_bus
+            file_repository=file_repository,
+            cooldown_minutes=settings.space_error_cooldown_minutes, 
+            event_bus=event_bus
         )
 
     return _singletons["state_manager"]

@@ -1,7 +1,3 @@
-"""
-Pytest configuration og shared fixtures.
-"""
-
 import pytest
 import asyncio
 from app.dependencies import reset_singletons

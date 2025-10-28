@@ -26,7 +26,9 @@ class TestFileStabilityRefactoring:
     def state_manager(self):
         """Fresh StateManager instance for each test."""
         reset_singletons()
-        return StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        return StateManager(file_repository=file_repository)
 
     @pytest.fixture
     def scan_config(self):

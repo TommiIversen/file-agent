@@ -5,8 +5,8 @@ from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.services.state_manager import StateManager
-from .domain_objects import ScanConfiguration
-from .file_scanner import FileScanner
+from ...services.scanner.domain_objects import ScanConfiguration
+from ...services.scanner.file_scanner import FileScanner
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService

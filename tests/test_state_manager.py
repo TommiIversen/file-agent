@@ -17,7 +17,9 @@ class TestStateManager:
     def state_manager(self):
         """Fresh StateManager instance for hver test."""
         reset_singletons()  # Ensure clean state
-        return StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        return StateManager(file_repository=file_repository)
 
     @pytest.fixture
     def sample_file_path(self):

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from app.core.events.domain_event import DomainEvent
-from app.models import StorageInfo, StorageUpdate, MountStatusUpdate
+from app.models import StorageUpdate, MountStatusUpdate
 
 @dataclass(frozen=True)
 class StorageStatusChangedEvent(DomainEvent):

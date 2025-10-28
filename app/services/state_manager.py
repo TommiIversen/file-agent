@@ -9,14 +9,18 @@ from app.core.events.file_events import (
     FileStatusChangedEvent,
     FileReadyEvent,
 )
+from app.core.file_repository import FileRepository
 from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
 
 
 class StateManager:
     def __init__(
-        self, cooldown_minutes: int = 60, event_bus: Optional[DomainEventBus] = None
+        self,
+        file_repository: FileRepository,
+        cooldown_minutes: int = 60,
+        event_bus: Optional[DomainEventBus] = None
     ):
-        self._files_by_id: Dict[str, TrackedFile] = {}
+        self._file_repository = file_repository
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
         self._cooldown_minutes = cooldown_minutes
@@ -28,7 +32,7 @@ class StateManager:
         if self._event_bus:
             asyncio.create_task(self._subscribe_to_events())
 
-        logging.info("StateManager initialiseret")
+        logging.info("StateManager initialiseret med FileRepository")
 
     async def _subscribe_to_events(self):
         if not self._event_bus:
@@ -55,8 +59,9 @@ class StateManager:
             file_id=event.file_id, status=event.new_status
         )
 
-    def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
-        candidates = [f for f in self._files_by_id.values() if f.file_path == file_path]
+    async def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
+        all_files = await self._file_repository.get_all()
+        candidates = [f for f in all_files if f.file_path == file_path]
         if not candidates:
             return None
 
@@ -83,7 +88,7 @@ class StateManager:
 
         return min(candidates, key=sort_key)
 
-    def _get_active_file_for_path_internal(
+    async def _get_active_file_for_path_internal(
         self, file_path: str
     ) -> Optional[TrackedFile]:
         active_statuses = {
@@ -98,9 +103,10 @@ class StateManager:
             FileStatus.SPACE_ERROR,
             FileStatus.WAITING_FOR_NETWORK,
         }
+        all_files = await self._file_repository.get_all()
         candidates = [
             f
-            for f in self._files_by_id.values()
+            for f in all_files
             if f.file_path == file_path and f.status in active_statuses
         ]
         if not candidates:
@@ -129,18 +135,18 @@ class StateManager:
         self, file_path: str, file_size: int, last_write_time: Optional[datetime] = None
     ) -> TrackedFile:
         async with self._lock:
-            existing_active = self._get_active_file_for_path_internal(file_path)
+            existing_active = await self._get_active_file_for_path_internal(file_path)
             if existing_active:
                 logging.debug(f"Fil allerede tracked som aktiv: {file_path}")
                 return existing_active
-            any_existing = self._get_current_file_for_path(file_path)
+            any_existing = await self._get_current_file_for_path(file_path)
             tracked_file = TrackedFile(
                 file_path=file_path,
                 file_size=file_size,
                 last_write_time=last_write_time,
                 status=FileStatus.DISCOVERED,
             )
-            self._files_by_id[tracked_file.id] = tracked_file
+            await self._file_repository.add(tracked_file)
             if any_existing and any_existing.status == FileStatus.REMOVED:
                 logging.info(
                     f"File returned after REMOVED - creating new entry: {file_path}"
@@ -172,7 +178,7 @@ class StateManager:
 
     async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         async with self._lock:
-            current_file = self._get_current_file_for_path(file_path)
+            current_file = await self._get_current_file_for_path(file_path)
             if current_file and current_file.status == FileStatus.REMOVED:
                 return None
             return current_file
@@ -201,7 +207,7 @@ class StateManager:
         self, file_path: str, cooldown_minutes: int = None
     ) -> bool:
         async with self._lock:
-            existing_file = self._get_current_file_for_path(file_path)
+            existing_file = await self._get_current_file_for_path(file_path)
             if not existing_file:
                 return False
             if cooldown_minutes is None:
@@ -224,9 +230,10 @@ class StateManager:
                 FileStatus.WAITING_FOR_NETWORK,
                 FileStatus.SPACE_ERROR,
             }
+            all_files = await self._file_repository.get_all()
             candidates = [
                 f
-                for f in self._files_by_id.values()
+                for f in all_files
                 if f.file_path == file_path and f.status in active_statuses
             ]
             if not candidates:
@@ -253,7 +260,7 @@ class StateManager:
 
     async def get_all_files(self) -> List[TrackedFile]:
         async with self._lock:
-            return list(self._files_by_id.values())
+            return await self._file_repository.get_all()
 
     def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
         active_statuses = {
@@ -282,7 +289,8 @@ class StateManager:
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
         async with self._lock:
             current_files = {}
-            for tracked_file in self._files_by_id.values():
+            all_files = await self._file_repository.get_all()
+            for tracked_file in all_files:
                 if tracked_file.status == status:
                     current = current_files.get(tracked_file.file_path)
                     if not current or self._is_more_current(tracked_file, current):
@@ -293,7 +301,8 @@ class StateManager:
         removed_count = 0
         async with self._lock:
             current_files = {}
-            for tracked_file in self._files_by_id.values():
+            all_files = await self._file_repository.get_all()
+            for tracked_file in all_files:
                 current = current_files.get(tracked_file.file_path)
                 if not current or self._is_more_current(tracked_file, current):
                     current_files[tracked_file.file_path] = tracked_file
@@ -330,17 +339,19 @@ class StateManager:
         cutoff_time = now - timedelta(hours=max_age_hours)
         async with self._lock:
             to_remove_ids = []
-            for file_id, tracked_file in self._files_by_id.items():
+            all_files = await self._file_repository.get_all()
+            for tracked_file in all_files:
                 file_age_timestamp = (
                     tracked_file.completed_at
                     or tracked_file.failed_at
                     or tracked_file.discovered_at
                 )
                 if file_age_timestamp and file_age_timestamp < cutoff_time:
-                    to_remove_ids.append(file_id)
+                    to_remove_ids.append(tracked_file.id)
             for file_id in to_remove_ids:
-                if file_id in self._files_by_id:
-                    removed_file = self._files_by_id.pop(file_id)
+                removed_file = await self._file_repository.get_by_id(file_id)
+                if removed_file:
+                    await self._file_repository.remove(file_id)
                     removed_count += 1
                     logging.debug(
                         f"Cleanup: Removed old file: {removed_file.file_path} "
@@ -355,10 +366,11 @@ class StateManager:
 
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
-            result = self._files_by_id.get(file_id)
+            result = await self._file_repository.get_by_id(file_id)
             if not result:
+                all_files_count = await self._file_repository.count()
                 logging.debug(
-                    f"🔍 get_file_by_id: UUID {file_id[:8]}... not found in {len(self._files_by_id)} files"
+                    f"🔍 get_file_by_id: UUID {file_id[:8]}... not found in {all_files_count} files"
                 )
             return result
 
@@ -367,7 +379,7 @@ class StateManager:
     ) -> Optional[TrackedFile]:
         event_to_publish = None
         async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
+            tracked_file = await self._file_repository.get_by_id(file_id)
             if not tracked_file:
                 logging.warning(f"Forsøg på at opdatere ukendt fil ID: {file_id}")
                 return None
@@ -413,6 +425,9 @@ class StateManager:
                 tracked_file, "failed_at", None
             ):
                 tracked_file.failed_at = datetime.now()
+            
+            # Save the updated file back to repository
+            await self._file_repository.add(tracked_file)
 
         if event_to_publish:
             await self._event_bus.publish(event_to_publish)
@@ -421,7 +436,8 @@ class StateManager:
     async def get_statistics(self) -> Dict:
         async with self._lock:
             current_files = {}
-            for tracked_file in self._files_by_id.values():
+            all_files = await self._file_repository.get_all()
+            for tracked_file in all_files:
                 current = current_files.get(tracked_file.file_path)
                 if not current or self._is_more_current(tracked_file, current):
                     current_files[tracked_file.file_path] = tracked_file
@@ -459,7 +475,7 @@ class StateManager:
         self, file_id: str, delay_seconds: int, reason: str, retry_type: str = "space"
     ) -> bool:
         async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
+            tracked_file = await self._file_repository.get_by_id(file_id)
             if not tracked_file:
                 logging.warning(f"Cannot schedule retry for unknown file ID: {file_id}")
                 return False
@@ -475,6 +491,10 @@ class StateManager:
                 self._execute_retry_task(file_id, delay_seconds)
             )
             self._retry_tasks[file_id] = retry_task
+            
+            # Save the updated file with retry info
+            await self._file_repository.add(tracked_file)
+            
             logging.info(
                 f"Scheduled {retry_type} retry for {tracked_file.file_path} in {delay_seconds}s: {reason}"
             )
@@ -496,9 +516,10 @@ class StateManager:
                 pass
             except Exception as e:
                 logging.warning(f"Error while cancelling task for {file_id}: {e}")
-        tracked_file = self._files_by_id.get(file_id)
+        tracked_file = await self._file_repository.get_by_id(file_id)
         if tracked_file and tracked_file.retry_info:
             tracked_file.retry_info = None
+            await self._file_repository.add(tracked_file)
             retry_cancelled = True
         if retry_cancelled:
             logging.debug(f"Cancelled retry for file ID: {file_id}")
@@ -508,7 +529,7 @@ class StateManager:
         try:
             await asyncio.sleep(delay_seconds)
             async with self._lock:
-                tracked_file = self._files_by_id.get(file_id)
+                tracked_file = await self._file_repository.get_by_id(file_id)
                 if not tracked_file or not tracked_file.retry_info:
                     logging.debug(
                         f"Retry cancelled - file or retry info missing: {file_id}"
@@ -537,17 +558,19 @@ class StateManager:
         except Exception as e:
             logging.error(f"Error in retry task for file ID {file_id}: {e}")
             async with self._lock:
-                tracked_file = self._files_by_id.get(file_id)
+                tracked_file = await self._file_repository.get_by_id(file_id)
                 if tracked_file:
                     tracked_file.retry_info = None
+                    await self._file_repository.add(tracked_file)
                 self._retry_tasks.pop(file_id, None)
 
     async def cancel_all_retries(self) -> int:
         async with self._lock:
             cancelled_count = 0
+            all_files = await self._file_repository.get_all()
             files_with_retries = [
-                file_id
-                for file_id, tracked_file in self._files_by_id.items()
+                tracked_file.id
+                for tracked_file in all_files
                 if tracked_file.retry_info is not None
             ]
             for file_id in files_with_retries:
@@ -558,13 +581,14 @@ class StateManager:
 
     async def increment_retry_count(self, file_id: str) -> int:
         async with self._lock:
-            tracked_file = self._files_by_id.get(file_id)
+            tracked_file = await self._file_repository.get_by_id(file_id)
             if not tracked_file:
                 logging.warning(
                     f"Cannot increment retry count for unknown file ID: {file_id}"
                 )
                 return 0
             tracked_file.retry_count += 1
+            await self._file_repository.add(tracked_file)
             logging.debug(
                 f"Incremented retry count for {tracked_file.file_path} to {tracked_file.retry_count}"
             )

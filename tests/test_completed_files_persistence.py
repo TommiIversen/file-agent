@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.services.state_manager import StateManager
-from app.services.scanner.file_scanner_service import FileScannerService
+from app.domains.file_discovery.file_scanner_service import FileScannerService
 from app.models import FileStatus
 from app.config import Settings
 
@@ -26,7 +26,9 @@ class TestCompletedFilesPersistence:
     @pytest.fixture
     def state_manager(self):
         """Create StateManager instance for testing"""
-        return StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        return StateManager(file_repository=file_repository)
 
     @pytest.fixture
     def temp_directory(self):
@@ -203,9 +205,10 @@ class TestCompletedFilesPersistence:
         old_completed_time = datetime.now() - timedelta(hours=3)
 
         async with state_manager._lock:
-            tracked_file = state_manager._get_current_file_for_path("/old/file.mxf")
+            tracked_file = await state_manager._get_current_file_for_path("/old/file.mxf")
             if tracked_file:
                 tracked_file.completed_at = old_completed_time
+                await state_manager._file_repository.add(tracked_file)
 
         # Create recent completed file
         tracked_recent = await state_manager.add_file("/recent/file.mxf", 100)
@@ -302,7 +305,9 @@ async def manual_test_completed_persistence():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         # Setup
-        state_manager = StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        state_manager = StateManager(file_repository=file_repository)
 
         # Create and add test file
         test_file = Path(temp_dir) / "test_completed.mxf"

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from app.services.state_manager import StateManager
-from app.services.scanner.file_scanner_service import FileScannerService
+from app.domains.file_discovery.file_scanner_service import FileScannerService
 from app.config import Settings
 from app.models import FileStatus
 
@@ -50,7 +50,9 @@ class TestDuplicateFilenameBug:
     @pytest.fixture
     def state_manager(self):
         """Create StateManager instance"""
-        return StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        return StateManager(file_repository=file_repository)
 
     @pytest.fixture
     def file_scanner(self, state_manager, settings):
@@ -253,7 +255,9 @@ async def manual_test_duplicate_filename_bug():
     print("🧪 Manual Duplicate Filename Bug Test")
     print("=" * 50)
 
-    state_manager = StateManager()
+    from app.core.file_repository import FileRepository
+    file_repository = FileRepository()
+    state_manager = StateManager(file_repository=file_repository)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         source_dir = Path(temp_dir) / "source"

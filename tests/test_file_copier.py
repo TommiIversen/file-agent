@@ -57,7 +57,9 @@ class TestFileCopierService:
     @pytest.fixture
     def state_manager(self):
         """Create StateManager instance."""
-        return StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        return StateManager(file_repository=file_repository)
 
     @pytest.fixture
     def job_queue_service(self, mock_settings, state_manager):
@@ -263,7 +265,9 @@ class TestFileCopierServiceIntegration:
         )
 
         # Create services
-        state_manager = StateManager()
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        state_manager = StateManager(file_repository=file_repository)
         job_queue_service = JobQueueService(settings, state_manager)
         job_processor = MagicMock()
         file_copier = FileCopierService(

@@ -15,7 +15,9 @@ class TestRetryTaskCancellationFailAndRediscover:
     @pytest.mark.asyncio
     async def test_retry_task_cancelled_on_immediate_failure(self):
         """Test that retry tasks are cancelled when files fail immediately."""
-        state_manager = StateManager(AsyncMock())
+        from app.core.file_repository import FileRepository
+        file_repository = FileRepository()
+        state_manager = StateManager(file_repository=file_repository, event_bus=AsyncMock())
 
         # Create file and schedule retry
         file_path = "c:\\temp_input\\test_file.mxv"
