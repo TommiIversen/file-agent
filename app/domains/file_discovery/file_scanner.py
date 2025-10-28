@@ -10,15 +10,13 @@ import aiofiles.os
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import (
-    FileDiscoveredEvent,
-    FileStatusChangedEvent,
-    FileReadyEvent,
-)
 from app.models import FileStatus, TrackedFile
-from app.services.growing_file_detector import GrowingFileDetector
-from app.services.state_manager import StateManager
+from app.core.cqrs.command_bus import CommandBus
+from app.core.cqrs.query_bus import QueryBus
 from .domain_objects import ScanConfiguration
+from .commands import AddFileCommand, MarkFileStableCommand
+from .queries import ShouldSkipFileProcessingQuery, GetActiveFileByPathQuery, GetFilesByStatusQuery
+from .growing_file_detector import GrowingFileDetector
 
 if TYPE_CHECKING:
     from app.services.storage_monitor import StorageMonitorService
@@ -55,21 +53,29 @@ class FileScanner:
     def __init__(
         self,
         config: ScanConfiguration,
-        state_manager: StateManager,
+        command_bus: CommandBus,
+        query_bus: QueryBus,
         storage_monitor: Optional["StorageMonitorService"] = None,
         settings: Optional[Settings] = None,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self.config = config
-        self.state_manager = state_manager
+        self._command_bus = command_bus
+        self._query_bus = query_bus
         self.storage_monitor = storage_monitor
         self.settings = settings
         self._event_bus = event_bus
         self._running = False
         self._scan_task: Optional[asyncio.Task] = None
 
-        self.growing_file_detector = GrowingFileDetector(settings, state_manager)
-        logging.info("Growing file support enabled")
+        # Initialize GrowingFileDetector with CQRS
+        self.growing_file_detector = GrowingFileDetector(
+            settings=settings,
+            command_bus=command_bus,
+            query_bus=query_bus
+        )
+
+        logging.info("FileScanner initialized with CQRS architecture")
 
         logging.info("FileScanOrchestrator initialized")
         logging.info(f"Monitoring: {config.source_directory}")
@@ -84,6 +90,7 @@ class FileScanner:
         self._running = True
         logging.info("File Scanner started")
 
+        # Start growing file detector monitoring
         await self.growing_file_detector.start_monitoring()
 
         # Start scanning loop as background task instead of blocking
@@ -110,7 +117,7 @@ class FileScanner:
             except Exception as e:
                 logging.error(f"Error during scanner task cancellation: {e}")
 
-        # Stop growing file detector
+        # Stop growing file detector monitoring
         await self.growing_file_detector.stop_monitoring()
 
         self._scan_task = None
@@ -155,16 +162,10 @@ class FileScanner:
         try:
             current_file_paths = {str(path) for path in current_files}
 
-            removed_count = await self.state_manager.cleanup_missing_files(
-                current_file_paths
-            )
-
-            if removed_count > 0:
-                logging.info(
-                    f"Cleanup: Removed {removed_count} files that no longer exist"
-                )
-
-            return removed_count
+            # TODO: Implement via CQRS - CleanupMissingFilesCommand
+            # For now, skip this functionality until we create the command
+            logging.debug(f"Cleanup missing files - found {len(current_file_paths)} current files")
+            return 0
 
         except Exception as e:
             logging.error(f"Error cleaning up missing files: {e}")
@@ -173,17 +174,10 @@ class FileScanner:
     async def _cleanup_old_files(self) -> int:
         """Clean up old files from memory based on configured retention period."""
         try:
-            removed_count = await self.state_manager.cleanup_old_files(
-                max_age_hours=self.config.keep_files_hours,
-            )
-
-            if removed_count > 0:
-                logging.info(
-                    f"Cleanup: Removed {removed_count} old files from memory "
-                    f"(older than {self.config.keep_files_hours} hours)"
-                )
-
-            return removed_count
+            # TODO: Implement via CQRS - CleanupOldFilesCommand
+            # For now, skip this functionality until we create the command
+            logging.debug(f"Cleanup old files - max age: {self.config.keep_files_hours} hours")
+            return 0
 
         except Exception as e:
             logging.error(f"Error cleaning up old files: {e}")
@@ -226,15 +220,15 @@ class FileScanner:
             try:
                 file_path = str(path_obj)
 
-                should_skip = await self.state_manager.should_skip_file_processing(
-                    file_path
-                )
+                # Use CQRS query to check if we should skip processing
+                query = ShouldSkipFileProcessingQuery(file_path=file_path)
+                should_skip = await self._query_bus.execute(query)
                 if should_skip:
                     continue
 
-                existing_file = await self.state_manager.get_active_file_by_path(
-                    file_path
-                )
+                # Use CQRS query to get existing file
+                existing_file_query = GetActiveFileByPathQuery(file_path=file_path)
+                existing_file = await self._query_bus.execute(existing_file_query)
                 if existing_file is not None:
                     await self._check_existing_file_changes(existing_file, file_path)
                     continue
@@ -247,24 +241,16 @@ class FileScanner:
                     logging.debug(f"Skipping empty file: {path_obj.name}")
                     continue
 
-                # Publish event instead of calling state_manager directly
-                if self._event_bus:
-                    event = FileDiscoveredEvent(
-                        file_path=file_path,
-                        file_size=metadata["size"],
-                        last_write_time=metadata["last_write_time"].timestamp(),
-                    )
-                    await self._event_bus.publish(event)
-                    logging.info(
-                        f"NEW FILE EVENT: {path_obj.name} ({metadata['size']} bytes)"
-                    )
-                else:
-                    # Fallback to old method if event bus is not available
-                    await self.state_manager.add_file(
-                        file_path=file_path,
-                        file_size=metadata["size"],
-                        last_write_time=metadata["last_write_time"],
-                    )
+                # Use CQRS command to add file
+                command = AddFileCommand(
+                    file_path=file_path,
+                    file_size=metadata["size"],
+                    last_write_time=metadata["last_write_time"]
+                )
+                await self._command_bus.execute(command)
+                logging.info(
+                    f"NEW FILE EVENT: {path_obj.name} ({metadata['size']} bytes)"
+                )
 
             except Exception as e:
                 logging.error(f"Error processing file {path_obj}: {e}")
@@ -281,21 +267,18 @@ class FileScanner:
                 f"[UUID: {tracked_file.id[:8]}...]"
             )
 
-            await self.state_manager.update_file_status_by_id(
-                file_id=tracked_file.id,
-                status=tracked_file.status,
-                file_size=metadata["size"],
-                last_write_time=metadata["last_write_time"],
-            )
+            # TODO: Implement UpdateFileCommand via CQRS
+            # For now, just log the change
+            logging.debug(f"File size change detected for {file_path}")
 
     async def _check_file_stability(self) -> None:
         try:
-            discovered_files = await self.state_manager.get_files_by_status(
-                FileStatus.DISCOVERED
-            )
-            growing_files = await self.state_manager.get_files_by_status(
-                FileStatus.GROWING
-            )
+            # Use CQRS queries to get files by status
+            discovered_query = GetFilesByStatusQuery(status=FileStatus.DISCOVERED)
+            discovered_files = await self._query_bus.execute(discovered_query)
+            
+            growing_query = GetFilesByStatusQuery(status=FileStatus.GROWING)
+            growing_files = await self._query_bus.execute(growing_query)
 
             all_files_to_check = discovered_files + growing_files
 
@@ -306,53 +289,25 @@ class FileScanner:
                 if metadata is None:
                     continue
 
-                await self._handle_growing_file_logic(metadata, tracked_file)
+                # Use GrowingFileDetector to check file growth status
+                recommended_status, updated_file = await self.growing_file_detector.check_file_growth_status(tracked_file)
+                
+                if recommended_status != tracked_file.status and updated_file:
+                    # File status changed based on growth analysis
+                    if recommended_status == FileStatus.READY:
+                        command = MarkFileStableCommand(
+                            file_id=tracked_file.id,
+                            file_path=file_path
+                        )
+                        await self._command_bus.execute(command)
+                        logging.info(
+                            f"STABILITY UPDATE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]"
+                        )
+                    elif recommended_status == FileStatus.READY_TO_START_GROWING:
+                        # This is handled by the GrowingFileDetector itself
+                        logging.info(
+                            f"GROWING UPDATE: {file_path} -> READY_TO_START_GROWING [UUID: {tracked_file.id[:8]}...]"
+                        )
 
         except Exception as e:
             logging.error(f"Error in stability check: {e}")
-
-    async def _handle_growing_file_logic(
-        self, metadata: Dict[str, Any], tracked_file: TrackedFile
-    ) -> None:
-        file_path = str(metadata["path"])
-
-        await self.growing_file_detector.update_file_growth_info(
-            tracked_file, metadata["size"]
-        )
-
-        (
-            recommended_status,
-            growth_info,
-        ) = await self.growing_file_detector.check_file_growth_status(tracked_file)
-
-        if recommended_status != tracked_file.status:
-            if tracked_file.status == FileStatus.WAITING_FOR_NETWORK:
-                logging.debug(f"Preserving WAITING_FOR_NETWORK status for {file_path}")
-                return
-
-            # Publish event instead of calling state_manager directly
-            if self._event_bus:
-                event = FileStatusChangedEvent(
-                    file_id=tracked_file.id,
-                    file_path=file_path,
-                    old_status=tracked_file.status,
-                    new_status=recommended_status,
-                )
-                await self._event_bus.publish(event)
-
-                if recommended_status == FileStatus.READY:
-                    await self._event_bus.publish(
-                        FileReadyEvent(
-                            file_id=tracked_file.id, file_path=tracked_file.file_path
-                        )
-                    )
-            else:
-                # Fallback to old method
-                await self.state_manager.update_file_status_by_id(
-                    file_id=tracked_file.id,
-                    status=recommended_status,
-                    file_size=metadata["size"],
-                )
-            logging.info(
-                f"GROWTH UPDATE: {file_path} -> {recommended_status} [UUID: {tracked_file.id[:8]}...]"
-            )

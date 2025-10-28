@@ -271,6 +271,11 @@ class StorageMonitorService:
         )
         return status
 
+    def is_destination_available(self) -> bool:
+        """Check if destination storage is available and accessible."""
+        destination_info = self.get_destination_info()
+        return destination_info is not None and destination_info.status == StorageStatus.OK
+
     def _is_destination_recovery(
         self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> bool:

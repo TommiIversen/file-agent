@@ -33,6 +33,22 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 
 from app.domains.directory_browsing.service import DirectoryScannerService
+from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
+from app.domains.file_discovery.command_handlers import (
+    AddFileCommandHandler, 
+    MarkFileReadyCommandHandler, 
+    MarkFileStableCommandHandler,
+    UpdateFileGrowthInfoCommandHandler,
+    MarkFileGrowingCommandHandler,
+    MarkFileReadyToStartGrowingCommandHandler
+)
+from app.domains.file_discovery.query_handlers import (
+    GetActiveFileByPathQueryHandler,
+    ShouldSkipFileProcessingQueryHandler, 
+    GetCurrentFileForPathQueryHandler,
+    GetFilesByStatusQueryHandler,
+    GetFilesNeedingGrowthMonitoringQueryHandler
+)
 
 
 # Global singleton instances
@@ -66,6 +82,62 @@ def get_file_repository() -> FileRepository:
     return _singletons["file_repository"]
 
 
+def get_file_discovery_slice() -> FileDiscoverySlice:
+    """Get the File Discovery vertical slice."""
+    if "file_discovery_slice" not in _singletons:
+        file_repository = get_file_repository()
+        event_bus = get_event_bus()
+        settings = get_settings()
+        _singletons["file_discovery_slice"] = FileDiscoverySlice(
+            file_repository=file_repository,
+            event_bus=event_bus,
+            cooldown_minutes=settings.space_error_cooldown_minutes
+        )
+    return _singletons["file_discovery_slice"]
+
+
+def register_file_discovery_handlers():
+    """Register all File Discovery CQRS handlers."""
+    command_bus = get_command_bus()
+    query_bus = get_query_bus()
+    
+    # Check if handlers are already registered (avoid double registration)
+    from app.domains.file_discovery.commands import AddFileCommand
+    from app.domains.file_discovery.queries import GetActiveFileByPathQuery
+    if command_bus.is_registered(AddFileCommand) and query_bus.is_registered(GetActiveFileByPathQuery):
+        return  # Handlers already registered
+    
+    file_discovery_slice = get_file_discovery_slice()
+    
+    # Register command handlers
+    from app.domains.file_discovery.commands import (
+        MarkFileReadyCommand, 
+        MarkFileStableCommand,
+        UpdateFileGrowthInfoCommand,
+        MarkFileGrowingCommand,
+        MarkFileReadyToStartGrowingCommand
+    )
+    command_bus.register(AddFileCommand, AddFileCommandHandler(file_discovery_slice).handle)
+    command_bus.register(MarkFileReadyCommand, MarkFileReadyCommandHandler(file_discovery_slice).handle)
+    command_bus.register(MarkFileStableCommand, MarkFileStableCommandHandler(file_discovery_slice).handle)
+    command_bus.register(UpdateFileGrowthInfoCommand, UpdateFileGrowthInfoCommandHandler(file_discovery_slice).handle)
+    command_bus.register(MarkFileGrowingCommand, MarkFileGrowingCommandHandler(file_discovery_slice).handle)
+    command_bus.register(MarkFileReadyToStartGrowingCommand, MarkFileReadyToStartGrowingCommandHandler(file_discovery_slice).handle)
+    
+    # Register query handlers  
+    from app.domains.file_discovery.queries import (
+        ShouldSkipFileProcessingQuery, 
+        GetCurrentFileForPathQuery, 
+        GetFilesByStatusQuery,
+        GetFilesNeedingGrowthMonitoringQuery
+    )
+    query_bus.register(GetActiveFileByPathQuery, GetActiveFileByPathQueryHandler(file_discovery_slice).handle)
+    query_bus.register(ShouldSkipFileProcessingQuery, ShouldSkipFileProcessingQueryHandler(file_discovery_slice).handle)
+    query_bus.register(GetCurrentFileForPathQuery, GetCurrentFileForPathQueryHandler(file_discovery_slice).handle)
+    query_bus.register(GetFilesByStatusQuery, GetFilesByStatusQueryHandler(file_discovery_slice).handle)
+    query_bus.register(GetFilesNeedingGrowthMonitoringQuery, GetFilesNeedingGrowthMonitoringQueryHandler(file_discovery_slice).handle)
+
+
 def get_state_manager() -> StateManager:
     if "state_manager" not in _singletons:
         settings = get_settings()
@@ -81,12 +153,23 @@ def get_state_manager() -> StateManager:
 
 
 def get_file_scanner() -> FileScannerService:
+    """Get the CQRS-based File Scanner Service."""
     if "file_scanner" not in _singletons:
+        # Ensure handlers are registered
+        register_file_discovery_handlers()
+        
+        settings = get_settings()
+        command_bus = get_command_bus()
+        query_bus = get_query_bus()
+        storage_monitor = get_storage_monitor()
+        event_bus = get_event_bus()
+        
         _singletons["file_scanner"] = FileScannerService(
-            settings=get_settings(),
-            state_manager=get_state_manager(),
-            storage_monitor=get_storage_monitor(),
-            event_bus=get_event_bus()
+            settings=settings,
+            command_bus=command_bus,
+            query_bus=query_bus,
+            storage_monitor=storage_monitor,
+            event_bus=event_bus
         )
     return _singletons["file_scanner"]
 
@@ -265,6 +348,12 @@ def get_directory_scanner() -> DirectoryScannerService:
     if "directory_scanner" not in _singletons:
         _singletons["directory_scanner"] = DirectoryScannerService(get_settings())
     return _singletons["directory_scanner"]
+
+
+async def initialize_cqrs_system():
+    """Initialize the CQRS system by registering all handlers."""
+    register_file_discovery_handlers()
+    # Future: register other domain handlers here
 
 
 def reset_singletons() -> None:

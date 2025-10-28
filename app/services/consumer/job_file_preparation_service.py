@@ -40,7 +40,7 @@ class JobFilePreparationService:
 
         strategy_name = self.copy_strategy.__class__.__name__
 
-        initial_status = self._determine_initial_status(tracked_file)
+        initial_status = self._determine_file_status(tracked_file)
         destination_path = self._calculate_destination_path(file_path)
 
         return PreparedFile(
@@ -50,8 +50,8 @@ class JobFilePreparationService:
             destination_path=destination_path,
         )
 
-    def _determine_initial_status(
-        self, tracked_file: Optional[TrackedFile]
+    def _determine_file_status(
+        self, tracked_file: TrackedFile | None
     ) -> FileStatus:
         """Determine initial file status based on whether file is static or growing."""
         if not tracked_file:
@@ -59,7 +59,14 @@ class JobFilePreparationService:
             # The copy operation will likely fail later, but this method shouldn't crash.
             return FileStatus.COPYING
 
+        # If file is already in copy processing (COPYING or GROWING_COPY), keep current status
+        # This prevents infinite loops where we re-evaluate files already being processed
+        if tracked_file.status in [FileStatus.COPYING, FileStatus.GROWING_COPY]:
+            logging.debug(f"🔄 File already in copy processing with status {tracked_file.status}: {tracked_file.file_path}")
+            return tracked_file.status
+
         # Use the copy strategy's logic to determine if this is a growing file
+        # Only for files not yet in copy processing
         is_growing_file = self.copy_strategy._is_file_currently_growing(tracked_file)
 
         if is_growing_file:

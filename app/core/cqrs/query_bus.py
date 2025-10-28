@@ -29,7 +29,13 @@ class QueryBus:
             raise ValueError(f"Handler for query '{query_type.__name__}' er allerede registreret.")
         
         self._handlers[query_type] = handler
-        logger.debug(f"Handler '{handler.__name__}' registreret for '{query_type.__name__}'")
+        logger.debug(f"Query handler {handler.__name__} registreret for {query_type.__name__}")
+
+    def is_registered(self, query_type: Type[Query]) -> bool:
+        """
+        Checker om en handler allerede er registreret for en query-type.
+        """
+        return query_type in self._handlers
 
     async def execute(self, query: Query) -> Any:
         """

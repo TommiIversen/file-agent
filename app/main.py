@@ -13,14 +13,15 @@ from .domains.directory_browsing import api as directory
 
 from .config import Settings
 from .dependencies import (
-    get_file_scanner,
     get_job_queue_service,
     get_file_copier,
     get_websocket_manager,
     get_storage_monitor,
     get_storage_checker,
     get_query_bus,
-    get_command_bus
+    get_command_bus,
+    initialize_cqrs_system,
+    get_file_scanner
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -47,7 +48,10 @@ async def lifespan(app: FastAPI):
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
-    # register_file_management_handlers(query_bus, command_bus) # Tilføj denne, når den er klar
+    
+    # Initialize File Discovery CQRS handlers
+    await initialize_cqrs_system()
+    logging.info("File Discovery CQRS handlers registered")
     
     logging.info("Handler-registrering fuldført.")
     # === SLUT: NYT REGISTRERINGSTRIN ===
@@ -77,11 +81,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.warning(f"Startup cleanup failed (non-critical): {e}")
 
-    # Start FileScannerService som background task
+    # Start CQRS File Scanner Service som background task
     file_scanner = get_file_scanner()
     scanner_task = asyncio.create_task(file_scanner.start_scanning())
     _background_tasks.append(scanner_task)
-    logging.info("FileScannerService startet som background task")
+    logging.info("CQRS FileScannerService startet som background task")
 
     # Start JobQueueService producer som background task
     job_queue_service = get_job_queue_service()

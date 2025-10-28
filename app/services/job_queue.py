@@ -88,10 +88,11 @@ class JobQueueService:
                 return
 
             # Guard against re-queuing files that are already being processed.
-            if tracked_file.status != FileStatus.READY:
+            # Accept both READY and READY_TO_START_GROWING status
+            if tracked_file.status not in [FileStatus.READY, FileStatus.READY_TO_START_GROWING]:
                 logging.warning(
                     f"Ignoring FileReadyEvent for {event.file_path} because its status is "
-                    f"'{tracked_file.status.value}' instead of READY."
+                    f"'{tracked_file.status.value}' instead of READY or READY_TO_START_GROWING."
                 )
                 return
 

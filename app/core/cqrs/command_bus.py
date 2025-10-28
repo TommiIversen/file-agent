@@ -24,6 +24,12 @@ class CommandBus:
         self._handlers[command_type] = handler
         logger.debug(f"Handler {handler.__name__} registreret for {command_type.__name__}")
 
+    def is_registered(self, command_type: Type[Command]) -> bool:
+        """
+        Checker om en handler allerede er registreret for en command-type.
+        """
+        return command_type in self._handlers
+
     async def execute(self, command: Command) -> Any:
         """
         Eksekverer en command ved at sende den til den registrerede handler.
