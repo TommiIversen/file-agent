@@ -18,6 +18,23 @@ document.addEventListener('alpine:init', () => {
         reconnectDelay: 1000,           // Base delay in ms
         reconnectTimeoutId: null,       // Track active reconnection timeout
 
+
+async initDashboard() {
+            try {
+                // 1. Hent start-data FØRST
+                console.log('Fetching initial state...');
+                await this.fetchInitialState();
+                
+                // 2. NÅR data er hentet, forbind til realtid
+                console.log('Initial state loaded. Connecting to WebSocket...');
+                this.connect(); // Start WS-forbindelsen
+
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+                this.updateStatus('disconnected', 'Kunne ikke hente start-data');
+            }
+        },
+
         // Connection Actions
         connect() {
             try {
@@ -121,6 +138,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async fetchInitialState() {
+
             try {
                 const response = await fetch('/api/initial-state');
                 if (!response.ok) {
@@ -128,8 +146,6 @@ document.addEventListener('alpine:init', () => {
                 }
                 const initialStateData = await response.json();
 
-                // Pass the initial state to the message handler as if it came from the WebSocket
-                // This reuses the existing data handling logic
                 window.messageHandler?.handleMessage({
                     type: 'initial_state',
                     data: initialStateData
@@ -139,7 +155,8 @@ document.addEventListener('alpine:init', () => {
 
             } catch (error) {
                 console.error('Error fetching initial state:', error);
-                this.updateStatus('disconnected', 'Kunne ikke hente start-data');
+                // Videresend fejlen, så initDashboard kan fange den
+                throw error; 
             }
         },
 

@@ -96,15 +96,12 @@ class FileTransferApp {
     /**
      * Alpine.js initialization handler
      */
-    onAlpineInit() {
+    async onAlpineInit() {
         console.log('🔧 Alpine.js initializing...');
 
-        // Wait a bit for stores to be fully initialized
-        setTimeout(() => {
-            this.initializeStores();
-            this.initializeServices();
-            this.startApplication();
-        }, 100);
+        this.initializeStores();
+        this.initializeServices();
+        await this.startApplication();
     }
 
     /**
@@ -162,40 +159,51 @@ class FileTransferApp {
     /**
      * Start the main application
      */
-    startApplication() {
+    async startApplication() {
         console.log('🚀 Starting application...');
 
-        // Start WebSocket connection if auto-connect is enabled
-        if (APP_CONFIG.websocket.autoConnect) {
-            this.startWebSocketConnection();
+        try {
+            // Start WebSocket connection (venter nu på data)
+            if (APP_CONFIG.websocket.autoConnect) {
+                await this.startWebSocketConnection();
+            }
+
+            // Setup periodic tasks
+            this.setupPeriodicTasks();
+
+            // Mark as initialized
+            this.initialized = true;
+
+            console.log('✅ Application started successfully');
+
+            // Dispatch application ready event
+            this.dispatchAppEvent('app:ready', {
+                config: APP_CONFIG,
+                stores: Object.keys(this.stores),
+                services: Object.keys(this.services)
+            });
+        } catch (error) {
+            console.error('Fejl under opstart af applikation:', error);
+            this.handleInitializationError(error);
         }
-
-        // Setup periodic tasks
-        this.setupPeriodicTasks();
-
-        // Mark as initialized
-        this.initialized = true;
-
-        console.log('✅ Application started successfully');
-
-        // Dispatch application ready event
-        this.dispatchAppEvent('app:ready', {
-            config: APP_CONFIG,
-            stores: Object.keys(this.stores),
-            services: Object.keys(this.services)
-        });
     }
 
     /**
      * Start WebSocket connection
      */
-    startWebSocketConnection() {
-        console.log('🔌 Starting WebSocket connection...');
+    async startWebSocketConnection() {
+        console.log('🔌 Henter initial data og starter WebSocket...');
 
         if (this.stores.connection) {
-            this.stores.connection.connect();
+            try {
+                await this.stores.connection.initDashboard();
+            } catch (error) {
+                console.error('Fejl under initDashboard:', error);
+                throw new Error('Kunne ikke initialisere dashboard forbindelse');
+            }
         } else {
             console.error('Connection store not available');
+            throw new Error('Connection store not available');
         }
     }
 
