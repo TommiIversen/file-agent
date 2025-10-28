@@ -16,7 +16,6 @@ from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
 from .services.copy.file_copy_executor import FileCopyExecutor
 from .services.copy_strategies import GrowingFileCopyStrategy
-from .services.directory_scanner import DirectoryScannerService
 from .services.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
@@ -28,6 +27,21 @@ from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
 from .services.websocket_manager import WebSocketManager
 
+
+from app.core.cqrs.command_bus import CommandBus
+from app.core.cqrs.query_bus import QueryBus
+
+from app.domains.directory_browsing.service import DirectoryScannerService
+from app.domains.directory_browsing.queries import (
+    ScanSourceDirectoryQuery, ScanDestinationDirectoryQuery, 
+    ScanCustomDirectoryQuery, GetScannerInfoQuery
+)
+from app.domains.directory_browsing.handlers import (
+    ScanSourceDirectoryHandler, ScanDestinationDirectoryHandler, 
+    ScanCustomDirectoryHandler, GetScannerInfoHandler
+)
+
+
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
 
@@ -36,6 +50,17 @@ _singletons: Dict[str, Any] = {}
 def get_settings() -> Settings:
     """Hent Settings singleton instance."""
     return Settings()
+
+
+def get_command_bus() -> CommandBus:
+    if "command_bus" not in _singletons:
+        _singletons["command_bus"] = CommandBus()
+    return _singletons["command_bus"]
+
+def get_query_bus() -> QueryBus:
+    if "query_bus" not in _singletons:
+        _singletons["query_bus"] = QueryBus()
+    return _singletons["query_bus"]
 
 
 def get_event_bus() -> "DomainEventBus":
@@ -356,6 +381,39 @@ async def get_job_queue() -> Optional[asyncio.Queue]:
     return job_queue_service.job_queue
 
 
+
+
+def get_directory_scanner() -> DirectoryScannerService:
+    if "directory_scanner" not in _singletons:
+        _singletons["directory_scanner"] = DirectoryScannerService(get_settings())
+    return _singletons["directory_scanner"]
+
+# 3. Registrer alle handlers (dette kan gøres i en startup-funktion)
+def register_handlers():
+    query_bus = get_query_bus()
+    scanner_service = get_directory_scanner()
+
+    # Registrer Directory Browsing Handlers
+    query_bus.register(
+        ScanSourceDirectoryQuery,
+        ScanSourceDirectoryHandler(scanner_service).handle
+    )
+    query_bus.register(
+        ScanDestinationDirectoryQuery,
+        ScanDestinationDirectoryHandler(scanner_service).handle
+    )
+    query_bus.register(
+        ScanCustomDirectoryQuery,
+        ScanCustomDirectoryHandler(scanner_service).handle
+    )
+    query_bus.register(
+        GetScannerInfoQuery,
+        GetScannerInfoHandler(scanner_service).handle
+    )
+
+register_handlers()
+
+
 def reset_singletons() -> None:
     """
     Reset alle singletons - primært til test formål.
@@ -364,3 +422,4 @@ def reset_singletons() -> None:
     """
     global _singletons
     _singletons.clear()
+
