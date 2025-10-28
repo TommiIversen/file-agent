@@ -177,6 +177,7 @@ def get_storage_monitor() -> StorageMonitorService:
     if "storage_monitor" not in _singletons:
         settings = get_settings()
         storage_checker = get_storage_checker()
+        event_bus = get_event_bus()
         websocket_manager = get_websocket_manager()
         network_mount_service = get_network_mount_service()  # Phase 2 integration
         job_queue_service = get_job_queue_service()  # Universal recovery system
@@ -184,7 +185,7 @@ def get_storage_monitor() -> StorageMonitorService:
         _singletons["storage_monitor"] = StorageMonitorService(
             settings=settings,
             storage_checker=storage_checker,
-            websocket_manager=websocket_manager,
+            event_bus=event_bus,
             network_mount_service=network_mount_service,
             job_queue=job_queue_service,  # Enable universal recovery
         )

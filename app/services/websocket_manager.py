@@ -8,6 +8,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
+from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 from app.models import FileStateUpdate, StorageUpdate, MountStatusUpdate
 from app.services.state_manager import StateManager
 
@@ -72,6 +73,13 @@ class WebSocketManager:
         await self._event_bus.subscribe(
             FileCopyProgressEvent, self.handle_file_copy_progress
         )
+        await self._event_bus.subscribe(
+            StorageStatusChangedEvent, self.handle_storage_status_event
+        )
+        await self._event_bus.subscribe(
+            MountStatusChangedEvent, self.handle_mount_status_event
+        )
+
         logging.info("Subscribed to DomainEventBus for real-time event updates")
 
     async def connect(self, websocket: WebSocket) -> None:
@@ -135,9 +143,20 @@ class WebSocketManager:
         except Exception as e:
             logging.error(f"Fejl ved sending af initial state: {e}")
 
-    async def _handle_state_change(self, update: FileStateUpdate) -> None:
-        """Handles the legacy FileStateUpdate from the old pub/sub system."""
+
+    async def handle_file_status_changed_event(
+        self, update: FileStatusChangedEvent
+    ) -> None:
+        """Handles the FileStatusChangedEvent from the new event bus."""
+        logging.info(f"Received event: {update.file_path} -> {update.new_status.value}")
         if not self._connections:
+            return
+
+        tracked_file = await self.state_manager.get_file_by_id(update.file_id)
+        if not tracked_file:
+            logging.warning(
+                f"Received FileStatusChangedEvent for unknown file ID: {update.file_id}"
+            )
             return
 
         try:
@@ -163,30 +182,6 @@ class WebSocketManager:
         except Exception as e:
             logging.error(f"Fejl ved broadcasting af state change: {e}")
 
-    async def handle_file_status_changed_event(
-        self, event: FileStatusChangedEvent
-    ) -> None:
-        """Handles the FileStatusChangedEvent from the new event bus."""
-        logging.info(f"Received event: {event.file_path} -> {event.new_status.value}")
-        if not self._connections:
-            return
-
-        tracked_file = await self.state_manager.get_file_by_id(event.file_id)
-        if not tracked_file:
-            logging.warning(
-                f"Received FileStatusChangedEvent for unknown file ID: {event.file_id}"
-            )
-            return
-
-        update_for_broadcast = FileStateUpdate(
-            file_path=event.file_path,
-            old_status=event.old_status,
-            new_status=event.new_status,
-            tracked_file=tracked_file,
-            timestamp=event.timestamp,  # Use event timestamp
-        )
-        # Re-use the existing broadcast logic by calling the old handler
-        await self._handle_state_change(update_for_broadcast)
 
     async def handle_file_copy_progress(self, event: FileCopyProgressEvent) -> None:
         """Handles the FileCopyProgressEvent from the event bus."""
@@ -239,76 +234,6 @@ class WebSocketManager:
     def _get_timestamp(self) -> str:
         return datetime.now().isoformat()
 
-    async def send_system_statistics(self) -> None:
-        if not self._connections:
-            return
-
-        try:
-            statistics = await self.state_manager.get_statistics()
-
-            message_data = {
-                "type": "statistics_update",
-                "data": {"statistics": statistics, "timestamp": self._get_timestamp()},
-            }
-
-            await self._broadcast_message(message_data)
-
-        except Exception as e:
-            logging.error(f"Fejl ved sending af statistics: {e}")
-
-    async def broadcast_storage_update(self, update: StorageUpdate) -> None:
-        if not self._connections:
-            return
-
-        try:
-            message_data = {
-                "type": "storage_update",
-                "data": {
-                    "storage_type": update.storage_type,
-                    "old_status": update.old_status.value
-                    if update.old_status
-                    else None,
-                    "new_status": update.new_status.value,
-                    "storage_info": _serialize_storage_info(update.storage_info),
-                    "timestamp": self._get_timestamp(),
-                },
-            }
-
-            await self._broadcast_message(message_data)
-
-            logging.debug(
-                f"Broadcasted storage update: {update.storage_type} -> {update.new_status.value}"
-            )
-
-        except Exception as e:
-            logging.error(f"Error broadcasting storage update: {e}")
-
-    async def broadcast_mount_status(self, update: MountStatusUpdate) -> None:
-        if not self._connections:
-            return
-
-        try:
-            message_data = {
-                "type": "mount_status",
-                "data": {
-                    "storage_type": update.storage_type,
-                    "mount_status": update.mount_status.value,
-                    "share_url": update.share_url,
-                    "mount_path": update.mount_path,
-                    "target_path": update.target_path,
-                    "error_message": update.error_message,
-                    "timestamp": self._get_timestamp(),
-                },
-            }
-
-            await self._broadcast_message(message_data)
-
-            logging.debug(
-                f"Broadcasted mount status: {update.storage_type} -> {update.mount_status.value}"
-            )
-
-        except Exception as e:
-            logging.error(f"Error broadcasting mount status: {e}")
 
     async def broadcast_scanner_status(self, scanning: bool, paused: bool) -> None:
         """Broadcast scanner status changes to all connected clients"""
@@ -358,3 +283,59 @@ class WebSocketManager:
         except Exception as e:
             logging.error(f"Failed to initialize scanner status: {e}")
             self._scanner_status = {"scanning": False, "paused": True}
+
+    async def handle_storage_status_event(self, update: StorageStatusChangedEvent) -> None:
+        if not self._connections:
+            return
+
+        try:
+            message_data = {
+                "type": "storage_update",
+                "data": {
+                    "storage_type": update.storage_type,
+                    "old_status": update.old_status.value
+                    if update.old_status
+                    else None,
+                    "new_status": update.new_status.value,
+                    "storage_info": _serialize_storage_info(update.storage_info),
+                    "timestamp": self._get_timestamp(),
+                },
+            }
+
+            await self._broadcast_message(message_data)
+
+            logging.debug(
+                f"Broadcasted storage update: {update.storage_type} -> {update.new_status.value}"
+            )
+
+        except Exception as e:
+            logging.error(f"Error broadcasting storage update: {e}")
+
+
+    # NY EVENT HANDLER for Mount
+    async def handle_mount_status_event(self, update: MountStatusChangedEvent) -> None:
+        if not self._connections:
+            return
+
+        try:
+            message_data = {
+                "type": "mount_status",
+                "data": {
+                    "storage_type": update.storage_type,
+                    "mount_status": update.mount_status.value,
+                    "share_url": update.share_url,
+                    "mount_path": update.mount_path,
+                    "target_path": update.target_path,
+                    "error_message": update.error_message,
+                    "timestamp": self._get_timestamp(),
+                },
+            }
+
+            await self._broadcast_message(message_data)
+
+            logging.debug(
+                f"Broadcasted mount status: {update.storage_type} -> {update.mount_status.value}"
+            )
+
+        except Exception as e:
+            logging.error(f"Error broadcasting mount status: {e}")

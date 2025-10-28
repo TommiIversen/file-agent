@@ -2,6 +2,8 @@ import asyncio
 import logging
 from typing import Optional
 
+from app.core.events.event_bus import DomainEventBus
+
 from .directory_manager import DirectoryManager
 from .mount_status_broadcaster import MountStatusBroadcaster
 from .notification_handler import NotificationHandler
@@ -16,7 +18,7 @@ class StorageMonitorService:
         self,
         settings: Settings,
         storage_checker: StorageChecker,
-        websocket_manager=None,
+        event_bus: DomainEventBus,
         network_mount_service=None,
         job_queue=None,
     ):
@@ -27,7 +29,7 @@ class StorageMonitorService:
 
         self._storage_state = StorageState()
         self._directory_manager = DirectoryManager()
-        self._notification_handler = NotificationHandler(websocket_manager)
+        self._notification_handler = NotificationHandler(event_bus)
         self._mount_broadcaster = MountStatusBroadcaster(self._notification_handler)
 
         self._is_running = False

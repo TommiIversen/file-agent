@@ -1,12 +1,15 @@
 import logging
 from typing import Optional
 
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
+
 from ...models import StorageInfo, StorageUpdate, MountStatusUpdate
 
 
 class NotificationHandler:
-    def __init__(self, websocket_manager=None):
-        self._websocket_manager = websocket_manager
+    def __init__(self, event_bus: DomainEventBus):
+        self._event_bus = event_bus
 
     async def handle_status_change(
         self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
@@ -41,16 +44,11 @@ class NotificationHandler:
             storage_info=new_info,
         )
 
-        await self._notify_websocket(update)
-
-    async def _notify_websocket(self, update: StorageUpdate) -> None:
-        if not self._websocket_manager:
-            return
-
         try:
-            await self._websocket_manager.broadcast_storage_update(update)
+            await self._event_bus.publish(StorageStatusChangedEvent(update=update))
         except Exception as e:
-            logging.error(f"Error broadcasting storage update via WebSocket: {e}")
+            logging.error(f"Error publishing StorageStatusChangedEvent: {e}")
+
 
     async def handle_mount_status(self, mount_update: MountStatusUpdate) -> None:
         logging.info(
@@ -65,13 +63,8 @@ class NotificationHandler:
             },
         )
 
-        await self._notify_mount_websocket(mount_update)
-
-    async def _notify_mount_websocket(self, update: MountStatusUpdate) -> None:
-        if not self._websocket_manager:
-            return
-
         try:
-            await self._websocket_manager.broadcast_mount_status(update)
+            await self._event_bus.publish(MountStatusChangedEvent(update=mount_update))
         except Exception as e:
-            logging.error(f"Error broadcasting mount status via WebSocket: {e}")
+            logging.error(f"Error publishing MountStatusChangedEvent: {e}")
+
