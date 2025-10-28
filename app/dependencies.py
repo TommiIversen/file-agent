@@ -230,10 +230,12 @@ def get_space_retry_manager() -> SpaceRetryManager:
 
 def get_websocket_manager() -> WebSocketManager:
     if "websocket_manager" not in _singletons:
-        state_manager = get_state_manager()
+        file_repository = get_file_repository()
         event_bus = get_event_bus()
         # Note: storage_monitor will be set later to avoid circular dependency
-        ws_manager = WebSocketManager(state_manager, event_bus=event_bus)
+        ws_manager = WebSocketManager(
+            file_repository=file_repository, 
+            event_bus=event_bus)
 
         # Scanner status will be initialized later to avoid circular dependency
         _singletons["websocket_manager"] = ws_manager

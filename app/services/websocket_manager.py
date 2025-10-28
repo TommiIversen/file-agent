@@ -11,6 +11,7 @@ from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgress
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 from app.core.file_repository import FileRepository
+from app.models import FileStatus, TrackedFile
 
 
 def _serialize_storage_info(storage_info) -> dict:
@@ -216,7 +217,7 @@ class WebSocketManager:
         if not self._connections:
             return
 
-        tracked_file = await self.state_manager.get_file_by_id(update.file_id)
+        tracked_file = await self.file_repository.get_by_id(update.file_id)
         if not tracked_file:
             logging.warning(
                 f"Received FileStatusChangedEvent for unknown file ID: {update.file_id}"
