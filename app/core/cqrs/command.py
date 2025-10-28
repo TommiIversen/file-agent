@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Any, Awaitable
+from typing import Generic, TypeVar
 
 # TCommand begrænses til at være en subklasse af Command
 TCommand = TypeVar('TCommand', bound='Command')

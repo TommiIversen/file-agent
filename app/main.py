@@ -19,7 +19,12 @@ from .dependencies import (
     get_websocket_manager,
     get_storage_monitor,
     get_storage_checker,
+    get_query_bus,
+    get_command_bus
 )
+
+from app.domains.directory_browsing.registration import register_directory_browsing_handlers
+
 from .logging_config import setup_logging
 from .routers import views
 
@@ -34,6 +39,18 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     setup_logging(settings)
+
+    # === START: NYT REGISTRERINGSTRIN ===
+    logging.info("Registrerer CQRS handlers...")
+    query_bus = get_query_bus()
+    command_bus = get_command_bus()
+    
+    # Kald registrerings-funktionerne for hvert domæne
+    register_directory_browsing_handlers(query_bus, command_bus)
+    # register_file_management_handlers(query_bus, command_bus) # Tilføj denne, når den er klar
+    
+    logging.info("Handler-registrering fuldført.")
+    # === SLUT: NYT REGISTRERINGSTRIN ===
 
     # Log configuration file information
     config_info = settings.config_file_info

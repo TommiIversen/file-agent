@@ -32,25 +32,15 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 
 from app.domains.directory_browsing.service import DirectoryScannerService
-from app.domains.directory_browsing.queries import (
-    ScanSourceDirectoryQuery, ScanDestinationDirectoryQuery, 
-    ScanCustomDirectoryQuery, GetScannerInfoQuery
-)
-from app.domains.directory_browsing.handlers import (
-    ScanSourceDirectoryHandler, ScanDestinationDirectoryHandler, 
-    ScanCustomDirectoryHandler, GetScannerInfoHandler
-)
 
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
 
-
 @lru_cache
 def get_settings() -> Settings:
     """Hent Settings singleton instance."""
     return Settings()
-
 
 def get_command_bus() -> CommandBus:
     if "command_bus" not in _singletons:
@@ -64,26 +54,12 @@ def get_query_bus() -> QueryBus:
 
 
 def get_event_bus() -> "DomainEventBus":
-    """
-    Hent DomainEventBus singleton instance.
-
-    Returns:
-        DomainEventBus instance (oprettes kun én gang)
-    """
-
     if "event_bus" not in _singletons:
         _singletons["event_bus"] = DomainEventBus()
-
     return _singletons["event_bus"]
 
 
 def get_state_manager() -> StateManager:
-    """
-    Hent StateManager singleton instance.
-
-    Returns:
-        StateManager instance (oprettes kun én gang)
-    """
     if "state_manager" not in _singletons:
         settings = get_settings()
         event_bus = get_event_bus()
@@ -95,14 +71,6 @@ def get_state_manager() -> StateManager:
 
 
 def get_file_scanner() -> FileScannerService:
-    """
-    Hent FileScannerService singleton instance.
-    Enhanced: Now injects StorageMonitorService following Central Storage Authority pattern
-    and WebSocketManager for proper dependency injection.
-
-    Returns:
-        FileScannerService instance (oprettes kun én gang)
-    """
     if "file_scanner" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -121,12 +89,6 @@ def get_file_scanner() -> FileScannerService:
 
 
 def get_job_queue_service() -> JobQueueService:
-    """
-    Hent JobQueueService singleton instance.
-
-    Returns:
-        JobQueueService instance (oprettes kun én gang)
-    """
     if "job_queue_service" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -140,12 +102,6 @@ def get_job_queue_service() -> JobQueueService:
 
 
 def get_file_copier() -> FileCopierService:
-    """
-    Hent FileCopierService singleton instance med JobProcessor dependency.
-
-    Returns:
-        FileCopierService instance med alle dependencies
-    """
     if "file_copier" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -163,12 +119,6 @@ def get_file_copier() -> FileCopierService:
 
 
 def get_space_checker() -> SpaceChecker:
-    """
-    Hent SpaceChecker singleton instance.
-
-    Returns:
-        SpaceChecker instance for pre-flight space checking
-    """
     if "space_checker" not in _singletons:
         settings = get_settings()
         storage_monitor = get_storage_monitor()
@@ -181,12 +131,6 @@ def get_space_checker() -> SpaceChecker:
 
 
 def get_space_retry_manager() -> SpaceRetryManager:
-    """
-    Hent SpaceRetryManager singleton instance.
-
-    Returns:
-        SpaceRetryManager instance for space retry logic
-    """
     if "space_retry_manager" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -199,12 +143,6 @@ def get_space_retry_manager() -> SpaceRetryManager:
 
 
 def get_websocket_manager() -> WebSocketManager:
-    """
-    Hent WebSocketManager singleton instance.
-
-    Returns:
-        WebSocketManager instance (oprettes kun én gang)
-    """
     if "websocket_manager" not in _singletons:
         state_manager = get_state_manager()
         event_bus = get_event_bus()
@@ -218,12 +156,6 @@ def get_websocket_manager() -> WebSocketManager:
 
 
 def get_storage_checker() -> StorageChecker:
-    """
-    Hent StorageChecker singleton instance.
-
-    Returns:
-        StorageChecker instance (oprettes kun én gang)
-    """
     if "storage_checker" not in _singletons:
         settings = get_settings()
         _singletons["storage_checker"] = StorageChecker(
@@ -234,12 +166,6 @@ def get_storage_checker() -> StorageChecker:
 
 
 def get_network_mount_service() -> NetworkMountService:
-    """
-    Hent NetworkMountService singleton instance.
-
-    Returns:
-        NetworkMountService instance (oprettes kun én gang)
-    """
     if "network_mount_service" not in _singletons:
         settings = get_settings()
         _singletons["network_mount_service"] = NetworkMountService(settings)
@@ -248,14 +174,6 @@ def get_network_mount_service() -> NetworkMountService:
 
 
 def get_storage_monitor() -> StorageMonitorService:
-    """
-    Hent StorageMonitorService singleton instance.
-    Enhanced: Now integrates with NetworkMountService for automatic network mount handling
-    and JobQueueService for universal recovery system.
-
-    Returns:
-        StorageMonitorService instance (oprettes kun én gang)
-    """
     if "storage_monitor" not in _singletons:
         settings = get_settings()
         storage_checker = get_storage_checker()
@@ -281,12 +199,6 @@ def get_storage_monitor() -> StorageMonitorService:
 
 
 def get_job_error_classifier() -> JobErrorClassifier:
-    """
-    Hent JobErrorClassifier singleton instance.
-
-    Returns:
-        JobErrorClassifier instance (oprettes kun én gang)
-    """
     if "job_error_classifier" not in _singletons:
         storage_monitor = get_storage_monitor()
         _singletons["job_error_classifier"] = JobErrorClassifier(storage_monitor)
@@ -295,9 +207,6 @@ def get_job_error_classifier() -> JobErrorClassifier:
 
 
 def get_file_copy_executor() -> FileCopyExecutor:
-    """
-    Hent FileCopyExecutor singleton instance.
-    """
     if "file_copy_executor" not in _singletons:
         settings = get_settings()
         _singletons["file_copy_executor"] = FileCopyExecutor(settings)
@@ -305,9 +214,6 @@ def get_file_copy_executor() -> FileCopyExecutor:
 
 
 def get_copy_strategy() -> GrowingFileCopyStrategy:
-    """
-    Hent GrowingFileCopyStrategy singleton instance.
-    """
     if "copy_strategy" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -320,12 +226,6 @@ def get_copy_strategy() -> GrowingFileCopyStrategy:
 
 
 def get_job_processor() -> JobProcessor:
-    """
-    Hent JobProcessor singleton instance.
-
-    Returns:
-        JobProcessor instance med alle dependencies
-    """
     if "job_processor" not in _singletons:
         settings = get_settings()
         state_manager = get_state_manager()
@@ -352,35 +252,9 @@ def get_job_processor() -> JobProcessor:
     return _singletons["job_processor"]
 
 
-def get_directory_scanner() -> DirectoryScannerService:
-    """
-    Hent DirectoryScannerService singleton instance.
-
-    SRP compliant service for directory scanning with async timeout protection.
-    Only depends on Settings - no other service dependencies.
-
-    Returns:
-        DirectoryScannerService instance (oprettes kun én gang)
-    """
-    if "directory_scanner" not in _singletons:
-        settings = get_settings()
-        _singletons["directory_scanner"] = DirectoryScannerService(settings)
-
-    return _singletons["directory_scanner"]
-
-
 async def get_job_queue() -> Optional[asyncio.Queue]:
-    """
-    Hent job queue singleton instance.
-
-    Returns:
-        asyncio.Queue instance for file job processing eller None hvis ikke oprettet
-    """
-    # Get queue from JobQueueService to ensure single instance
     job_queue_service = get_job_queue_service()
     return job_queue_service.job_queue
-
-
 
 
 def get_directory_scanner() -> DirectoryScannerService:
@@ -388,38 +262,8 @@ def get_directory_scanner() -> DirectoryScannerService:
         _singletons["directory_scanner"] = DirectoryScannerService(get_settings())
     return _singletons["directory_scanner"]
 
-# 3. Registrer alle handlers (dette kan gøres i en startup-funktion)
-def register_handlers():
-    query_bus = get_query_bus()
-    scanner_service = get_directory_scanner()
-
-    # Registrer Directory Browsing Handlers
-    query_bus.register(
-        ScanSourceDirectoryQuery,
-        ScanSourceDirectoryHandler(scanner_service).handle
-    )
-    query_bus.register(
-        ScanDestinationDirectoryQuery,
-        ScanDestinationDirectoryHandler(scanner_service).handle
-    )
-    query_bus.register(
-        ScanCustomDirectoryQuery,
-        ScanCustomDirectoryHandler(scanner_service).handle
-    )
-    query_bus.register(
-        GetScannerInfoQuery,
-        GetScannerInfoHandler(scanner_service).handle
-    )
-
-register_handlers()
-
 
 def reset_singletons() -> None:
-    """
-    Reset alle singletons - primært til test formål.
-
-    VIGTIGT: Kun til brug i tests!
-    """
     global _singletons
     _singletons.clear()
 
