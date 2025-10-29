@@ -155,14 +155,10 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
 
             if success:
                 if await _verify_file_integrity(source_path, dest_path):
-                    try:
-                        await aiofiles.os.remove(source_path)
-                        logging.debug(
-                            f"Source file deleted: {os.path.basename(source_path)}"
-                        )
-                    except (OSError, PermissionError) as e:
+                    delete_success, delete_error = await self._delete_source_file_with_retry(source_path)
+                    if not delete_success:
                         logging.warning(
-                            f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}"
+                            f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {delete_error}"
                         )
                         old_status = tracked_file.status
                         await self.state_manager.update_file_status_by_id(
@@ -170,7 +166,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                             FileStatus.COMPLETED_DELETE_FAILED,
                             copy_progress=100.0,
                             destination_path=dest_path,
-                            error_message=f"Could not delete source file: {e}",
+                            error_message=f"Could not delete source file: {delete_error}",
                         )
                         if self._event_bus:
                             await self._event_bus.publish(
@@ -559,6 +555,26 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     await asyncio.sleep(pause_ms / 1000)
 
         return bytes_copied, last_progress_percent
+
+    async def _delete_source_file_with_retry(self, source_path: str) -> tuple[bool, str | None]:
+        """
+        Attempt to delete the source file with a few retries.
+        Returns (success, error_message). error_message is None if successful.
+        """
+        last_error = None
+        for i in range(3):
+            try:
+                await aiofiles.os.remove(source_path)
+                logging.debug(f"Source file deleted: {os.path.basename(source_path)}")
+                return True, None
+            except Exception as e:
+                last_error = str(e)
+                logging.warning(
+                    f"Delete attempt {i + 1}/3 failed for {os.path.basename(source_path)}: {e}"
+                )
+                if i < 2:
+                    await asyncio.sleep(2)
+        return False, last_error
 
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
