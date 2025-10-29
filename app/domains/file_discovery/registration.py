@@ -1,7 +1,5 @@
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from app.core.events.event_bus import DomainEventBus
-from app.core.file_repository import FileRepository
 from app.domains.file_discovery.command_handlers import (
     AddFileCommandHandler,
     MarkFileReadyCommandHandler,

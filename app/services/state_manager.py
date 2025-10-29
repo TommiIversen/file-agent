@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Callable, Awaitable
+from datetime import datetime
+from typing import List, Optional, Callable, Awaitable
 
 from app.core.file_repository import FileRepository
-from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
+from app.models import TrackedFile, FileStatus, FileStateUpdate
 
 
 class StateManager:
@@ -17,10 +17,6 @@ class StateManager:
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
         self._cooldown_minutes = cooldown_minutes
-
-        # Retry task tracking - only tasks, state is in TrackedFile.retry_info
-        self._retry_tasks: Dict[str, asyncio.Task] = {}
-
         logging.info("StateManager initialiseret med FileRepository")
 
 
@@ -97,7 +93,6 @@ class StateManager:
             return list(current_files.values())
 
 
-
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
             result = await self._file_repository.get_by_id(file_id)
@@ -121,19 +116,7 @@ class StateManager:
                 logging.info(
                     f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
                 )
- 
             tracked_file.status = status
-            terminal_statuses = {
-                FileStatus.FAILED,
-                FileStatus.COMPLETED,
-                FileStatus.REMOVED,
-            }
-            if status in terminal_statuses:
-                await self._cancel_existing_retry_unlocked(file_id)
-                logging.debug(
-                    f"RETRY CANCELLED: File {tracked_file.file_path} reached terminal status {status.value} - "
-                    f"cancelled scheduled retry [UUID: {file_id[:8]}...]"
-                )
             for key, value in kwargs.items():
                 if hasattr(tracked_file, key):
                     setattr(tracked_file, key, value)
@@ -147,130 +130,8 @@ class StateManager:
                 tracked_file, "failed_at", None
             ):
                 tracked_file.failed_at = datetime.now()
-            
             await self._file_repository.update(tracked_file)
-
         return tracked_file
 
 
-    async def schedule_retry(
-        self, file_id: str, delay_seconds: int, reason: str, retry_type: str = "space"
-    ) -> bool:
-        async with self._lock:
-            tracked_file = await self._file_repository.get_by_id(file_id)
-            if not tracked_file:
-                logging.warning(f"Cannot schedule retry for unknown file ID: {file_id}")
-                return False
-            await self._cancel_existing_retry_unlocked(file_id)
-            now = datetime.now()
-            tracked_file.retry_info = RetryInfo(
-                scheduled_at=now,
-                retry_at=now + timedelta(seconds=delay_seconds),
-                reason=reason,
-                retry_type=retry_type,
-            )
-            retry_task = asyncio.create_task(
-                self._execute_retry_task(file_id, delay_seconds)
-            )
-            self._retry_tasks[file_id] = retry_task
-            
-            await self._file_repository.update(tracked_file)
-            
-            logging.info(
-                f"Scheduled {retry_type} retry for {tracked_file.file_path} in {delay_seconds}s: {reason}"
-            )
-            return True
 
-    async def cancel_retry(self, file_id: str) -> bool:
-        async with self._lock:
-            return await self._cancel_existing_retry_unlocked(file_id)
-
-    async def _cancel_existing_retry_unlocked(self, file_id: str) -> bool:
-        retry_cancelled = False
-        if file_id in self._retry_tasks:
-            task = self._retry_tasks.pop(file_id)
-            task.cancel()
-            retry_cancelled = True
-            try:
-                await asyncio.wait_for(task, timeout=0.1)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
-            except Exception as e:
-                logging.warning(f"Error while cancelling task for {file_id}: {e}")
-        tracked_file = await self._file_repository.get_by_id(file_id)
-        if tracked_file and tracked_file.retry_info:
-            tracked_file.retry_info = None
-            await self._file_repository.update(tracked_file)
-            retry_cancelled = True
-        if retry_cancelled:
-            logging.debug(f"Cancelled retry for file ID: {file_id}")
-        return retry_cancelled
-
-    async def _execute_retry_task(self, file_id: str, delay_seconds: int) -> None:
-        try:
-            await asyncio.sleep(delay_seconds)
-            async with self._lock:
-                tracked_file = await self._file_repository.get_by_id(file_id)
-                if not tracked_file or not tracked_file.retry_info:
-                    logging.debug(
-                        f"Retry cancelled - file or retry info missing: {file_id}"
-                    )
-                    return
-                if tracked_file.status != FileStatus.WAITING_FOR_SPACE:
-                    logging.debug(
-                        f"Retry cancelled - file status changed: {tracked_file.file_path} (status: {tracked_file.status.value})"
-                    )
-                    return
-                tracked_file.status = FileStatus.READY
-                tracked_file.error_message = None
-                tracked_file.retry_info = None  # Clear retry info
-                logging.info(
-                    f"Retry executed for {tracked_file.file_path} - reset to READY"
-                )
-                self._retry_tasks.pop(file_id, None)
-
-        except asyncio.CancelledError:
-            async with self._lock:
-                tracked_file = self._files_by_id.get(file_id)
-                if tracked_file:
-                    tracked_file.retry_info = None
-                self._retry_tasks.pop(file_id, None)
-            raise
-        except Exception as e:
-            logging.error(f"Error in retry task for file ID {file_id}: {e}")
-            async with self._lock:
-                tracked_file = await self._file_repository.get_by_id(file_id)
-                if tracked_file:
-                    tracked_file.retry_info = None
-                    await self._file_repository.add(tracked_file)
-                self._retry_tasks.pop(file_id, None)
-
-    async def cancel_all_retries(self) -> int:
-        async with self._lock:
-            cancelled_count = 0
-            all_files = await self._file_repository.get_all()
-            files_with_retries = [
-                tracked_file.id
-                for tracked_file in all_files
-                if tracked_file.retry_info is not None
-            ]
-            for file_id in files_with_retries:
-                if await self._cancel_existing_retry_unlocked(file_id):
-                    cancelled_count += 1
-            logging.info(f"Cancelled {cancelled_count} pending retries")
-            return cancelled_count
-
-    async def increment_retry_count(self, file_id: str) -> int:
-        async with self._lock:
-            tracked_file = await self._file_repository.get_by_id(file_id)
-            if not tracked_file:
-                logging.warning(
-                    f"Cannot increment retry count for unknown file ID: {file_id}"
-                )
-                return 0
-            tracked_file.retry_count += 1
-            await self._file_repository.add(tracked_file)
-            logging.debug(
-                f"Incremented retry count for {tracked_file.file_path} to {tracked_file.retry_count}"
-            )
-            return tracked_file.retry_count

@@ -27,6 +27,7 @@ from .services.state_manager import StateManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
 from .domains.presentation.websocket_manager import WebSocketManager
+from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 
 
 from app.core.cqrs.command_bus import CommandBus
@@ -66,12 +67,6 @@ def get_file_repository() -> FileRepository:
     if "file_repository" not in _singletons:
         _singletons["file_repository"] = FileRepository()
     return _singletons["file_repository"]
-
-
-
-
-
-from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 
 
 def get_file_discovery_slice() -> FileDiscoverySlice:
@@ -166,12 +161,13 @@ def get_space_checker() -> SpaceChecker:
 def get_space_retry_manager() -> SpaceRetryManager:
     if "space_retry_manager" not in _singletons:
         settings = get_settings()
-        state_manager = get_state_manager()
-
+        file_repository = get_file_repository()
+        event_bus = get_event_bus()
         _singletons["space_retry_manager"] = SpaceRetryManager(
-            settings=settings, state_manager=state_manager
+            settings=settings,
+            file_repository=file_repository,
+            event_bus=event_bus
         )
-
     return _singletons["space_retry_manager"]
 
 

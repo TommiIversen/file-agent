@@ -7,9 +7,8 @@ from typing import Optional
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus
-from app.services.consumer.job_models import QueueJob, JobResult
+from app.services.consumer.job_models import QueueJob
 from app.services.job_queue import JobQueueService
 from app.services.state_manager import StateManager
 
