@@ -96,11 +96,6 @@ class StateManager:
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
             result = await self._file_repository.get_by_id(file_id)
-            if not result:
-                all_files_count = await self._file_repository.count()
-                logging.debug(
-                    f"🔍 get_file_by_id: UUID {file_id[:8]}... not found in {all_files_count} files"
-                )
             return result
 
     async def update_file_status_by_id(
