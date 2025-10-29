@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
@@ -32,17 +33,30 @@ class JobCopyExecutor:
         self.state_manager = state_manager
         self.copy_strategy = copy_strategy
         self.error_classifier = error_classifier
-        # The event_bus is passed to the copy_strategy, so we don't need it here.
-        # However, the JobProcessor is passing it, so we accept it.
+        self.event_bus = event_bus
 
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
-        """Initialize file status for copying operation."""
+        """Initialize file status for copying operation and publish event."""
+        tracked_file = prepared_file.tracked_file
+        new_status = prepared_file.initial_status
+        old_status = tracked_file.status
+
         await self.state_manager.update_file_status_by_id(
-            prepared_file.tracked_file.id,
-            prepared_file.initial_status,
+            tracked_file.id,
+            new_status,
             copy_progress=0.0,
             started_copying_at=datetime.now(),
         )
+
+        if self.event_bus and old_status != new_status:
+            await self.event_bus.publish(
+                FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=old_status,
+                    new_status=new_status,
+                )
+            )
 
     async def execute_copy(self, prepared_file: PreparedFile) -> bool:
         """Execute copy operation using the selected strategy."""

@@ -28,11 +28,12 @@ from .dependencies import (
     get_storage_checker,
     get_query_bus,
     get_command_bus,
-    initialize_cqrs_system,
+    get_file_discovery_slice,  # Import the new slice getter
     get_file_scanner
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
+from app.domains.file_discovery.registration import register_file_discovery_handlers  # Import the new registration function
 
 from .logging_config import setup_logging
 from .routers import views
@@ -57,14 +58,10 @@ async def lifespan(app: FastAPI):
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
+    register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
-    # Initialize File Discovery CQRS handlers
-    await initialize_cqrs_system()
-    logging.info("File Discovery CQRS handlers registered")
-    
     logging.info("Handler-registrering fuldført.")
-    # === SLUT: NYT REGISTRERINGSTRIN ===
 
     # Log configuration file information
     config_info = settings.config_file_info
