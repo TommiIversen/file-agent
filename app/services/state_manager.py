@@ -1,14 +1,8 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Callable, Awaitable
+from typing import Dict, List, Optional, Callable, Awaitable
 
-from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import (
-    FileDiscoveredEvent,
-    FileStatusChangedEvent,
-    FileReadyEvent,
-)
 from app.core.file_repository import FileRepository
 from app.models import TrackedFile, FileStatus, FileStateUpdate, RetryInfo
 

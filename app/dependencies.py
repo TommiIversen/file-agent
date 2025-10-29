@@ -257,7 +257,6 @@ def get_storage_monitor() -> StorageMonitorService:
         settings = get_settings()
         storage_checker = get_storage_checker()
         event_bus = get_event_bus()
-        websocket_manager = get_websocket_manager()
         network_mount_service = get_network_mount_service()  # Phase 2 integration
         job_queue_service = get_job_queue_service()  # Universal recovery system
 
