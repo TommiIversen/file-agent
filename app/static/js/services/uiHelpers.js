@@ -64,6 +64,7 @@ class UIHelpers {
             case 'PausedGrowingCopy':
                 return `width: ${file.copy_progress || 0}%`;
             case 'Completed':
+            case 'CompletedDeleteFailed':
                 return 'width: 100%';
             case 'Failed':
             case 'SpaceError':
@@ -99,6 +100,8 @@ class UIHelpers {
                 return 'bg-yellow-600';  // Distinct color for paused operations
             case 'Completed':
                 return 'bg-green-600';
+            case 'CompletedDeleteFailed':
+                return 'bg-yellow-500';  // A distinct color for this state
             case 'Failed':
             case 'SpaceError':
                 return 'bg-red-600';
@@ -166,6 +169,8 @@ class UIHelpers {
                 return 'bg-purple-500 animate-pulse';
             case 'Completed':
                 return 'bg-green-700';
+            case 'CompletedDeleteFailed':
+                return 'bg-yellow-600';
             case 'Failed':
                 return 'bg-red-600';
             case 'Removed':
@@ -231,6 +236,8 @@ class UIHelpers {
                 return '⏸️ Paused (Growing)';
             case 'Completed':
                 return 'Completed';
+            case 'CompletedDeleteFailed':
+                return 'Delete Failed';
             case 'Failed':
                 return 'Failed';
             case 'WaitingForSpace':

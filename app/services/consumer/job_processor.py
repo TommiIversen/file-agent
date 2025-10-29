@@ -44,7 +44,10 @@ class JobProcessor:
         )
 
         self.finalization_service = JobFinalizationService(
-            settings=settings, state_manager=state_manager, job_queue=job_queue
+            settings=settings, 
+            state_manager=state_manager, 
+            job_queue=job_queue, 
+            event_bus=event_bus
         )
 
         self.template_engine = OutputFolderTemplateEngine(settings)

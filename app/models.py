@@ -21,6 +21,7 @@ class FileStatus(str, Enum):
     IN_QUEUE = "InQueue"  # Fil er tilføjet til job queue
     COPYING = "Copying"  # Fil er ved at blive kopieret
     COMPLETED = "Completed"  # Fil er succesfuldt kopieret og slettet
+    COMPLETED_DELETE_FAILED = "CompletedDeleteFailed"  # Fil er kopieret, men kunne ikke slettes
     FAILED = "Failed"  # Fil kunne ikke kopieres (permanent fejl)
     REMOVED = "Removed"  # Fil er forsvundet fra source (bevares som history)
 

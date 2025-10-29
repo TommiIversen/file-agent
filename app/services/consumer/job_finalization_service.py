@@ -3,10 +3,13 @@ Job Finalization Service - handles completion of copy jobs.
 """
 
 import logging
+from typing import Optional
 
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus
-from app.services.consumer.job_models import QueueJob
+from app.services.consumer.job_models import QueueJob, JobResult
 from app.services.job_queue import JobQueueService
 from app.services.state_manager import StateManager
 
@@ -19,13 +22,24 @@ class JobFinalizationService:
         settings: Settings,
         state_manager: StateManager,
         job_queue: JobQueueService,
+        event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
         self.job_queue = job_queue
+        self.event_bus = event_bus
 
     async def finalize_success(self, job: QueueJob, file_size: int) -> None:
         """Finalize successful job completion."""
+        # Check the current status to avoid overwriting COMPLETED_DELETE_FAILED
+        tracked_file = await self.state_manager.get_file_by_id(job.file_id)
+        if tracked_file and tracked_file.status == FileStatus.COMPLETED_DELETE_FAILED:
+            logging.debug(
+                f"Skipping finalization for {job.file_path} as it already has delete error status"
+            )
+            await self.job_queue.mark_job_completed(job)
+            return
+
         await self._finalize_job(
             job,
             status=FileStatus.COMPLETED,

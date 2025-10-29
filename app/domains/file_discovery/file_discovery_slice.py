@@ -147,6 +147,9 @@ class FileDiscoverySlice:
         if existing_file.status == FileStatus.SPACE_ERROR:
             return self._is_space_error_in_cooldown(existing_file)
         
+        if existing_file.status == FileStatus.COMPLETED_DELETE_FAILED:
+            return True  # Always skip if delete failed
+        
         return False
 
     async def add_discovered_file(

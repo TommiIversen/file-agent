@@ -11,6 +11,7 @@ import aiofiles.os
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus, TrackedFile
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
@@ -163,13 +164,41 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         logging.warning(
                             f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {e}"
                         )
+                        old_status = tracked_file.status
+                        await self.state_manager.update_file_status_by_id(
+                            tracked_file.id,
+                            FileStatus.COMPLETED_DELETE_FAILED,
+                            copy_progress=100.0,
+                            destination_path=dest_path,
+                            error_message=f"Could not delete source file: {e}",
+                        )
+                        if self._event_bus:
+                            await self._event_bus.publish(
+                                FileStatusChangedEvent(
+                                    file_id=tracked_file.id,
+                                    file_path=tracked_file.file_path,
+                                    old_status=old_status,
+                                    new_status=FileStatus.COMPLETED_DELETE_FAILED,
+                                )
+                            )
+                        return True  # Still a success from a copy perspective
 
+                    old_status = tracked_file.status
                     await self.state_manager.update_file_status_by_id(
                         tracked_file.id,
                         FileStatus.COMPLETED,
                         copy_progress=100.0,
                         destination_path=dest_path,
                     )
+                    if self._event_bus:
+                        await self._event_bus.publish(
+                            FileStatusChangedEvent(
+                                file_id=tracked_file.id,
+                                file_path=tracked_file.file_path,
+                                old_status=old_status,
+                                new_status=FileStatus.COMPLETED,
+                            )
+                        )
 
                     logging.info(
                         f"Growing copy completed: {os.path.basename(source_path)}"
@@ -330,6 +359,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         """
         # Static files start as "finished growing" to skip safety margins
         file_finished_growing = no_growth_cycles >= max_no_growth_cycles
+        last_progress_percent = -1  # Initialize with a value that ensures the first update is sent
 
         while True:
             current_tracked_file = await self.state_manager.get_file_by_id(
@@ -392,7 +422,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     f"{speed_mode} | {phase} | Copy {safe_copy_to - bytes_copied} bytes"
                 )
 
-                bytes_copied = await self._copy_chunk_range(
+                bytes_copied, last_progress_percent = await self._copy_chunk_range(
                     source_path,
                     dst,
                     bytes_copied,
@@ -403,6 +433,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     pause_ms if use_pause else 0,
                     network_detector,
                     status,
+                    last_progress_percent,
                 )
             elif not file_finished_growing:
                 copy_ratio = (
@@ -442,7 +473,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
         pause_ms: int,
         network_detector: NetworkErrorDetector,
         status: FileStatus = FileStatus.GROWING_COPY,
-    ) -> int:
+        last_progress_percent: int = -1,
+    ) -> tuple[int, int]:
         """
         Copy a range of bytes from source to destination with network error detection.
         Args:
@@ -488,6 +520,8 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                     else 0
                 )
 
+                progress_percent = int(copy_ratio)
+
                 current_time = datetime.now()
                 if not hasattr(self, "_copy_start_time"):
                     self._copy_start_time = current_time
@@ -500,7 +534,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 )
                 copy_speed_mbps = transfer_rate / (1024 * 1024)
 
-                if self._event_bus:
+                if self._event_bus and progress_percent > last_progress_percent:
                     from app.core.events.file_events import FileCopyProgressEvent
 
                     progress_event = FileCopyProgressEvent(
@@ -510,6 +544,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                         copy_speed_mbps=copy_speed_mbps,
                     )
                     asyncio.create_task(self._event_bus.publish(progress_event))
+                    last_progress_percent = progress_percent
 
                 await self.state_manager.update_file_status_by_id(
                     tracked_file.id,
@@ -523,7 +558,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 if pause_ms > 0:
                     await asyncio.sleep(pause_ms / 1000)
 
-        return bytes_copied
+        return bytes_copied, last_progress_percent
 
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
