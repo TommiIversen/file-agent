@@ -18,46 +18,17 @@ class StateManager:
         self,
         file_repository: FileRepository,
         cooldown_minutes: int = 60,
-        event_bus: Optional[DomainEventBus] = None
     ):
         self._file_repository = file_repository
         self._lock = asyncio.Lock()
         self._subscribers: List[Callable[[FileStateUpdate], Awaitable[None]]] = []
         self._cooldown_minutes = cooldown_minutes
-        self._event_bus = event_bus  # Event bus for decoupled communication
 
         # Retry task tracking - only tasks, state is in TrackedFile.retry_info
         self._retry_tasks: Dict[str, asyncio.Task] = {}
 
-        # if self._event_bus:
-        #     asyncio.create_task(self._subscribe_to_events())
-
         logging.info("StateManager initialiseret med FileRepository")
 
-    async def _subscribe_to_events(self):
-        if not self._event_bus:
-            return
-        await self._event_bus.subscribe(
-            FileDiscoveredEvent, self.handle_file_discovered
-        )
-        await self._event_bus.subscribe(
-            FileStatusChangedEvent, self.handle_file_status_changed
-        )
-        logging.info("StateManager subscribed to domain events")
-
-    async def handle_file_discovered(self, event: FileDiscoveredEvent) -> None:
-        """Handles the FileDiscoveredEvent."""
-        await self.add_file(
-            file_path=event.file_path,
-            file_size=event.file_size,
-            last_write_time=datetime.fromtimestamp(event.last_write_time),
-        )
-
-    async def handle_file_status_changed(self, event: FileStatusChangedEvent) -> None:
-        """Handles the FileStatusChangedEvent."""
-        await self.update_file_status_by_id(
-            file_id=event.file_id, status=event.new_status
-        )
 
     async def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
         all_files = await self._file_repository.get_all()
@@ -96,31 +67,6 @@ class StateManager:
                 return None
             return current_file
 
-    def _is_space_error_in_cooldown(
-        self, tracked_file: TrackedFile, cooldown_minutes: int = 60
-    ) -> bool:
-        if tracked_file.status != FileStatus.SPACE_ERROR:
-            return False
-        if not tracked_file.space_error_at:
-            return False
-        cooldown_duration = timedelta(minutes=cooldown_minutes)
-        time_since_error = datetime.now() - tracked_file.space_error_at
-        is_in_cooldown = time_since_error < cooldown_duration
-        if is_in_cooldown:
-            remaining_minutes = (
-                cooldown_duration - time_since_error
-            ).total_seconds() / 60
-            logging.debug(
-                f"File {tracked_file.file_path} in SPACE_ERROR cooldown - "
-                f"{remaining_minutes:.1f} minutes remaining"
-            )
-        return is_in_cooldown
-
-
-    async def get_all_files(self) -> List[TrackedFile]:
-        async with self._lock:
-            return await self._file_repository.get_all()
-
     def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
         active_statuses = {
             FileStatus.COPYING: 1,
@@ -156,72 +102,7 @@ class StateManager:
                         current_files[tracked_file.file_path] = tracked_file
             return list(current_files.values())
 
-    async def cleanup_missing_files(self, existing_paths: Set[str]) -> int:
-        removed_count = 0
-        async with self._lock:
-            current_files = {}
-            all_files = await self._file_repository.get_all()
-            for tracked_file in all_files:
-                current = current_files.get(tracked_file.file_path)
-                if not current or self._is_more_current(tracked_file, current):
-                    current_files[tracked_file.file_path] = tracked_file
-            for file_path, tracked_file in current_files.items():
-                if file_path not in existing_paths:
-                    if tracked_file.status == FileStatus.COMPLETED:
-                        logging.debug(f"Bevarer completed fil i memory: {file_path}")
-                        continue
-                    if tracked_file.status in [
-                        FileStatus.COPYING,
-                        FileStatus.IN_QUEUE,
-                        FileStatus.GROWING_COPY,
-                    ]:
-                        logging.debug(
-                            f"Bevarer fil under processing: {file_path} (status: {tracked_file.status})"
-                        )
-                        continue
-                    if tracked_file.status != FileStatus.REMOVED:
-                        old_status = tracked_file.status
-                        tracked_file.status = FileStatus.REMOVED
-                        removed_count += 1
-                        logging.info(
-                            f"Marked missing file as REMOVED: {file_path} (was {old_status})"
-                        )
-        if removed_count > 0:
-            logging.info(
-                f"Cleanup: Markerede {removed_count} manglende filer som REMOVED"
-            )
-        return removed_count
 
-    async def cleanup_old_files(self, max_age_hours: int) -> int:
-        removed_count = 0
-        now = datetime.now()
-        cutoff_time = now - timedelta(hours=max_age_hours)
-        async with self._lock:
-            to_remove_ids = []
-            all_files = await self._file_repository.get_all()
-            for tracked_file in all_files:
-                file_age_timestamp = (
-                    tracked_file.completed_at
-                    or tracked_file.failed_at
-                    or tracked_file.discovered_at
-                )
-                if file_age_timestamp and file_age_timestamp < cutoff_time:
-                    to_remove_ids.append(tracked_file.id)
-            for file_id in to_remove_ids:
-                removed_file = await self._file_repository.get_by_id(file_id)
-                if removed_file:
-                    await self._file_repository.remove(file_id)
-                    removed_count += 1
-                    logging.debug(
-                        f"Cleanup: Removed old file: {removed_file.file_path} "
-                        f"(status: {removed_file.status})"
-                    )
-        if removed_count > 0:
-            logging.info(
-                f"Cleanup: Fjernede {removed_count} gamle filer fra memory "
-                f"(ældre end {max_age_hours} timer)"
-            )
-        return removed_count
 
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
@@ -236,7 +117,6 @@ class StateManager:
     async def update_file_status_by_id(
         self, file_id: str, status: FileStatus, **kwargs
     ) -> Optional[TrackedFile]:
-        event_to_publish = None
         async with self._lock:
             tracked_file = await self._file_repository.get_by_id(file_id)
             if not tracked_file:
@@ -247,18 +127,7 @@ class StateManager:
                 logging.info(
                     f"Status opdateret (ID): {tracked_file.file_path} {old_status} -> {status}"
                 )
-                if self._event_bus:
-                    event_to_publish = FileStatusChangedEvent(
-                        file_id=tracked_file.id,
-                        file_path=tracked_file.file_path,
-                        old_status=old_status,
-                        new_status=status,
-                    )
-                    if status == FileStatus.READY:
-                        ready_event = FileReadyEvent(
-                            file_id=tracked_file.id, file_path=tracked_file.file_path
-                        )
-                        asyncio.create_task(self._event_bus.publish(ready_event))
+ 
             tracked_file.status = status
             terminal_statuses = {
                 FileStatus.FAILED,
@@ -287,47 +156,8 @@ class StateManager:
             
             await self._file_repository.update(tracked_file)
 
-        if event_to_publish:
-            await self._event_bus.publish(event_to_publish)
         return tracked_file
 
-    async def get_statistics(self) -> Dict:
-        async with self._lock:
-            current_files = {}
-            all_files = await self._file_repository.get_all()
-            for tracked_file in all_files:
-                current = current_files.get(tracked_file.file_path)
-                if not current or self._is_more_current(tracked_file, current):
-                    current_files[tracked_file.file_path] = tracked_file
-            current_files_list = list(current_files.values())
-            total_files = len(current_files_list)
-            status_counts = {}
-            for status in FileStatus:
-                status_counts[status.value] = len(
-                    [f for f in current_files_list if f.status == status]
-                )
-            total_size = sum(f.file_size for f in current_files_list)
-            copying_files = [
-                f for f in current_files_list if f.status == FileStatus.COPYING
-            ]
-            growing_files = [
-                f
-                for f in current_files_list
-                if f.status
-                in [
-                    FileStatus.GROWING,
-                    FileStatus.READY_TO_START_GROWING,
-                    FileStatus.GROWING_COPY,
-                ]
-            ]
-            return {
-                "total_files": total_files,
-                "status_counts": status_counts,
-                "total_size_bytes": total_size,
-                "active_copies": len(copying_files),
-                "growing_files": len(growing_files),
-                "subscribers": len(self._subscribers),
-            }
 
     async def schedule_retry(
         self, file_id: str, delay_seconds: int, reason: str, retry_type: str = "space"

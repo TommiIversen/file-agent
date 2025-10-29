@@ -142,12 +142,10 @@ def register_file_discovery_handlers():
 def get_state_manager() -> StateManager:
     if "state_manager" not in _singletons:
         settings = get_settings()
-        event_bus = get_event_bus()
         file_repository = get_file_repository()
         _singletons["state_manager"] = StateManager(
             file_repository=file_repository,
             cooldown_minutes=settings.space_error_cooldown_minutes, 
-            event_bus=event_bus
         )
 
     return _singletons["state_manager"]
