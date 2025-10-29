@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent
+from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent, FileStatusChangedEvent
 from app.core.file_repository import FileRepository
 from app.models import TrackedFile, FileStatus
 
@@ -210,6 +210,15 @@ class FileDiscoverySlice:
             )
             await self._event_bus.publish(discovery_event)
 
+            # Also publish a status change event to notify the UI
+            status_change_event = FileStatusChangedEvent(
+                file_id=tracked_file.id,
+                file_path=tracked_file.file_path,
+                old_status=None,  # No old status for a new file
+                new_status=FileStatus.DISCOVERED,
+            )
+            await self._event_bus.publish(status_change_event)
+
         return tracked_file
 
     async def mark_file_ready(self, file_id: str) -> bool:
@@ -349,8 +358,19 @@ class FileDiscoverySlice:
         if not file:
             return False
 
+        old_status = file.status
         file.status = FileStatus.GROWING
         await self._file_repository.update(file)
+
+        if self._event_bus and old_status != FileStatus.GROWING:
+            await self._event_bus.publish(
+                FileStatusChangedEvent(
+                    file_id=file.id,
+                    file_path=file.file_path,
+                    old_status=old_status,
+                    new_status=FileStatus.GROWING,
+                )
+            )
         
         logging.info(f"File marked as growing: {file.file_path}")
         return True
