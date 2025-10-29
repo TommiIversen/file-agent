@@ -170,7 +170,11 @@ class FileDiscoverySlice:
         
         # Check for any existing file (including inactive)
         any_existing = await self.get_current_file_for_path(file_path)
-        
+
+        if any_existing and any_existing.status == FileStatus.COMPLETED_DELETE_FAILED:
+            logging.debug(f"Skipping file marked with deletion error: {file_path}")
+            return any_existing
+
         # Create new tracked file
         tracked_file = TrackedFile(
             file_path=file_path,
