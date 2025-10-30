@@ -91,13 +91,6 @@ class TrackedFile(BaseModel):
         description="Sidste gang filen blev modificeret (til stabilitetschek)",
     )
 
-    copy_progress: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=100.0,
-        description="Kopieringsprogress i procent (0-100)",
-    )
-
     error_message: Optional[str] = Field(
         default=None, description="Fejlbesked hvis status er FAILED"
     )
@@ -124,34 +117,6 @@ class TrackedFile(BaseModel):
 
     space_error_at: Optional[datetime] = Field(
         default=None, description="Tidspunkt hvor filen fik permanent space error"
-    )
-
-    destination_path: Optional[str] = Field(
-        default=None,
-        description="Sti til destination filen (med evt. navnekonflikt suffix)",
-    )
-
-    # Growing file tracking
-    growth_rate_mbps: float = Field(
-        default=0.0,
-        ge=0.0,
-        description="Filens vækstrate i MB per sekund (kun for growing files)",
-    )
-
-    bytes_copied: int = Field(
-        default=0,
-        ge=0,
-        description="Antal bytes kopieret indtil videre (for growing copy progress)",
-    )
-
-    copy_speed_mbps: float = Field(
-        default=0.0,
-        ge=0.0,
-        description="Aktuel copy hastighed i MB per sekund (for alle copy modes)",
-    )
-
-    last_growth_check: Optional[datetime] = Field(
-        default=None, description="Sidste gang vi tjekkede for file growth"
     )
 
     # Additional growing file tracking fields to eliminate duplicate state in GrowingFileDetector
