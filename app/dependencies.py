@@ -119,30 +119,23 @@ def get_file_scanner() -> FileScannerService:
 def get_job_queue_service() -> JobQueueService:
     if "job_queue_service" not in _singletons:
         settings = get_settings()
-        state_manager = get_state_manager()
+        file_repository = get_file_repository()
         event_bus = get_event_bus()
         # JobQueueService will create its own queue internally
         _singletons["job_queue_service"] = JobQueueService(
-            settings, state_manager, event_bus=event_bus
+            settings, file_repository, event_bus=event_bus
         )
-
     return _singletons["job_queue_service"]
 
 
 def get_file_copier() -> FileCopierService:
     if "file_copier" not in _singletons:
-        settings = get_settings()
-        state_manager = get_state_manager()
-        job_queue_service = get_job_queue_service()
-        job_processor = get_job_processor()
-
         _singletons["file_copier"] = FileCopierService(
-            settings=settings,
-            state_manager=state_manager,
-            job_queue=job_queue_service,
-            job_processor=job_processor,
+            settings=get_settings(),
+            state_manager=get_state_manager(),
+            job_queue=get_job_queue_service(),
+            job_processor=get_job_processor(),
         )
-
     return _singletons["file_copier"]
 
 

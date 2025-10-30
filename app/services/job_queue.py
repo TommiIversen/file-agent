@@ -5,23 +5,23 @@ from typing import Optional, List
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileReadyEvent
+from app.core.events.file_events import FileReadyEvent, FileStatusChangedEvent
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob, JobResult
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
 
 
 class JobQueueService:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
+        file_repository: FileRepository,
         event_bus: Optional[DomainEventBus] = None,
         storage_monitor=None,
     ):
         self.settings = settings
-        self.state_manager = state_manager
-        self.storage_monitor = storage_monitor  # Add storage monitor reference
+        self.file_repository = file_repository
+        self.storage_monitor = storage_monitor
         self._event_bus = event_bus
         self.job_queue: Optional[asyncio.Queue[QueueJob]] = None
 
@@ -61,7 +61,7 @@ class JobQueueService:
 
         try:
             while self._running:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
 
         except asyncio.CancelledError:
             logging.info("Job Queue Producer blev cancelled")
@@ -80,7 +80,8 @@ class JobQueueService:
     async def handle_file_ready(self, event: FileReadyEvent) -> None:
         """Handles the FileReadyEvent from the event bus."""
         try:
-            tracked_file = await self.state_manager.get_file_by_id(event.file_id)
+            # Use event.file_id and event.file_path directly
+            tracked_file = await self.file_repository.get_by_id(event.file_id)
             if not tracked_file:
                 logging.warning(
                     f"Received FileReadyEvent for unknown file ID: {event.file_id}"
@@ -99,10 +100,17 @@ class JobQueueService:
             if await self._is_network_available():
                 await self._add_job_to_queue(tracked_file)
             else:
-                await self.state_manager.update_file_status_by_id(
-                    file_id=event.file_id,
-                    status=FileStatus.WAITING_FOR_NETWORK,
-                    error_message="Network unavailable - waiting for recovery",
+                tracked_file.status = FileStatus.WAITING_FOR_NETWORK
+                tracked_file.error_message = "Network unavailable - waiting for recovery"
+                await self.file_repository.update(tracked_file)
+                await self._event_bus.publish(
+                    FileStatusChangedEvent(
+                        file_id=event.file_id,
+                        file_path=event.file_path,
+                        old_status=FileStatus.READY,
+                        new_status=FileStatus.WAITING_FOR_NETWORK,
+                        timestamp=datetime.now()
+                    )
                 )
                 logging.info(
                     f"⏸️ NETWORK DOWN: {event.file_path} ready but waiting for network"
@@ -134,9 +142,9 @@ class JobQueueService:
     async def process_waiting_network_files(self) -> None:
         """Process all files waiting for network when network becomes available"""
         try:
-            waiting_files = await self.state_manager.get_files_by_status(
-                FileStatus.WAITING_FOR_NETWORK
-            )
+            # Use file_repository to get files by status
+            all_files = await self.file_repository.get_all()
+            waiting_files = [f for f in all_files if f.status == FileStatus.WAITING_FOR_NETWORK]
 
             if not waiting_files:
                 logging.info("🌐 NETWORK RECOVERY: No files waiting for network")
@@ -148,13 +156,19 @@ class JobQueueService:
 
             for tracked_file in waiting_files:
                 try:
-                    # Transition back to DISCOVERED so they are re-evaluated for growing status
-                    await self.state_manager.update_file_status_by_id(
-                        file_id=tracked_file.id,
-                        status=FileStatus.DISCOVERED,
-                        error_message=None,
+                    old_status = tracked_file.status
+                    tracked_file.status = FileStatus.DISCOVERED
+                    tracked_file.error_message = None
+                    await self.file_repository.update(tracked_file)
+                    await self._event_bus.publish(
+                        FileStatusChangedEvent(
+                            file_id=tracked_file.id,
+                            file_path=tracked_file.file_path,
+                            old_status=old_status,
+                            new_status=FileStatus.DISCOVERED,
+                            timestamp=datetime.now()
+                        )
                     )
-
                     # They will be re-evaluated through normal scanner discovery flow
                     logging.info(
                         f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation"
@@ -187,8 +201,17 @@ class JobQueueService:
             await self.job_queue.put(job)
             self._total_jobs_added += 1
 
-            await self.state_manager.update_file_status_by_id(
-                file_id=job.file_id, status=FileStatus.IN_QUEUE
+            old_status = tracked_file.status
+            tracked_file.status = FileStatus.IN_QUEUE
+            await self.file_repository.update(tracked_file)
+            await self._event_bus.publish(
+                FileStatusChangedEvent(
+                    file_id=job.file_id,
+                    file_path=tracked_file.file_path,
+                    old_status=old_status,
+                    new_status=FileStatus.IN_QUEUE,
+                    timestamp=datetime.now()
+                )
             )
 
             logging.info(f"Typed job tilføjet til queue: {job}")
