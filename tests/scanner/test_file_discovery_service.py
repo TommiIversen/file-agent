@@ -4,10 +4,11 @@ Tests for file discovery functionality - now integrated in FileScanOrchestrator.
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from app.services.scanner.file_scanner import FileScanner
-from app.services.scanner.domain_objects import ScanConfiguration
-from app.services.state_manager import StateManager
+from app.domains.file_discovery.file_scanner import FileScanner
+from app.domains.file_discovery.domain_objects import ScanConfiguration
 from app.config import Settings
+from app.core.cqrs.command_bus import CommandBus
+from app.core.cqrs.query_bus import QueryBus
 
 
 class TestFileDiscovery:
@@ -23,19 +24,24 @@ class TestFileDiscovery:
         )
 
     @pytest.fixture
-    def mock_state_manager(self):
-        """Create a mock StateManager for testing."""
-        return MagicMock(spec=StateManager)
+    def mock_command_bus(self):
+        """Create a mock CommandBus for testing."""
+        return MagicMock(spec=CommandBus)
 
     @pytest.fixture
-    def orchestrator(self, config, mock_state_manager):
+    def mock_query_bus(self):
+        """Create a mock QueryBus for testing."""
+        return MagicMock(spec=QueryBus)
+
+    @pytest.fixture
+    def orchestrator(self, config, mock_command_bus, mock_query_bus):
         settings = MagicMock(spec=Settings)
         settings.growing_file_min_size_mb = 100
         settings.growing_file_poll_interval_seconds = 5
         settings.growing_file_safety_margin_mb = 50
         settings.growing_file_growth_timeout_seconds = 300
         settings.growing_file_chunk_size_kb = 2048
-        return FileScanner(config, mock_state_manager, settings=settings)
+        return FileScanner(config, command_bus=mock_command_bus, query_bus=mock_query_bus, settings=settings)
 
     @pytest.mark.asyncio
     async def test_discover_all_files_success(self, orchestrator):

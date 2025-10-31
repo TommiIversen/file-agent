@@ -1,13 +1,14 @@
 """Test network recovery re-evaluation of growing files"""
 
 import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 from app.models import FileStatus, TrackedFile
 from app.services.job_queue import JobQueueService
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
 
 
 @pytest.fixture
@@ -18,10 +19,10 @@ def mock_settings():
 
 
 @pytest.fixture
-def mock_state_manager():
-    """Mock state manager for testing"""
-    manager = AsyncMock(spec=StateManager)
-    return manager
+def mock_file_repository():
+    """Mock file repository for testing"""
+    repo = AsyncMock(spec=FileRepository)
+    return repo
 
 
 @pytest.fixture
@@ -38,21 +39,26 @@ def mock_storage_monitor():
 
     return monitor
 
+@pytest.fixture
+def mock_event_bus():
+    return AsyncMock(spec=DomainEventBus)
+
 
 @pytest.fixture
-def job_queue(mock_settings, mock_state_manager, mock_storage_monitor):
+def job_queue(mock_settings, mock_file_repository, mock_storage_monitor, mock_event_bus):
     """Create JobQueueService instance for testing"""
     queue = JobQueueService(
         settings=mock_settings,
-        state_manager=mock_state_manager,
+        file_repository=mock_file_repository,
         storage_monitor=mock_storage_monitor,
+        event_bus=mock_event_bus
     )
     return queue
 
 
 @pytest.mark.asyncio
 async def test_network_recovery_sets_files_to_discovered_for_reevaluation(
-    job_queue, mock_state_manager
+    job_queue, mock_file_repository, mock_event_bus
 ):
     """Test that network recovery sets waiting files back to DISCOVERED for re-evaluation"""
 
@@ -62,73 +68,71 @@ async def test_network_recovery_sets_files_to_discovered_for_reevaluation(
             id="file1-uuid",
             file_path="c:/temp/test1.mxf",
             file_name="test1.mxf",
-            size=1000,
+            file_size=1000,
             status=FileStatus.WAITING_FOR_NETWORK,
         ),
         TrackedFile(
             id="file2-uuid",
             file_path="c:/temp/test2.mxv",
             file_name="test2.mxv",
-            size=2000,
+            file_size=2000,
             status=FileStatus.WAITING_FOR_NETWORK,
         ),
     ]
 
-    # Mock state manager to return waiting files
-    mock_state_manager.get_files_by_status.return_value = tracked_files
+    # Mock repository to return waiting files
+    mock_file_repository.get_all.return_value = tracked_files
 
     # Process waiting files
     await job_queue.process_waiting_network_files()
 
-    # Verify get_files_by_status was called with correct status
-    mock_state_manager.get_files_by_status.assert_called_once_with(
-        FileStatus.WAITING_FOR_NETWORK
-    )
+    # Verify get_all was called
+    mock_file_repository.get_all.assert_called_once()
 
-    # Verify each file was set to DISCOVERED status for re-evaluation
-    expected_calls = [
-        mock_state_manager.update_file_status_by_id.call_args_list[0],
-        mock_state_manager.update_file_status_by_id.call_args_list[1],
-    ]
+    # Verify each file was updated to DISCOVERED status for re-evaluation
+    assert mock_file_repository.update.call_count == 2
+    
+    # Check the first file update
+    call1 = mock_file_repository.update.call_args_list[0]
+    updated_file1 = call1.args[0]
+    assert isinstance(updated_file1, TrackedFile)
+    assert updated_file1.id == "file1-uuid"
+    assert updated_file1.status == FileStatus.DISCOVERED
+    assert updated_file1.error_message is None
 
-    # Check first file
-    args, kwargs = expected_calls[0]
-    assert kwargs["file_id"] == "file1-uuid"
-    assert kwargs["status"] == FileStatus.DISCOVERED
-    assert kwargs["error_message"] is None
+    # Check the second file update
+    call2 = mock_file_repository.update.call_args_list[1]
+    updated_file2 = call2.args[0]
+    assert isinstance(updated_file2, TrackedFile)
+    assert updated_file2.id == "file2-uuid"
+    assert updated_file2.status == FileStatus.DISCOVERED
+    assert updated_file2.error_message is None
 
-    # Check second file
-    args, kwargs = expected_calls[1]
-    assert kwargs["file_id"] == "file2-uuid"
-    assert kwargs["status"] == FileStatus.DISCOVERED
-    assert kwargs["error_message"] is None
+    # Verify that events were published
+    assert mock_event_bus.publish.call_count == 2
 
-    # Verify update was called twice (once per file)
-    assert mock_state_manager.update_file_status_by_id.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_network_recovery_with_no_waiting_files(job_queue, mock_state_manager):
+async def test_network_recovery_with_no_waiting_files(job_queue, mock_file_repository):
     """Test network recovery when no files are waiting"""
 
     # Mock no waiting files
-    mock_state_manager.get_files_by_status.return_value = []
+    mock_file_repository.get_all.return_value = []
 
     # Process waiting files
     await job_queue.process_waiting_network_files()
 
-    # Verify get_files_by_status was called
-    mock_state_manager.get_files_by_status.assert_called_once_with(
-        FileStatus.WAITING_FOR_NETWORK
-    )
+    # Verify get_all was called
+    mock_file_repository.get_all.assert_called_once()
 
     # Verify no status updates were made
-    mock_state_manager.update_file_status_by_id.assert_not_called()
+    mock_file_repository.update.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_network_recovery_handles_update_errors_gracefully(
-    job_queue, mock_state_manager
+    job_queue, mock_file_repository
 ):
     """Test that network recovery handles individual file update errors gracefully"""
 
@@ -138,22 +142,22 @@ async def test_network_recovery_handles_update_errors_gracefully(
             id="file1-uuid",
             file_path="c:/temp/test1.mxf",
             file_name="test1.mxf",
-            size=1000,
+            file_size=1000,
             status=FileStatus.WAITING_FOR_NETWORK,
         ),
         TrackedFile(
             id="file2-uuid",
             file_path="c:/temp/test2.mxv",
             file_name="test2.mxv",
-            size=2000,
+            file_size=2000,
             status=FileStatus.WAITING_FOR_NETWORK,
         ),
     ]
 
-    mock_state_manager.get_files_by_status.return_value = tracked_files
+    mock_file_repository.get_all.return_value = tracked_files
 
     # Make first update fail, second succeed
-    mock_state_manager.update_file_status_by_id.side_effect = [
+    mock_file_repository.update.side_effect = [
         Exception("Database error"),
         None,  # Success for second file
     ]
@@ -162,12 +166,12 @@ async def test_network_recovery_handles_update_errors_gracefully(
     await job_queue.process_waiting_network_files()
 
     # Verify both updates were attempted
-    assert mock_state_manager.update_file_status_by_id.call_count == 2
+    assert mock_file_repository.update.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_network_recovery_logs_reactivation_messages(
-    job_queue, mock_state_manager, caplog
+    job_queue, mock_file_repository, caplog
 ):
     """Test that network recovery logs appropriate reactivation messages"""
 
@@ -180,12 +184,12 @@ async def test_network_recovery_logs_reactivation_messages(
             id="file1-uuid",
             file_path="c:/temp/test.mxf",
             file_name="test.mxf",
-            size=1000,
+            file_size=1000,
             status=FileStatus.WAITING_FOR_NETWORK,
         )
     ]
 
-    mock_state_manager.get_files_by_status.return_value = tracked_files
+    mock_file_repository.get_all.return_value = tracked_files
 
     await job_queue.process_waiting_network_files()
 

@@ -47,12 +47,19 @@ class TestCompleteStaticFileFlow:
         return GrowingFileCopyStrategy(settings, file_repository, event_bus)
 
     @pytest.fixture
+    def template_engine(self):
+        """Mock template engine."""
+        engine = MagicMock()
+        engine.is_enabled.return_value = False
+        return engine
+
+    @pytest.fixture
     def job_preparation_service(
-        self, settings, file_repository, copy_strategy, template_engine
+        self, settings, file_repository, event_bus, copy_strategy, template_engine
     ):
         """Create JobFilePreparationService for testing."""
         return JobFilePreparationService(
-            settings, file_repository, copy_strategy, template_engine
+            settings, file_repository, event_bus, copy_strategy, template_engine
         )
 
     @pytest.mark.asyncio

@@ -7,10 +7,10 @@ import pytest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
-from app.services.scanner.domain_objects import (
+from app.domains.file_discovery.domain_objects import (
     ScanConfiguration,
 )
-from app.services.scanner.file_scanner import (
+from app.domains.file_discovery.file_scanner import (
     get_file_metadata,
     is_mxf_file,
     should_ignore_file,

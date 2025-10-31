@@ -20,14 +20,15 @@ from app.services.copy.growing_copy import GrowingFileCopyStrategy
 def preparer():
     """Simple file preparer for testing."""
     settings = MagicMock(source_directory="/src", destination_directory="/dst")
-    state_manager = AsyncMock()
+    file_repository = AsyncMock()
+    event_bus = AsyncMock()
     copy_strategy = AsyncMock(spec=GrowingFileCopyStrategy)
     copy_strategy.__class__.__name__ = "GrowingFileCopyStrategy"
     template_engine = MagicMock()
     template_engine.is_enabled.return_value = True
 
     return JobFilePreparationService(
-        settings, state_manager, copy_strategy, template_engine
+        settings, file_repository, event_bus, copy_strategy, template_engine
     )
 
 
@@ -42,7 +43,7 @@ class TestJobFilePreparationService:
         )
         job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
 
-        preparer.state_manager.get_file_by_path.return_value = tracked_file
+        preparer.file_repository.get_by_id.return_value = tracked_file
 
         # Mock the utils functions
         with (
@@ -68,17 +69,8 @@ class TestJobFilePreparationService:
     async def test_prepare_file_not_found(self, preparer):
         """Test file preparation when file not found."""
 
-        # Simulate a job with a tracked_file that is None
-        class DummyJob:
-            tracked_file = None
-            added_to_queue_at = datetime.now()
-
-            @property
-            def file_path(self):
-                return "/nonexistent/file.mxf"  # Use a string, not None
-
-        job = DummyJob()
-        preparer.state_manager.get_file_by_path.return_value = None
+        job = QueueJob(tracked_file=None, added_to_queue_at=datetime.now())
+        preparer.file_repository.get_by_id.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)
 
@@ -94,10 +86,10 @@ class TestJobFilePreparationService:
 
         # Test the growing file case
         preparer.copy_strategy._is_file_currently_growing.return_value = True
-        status = preparer._determine_initial_status(mock_tracked_file)
+        status = preparer._determine_file_status(mock_tracked_file)
         assert status == FileStatus.GROWING_COPY
 
         # Test the static file case
         preparer.copy_strategy._is_file_currently_growing.return_value = False
-        status = preparer._determine_initial_status(mock_tracked_file)
+        status = preparer._determine_file_status(mock_tracked_file)
         assert status == FileStatus.COPYING

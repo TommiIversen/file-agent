@@ -14,16 +14,21 @@ from app.services.consumer.job_copy_executor import JobCopyExecutor
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
+from app.services.consumer.job_error_classifier import JobErrorClassifier
 
 
 @pytest.fixture
 def executor():
     """Simple copy executor for testing."""
     settings = MagicMock()
-    state_manager = AsyncMock()
+    file_repository = AsyncMock(spec=FileRepository)
     copy_strategy = AsyncMock(spec=GrowingFileCopyStrategy)
+    error_classifier = AsyncMock(spec=JobErrorClassifier)
+    event_bus = AsyncMock(spec=DomainEventBus)
 
-    return JobCopyExecutor(settings, state_manager, copy_strategy)
+    return JobCopyExecutor(settings, file_repository, copy_strategy, error_classifier, event_bus)
 
 
 @pytest.fixture
@@ -51,11 +56,8 @@ class TestJobCopyExecutor:
 
             await executor.initialize_copy_status(prepared_file)
 
-        executor.state_manager.update_file_status_by_id.assert_called_once_with(
-            prepared_file.tracked_file.id,
-            FileStatus.COPYING,
-            copy_progress=0.0,
-            started_copying_at=datetime(2025, 10, 12, 12, 0, 0),
+        executor.file_repository.update.assert_called_once_with(
+            prepared_file.tracked_file
         )
 
     @pytest.mark.asyncio
@@ -84,12 +86,8 @@ class TestJobCopyExecutor:
         """Test copy failure handling."""
         await executor.handle_copy_failure(prepared_file, "Test error")
 
-        executor.state_manager.update_file_status_by_id.assert_called_once_with(
-            prepared_file.tracked_file.id,
-            FileStatus.FAILED,
-            copy_progress=0.0,
-            bytes_copied=0,
-            error_message="Failed: Copy operation failed",
+        executor.file_repository.update.assert_called_once_with(
+            prepared_file.tracked_file
         )
 
     def test_get_copy_executor_info(self, executor):
@@ -97,4 +95,4 @@ class TestJobCopyExecutor:
         info = executor.get_copy_executor_info()
 
         assert info["copy_strategy"] == "GrowingFileCopyStrategy"
-        assert info["state_manager_available"] is True
+        assert info["file_repository_available"] is True

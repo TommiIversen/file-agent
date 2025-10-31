@@ -11,6 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 from app.models import FileStatus, SpaceCheckResult, TrackedFile
 from app.services.consumer.job_space_manager import JobSpaceManager
 from app.services.consumer.job_models import ProcessResult
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
+from app.services.job_queue import JobQueueService
 
 
 @pytest.fixture
@@ -22,15 +25,21 @@ def mock_settings():
 
 
 @pytest.fixture
-def mock_state_manager():
-    """Mock state manager for testing."""
-    return AsyncMock()
+def mock_file_repository():
+    """Mock file repository for testing."""
+    return AsyncMock(spec=FileRepository)
+
+
+@pytest.fixture
+def mock_event_bus():
+    """Mock event bus for testing."""
+    return AsyncMock(spec=DomainEventBus)
 
 
 @pytest.fixture
 def mock_job_queue():
     """Mock job queue for testing."""
-    return AsyncMock()
+    return AsyncMock(spec=JobQueueService)
 
 
 @pytest.fixture
@@ -48,7 +57,8 @@ def mock_space_retry_manager():
 @pytest.fixture
 def job_space_manager(
     mock_settings,
-    mock_state_manager,
+    mock_file_repository,
+    mock_event_bus,
     mock_job_queue,
     mock_space_checker,
     mock_space_retry_manager,
@@ -56,7 +66,8 @@ def job_space_manager(
     """Create JobSpaceManager instance for testing."""
     return JobSpaceManager(
         settings=mock_settings,
-        state_manager=mock_state_manager,
+        file_repository=mock_file_repository,
+        event_bus=mock_event_bus,
         job_queue=mock_job_queue,
         space_checker=mock_space_checker,
         space_retry_manager=mock_space_retry_manager,
@@ -262,9 +273,9 @@ class TestJobSpaceManager:
         assert result.success is False
         assert result.space_shortage is True
         assert result.retry_scheduled is False
-        job_space_manager.state_manager.update_file_status_by_id.assert_called_once_with(
-            "tracked-file-uuid",  # Verify the correct ID is used
-            FileStatus.FAILED,
+        job_space_manager.file_repository.update_file_status.assert_called_once_with(
+            file_id="tracked-file-uuid",
+            status=FileStatus.FAILED,
             error_message="Insufficient space: Insufficient space",
         )
         job_space_manager.job_queue.mark_job_failed.assert_called_once()

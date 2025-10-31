@@ -13,7 +13,7 @@ from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkError, NetworkErrorDetector
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
-from app.services.copy.file_copy_executor import FileCopyExecutor
+
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
 
@@ -74,6 +74,12 @@ class TestFailFastNetworkErrorDetection:
             assert "no longer accessible" in str(exc_info.value)
 
     @pytest.mark.asyncio
+    async def test_growing_copy_strategy_fails_fast_on_network_error(self):
+        """Test that GrowingFileCopyStrategy fails fast on network errors during chunk copy."""
+        settings = Settings()
+        settings.growing_file_min_size_mb = 1
+        settings.use_temporary_file = False
+
         file_repository = AsyncMock(spec=FileRepository)
         event_bus = AsyncMock(spec=DomainEventBus)
 
