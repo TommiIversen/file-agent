@@ -13,6 +13,7 @@ from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
 from app.services.copy.network_error_detector import NetworkError
+from app.services.copy.exceptions import FileCopyError
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.core.file_repository import FileRepository
 
@@ -87,9 +88,10 @@ class JobCopyExecutor:
             raise
         except Exception as e:
             logging.error(
-                f"Copy execution error for {Path(prepared_file.tracked_file.file_path).name}: {e}"
+                f"Unexpected error during copy execution for {Path(prepared_file.tracked_file.file_path).name}: {e}"
             )
-            return False
+            raise FileCopyError(f"Unexpected error during copy execution: {e}") from e
+
 
     def _log_copy_result(self, prepared_file, success: bool):
         """Log copy operation result."""

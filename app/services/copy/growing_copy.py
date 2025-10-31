@@ -13,6 +13,7 @@ from app.core.events.file_events import FileStatusChangedEvent, FileCopyComplete
 from app.core.file_repository import FileRepository
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
+from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
 from app.utils.progress_utils import calculate_transfer_rate
 from app.core.events.file_events import FileCopyProgressEvent
 
@@ -60,9 +61,12 @@ class GrowingFileCopyStrategy():
                     aiofiles.os.path.getsize(source_path),
                     timeout=1.0,  # 1 second timeout
                 )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 logging.error(f"File size check timed out for {source_path}")
-                return False
+                raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
+            except OSError as e:
+                logging.error(f"Failed to access source file for size check: {e}")
+                raise FileCopyIOError(f"Failed to access source file for size check {source_path}: {e}") from e
 
             # Check if this is a growing file based on its status history
             is_growing_file = self._is_file_currently_growing(tracked_file)
@@ -93,12 +97,12 @@ class GrowingFileCopyStrategy():
                             f"📏 SIZE CHECK: {os.path.basename(source_path)} "
                             f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
                         )
-                    except asyncio.TimeoutError:
+                    except asyncio.TimeoutError as e:
                         logging.error(f"File size check timed out for {source_path}")
-                        return False
+                        raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
                     except OSError as e:
                         logging.error(f"Failed to check file size: {e}")
-                        return False
+                        raise FileCopyIOError(f"Failed to check file size {source_path}: {e}") from e
 
                 logging.info(
                     f"✅ SIZE REACHED: {os.path.basename(source_path)} "
@@ -122,7 +126,7 @@ class GrowingFileCopyStrategy():
                 logging.debug(f"Ensured destination directory exists: {dest_dir}")
             except Exception as e:
                 logging.error(f"Directory creation failed for: {dest_dir}: {e}")
-                return False
+                raise FileCopyIOError(f"Directory creation failed for {dest_dir}: {e}") from e
 
             network_detector = NetworkErrorDetector()
             success = await self._copy_growing_file(
@@ -197,9 +201,9 @@ class GrowingFileCopyStrategy():
                     return True
                 else:
                     logging.error(f"Growing copy verification failed: {source_path}")
-                    return False
+                    raise FileCopyIntegrityError(f"File integrity verification failed: {source_path}")
             else:
-                return False
+                raise FileCopyError(f"Copy execution failed unexpectedly for {source_path}")
 
         except FileNotFoundError:
             raise
@@ -213,7 +217,7 @@ class GrowingFileCopyStrategy():
                 logging.error(f"Network error detected in growing copy strategy: {e}")
                 raise
             logging.error(f"Error in growing copy strategy: {e}")
-            return False
+            raise FileCopyError(f"Error in growing copy strategy: {e}") from e
         finally:
             if temp_dest_path and await aiofiles.os.path.exists(temp_dest_path):
                 try:
@@ -259,7 +263,7 @@ class GrowingFileCopyStrategy():
                 pause_ms = 0
                 no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
-            async with asyncio.wait_for(aiofiles.open(dest_path, "wb"), timeout=self.settings.file_operation_timeout_seconds) as dst:
+            async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
                     source_path,
                     dst,
@@ -274,7 +278,6 @@ class GrowingFileCopyStrategy():
                     pause_ms,
                     network_detector,
                 )
-
             return True
 
         except NetworkError:
@@ -286,7 +289,7 @@ class GrowingFileCopyStrategy():
                 logging.error(f"Network error detected in growing file copy: {e}")
                 raise
             logging.error(f"Error in growing file copy: {e}")
-            return False
+            raise FileCopyError(f"Error in growing file copy: {e}") from e
 
     async def _growing_copy_loop(
         self,
@@ -319,21 +322,21 @@ class GrowingFileCopyStrategy():
             )
             if not current_tracked_file:
                 logging.warning(f"File disappeared during copy: {source_path}")
-                return bytes_copied
+                raise FileCopyError(f"Tracked file disappeared during copy: {source_path}")
 
             try:
                 current_file_size = await asyncio.wait_for(
                     aiofiles.os.path.getsize(source_path), timeout=1.0
                 )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 logging.warning(f"File size check timed out for: {source_path}")
-                break
-            except OSError:
+                raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
+            except OSError as e:
                 logging.warning(f"Cannot access source file: {source_path}")
-                break
+                raise FileCopyIOError(f"Cannot access source file {source_path}: {e}") from e
             except Exception as e:
                 logging.error(f"Error checking file size: {e}")
-                break
+                raise FileCopyError(f"Error checking file size for {source_path}: {e}") from e
 
             if not file_finished_growing:
                 if current_file_size > last_file_size:
@@ -440,9 +443,12 @@ class GrowingFileCopyStrategy():
         bytes_copied = start_bytes
         bytes_to_copy = end_bytes - start_bytes
 
-        async with asyncio.wait_for(aiofiles.open(source_path, "rb"), timeout=self.settings.file_operation_timeout_seconds) as src:
-            await asyncio.wait_for(src.seek(bytes_copied), timeout=self.settings.file_operation_timeout_seconds)
-
+        async with aiofiles.open(source_path, "rb") as src:
+            # Anvend timeout på seek
+            await asyncio.wait_for(
+                src.seek(bytes_copied),
+                timeout=self.settings.file_operation_timeout_seconds
+            )
             while bytes_to_copy > 0:
                 read_size = min(chunk_size, bytes_to_copy)
                 chunk = await asyncio.wait_for(src.read(read_size), timeout=self.settings.file_operation_timeout_seconds)
@@ -470,19 +476,19 @@ class GrowingFileCopyStrategy():
 
                 progress_percent = int(copy_ratio)
 
-                current_time = datetime.now()
-                if not hasattr(self, "_copy_start_time"):
-                    self._copy_start_time = current_time
-                    self._copy_start_bytes = bytes_copied
-
-                elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
-                transfer_rate = calculate_transfer_rate(
-                    bytes_copied - self._copy_start_bytes,
-                    elapsed_seconds,
-                )
-                copy_speed_mbps = transfer_rate / (1024 * 1024)
 
                 if self.event_bus and progress_percent > last_progress_percent:
+                    current_time = datetime.now()
+                    if not hasattr(self, "_copy_start_time"):
+                        self._copy_start_time = current_time
+                        self._copy_start_bytes = bytes_copied
+
+                    elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
+                    transfer_rate = calculate_transfer_rate(
+                        bytes_copied - self._copy_start_bytes,
+                        elapsed_seconds,
+                    )
+                    copy_speed_mbps = transfer_rate / (1024 * 1024)
 
                     progress_event = FileCopyProgressEvent(
                         file_id=tracked_file.id,
@@ -493,16 +499,16 @@ class GrowingFileCopyStrategy():
                     asyncio.create_task(self.event_bus.publish(progress_event))
                     last_progress_percent = progress_percent
 
-                # 1. Get (we have tracked_file)
-                # 2. Modify
-                tracked_file.status = status
-                tracked_file.copy_progress = copy_ratio
-                tracked_file.bytes_copied = bytes_copied
-                tracked_file.file_size = current_file_size
-                tracked_file.copy_speed_mbps = copy_speed_mbps
+                    # 1. Get (we have tracked_file)
+                    # 2. Modify
+                    tracked_file.status = status
+                    tracked_file.copy_progress = copy_ratio
+                    tracked_file.bytes_copied = bytes_copied
+                    tracked_file.file_size = current_file_size
+                    tracked_file.copy_speed_mbps = copy_speed_mbps
 
-                # 3. Save
-                await self.file_repository.update(tracked_file)
+                    # 3. Save
+                    await self.file_repository.update(tracked_file)
 
                 if pause_ms > 0:
                     await asyncio.sleep(pause_ms / 1000)

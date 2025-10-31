@@ -104,41 +104,30 @@ class JobProcessor:
             await self.copy_executor.initialize_copy_status(prepared_file)
 
             try:
-                copy_success = await self.copy_executor.execute_copy(prepared_file)
-
-                if copy_success:
-                    await self.finalization_service.finalize_success(
-                        job, prepared_file.tracked_file.file_size
-                    )
-                    return ProcessResult(success=True, file_path=file_path)
-                else:
-                    logging.warning(f"Copy execution returned failure: {file_path}")
-                    return ProcessResult(
-                        success=False,
-                        file_path=file_path,
-                        error_message="Copy execution failed",
-                    )
+                await self.copy_executor.execute_copy(prepared_file)
+                await self.finalization_service.finalize_success(
+                    job, prepared_file.tracked_file.file_size
+                )
+                return ProcessResult(success=True, file_path=file_path)
 
             except Exception as copy_error:
                 logging.warning(f"Copy exception for {file_path}: {copy_error}")
 
-                was_paused = await self.copy_executor.handle_copy_failure(
+                await self.copy_executor.handle_copy_failure(
                     prepared_file, copy_error
                 )
 
-                if was_paused:
-                    return ProcessResult(
-                        success=False,
-                        file_path=file_path,
-                        error_message=f"Copy paused due to network issue: {copy_error}",
-                        should_retry=True,
-                    )
-                else:
-                    return ProcessResult(
-                        success=False,
-                        file_path=file_path,
-                        error_message=f"Copy failed permanently: {copy_error}",
-                    )
+                # The JobErrorClassifier will have set the appropriate status (FAILED, REMOVED, etc.)
+                # The JobProcessor now just needs to return a ProcessResult indicating failure.
+                # If a retry is desired, JobErrorClassifier should set a status that triggers retry logic elsewhere, or
+                # JobCopyExecutor.handle_copy_failure should return a more explicit retry instruction.
+                # For now, assuming all exceptions lead to a FAILED status unless explicitly handled as REMOVED by classifier.
+                return ProcessResult(
+                    success=False,
+                    file_path=file_path,
+                    error_message=f"Copy operation failed: {copy_error}",
+                    # should_retry=... (This logic needs to be refined based on JobErrorClassifier output)
+                )
 
         except Exception as e:
             logging.error(f"Unexpected error processing job {file_path}: {e}")

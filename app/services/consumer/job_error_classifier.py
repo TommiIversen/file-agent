@@ -10,6 +10,7 @@ from typing import Tuple
 
 from app.models import StorageStatus, FileStatus
 from app.services.copy.network_error_detector import NetworkError
+from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 
 
@@ -93,6 +94,17 @@ class JobErrorClassifier:
         # Handle NetworkError from fail-fast detection immediately
         if isinstance(error, NetworkError):
             return FileStatus.FAILED, f"Network failure detected: {str(error)}"
+        elif isinstance(error, FileNotFoundError):
+            # This is already handled by _is_source_error, but good to be explicit
+            return FileStatus.REMOVED, "Source file no longer exists (FileNotFoundError)"
+        elif isinstance(error, FileCopyTimeoutError):
+            return FileStatus.FAILED, f"File operation timed out: {str(error)}"
+        elif isinstance(error, FileCopyIOError):
+            return FileStatus.FAILED, f"File I/O error: {str(error)}"
+        elif isinstance(error, FileCopyIntegrityError):
+            return FileStatus.FAILED, f"File integrity check failed: {str(error)}"
+        elif isinstance(error, FileCopyError):
+            return FileStatus.FAILED, f"General copy error: {str(error)}"
 
         # Check destination status first
         if self._is_destination_unavailable():

@@ -297,7 +297,7 @@ def get_state_manager() -> StateManager:
 ### **Network Failure Real-Time Flow:**
 ```python
 # Real-world scenarie: NAS går ned under kopi
-# T+0ms:    FileCopyExecutor encounters network error  
+# T+0ms:    GrowingfileCopy encounters network error  
 # T+10ms:   NetworkFailureDetectedEvent published via event bus
 # T+15ms:   FileScanner receives event, pauses scanning IMMEDIATELY  
 # T+20ms:   JobProcessor receives event, stops processing new files
@@ -305,7 +305,7 @@ def get_state_manager() -> StateManager:
 # T+30ms:   Total system coordination complete
 
 # Vs. current approach:
-# T+0ms:    FileCopyExecutor error, file marked FAILED
+# T+0ms:    GrowingfileCopy error, file marked FAILED
 # T+30000ms: StorageMonitor discovers network down (30s later!)
 # Result: 30 seconds of continued scanning and queue flooding
 ```
