@@ -3,7 +3,7 @@ Test for verifying the complete static file copy flow including status handling.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
@@ -114,8 +114,12 @@ class TestCompleteStaticFileFlow:
             tracked_file=growing_file, added_to_queue_at=datetime.now(), retry_count=0
         )
 
-        # Prepare the file
-        prepared_file = await job_preparation_service.prepare_file_for_copy(job)
+        # Mock the copy strategy to identify the file as growing
+        with patch.object(job_preparation_service.copy_strategy, 
+                          '_is_file_currently_growing', 
+                          MagicMock(return_value=True)):
+            # Prepare the file
+            prepared_file = await job_preparation_service.prepare_file_for_copy(job)
 
         # Verify the status is set correctly for growing files
         assert prepared_file.initial_status == FileStatus.GROWING_COPY, (

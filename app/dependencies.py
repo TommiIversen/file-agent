@@ -20,14 +20,11 @@ from .services.storage_monitor import StorageMonitorService
 from .domains.presentation.websocket_manager import WebSocketManager
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 
-
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 
 from app.domains.directory_browsing.service import DirectoryScannerService
 from app.domains.presentation.event_handlers import PresentationEventHandlers
-
-
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -76,30 +73,22 @@ def get_file_discovery_slice() -> FileDiscoverySlice:
 
 def get_file_scanner() -> FileScannerService:
     if "file_scanner" not in _singletons:        
-        settings = get_settings()
-        command_bus = get_command_bus()
-        query_bus = get_query_bus()
-        storage_monitor = get_storage_monitor()
-        event_bus = get_event_bus()
-        
         _singletons["file_scanner"] = FileScannerService(
-            settings=settings,
-            command_bus=command_bus,
-            query_bus=query_bus,
-            storage_monitor=storage_monitor,
-            event_bus=event_bus
+            settings=get_settings(),
+            command_bus=get_command_bus(),
+            query_bus=get_query_bus(),
+            storage_monitor=get_storage_monitor(),
+            event_bus=get_event_bus()
         )
     return _singletons["file_scanner"]
 
 
 def get_job_queue_service() -> JobQueueService:
     if "job_queue_service" not in _singletons:
-        settings = get_settings()
-        file_repository = get_file_repository()
-        event_bus = get_event_bus()
-        # JobQueueService will create its own queue internally
         _singletons["job_queue_service"] = JobQueueService(
-            settings, file_repository, event_bus=event_bus
+            settings=get_settings(), 
+            file_repository=get_file_repository(), 
+            event_bus=get_event_bus()
         )
     return _singletons["job_queue_service"]
 
@@ -128,13 +117,10 @@ def get_space_checker() -> SpaceChecker:
 
 def get_space_retry_manager() -> SpaceRetryManager:
     if "space_retry_manager" not in _singletons:
-        settings = get_settings()
-        file_repository = get_file_repository()
-        event_bus = get_event_bus()
         _singletons["space_retry_manager"] = SpaceRetryManager(
-            settings=settings,
-            file_repository=file_repository,
-            event_bus=event_bus
+            settings=get_settings(),
+            file_repository=get_file_repository(),
+            event_bus=get_event_bus()
         )
     return _singletons["space_retry_manager"]
 
@@ -166,20 +152,14 @@ def get_network_mount_service() -> NetworkMountService:
 
 def get_storage_monitor() -> StorageMonitorService:
     if "storage_monitor" not in _singletons:
-        settings = get_settings()
-        storage_checker = get_storage_checker()
-        event_bus = get_event_bus()
-        network_mount_service = get_network_mount_service()  # Phase 2 integration
         job_queue_service = get_job_queue_service()  # Universal recovery system
-
         _singletons["storage_monitor"] = StorageMonitorService(
-            settings=settings,
-            storage_checker=storage_checker,
-            event_bus=event_bus,
-            network_mount_service=network_mount_service,
-            job_queue=job_queue_service,  # Enable universal recovery
+            settings=get_settings(),
+            storage_checker=get_storage_checker(),
+            event_bus=get_event_bus(),
+            network_mount_service=get_network_mount_service(),
+            job_queue=job_queue_service  # Enable universal recovery
         )
-
         # Set storage_monitor reference in JobQueueService for network checking
         job_queue_service.storage_monitor = _singletons["storage_monitor"]
 
@@ -188,11 +168,8 @@ def get_storage_monitor() -> StorageMonitorService:
 
 def get_job_error_classifier() -> JobErrorClassifier:
     if "job_error_classifier" not in _singletons:
-        storage_monitor = get_storage_monitor()
-        _singletons["job_error_classifier"] = JobErrorClassifier(storage_monitor)
-
+        _singletons["job_error_classifier"] = JobErrorClassifier(storage_monitor=get_storage_monitor())
     return _singletons["job_error_classifier"]
-
 
 
 def get_copy_strategy() -> GrowingFileCopyStrategy:
@@ -250,11 +227,6 @@ def get_presentation_event_handlers() -> PresentationEventHandlers:
             websocket_manager=websocket_manager, file_repository=file_repository
         )
     return _singletons["presentation_event_handlers"]
-
-
-
-
-
 
 
 def reset_singletons() -> None:

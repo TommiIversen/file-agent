@@ -23,12 +23,13 @@ class TestJobProcessor:
     ):
         """Test that processor initializes all services."""
         settings = MagicMock()
-        state_manager = AsyncMock()
+        file_repository = AsyncMock()
+        event_bus = AsyncMock()
         job_queue = AsyncMock()
-        copy_strategy_factory = MagicMock()
+        copy_strategy = MagicMock()
 
         processor = JobProcessor(
-            settings, state_manager, job_queue, copy_strategy_factory
+            settings, file_repository, event_bus, job_queue, copy_strategy
         )
 
         # Verify all services were created
@@ -48,7 +49,11 @@ class TestJobProcessor:
             patch("app.services.consumer.job_processor.OutputFolderTemplateEngine"),
         ):
             settings = MagicMock()
-            processor = JobProcessor(settings, AsyncMock(), AsyncMock(), MagicMock())
+            file_repository = AsyncMock()
+            event_bus = AsyncMock()
+            job_queue = AsyncMock()
+            copy_strategy = MagicMock()
+            processor = JobProcessor(settings, file_repository, event_bus, job_queue, copy_strategy)
 
             info = processor.get_processor_info()
 

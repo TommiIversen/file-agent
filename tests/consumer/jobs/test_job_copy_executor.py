@@ -84,6 +84,7 @@ class TestJobCopyExecutor:
     @pytest.mark.asyncio
     async def test_handle_copy_failure(self, executor, prepared_file):
         """Test copy failure handling."""
+        executor.error_classifier.classify_copy_error.return_value = (FileStatus.FAILED, "Test error")
         await executor.handle_copy_failure(prepared_file, "Test error")
 
         executor.file_repository.update.assert_called_once_with(

@@ -69,7 +69,10 @@ class TestJobFilePreparationService:
     async def test_prepare_file_not_found(self, preparer):
         """Test file preparation when file not found."""
 
-        job = QueueJob(tracked_file=None, added_to_queue_at=datetime.now())
+        mock_tracked_file = MagicMock(spec=TrackedFile)
+        mock_tracked_file.id = "nonexistent-id"
+        mock_tracked_file.file_path = "/src/nonexistent.mxf"
+        job = QueueJob(tracked_file=mock_tracked_file, added_to_queue_at=datetime.now())
         preparer.file_repository.get_by_id.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)
@@ -83,6 +86,7 @@ class TestJobFilePreparationService:
         # Create a mock tracked_file
         mock_tracked_file = MagicMock(spec=TrackedFile)
         mock_tracked_file.file_path = "/mock/file.mxf"
+        mock_tracked_file.status = FileStatus.READY
 
         # Test the growing file case
         preparer.copy_strategy._is_file_currently_growing.return_value = True

@@ -13,16 +13,20 @@ from app.services.consumer.job_finalization_service import JobFinalizationServic
 from app.models import FileStatus
 from app.models import TrackedFile
 from app.services.consumer.job_models import QueueJob
+from app.core.file_repository import FileRepository
+from app.services.job_queue import JobQueueService
+from app.core.events.event_bus import DomainEventBus
 
 
 @pytest.fixture
 def finalizer():
     """Simple finalizer for testing."""
     settings = MagicMock(max_retry_attempts=3)
-    state_manager = AsyncMock()
-    job_queue = AsyncMock()
+    file_repository = AsyncMock(spec=FileRepository)
+    job_queue = AsyncMock(spec=JobQueueService)
+    event_bus = AsyncMock(spec=DomainEventBus)
 
-    return JobFinalizationService(settings, state_manager, job_queue)
+    return JobFinalizationService(settings, file_repository, job_queue, event_bus)
 
 
 class TestJobFinalizationService:
@@ -40,7 +44,7 @@ class TestJobFinalizationService:
         await finalizer.finalize_success(job, file_size)
 
         finalizer.job_queue.mark_job_completed.assert_called_once_with(job)
-        finalizer.state_manager.update_file_status_by_id.assert_called_once()
+        finalizer.file_repository.update.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_finalize_failure(self, finalizer):
@@ -54,7 +58,7 @@ class TestJobFinalizationService:
         await finalizer.finalize_failure(job, error)
 
         finalizer.job_queue.mark_job_failed.assert_called_once_with(job, "Test error")
-        finalizer.state_manager.update_file_status_by_id.assert_called_once()
+        finalizer.file_repository.update.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_finalize_max_retries(self, finalizer):
@@ -69,12 +73,12 @@ class TestJobFinalizationService:
         finalizer.job_queue.mark_job_failed.assert_called_once_with(
             job, "Max retry attempts reached"
         )
-        finalizer.state_manager.update_file_status_by_id.assert_called_once()
+        finalizer.file_repository.update.assert_called_once()
 
     def test_get_finalization_info(self, finalizer):
         """Test configuration info retrieval."""
         info = finalizer.get_finalization_info()
 
         assert info["max_retry_attempts"] == 3
-        assert info["state_manager_available"] is True
+        assert info["file_repository_available"] is True
         assert info["job_queue_available"] is True

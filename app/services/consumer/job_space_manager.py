@@ -125,19 +125,20 @@ class JobSpaceManager:
 
 
         try:
-            tracked_file = await self.file_repository.update_file_status(
-                file_id=job.file_id,
-                status=FileStatus.FAILED,
-                error_message=f"Insufficient space: {space_check.reason}"
-            )
+            tracked_file = await self.file_repository.get_by_id(job.file_id)
             if tracked_file:
-                await self.event_bus.publish(FileStatusChangedEvent(
-                    file_id=tracked_file.id,
-                    file_path=tracked_file.file_path,
-                    old_status=job.tracked_file.status,
-                    new_status=FileStatus.FAILED,
-                    timestamp=datetime.now()
-                ))
+                tracked_file.status = FileStatus.FAILED
+                tracked_file.error_message = f"Insufficient space: {space_check.reason}"
+                await self.file_repository.update(tracked_file)
+
+                if self.event_bus:
+                    await self.event_bus.publish(FileStatusChangedEvent(
+                        file_id=tracked_file.id,
+                        file_path=tracked_file.file_path,
+                        old_status=job.tracked_file.status,
+                        new_status=FileStatus.FAILED,
+                        timestamp=datetime.now()
+                    ))
             await self.job_queue.mark_job_failed(job, "Insufficient disk space")
         except Exception as e:
             logging.error(
