@@ -199,11 +199,11 @@ class FileScanner:
                 logging.debug(f"Source path is not a directory: {source_path}")
                 return discovered_files
 
-            # Scan recursively for .mxf files
-            for root, _, files in os.walk(source_path):
+            # Scan recursively for .mxf files using asyncio.to_thread for non-blocking I/O
+            for root, _, files in await asyncio.to_thread(os.walk, source_path):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    abs_file_path = os.path.abspath(file_path)
+                    abs_file_path = await asyncio.to_thread(os.path.abspath, file_path)
                     path_obj = Path(abs_file_path)
 
                     if is_mxf_file(path_obj) and not should_ignore_file(path_obj):

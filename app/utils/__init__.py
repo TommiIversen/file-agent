@@ -8,12 +8,7 @@ the main application logic without side effects.
 from .file_operations import (
     calculate_relative_path,
     generate_conflict_free_path,
-    validate_file_sizes,
-    create_temp_file_path,
     build_destination_path,
-    resolve_destination_with_conflicts,
-    validate_source_file,
-    validate_file_copy_integrity,
 )
 
 from .progress_utils import (
@@ -33,12 +28,7 @@ __all__ = [
     # File operations
     "calculate_relative_path",
     "generate_conflict_free_path",
-    "validate_file_sizes",
-    "create_temp_file_path",
     "build_destination_path",
-    "resolve_destination_with_conflicts",
-    "validate_source_file",
-    "validate_file_copy_integrity",
     # Progress utilities
     "calculate_copy_progress",
     "calculate_progress_percent_int",

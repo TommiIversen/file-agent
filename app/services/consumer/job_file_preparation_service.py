@@ -44,7 +44,7 @@ class JobFilePreparationService:
         strategy_name = self.copy_strategy.__class__.__name__
 
         initial_status = self._determine_file_status(tracked_file)
-        destination_path = self._calculate_destination_path(file_path)
+        destination_path = await self._calculate_destination_path(file_path)
 
         # Eksempel på Update & Announce hvis destination_path skal gemmes
         # old_status = tracked_file.status
@@ -93,7 +93,7 @@ class JobFilePreparationService:
             logging.info(f"⚡ File marked for STATIC COPY: {tracked_file.file_path}")
             return FileStatus.COPYING  # Static files go straight to copying
 
-    def _calculate_destination_path(self, file_path: str) -> Path:
+    async def _calculate_destination_path(self, file_path: str) -> Path:
         """Calculate destination path using template engine if enabled."""
         source = Path(file_path)
         source_base = Path(self.settings.source_directory)
@@ -103,7 +103,7 @@ class JobFilePreparationService:
             source, source_base, dest_base, self.template_engine
         )
 
-        return generate_conflict_free_path(Path(dest_path))
+        return await generate_conflict_free_path(Path(dest_path))
 
     def get_preparation_info(self) -> dict:
         """Get file preparation service configuration details."""
