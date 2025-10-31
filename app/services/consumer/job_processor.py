@@ -5,6 +5,8 @@ Job Processor - pure orchestrator delegating work to specialized services.
 import logging
 
 from app.config import Settings
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
 from app.services.consumer.job_copy_executor import JobCopyExecutor
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
 from app.services.consumer.job_finalization_service import JobFinalizationService
@@ -12,7 +14,6 @@ from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.consumer.job_space_manager import JobSpaceManager
 from app.services.copy_strategies import GrowingFileCopyStrategy
 from app.services.job_queue import JobQueueService
-from app.services.state_manager import StateManager
 from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
@@ -22,31 +23,33 @@ class JobProcessor:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
+        file_repository: FileRepository,
+        event_bus: DomainEventBus,
         job_queue: JobQueueService,
         copy_strategy: GrowingFileCopyStrategy,
         space_checker=None,
         space_retry_manager=None,
         error_classifier=None,
-        event_bus=None,
     ):
         self.settings = settings
-        self.state_manager = state_manager
+        self.file_repository = file_repository
+        self.event_bus = event_bus
         self.job_queue = job_queue
         self.copy_strategy = copy_strategy
 
         self.space_manager = JobSpaceManager(
             settings=settings,
-            state_manager=state_manager,
+            file_repository=file_repository,
+            event_bus=event_bus,
             job_queue=job_queue,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
         )
 
         self.finalization_service = JobFinalizationService(
-            settings=settings, 
-            state_manager=state_manager, 
-            job_queue=job_queue, 
+            settings=settings,
+            file_repository=file_repository,
+            job_queue=job_queue,
             event_bus=event_bus
         )
 
@@ -54,14 +57,15 @@ class JobProcessor:
 
         self.file_preparation_service = JobFilePreparationService(
             settings=settings,
-            state_manager=state_manager,
+            file_repository=file_repository,
+            event_bus=event_bus,
             copy_strategy=copy_strategy,
             template_engine=self.template_engine,
         )
 
         self.copy_executor = JobCopyExecutor(
             settings=settings,
-            state_manager=state_manager,
+            file_repository=file_repository,
             copy_strategy=copy_strategy,
             error_classifier=error_classifier,
             event_bus=event_bus,

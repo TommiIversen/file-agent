@@ -241,7 +241,7 @@ def get_copy_strategy() -> GrowingFileCopyStrategy:
 def get_job_processor() -> JobProcessor:
     if "job_processor" not in _singletons:
         settings = get_settings()
-        state_manager = get_state_manager()
+        file_repository = get_file_repository()
         job_queue_service = get_job_queue_service()
         copy_strategy = get_copy_strategy()
         space_checker = (
@@ -253,13 +253,13 @@ def get_job_processor() -> JobProcessor:
 
         _singletons["job_processor"] = JobProcessor(
             settings=settings,
-            state_manager=state_manager,
+            file_repository=file_repository,
+            event_bus=event_bus,
             job_queue=job_queue_service,
             copy_strategy=copy_strategy,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
             error_classifier=error_classifier,
-            event_bus=event_bus,
         )
 
     return _singletons["job_processor"]

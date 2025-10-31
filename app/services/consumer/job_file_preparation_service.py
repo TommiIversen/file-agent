@@ -10,7 +10,8 @@ from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile, QueueJob
 from app.services.copy_strategies import GrowingFileCopyStrategy
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
 from app.utils.file_operations import (
     build_destination_path_with_template,
     generate_conflict_free_path,
@@ -24,24 +25,40 @@ class JobFilePreparationService:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
+        file_repository: FileRepository,
+        event_bus: DomainEventBus,
         copy_strategy: GrowingFileCopyStrategy,
         template_engine: OutputFolderTemplateEngine,
     ):
         self.settings = settings
-        self.state_manager = state_manager
+        self.file_repository = file_repository
+        self.event_bus = event_bus
         self.copy_strategy = copy_strategy
         self.template_engine = template_engine
 
     async def prepare_file_for_copy(self, job: QueueJob) -> Optional[PreparedFile]:
         """Prepare file information for copying with strategy selection."""
-        tracked_file = job.tracked_file
+        tracked_file = await self.file_repository.get_by_id(job.file_id)
         file_path = job.file_path
 
         strategy_name = self.copy_strategy.__class__.__name__
 
         initial_status = self._determine_file_status(tracked_file)
         destination_path = self._calculate_destination_path(file_path)
+
+        # Eksempel på Update & Announce hvis destination_path skal gemmes
+        # old_status = tracked_file.status
+        # tracked_file.destination_path = str(destination_path)
+        # await self.file_repository.update(tracked_file)
+        # Hvis status ændres, publicer event:
+        # if tracked_file.status != old_status:
+        #     await self.event_bus.publish(FileStatusChangedEvent(
+        #         file_id=tracked_file.id,
+        #         file_path=tracked_file.file_path,
+        #         old_status=old_status,
+        #         new_status=tracked_file.status,
+        #         timestamp=datetime.now()
+        #     ))
 
         return PreparedFile(
             tracked_file=tracked_file,

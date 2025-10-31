@@ -206,9 +206,6 @@ class TestFileCopierService:
     # Test removed - job processing failure is now handled by JobProcessor service
     # Individual copy methods and mocking no longer available in orchestrator
 
-    # Test removed - global error handling is now handled by CopyErrorHandler service
-    # _handle_global_error method no longer exists in orchestrator
-
     @pytest.mark.asyncio
     async def test_copy_statistics(self, file_copier):
         """Test copy statistics gathering."""

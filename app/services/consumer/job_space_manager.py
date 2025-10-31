@@ -8,7 +8,10 @@ from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
 from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.job_queue import JobQueueService
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileStatusChangedEvent
+from datetime import datetime
 
 
 class JobSpaceManager:
@@ -17,17 +20,18 @@ class JobSpaceManager:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
+        file_repository: FileRepository,
+        event_bus: DomainEventBus,
         job_queue: JobQueueService,
         space_checker=None,
         space_retry_manager=None,
     ):
         self.settings = settings
-        self.state_manager = state_manager
+        self.file_repository = file_repository
+        self.event_bus = event_bus
         self.job_queue = job_queue
         self.space_checker = space_checker
         self.space_retry_manager = space_retry_manager
-
         logging.debug("JobSpaceManager initialized")
 
     def should_check_space(self) -> bool:
@@ -71,12 +75,20 @@ class JobSpaceManager:
                 },
             )
 
-            # Use WAITING_FOR_NETWORK instead of SPACE_ERROR for network issues
-            await self.state_manager.update_file_status_by_id(
+            # Update & Announce-mønsteret
+            tracked_file = await self.file_repository.update_file_status(
                 file_id=job.file_id,
                 status=FileStatus.WAITING_FOR_NETWORK,
-                error_message=f"Network unavailable: {space_check.reason}",
+                error_message=f"Network unavailable: {space_check.reason}"
             )
+            if tracked_file:
+                await self.event_bus.publish(FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=job.tracked_file.status,
+                    new_status=FileStatus.WAITING_FOR_NETWORK,
+                    timestamp=datetime.now()
+                ))
 
             return ProcessResult(
                 success=False,
@@ -111,12 +123,21 @@ class JobSpaceManager:
                 except Exception as e:
                     logging.error(f"Error scheduling space retry for {file_path}: {e}")
 
+
         try:
-            await self.state_manager.update_file_status_by_id(
-                job.file_id,
-                FileStatus.FAILED,
-                error_message=f"Insufficient space: {space_check.reason}",
+            tracked_file = await self.file_repository.update_file_status(
+                file_id=job.file_id,
+                status=FileStatus.FAILED,
+                error_message=f"Insufficient space: {space_check.reason}"
             )
+            if tracked_file:
+                await self.event_bus.publish(FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=job.tracked_file.status,
+                    new_status=FileStatus.FAILED,
+                    timestamp=datetime.now()
+                ))
             await self.job_queue.mark_job_failed(job, "Insufficient disk space")
         except Exception as e:
             logging.error(

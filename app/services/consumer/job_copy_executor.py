@@ -1,6 +1,5 @@
-"""
-Job Copy Executor - handles copy execution and status management.
-"""
+from app.core.events.file_events import FileCopyStartedEvent, FileCopyFailedEvent
+
 
 import logging
 from datetime import datetime
@@ -15,7 +14,8 @@ from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
 from app.services.copy.network_error_detector import NetworkError
 from app.services.copy_strategies import GrowingFileCopyStrategy
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+
 
 
 class JobCopyExecutor:
@@ -24,13 +24,13 @@ class JobCopyExecutor:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
+        file_repository: FileRepository,
         copy_strategy: GrowingFileCopyStrategy,
         error_classifier: Optional[JobErrorClassifier] = None,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
-        self.state_manager = state_manager
+        self.file_repository = file_repository
         self.copy_strategy = copy_strategy
         self.error_classifier = error_classifier
         self.event_bus = event_bus
@@ -41,13 +41,11 @@ class JobCopyExecutor:
         new_status = prepared_file.initial_status
         old_status = tracked_file.status
 
-        await self.state_manager.update_file_status_by_id(
-            tracked_file.id,
-            new_status,
-            copy_progress=0.0,
-            started_copying_at=datetime.now(),
-        )
-
+        # Update & Announce-mønsteret
+        tracked_file.status = new_status
+        tracked_file.copy_progress = 0.0
+        tracked_file.started_copying_at = datetime.now()
+        await self.file_repository.update(tracked_file)
         if self.event_bus and old_status != new_status:
             await self.event_bus.publish(
                 FileStatusChangedEvent(
@@ -55,6 +53,14 @@ class JobCopyExecutor:
                     file_path=tracked_file.file_path,
                     old_status=old_status,
                     new_status=new_status,
+                    timestamp=datetime.now()
+                )
+            )
+            await self.event_bus.publish(
+                FileCopyStartedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    destination_path=getattr(tracked_file, "destination_path", None)
                 )
             )
 
@@ -117,35 +123,65 @@ class JobCopyExecutor:
         self, prepared_file: PreparedFile, reason: str, error: Exception
     ) -> None:
         """Handle errors where source file disappeared."""
-        await self.state_manager.update_file_status_by_id(
-            prepared_file.tracked_file.id,
-            FileStatus.REMOVED,
-            copy_progress=0.0,
-            bytes_copied=0,
-            error_message=f"Removed: {reason}",
-        )
-
-        file_name = Path(prepared_file.tracked_file.file_path).name
+        tracked_file = prepared_file.tracked_file
+        tracked_file.status = FileStatus.REMOVED
+        tracked_file.copy_progress = 0.0
+        tracked_file.bytes_copied = 0
+        tracked_file.error_message = f"Removed: {reason}"
+        await self.file_repository.update(tracked_file)
+        if self.event_bus:
+            await self.event_bus.publish(
+                FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=tracked_file.status,
+                    new_status=FileStatus.REMOVED,
+                    timestamp=datetime.now()
+                )
+            )
+            await self.event_bus.publish(
+                FileCopyFailedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    error_message=f"Removed: {reason}"
+                )
+            )
+        file_name = Path(tracked_file.file_path).name
         logging.info(f"File removed during copy: {file_name} - {reason}")
 
     async def _handle_fail_error(
         self, prepared_file: PreparedFile, reason: str, error: Exception
     ) -> None:
         """Handle errors that should result in immediate failure."""
-        await self.state_manager.update_file_status_by_id(
-            prepared_file.tracked_file.id,
-            FileStatus.FAILED,
-            copy_progress=0.0,
-            bytes_copied=0,
-            error_message=f"Failed: {reason}",
-        )
-
-        file_name = Path(prepared_file.tracked_file.file_path).name
+        tracked_file = prepared_file.tracked_file
+        tracked_file.status = FileStatus.FAILED
+        tracked_file.copy_progress = 0.0
+        tracked_file.bytes_copied = 0
+        tracked_file.error_message = f"Failed: {reason}"
+        await self.file_repository.update(tracked_file)
+        if self.event_bus:
+            await self.event_bus.publish(
+                FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=tracked_file.status,
+                    new_status=FileStatus.FAILED,
+                    timestamp=datetime.now()
+                )
+            )
+            await self.event_bus.publish(
+                FileCopyFailedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    error_message=f"Failed: {reason}"
+                )
+            )
+        file_name = Path(tracked_file.file_path).name
         logging.error(f"Copy failed: {file_name} - {reason}")
 
     def get_copy_executor_info(self) -> dict:
         """Get copy executor configuration details."""
         return {
             "copy_strategy": self.copy_strategy.__class__.__name__,
-            "state_manager_available": self.state_manager is not None,
+            "file_repository_available": self.file_repository is not None,
         }

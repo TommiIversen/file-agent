@@ -31,7 +31,6 @@ After comprehensive scanning of all service layers and subdirectories, the file-
 - **JobErrorClassifier** - Copy error classification (local vs global vs network)
 
 **Error Handling & Retry:**
-- **CopyErrorHandler** (error_handling/) - Error type classification and retry decision logic
 - **SpaceRetryManager** - Space shortage retry scheduling and management
 - **FileRetryScheduler** (embedded in StateManager) - ⚠️ **Should be extracted**
 
@@ -106,12 +105,10 @@ After comprehensive scanning of all service layers and subdirectories, the file-
 1. **Network Error Detection** - Scattered across 3 different services:
    - NetworkErrorDetector (copy/)
    - JobErrorClassifier (consumer/)  
-   - CopyErrorHandler (error_handling/)
 
 2. **Retry Logic** - Duplicated in multiple places:
    - StateManager (file-level retries)
    - SpaceRetryManager (space-specific retries)
-   - CopyErrorHandler (copy error retries)
 
 ## Complete Service Coverage Verification ✅
 

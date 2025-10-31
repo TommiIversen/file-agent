@@ -1,5 +1,3 @@
-"""File operations utilities for File Transfer Agent."""
-
 from pathlib import Path
 
 
@@ -77,9 +75,6 @@ def resolve_destination_with_conflicts(
 ) -> Path:
     initial_dest = build_destination_path(source_path, source_base, dest_base)
     return generate_conflict_free_path(initial_dest)
-
-
-# Validation functions for error checking
 
 
 def validate_source_file(source_path: Path) -> None:
