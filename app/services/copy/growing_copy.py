@@ -3,7 +3,6 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 import aiofiles.os
@@ -183,13 +182,13 @@ class GrowingFileCopyStrategy():
                             )
                         )
                         await self.event_bus.publish(
-                            FileCopyCompletedEvent(
-                                file_id=tracked_file.id,
-                                file_path=tracked_file.file_path,
-                                destination_path=dest_path,
-                                file_size=tracked_file.file_size,
+                                FileCopyCompletedEvent(
+                                    file_id=tracked_file.id,
+                                    file_path=tracked_file.file_path,
+                                    destination_path=dest_path,
+                                    bytes_copied=tracked_file.file_size
+                                )
                             )
-                        )
 
                     logging.info(
                         f"Growing copy completed: {os.path.basename(source_path)}"

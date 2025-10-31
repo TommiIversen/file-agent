@@ -6,19 +6,16 @@ from app.config import Settings
 from app.services.consumer.job_models import QueueJob
 from app.services.consumer.job_processor import JobProcessor
 from app.services.job_queue import JobQueueService
-from app.services.state_manager import StateManager
 
 
 class FileCopierService:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
         job_queue: JobQueueService,
         job_processor: JobProcessor,
     ):
         self.settings = settings
-        self.state_manager = state_manager
         self.job_queue = job_queue
         self.job_processor = job_processor
 

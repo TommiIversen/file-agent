@@ -4,18 +4,17 @@ from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
+from app.services.copy.file_copier import FileCopierService
 
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
 from .services.copy.growing_copy import GrowingFileCopyStrategy
-from .services.copy.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
 from .domains.file_discovery.file_scanner_service import FileScannerService
 from .services.space_checker import SpaceChecker
 from .services.space_retry_manager import SpaceRetryManager
-from .services.state_manager import StateManager
 from .services.storage_checker import StorageChecker
 from .services.storage_monitor import StorageMonitorService
 from .domains.presentation.websocket_manager import WebSocketManager
@@ -75,23 +74,8 @@ def get_file_discovery_slice() -> FileDiscoverySlice:
     return _singletons["file_discovery_slice"]
 
 
-def get_state_manager() -> StateManager:
-    if "state_manager" not in _singletons:
-        settings = get_settings()
-        file_repository = get_file_repository()
-        _singletons["state_manager"] = StateManager(
-            file_repository=file_repository,
-            cooldown_minutes=settings.space_error_cooldown_minutes, 
-        )
-
-    return _singletons["state_manager"]
-
-
 def get_file_scanner() -> FileScannerService:
-    """Get the CQRS-based File Scanner Service."""
-    if "file_scanner" not in _singletons:
-        # Ensure handlers are registered
-        
+    if "file_scanner" not in _singletons:        
         settings = get_settings()
         command_bus = get_command_bus()
         query_bus = get_query_bus()
@@ -124,7 +108,6 @@ def get_file_copier() -> FileCopierService:
     if "file_copier" not in _singletons:
         _singletons["file_copier"] = FileCopierService(
             settings=get_settings(),
-            state_manager=get_state_manager(),
             job_queue=get_job_queue_service(),
             job_processor=get_job_processor(),
         )

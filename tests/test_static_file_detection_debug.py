@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
-from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
 
