@@ -9,7 +9,8 @@ from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
 from app.services.consumer.job_file_preparation_service import JobFilePreparationService
 from app.services.consumer.job_models import QueueJob
 from app.utils.output_folder_template import OutputFolderTemplateEngine
@@ -33,32 +34,27 @@ class TestCompleteStaticFileFlow:
         return settings
 
     @pytest.fixture
-    def state_manager(self):
-        """Mock state manager."""
-        return AsyncMock(spec=StateManager)
+    def file_repository(self):
+        """Mock file repository."""
+        return AsyncMock(spec=FileRepository)
 
     @pytest.fixture
-    def file_copy_executor(self):
-        """Mock file copy executor."""
-        return MagicMock(spec=FileCopyExecutor)
+    def event_bus(self):
+        """Mock event bus."""
+        return AsyncMock(spec=DomainEventBus)
 
     @pytest.fixture
-    def template_engine(self):
-        """Mock template engine."""
-        return MagicMock(spec=OutputFolderTemplateEngine)
-
-    @pytest.fixture
-    def copy_strategy(self, settings, state_manager, file_copy_executor):
+    def copy_strategy(self, settings, file_repository, event_bus):
         """Create GrowingFileCopyStrategy for testing."""
-        return GrowingFileCopyStrategy(settings, state_manager, file_copy_executor)
+        return GrowingFileCopyStrategy(settings, file_repository, event_bus)
 
     @pytest.fixture
     def job_preparation_service(
-        self, settings, state_manager, copy_strategy, template_engine
+        self, settings, file_repository, copy_strategy, template_engine
     ):
         """Create JobFilePreparationService for testing."""
         return JobFilePreparationService(
-            settings, state_manager, copy_strategy, template_engine
+            settings, file_repository, copy_strategy, template_engine
         )
 
     @pytest.mark.asyncio

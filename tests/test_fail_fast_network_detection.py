@@ -14,7 +14,8 @@ from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkError, NetworkErrorDetector
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
 
 
 class TestFailFastNetworkErrorDetection:
@@ -73,23 +74,13 @@ class TestFailFastNetworkErrorDetection:
             assert "no longer accessible" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_growing_copy_strategy_fails_fast_on_network_error(self):
-        """Test that GrowingFileCopyStrategy chunk copy immediately fails when network error is detected."""
-        settings = Settings()
-        settings.growing_file_min_size_mb = 1  # 1MB minimum
-        settings.growing_file_chunk_size_kb = 64  # 64KB chunks
-        settings.growing_file_poll_interval_seconds = 0.1
-        settings.growing_file_safety_margin_mb = 0.1
-        settings.growing_copy_pause_ms = 0
-        settings.use_temporary_file = False
-
-        state_manager = AsyncMock(spec=StateManager)
-        file_copy_executor = AsyncMock(spec=FileCopyExecutor)
+        file_repository = AsyncMock(spec=FileRepository)
+        event_bus = AsyncMock(spec=DomainEventBus)
 
         strategy = GrowingFileCopyStrategy(
             settings=settings,
-            state_manager=state_manager,
-            file_copy_executor=file_copy_executor,
+            file_repository=file_repository,
+            event_bus=event_bus,
         )
 
         tracked_file = TrackedFile(
@@ -139,13 +130,13 @@ class TestFailFastNetworkErrorDetection:
         settings.growing_file_min_size_mb = 1
         settings.use_temporary_file = False
 
-        state_manager = AsyncMock(spec=StateManager)
-        file_copy_executor = AsyncMock(spec=FileCopyExecutor)
+        file_repository = AsyncMock(spec=FileRepository)
+        event_bus = AsyncMock(spec=DomainEventBus)
 
         strategy = GrowingFileCopyStrategy(
             settings=settings,
-            state_manager=state_manager,
-            file_copy_executor=file_copy_executor,
+            file_repository=file_repository,
+            event_bus=event_bus,
         )
 
         tracked_file = TrackedFile(

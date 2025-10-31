@@ -215,9 +215,9 @@ def get_job_error_classifier() -> JobErrorClassifier:
 def get_copy_strategy() -> GrowingFileCopyStrategy:
     if "copy_strategy" not in _singletons:
         _singletons["copy_strategy"] = GrowingFileCopyStrategy(
-            settings=get_settings(), 
-            state_manager=get_state_manager(), 
-            event_bus=get_event_bus()
+            settings=get_settings(),
+            file_repository=get_file_repository(),
+            event_bus=get_event_bus(),
         )
     return _singletons["copy_strategy"]
 

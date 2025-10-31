@@ -10,10 +10,10 @@ import aiofiles.os
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyCompletedEvent
+from app.core.file_repository import FileRepository
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
-from app.services.state_manager import StateManager
 from app.utils.progress_utils import calculate_transfer_rate
 from app.core.events.file_events import FileCopyProgressEvent
 
@@ -39,12 +39,12 @@ class GrowingFileCopyStrategy():
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
-        event_bus: Optional[DomainEventBus] = None,
+        file_repository: FileRepository,
+        event_bus: DomainEventBus,
     ):
         self.settings = settings
-        self.state_manager = state_manager
-        self._event_bus = event_bus
+        self.file_repository = file_repository
+        self.event_bus = event_bus
 
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
@@ -117,17 +117,6 @@ class GrowingFileCopyStrategy():
                 f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)"
             )
 
-            # latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
-            # if latest_tracked_file:
-            #     tracked_file = latest_tracked_file
-            #     logging.debug(
-            #         f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}"
-            #     )
-            # else:
-            #     logging.warning(
-            #         f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}..."
-            #     )
-
             dest_dir = Path(dest_path).parent
             try:
                 await aiofiles.os.makedirs(dest_dir, exist_ok=True)
@@ -147,16 +136,21 @@ class GrowingFileCopyStrategy():
                         logging.warning(
                             f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {delete_error}"
                         )
+                        # 1. Get (we have tracked_file)
                         old_status = tracked_file.status
-                        await self.state_manager.update_file_status_by_id(
-                            tracked_file.id,
-                            FileStatus.COMPLETED_DELETE_FAILED,
-                            copy_progress=100.0,
-                            destination_path=dest_path,
-                            error_message=f"Could not delete source file: {delete_error}",
-                        )
-                        if self._event_bus:
-                            await self._event_bus.publish(
+
+                        # 2. Modify
+                        tracked_file.status = FileStatus.COMPLETED_DELETE_FAILED
+                        tracked_file.copy_progress = 100.0
+                        tracked_file.destination_path = dest_path
+                        tracked_file.error_message = f"Could not delete source file: {delete_error}"
+
+                        # 3. Save
+                        await self.file_repository.update(tracked_file)
+
+                        # 4. Announce
+                        if self.event_bus:
+                            await self.event_bus.publish(
                                 FileStatusChangedEvent(
                                     file_id=tracked_file.id,
                                     file_path=tracked_file.file_path,
@@ -166,20 +160,34 @@ class GrowingFileCopyStrategy():
                             )
                         return True  # Still a success from a copy perspective
 
+                    # 1. Get (we have tracked_file)
                     old_status = tracked_file.status
-                    await self.state_manager.update_file_status_by_id(
-                        tracked_file.id,
-                        FileStatus.COMPLETED,
-                        copy_progress=100.0,
-                        destination_path=dest_path,
-                    )
-                    if self._event_bus:
-                        await self._event_bus.publish(
+
+                    # 2. Modify
+                    tracked_file.status = FileStatus.COMPLETED
+                    tracked_file.copy_progress = 100.0
+                    tracked_file.destination_path = dest_path
+                    tracked_file.error_message = None  # Ryd fejl
+
+                    # 3. Save
+                    await self.file_repository.update(tracked_file)
+
+                    # 4. Announce
+                    if self.event_bus:
+                        await self.event_bus.publish(
                             FileStatusChangedEvent(
                                 file_id=tracked_file.id,
                                 file_path=tracked_file.file_path,
                                 old_status=old_status,
                                 new_status=FileStatus.COMPLETED,
+                            )
+                        )
+                        await self.event_bus.publish(
+                            FileCopyCompletedEvent(
+                                file_id=tracked_file.id,
+                                file_path=tracked_file.file_path,
+                                destination_path=dest_path,
+                                file_size=tracked_file.file_size,
                             )
                         )
 
@@ -343,7 +351,7 @@ class GrowingFileCopyStrategy():
         last_progress_percent = -1  # Initialize with a value that ensures the first update is sent
 
         while True:
-            current_tracked_file = await self.state_manager.get_file_by_id(
+            current_tracked_file = await self.file_repository.get_by_id(
                 tracked_file.id
             )
             if not current_tracked_file:
@@ -417,19 +425,20 @@ class GrowingFileCopyStrategy():
                     last_progress_percent,
                 )
             elif not file_finished_growing:
+                # 1. Get (we have current_tracked_file)
                 copy_ratio = (
                     (bytes_copied / current_file_size) * 100
                     if current_file_size > 0
                     else 0
                 )
+                # 2. Modify
+                current_tracked_file.status = FileStatus.GROWING_COPY
+                current_tracked_file.copy_progress = copy_ratio
+                current_tracked_file.bytes_copied = bytes_copied
+                current_tracked_file.file_size = current_file_size
 
-                await self.state_manager.update_file_status_by_id(
-                    tracked_file.id,
-                    FileStatus.GROWING_COPY,
-                    copy_progress=copy_ratio,
-                    bytes_copied=bytes_copied,
-                    file_size=current_file_size,
-                )
+                # 3. Save
+                await self.file_repository.update(current_tracked_file)
 
             if file_finished_growing and bytes_copied >= current_file_size:
                 logging.info(
@@ -507,7 +516,7 @@ class GrowingFileCopyStrategy():
                 )
                 copy_speed_mbps = transfer_rate / (1024 * 1024)
 
-                if self._event_bus and progress_percent > last_progress_percent:
+                if self.event_bus and progress_percent > last_progress_percent:
 
                     progress_event = FileCopyProgressEvent(
                         file_id=tracked_file.id,
@@ -515,17 +524,19 @@ class GrowingFileCopyStrategy():
                         total_bytes=current_file_size,
                         copy_speed_mbps=copy_speed_mbps,
                     )
-                    asyncio.create_task(self._event_bus.publish(progress_event))
+                    asyncio.create_task(self.event_bus.publish(progress_event))
                     last_progress_percent = progress_percent
 
-                await self.state_manager.update_file_status_by_id(
-                    tracked_file.id,
-                    status,
-                    copy_progress=copy_ratio,
-                    bytes_copied=bytes_copied,
-                    file_size=current_file_size,
-                    copy_speed_mbps=copy_speed_mbps,
-                )
+                # 1. Get (we have tracked_file)
+                # 2. Modify
+                tracked_file.status = status
+                tracked_file.copy_progress = copy_ratio
+                tracked_file.bytes_copied = bytes_copied
+                tracked_file.file_size = current_file_size
+                tracked_file.copy_speed_mbps = copy_speed_mbps
+
+                # 3. Save
+                await self.file_repository.update(tracked_file)
 
                 if pause_ms > 0:
                     await asyncio.sleep(pause_ms / 1000)

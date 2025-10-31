@@ -20,67 +20,6 @@ class StateManager:
         logging.info("StateManager initialiseret med FileRepository")
 
 
-    async def _get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
-        all_files = await self._file_repository.get_all()
-        candidates = [f for f in all_files if f.file_path == file_path]
-        if not candidates:
-            return None
-
-        def sort_key(f: TrackedFile):
-            active_statuses = {
-                FileStatus.COPYING: 1,
-                FileStatus.IN_QUEUE: 2,
-                FileStatus.GROWING_COPY: 3,
-                FileStatus.READY_TO_START_GROWING: 4,
-                FileStatus.READY: 5,
-                FileStatus.GROWING: 6,
-                FileStatus.DISCOVERED: 7,
-                FileStatus.WAITING_FOR_SPACE: 8,
-                FileStatus.WAITING_FOR_NETWORK: 9,
-                FileStatus.COMPLETED: 10,
-                FileStatus.FAILED: 11,
-                FileStatus.REMOVED: 12,
-                FileStatus.SPACE_ERROR: 13,
-            }
-
-            priority = active_statuses.get(f.status, 99)
-            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
-            return (priority, time_priority)
-
-        return min(candidates, key=sort_key)
-
-
-    async def get_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
-        async with self._lock:
-            current_file = await self._get_current_file_for_path(file_path)
-            if current_file and current_file.status == FileStatus.REMOVED:
-                return None
-            return current_file
-
-    def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
-        active_statuses = {
-            FileStatus.COPYING: 1,
-            FileStatus.IN_QUEUE: 2,
-            FileStatus.GROWING_COPY: 3,
-            FileStatus.READY_TO_START_GROWING: 4,
-            FileStatus.READY: 5,
-            FileStatus.GROWING: 6,
-            FileStatus.DISCOVERED: 7,
-            FileStatus.WAITING_FOR_SPACE: 8,
-            FileStatus.WAITING_FOR_NETWORK: 8,
-            FileStatus.COMPLETED: 9,
-            FileStatus.FAILED: 10,
-            FileStatus.REMOVED: 11,
-            FileStatus.SPACE_ERROR: 12,
-        }
-        priority1 = active_statuses.get(file1.status, 99)
-        priority2 = active_statuses.get(file2.status, 99)
-        if priority1 != priority2:
-            return priority1 < priority2
-        time1 = file1.discovered_at.timestamp() if file1.discovered_at else 0
-        time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
-        return time1 > time2
-
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
             result = await self._file_repository.get_by_id(file_id)

@@ -11,7 +11,8 @@ from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
-from app.services.state_manager import StateManager
+from app.core.file_repository import FileRepository
+from app.core.events.event_bus import DomainEventBus
 
 
 class TestStaticFileCopyOptimization:
@@ -30,19 +31,19 @@ class TestStaticFileCopyOptimization:
         return settings
 
     @pytest.fixture
-    def state_manager(self):
-        """Mock state manager."""
-        return AsyncMock(spec=StateManager)
+    def file_repository(self):
+        """Mock file repository."""
+        return AsyncMock(spec=FileRepository)
 
     @pytest.fixture
-    def file_copy_executor(self):
-        """Mock file copy executor."""
-        return MagicMock(spec=FileCopyExecutor)
+    def event_bus(self):
+        """Mock event bus."""
+        return AsyncMock(spec=DomainEventBus)
 
     @pytest.fixture
-    def copy_strategy(self, settings, state_manager, file_copy_executor):
+    def copy_strategy(self, settings, file_repository, event_bus):
         """Create GrowingFileCopyStrategy for testing."""
-        return GrowingFileCopyStrategy(settings, state_manager, file_copy_executor)
+        return GrowingFileCopyStrategy(settings, file_repository, event_bus)
 
     def test_static_file_detection_ready_status(self, copy_strategy):
         """Test that a file with READY status is detected as static."""
@@ -118,7 +119,7 @@ class TestStaticFileCopyOptimization:
         assert result is True, "File that has grown should be detected as growing"
 
     @pytest.mark.asyncio
-    async def test_static_file_copy_parameters(self, copy_strategy, state_manager):
+    async def test_static_file_copy_parameters(self, copy_strategy, file_repository):
         """Test that static files get optimized copy parameters."""
         # Create a static file
         static_file = TrackedFile(
@@ -130,9 +131,9 @@ class TestStaticFileCopyOptimization:
             previous_file_size=75 * 1024 * 1024,
         )
 
-        # Mock the state manager to return our static file
-        state_manager.get_file_by_path.return_value = static_file
-        state_manager.get_file_by_id.return_value = static_file
+        # Mock the file repository to return our static file
+        file_repository.get_by_path.return_value = static_file
+        file_repository.get_by_id.return_value = static_file
 
         # Mock file operations
         with patch("aiofiles.os.path.getsize", return_value=75 * 1024 * 1024):
@@ -178,7 +179,7 @@ class TestStaticFileCopyOptimization:
         )
 
     @pytest.mark.asyncio
-    async def test_growing_file_copy_parameters(self, copy_strategy, state_manager):
+    async def test_growing_file_copy_parameters(self, copy_strategy, file_repository):
         """Test that growing files get standard copy parameters with safety margins."""
         # Create a growing file
         growing_file = TrackedFile(
@@ -190,9 +191,9 @@ class TestStaticFileCopyOptimization:
             previous_file_size=140 * 1024 * 1024,
         )
 
-        # Mock the state manager
-        state_manager.get_file_by_path.return_value = growing_file
-        state_manager.get_file_by_id.return_value = growing_file
+        # Mock the file repository
+        file_repository.get_by_path.return_value = growing_file
+        file_repository.get_by_id.return_value = growing_file
 
         # Mock file operations
         with patch("aiofiles.os.path.getsize", return_value=150 * 1024 * 1024):

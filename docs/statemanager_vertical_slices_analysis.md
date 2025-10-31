@@ -3,7 +3,7 @@
 
 ## 🔍 **StateManager Ansvar Analyse (715 linjer)**
 
-Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 store ansvarområder:**
+Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 store ansvarområder:** - Er lavet - DONE !!
 
 ### **📊 Current StateManager Responsibilities:**
 
