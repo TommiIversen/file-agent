@@ -28,19 +28,10 @@ class FileCopierService:
         self._running = False
         self._worker_count = settings.max_concurrent_copies
 
-        # Statistics
-        self._total_jobs_processed = 0
-        self._start_time: Optional[datetime] = None
-
-        self._destination_available = True
-
         logging.info(
             f"FileCopierService initialiseret med {self._worker_count} workers"
         )
 
-    @property
-    def copy_strategy_factory(self):
-        return self.job_processor.copy_strategy_factory
 
     @property
     def file_copy_executor(self):
@@ -52,7 +43,6 @@ class FileCopierService:
             return
 
         self._running = True
-        self._start_time = datetime.now()
 
         for i in range(self._worker_count):
             worker_task = asyncio.create_task(
@@ -95,17 +85,3 @@ class FileCopierService:
             logging.error(f"Worker {worker_id} error: {e}")
             raise
 
-    async def get_copy_statistics(self):
-        return {
-            "is_running": self._running,
-            "total_files_copied": 0,
-            "total_bytes_copied": 0,
-            "total_files_failed": 0,
-            "success_rate": 100.0,
-        }
-
-    def is_running(self):
-        return self._running
-
-    def get_active_worker_count(self):
-        return 0
