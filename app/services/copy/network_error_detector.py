@@ -176,13 +176,6 @@ class NetworkErrorDetector:
         return hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES
 
     def check_write_error(self, error: Exception, operation: str = "write") -> None:
-        """
-        Check if a write error is network-related and raise NetworkError if so.
-
-        Args:
-            error: The exception that occurred
-            operation: Description of the operation that failed
-        """
         error_str = str(error).lower()
 
         if self._is_network_error_string(error_str) or self._is_network_errno(error):

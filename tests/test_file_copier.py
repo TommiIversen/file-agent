@@ -123,19 +123,6 @@ class TestFileCopierService:
         assert not file_copier._running
         assert file_copier._destination_available
 
-    @pytest.mark.asyncio
-    async def test_destination_availability_check(self, file_copier, temp_directories):
-        """Test destination availability checking."""
-        source_dir, dest_dir = temp_directories
-
-        # Test with valid destination
-        assert await file_copier.destination_checker.is_available()
-
-        # Test with non-existent destination - DestinationChecker will recreate it
-        shutil.rmtree(dest_dir)
-        file_copier.destination_checker.clear_cache()  # Clear cache after deleting directory
-        # DestinationChecker automatically recreates missing directories, so this should be True
-        assert await file_copier.destination_checker.is_available()
 
     @pytest.fixture
     async def test_name_conflict_resolution(self, file_copier, temp_directories):
