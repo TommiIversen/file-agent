@@ -143,7 +143,7 @@ document.addEventListener('alpine:init', () => {
 
         async toggleScanner() {
             if (this.scannerToggling) return;
-            
+
             const uiStore = Alpine.store('ui');
             if (!uiStore) {
                 console.error('UI store not available');
@@ -154,22 +154,22 @@ document.addEventListener('alpine:init', () => {
             const isCurrentlyPaused = uiStore.scanner.paused;
             const endpoint = isCurrentlyPaused ? '/api/scanner/resume' : '/api/scanner/pause';
             const action = isCurrentlyPaused ? 'Resuming' : 'Pausing';
-            
+
             this.scannerToggling = true;
             this.actionMessage = null;
-            
+
             try {
                 console.log(`${action} scanner...`);
-                
+
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (result.success) {
                     // WebSocket will automatically update uiStore - no manual sync needed
                     this.actionSuccess = true;
@@ -195,18 +195,18 @@ document.addEventListener('alpine:init', () => {
 });
 
 // Global functions for use in HTML (for settings modal only)
-window.openSettingsModal = function() {
+window.openSettingsModal = function () {
     Alpine.store('settings').openSettingsModal();
 };
-window.closeSettingsModal = function() {
+window.closeSettingsModal = function () {
     Alpine.store('settings').closeSettingsModal();
 };
-window.reloadConfig = function() {
+window.reloadConfig = function () {
     Alpine.store('settings').reloadConfig();
 };
-window.restartApplication = function() {
+window.restartApplication = function () {
     Alpine.store('settings').restartApplication();
 };
-window.toggleScanner = function() {
+window.toggleScanner = function () {
     Alpine.store('settings').toggleScanner();
 };

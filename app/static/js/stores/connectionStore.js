@@ -19,12 +19,12 @@ document.addEventListener('alpine:init', () => {
         reconnectTimeoutId: null,       // Track active reconnection timeout
 
 
-async initDashboard() {
+        async initDashboard() {
             try {
                 // 1. Hent start-data FØRST
                 console.log('Fetching initial state...');
                 await this.fetchInitialState();
-                
+
                 // 2. NÅR data er hentet, forbind til realtid
                 console.log('Initial state loaded. Connecting to WebSocket...');
                 this.connect(); // Start WS-forbindelsen
@@ -156,7 +156,7 @@ async initDashboard() {
             } catch (error) {
                 console.error('Error fetching initial state:', error);
                 // Videresend fejlen, så initDashboard kan fange den
-                throw error; 
+                throw error;
             }
         },
 

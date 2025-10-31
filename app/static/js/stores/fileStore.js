@@ -24,6 +24,7 @@ document.addEventListener('alpine:init', () => {
             growingFiles: 0
         },
 
+
         // Filter Management
         setFilter(filterName) {
             this.activeFilter = filterName;
@@ -36,7 +37,7 @@ document.addEventListener('alpine:init', () => {
                 console.error('addFile called with invalid file object:', file);
                 return;
             }
-            
+
             this.items.set(file.id, file);  // Brug ID som key
 
             if (this.items.size > this.MAX_FILES) {
@@ -57,12 +58,12 @@ document.addEventListener('alpine:init', () => {
                 console.error('updateFile called with invalid parameters:', { fileId, partialFile });
                 return;
             }
-            
+
             if (this.items.has(fileId)) {
                 const existingFile = this.items.get(fileId);
                 // Merge the new properties into the existing file object
                 Object.assign(existingFile, partialFile);
-                
+
                 // If the status is changing, log it
                 if (partialFile.status) {
                     console.log(`File updated: ${existingFile.file_path} (ID: ${fileId}) - Status: ${partialFile.status}`);
@@ -90,7 +91,7 @@ document.addEventListener('alpine:init', () => {
                 console.error('setInitialFiles called with non-array:', files);
                 return;
             }
-            
+
             console.log('Setting initial files:', files.length);
             this.items.clear();
 
@@ -236,14 +237,14 @@ document.addEventListener('alpine:init', () => {
                 console.warn('sortFiles called with invalid files array:', files);
                 return [];
             }
-            
+
             return files.sort((a, b) => {
                 // Defensive checks for file objects
                 if (!a || !b) {
                     console.warn('sortFiles: null file object detected', { a, b });
                     return 0;
                 }
-                
+
                 switch (this.sortBy) {
                     case 'activity':
                         // Sort by most relevant timestamp based on status

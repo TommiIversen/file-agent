@@ -1,51 +1,51 @@
 <!-- Log Viewer Modal extracted as a Jinja2 component -->
-<div x-show="$store.logViewer?.showLogViewerModal" 
+<div x-show="$store.logViewer?.showLogViewerModal"
      x-transition:enter="transition ease-out duration-300"
      x-transition:enter-start="opacity-0"
      x-transition:enter-end="opacity-100"
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     class="fixed inset-0 bg-black/50 flex items-center backdrop-blur-sm items-center justify-center z-50" 
+     class="fixed inset-0 bg-black/50 flex items-center backdrop-blur-sm items-center justify-center z-50"
     @click.self="closeLogViewerModal()"
     @keydown.escape.window="closeLogViewerModal()">
-    
+
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-[95vw] w-full h-[89vh] overflow-hidden flex flex-col">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-bold text-white">📝 Log Viewer</h2>
             <div class="flex items-center space-x-3">
-        <button @click="$store.logViewer.loadLogFiles()" 
+        <button @click="$store.logViewer.loadLogFiles()"
             :disabled="$store.logViewer.loadingLogFiles"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
                     🔄 Refresh
                 </button>
-                <button @click="closeLogViewerModal()" 
+                <button @click="closeLogViewerModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
                     ×
                 </button>
             </div>
         </div>
-        
+
             <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
             <!-- Log Files List -->
             <div class="lg:col-span-2 bg-gray-700 bg-opacity-60 rounded-lg p-4 overflow-auto">>
                 <h3 class="text-lg font-semibold text-white mb-3">Available Log Files</h3>
-                
+
                 <!-- Loading State -->
                 <div x-show="$store.logViewer?.loadingLogFiles" class="text-center py-4">
                     <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-white mb-2"></div>
                     <div class="text-white text-sm">Loading log files...</div>
                 </div>
-                
+
                 <!-- Error State -->
                 <div x-show="!$store.logViewer?.loadingLogFiles && $store.logViewer?.logFilesError" class="text-center py-4">
                     <div class="text-red-400 text-sm" x-text="$store.logViewer?.logFilesError"></div>
-                    <button @click="$store.logViewer.loadLogFiles()" 
+                    <button @click="$store.logViewer.loadLogFiles()"
                             class="mt-2 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-sm transition-colors duration-200">
                         Try Again
                     </button>
                 </div>
-                
+
                 <!-- Log Files List -->
                 <div x-show="!$store.logViewer?.loadingLogFiles && !$store.logViewer?.logFilesError" class="space-y-2">
                     <template x-for="logFile in $store.logViewer?.logFiles || []" :key="logFile.filename">
@@ -67,13 +67,13 @@
                             </div>
                         </div>
                     </template>
-                    
+
                     <div x-show="($store.logViewer?.logFiles || []).length === 0" class="text-center text-gray-400 py-4">
                         No log files found
                     </div>
                 </div>
             </div>
-            
+
             <!-- Log Content -->
             <div class="lg:col-span-10 bg-gray-700 bg-opacity-60 rounded-lg p-4 flex flex-col min-h-0">
                 <div class="flex justify-between items-center mb-3">
@@ -84,9 +84,9 @@
                             <span x-show="$store.logViewer?.viewMode === 'chunked'" class="text-yellow-400">(Chunked)</span>
                         </span>
                     </h3>
-                    
+
                     <!-- Download Button -->
-            <button x-show="$store.logViewer?.selectedLogFile" 
+            <button x-show="$store.logViewer?.selectedLogFile"
                 @click="downloadLogFile($store.logViewer.selectedLogFile.filename)"
                             class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors duration-200 flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,7 +95,7 @@
                         Download
                     </button>
                 </div>
-                
+
                 <!-- File Info -->
              <div x-show="$store.logViewer?.selectedLogFile" class="text-xs text-gray-400 mb-2">
                 <span x-text="$store.logViewer?.selectedLogFile?.size_mb + ' MB'"></span>
@@ -105,12 +105,12 @@
                     • Showing <span x-text="($store.logViewer?.logChunks || []).length"></span> of <span x-text="$store.logViewer?.currentChunkInfo?.total_lines"></span> lines
                 </span>
                 </div>
-                
+
                 <!-- No File Selected -->
                 <div x-show="!$store.logViewer?.selectedLogFile" class="flex-1 flex items-center justify-center text-gray-400">
                     Select a log file to view its content
                 </div>
-                
+
                 <!-- Loading Log Content -->
                 <div x-show="$store.logViewer?.loadingLogContent" class="flex-1 flex items-center justify-center">
                     <div class="text-center">
@@ -118,42 +118,42 @@
                         <div class="text-white">Loading log content...</div>
                     </div>
                 </div>
-                
+
                 <!-- Full Content Display (for smaller files) -->
-             <div x-show="$store.logViewer?.selectedLogFile && !$store.logViewer?.loadingLogContent && $store.logViewer?.viewMode === 'full' && $store.logViewer?.logContent" 
+             <div x-show="$store.logViewer?.selectedLogFile && !$store.logViewer?.loadingLogContent && $store.logViewer?.viewMode === 'full' && $store.logViewer?.logContent"
                  class="flex-1 bg-gray-900 rounded-lg p-4 overflow-auto min-h-0">
                 <pre class="text-gray-300 text-xs font-mono whitespace-pre overflow-auto" style="white-space: pre; overflow-x: auto;" x-text="$store.logViewer?.logContent"></pre>
                 </div>
-                
+
                 <!-- Chunked Content Display (for larger files) -->
-             <div x-show="$store.logViewer?.selectedLogFile && !$store.logViewer?.loadingLogContent && $store.logViewer?.viewMode === 'chunked'" 
+             <div x-show="$store.logViewer?.selectedLogFile && !$store.logViewer?.loadingLogContent && $store.logViewer?.viewMode === 'chunked'"
                  class="flex-1 flex flex-col min-h-0">
-                     
+
                     <!-- Load More Backward Button -->
                     <div x-show="$store.logViewer?.currentChunkInfo?.has_more_backward" class="mb-2">
-                        <button @click="loadMoreBackward()" 
+                        <button @click="loadMoreBackward()"
                                 :disabled="$store.logViewer?.loadingChunk"
                                 class="w-full px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded text-sm transition-colors duration-200">
                             <span x-show="!$store.ui?.loadingChunk">↑ Load Earlier Content</span>
                             <span x-show="$store.ui?.loadingChunk">Loading...</span>
                         </button>
                     </div>
-                    
+
                     <!-- Chunked Content -->
                     <div class="flex-1 bg-gray-900 rounded-lg p-4 overflow-auto min-h-0">
                         <pre class="text-gray-300 text-xs font-mono whitespace-pre overflow-auto" style="white-space: pre; overflow-x: auto;"><template x-for="(line, index) in ($store.logViewer?.logChunks || [])" :key="index"><div x-text="line"></div></template></pre>
                     </div>
-                    
+
                     <!-- Load More Forward Button -->
                     <div x-show="$store.logViewer?.currentChunkInfo?.has_more_forward" class="mt-2">
-                        <button @click="loadMoreForward()" 
+                        <button @click="loadMoreForward()"
                                 :disabled="$store.logViewer?.loadingChunk"
                                 class="w-full px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded text-sm transition-colors duration-200">
                             <span x-show="!$store.ui?.loadingChunk">↓ Load More Content</span>
                             <span x-show="$store.ui?.loadingChunk">Loading...</span>
                         </button>
                     </div>
-                    
+
                     <!-- Chunk Error -->
                     <div x-show="$store.logViewer?.chunkError" class="mt-2 p-2 bg-red-900 bg-opacity-50 rounded text-red-400 text-sm">
                         <strong>Error:</strong> <span x-text="$store.logViewer?.chunkError"></span>

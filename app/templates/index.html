@@ -66,33 +66,33 @@
             <!-- Titel (venstre) -->
             <div>
                 <h1 class="text-3xl font-bold flex items-center">
-                    Dr. Feta 
+                    Dr. Feta
                     <svg class="ml-2 w-8 h-8 text-gray-100" fill="currentColor" viewBox="0 0 100 100">
                         <!-- Feta cheese block seen from the side - positioned at bottom -->
                         <!-- Back face (darker) -->
                         <path d="M25 35 L75 30 L75 70 L25 75 Z" fill="#e5e7eb" opacity="0.7"/>
-                        
+
                         <!-- Top face -->
                         <path d="M20 40 L70 35 L75 30 L25 35 Z" fill="currentColor"/>
-                        
+
                         <!-- Front face (main) -->
                         <rect x="20" y="40" width="50" height="35" fill="currentColor"/>
-                        
+
                         <!-- Side edge (darker) -->
                         <path d="M70 35 L75 30 L75 70 L70 75 Z" fill="#d1d5db"/>
-                        
+
                         <!-- Cheese texture and holes -->
                         <ellipse cx="30" cy="50" rx="2" ry="1.5" fill="#9ca3af" opacity="0.8"/>
                         <ellipse cx="45" cy="58" rx="2.5" ry="2" fill="#9ca3af" opacity="0.8"/>
                         <ellipse cx="55" cy="52" rx="1.5" ry="1" fill="#9ca3af" opacity="0.8"/>
                         <ellipse cx="38" cy="65" rx="2" ry="1.5" fill="#9ca3af" opacity="0.8"/>
                         <ellipse cx="58" cy="65" rx="1.5" ry="1" fill="#9ca3af" opacity="0.8"/>
-                        
+
                         <!-- Subtle crumbly texture lines -->
                         <path d="M22 45 L68 43" stroke="#f3f4f6" stroke-width="0.3" opacity="0.6"/>
                         <path d="M22 55 L68 53" stroke="#f3f4f6" stroke-width="0.3" opacity="0.6"/>
                         <path d="M22 65 L68 63" stroke="#f3f4f6" stroke-width="0.3" opacity="0.6"/>
-                        
+
                         <!-- Feta characteristic cracks -->
                         <path d="M35 42 L37 55" stroke="#d1d5db" stroke-width="0.5" opacity="0.7"/>
                         <path d="M52 45 L50 60" stroke="#d1d5db" stroke-width="0.5" opacity="0.7"/>
@@ -130,17 +130,17 @@
             <!-- Connection Status og Settings (højre) -->
             <div class="flex justify-end items-center space-x-4">
                 <!-- Logs Button -->
-                <button @click="openLogViewerModal()" 
+                <button @click="openLogViewerModal()"
                         class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
                     📝 Logs
                 </button>
-                
+
                 <!-- Settings Button -->
-                <button @click="openSettingsModal()" 
+                <button @click="openSettingsModal()"
                         class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
                     ⚙️ Settings
                 </button>
-                
+
                 <!-- Connection Status -->
                 <div class="text-right">
                     <div class="flex items-center justify-end mb-1">
@@ -332,7 +332,7 @@
                     <span x-show="!$store.ui?.scanner?.scanning && !$store.ui?.scanner?.paused">❓ Scanner Unknown</span>
                 </span>
             </div>
-            
+
             <!-- Sort Options (højre) -->
             <div class="flex items-center space-x-4">
                 <span class="text-gray-300 text-sm">Sorter efter:</span>

@@ -1,6 +1,6 @@
 /**
  * Directory Browser Store - Alpine.js store for file/folder browsing modal
- * 
+ *
  * Handles directory scanning, file listing, and modal state management.
  * Integrates with DirectoryScannerService backend endpoints.
  */
@@ -12,7 +12,7 @@ document.addEventListener('alpine:init', () => {
         currentPath: '',
         scanType: '', // 'source' or 'destination'
         modalTitle: '',
-        
+
         // Directory scan data
         isLoading: false,
         isAccessible: false,
@@ -23,7 +23,7 @@ document.addEventListener('alpine:init', () => {
         totalDirectories: 0,
         scanDuration: 0,
         errorMessage: null,
-        
+
         // UI state
         sortBy: 'name', // 'name', 'size', 'created', 'modified', 'type'
         sortDirection: 'asc', // 'asc' or 'desc'
@@ -31,11 +31,11 @@ document.addEventListener('alpine:init', () => {
         recursive: true, // Enable recursive scanning by default
         maxDepth: 3,     // Default recursion depth
         viewMode: 'tree', // 'tree' or 'flat' view mode
-        
+
         // Tree view state
         expandedDirectories: new Set(), // Set of expanded directory paths
         defaultExpanded: true,          // Whether directories should be expanded by default
-        
+
         /**
          * Open modal for source directory browsing
          */
@@ -45,7 +45,7 @@ document.addEventListener('alpine:init', () => {
             this.isOpen = true;
             this.scanDirectory();
         },
-        
+
         /**
          * Open modal for destination directory browsing
          */
@@ -55,7 +55,7 @@ document.addEventListener('alpine:init', () => {
             this.isOpen = true;
             this.scanDirectory();
         },
-        
+
         /**
          * Close the modal and reset state
          */
@@ -63,7 +63,14 @@ document.addEventListener('alpine:init', () => {
             this.isOpen = false;
             this.resetState();
         },
-        
+
+
+
+
+
+
+
+
         /**
          * Reset internal state
          */
@@ -81,7 +88,7 @@ document.addEventListener('alpine:init', () => {
             this.scanDuration = 0;
             this.errorMessage = null;
         },
-        
+
         /**
          * Scan current directory using backend API
          */
@@ -90,33 +97,34 @@ document.addEventListener('alpine:init', () => {
                 console.error('DirectoryBrowser: No scan type specified');
                 return;
             }
-            
+
             this.isLoading = true;
             this.errorMessage = null;
-            
+
             try {
-                const endpoint = this.scanType === 'source' 
+                const endpoint = this.scanType === 'source'
                     ? '/api/directory/scan/source'
                     : '/api/directory/scan/destination';
-                
+
                 // Add query parameters for recursive scanning
                 const params = new URLSearchParams({
                     recursive: this.recursive.toString(),
                     max_depth: this.maxDepth.toString()
                 });
-                
+
                 const url = `${endpoint}?${params}`;
-                    
+
                 console.log(`DirectoryBrowser: Scanning ${this.scanType} directory (recursive=${this.recursive}, depth=${this.maxDepth})...`);
-                
+
                 const response = await fetch(url);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const data = await response.json();
-                
+
+
                 // Update state with scan results
                 this.currentPath = data.path;
                 this.isAccessible = data.is_accessible;
@@ -127,14 +135,14 @@ document.addEventListener('alpine:init', () => {
                 this.totalDirectories = data.total_directories || 0;
                 this.scanDuration = data.scan_duration_seconds || 0;
                 this.errorMessage = data.error_message;
-                
+
                 // Initialize tree view state
                 if (this.defaultExpanded && this.viewMode === 'tree') {
                     this.expandAllDirectories();
                 }
-                
+
                 console.log(`DirectoryBrowser: Scan completed - ${this.totalItems} items found (${this.totalFiles} files, ${this.totalDirectories} dirs)`);
-                
+
             } catch (error) {
                 console.error('DirectoryBrowser: Scan failed:', error);
                 this.errorMessage = `Failed to scan directory: ${error.message}`;
@@ -144,7 +152,7 @@ document.addEventListener('alpine:init', () => {
                 this.isLoading = false;
             }
         },
-        
+
         /**
          * Get filtered and sorted items for display
          */
@@ -155,53 +163,53 @@ document.addEventListener('alpine:init', () => {
             } else {
                 // Flat view: use flat items list
                 let filtered = this.items;
-                
+
                 // Filter hidden files if not showing them
                 if (!this.showHidden) {
                     filtered = filtered.filter(item => !item.is_hidden);
                 }
-                
+
                 return this._getFlatViewItems(filtered);
             }
         },
-        
+
         /**
          * Flatten nested tree structure for display with expand/collapse logic
          */
         _getFlattenedTreeItems(treeItems, depth = 0) {
             const flatItems = [];
-            
+
             if (!treeItems || !Array.isArray(treeItems)) {
                 return flatItems;
             }
-            
+
             for (const item of treeItems) {
                 // Filter hidden files if not showing them
                 if (!this.showHidden && item.is_hidden) {
                     continue;
                 }
-                
+
                 // Add current item with calculated depth
                 const flatItem = {
                     ...item,
                     depth_level: depth
                 };
                 flatItems.push(flatItem);
-                
+
                 // Add children if directory is expanded and has children
-                if (item.is_directory && 
-                    item.children && 
-                    item.children.length > 0 && 
+                if (item.is_directory &&
+                    item.children &&
+                    item.children.length > 0 &&
                     this.isDirectoryExpanded(item.path)) {
-                    
+
                     const childItems = this._getFlattenedTreeItems(item.children, depth + 1);
                     flatItems.push(...childItems);
                 }
             }
-            
+
             return flatItems;
         },
-        
+
         /**
          * Get items for flat view with standard sorting
          */
@@ -209,7 +217,7 @@ document.addEventListener('alpine:init', () => {
             // Sort items normally for flat view
             return items.sort((a, b) => {
                 let comparison = 0;
-                
+
                 switch (this.sortBy) {
                     case 'name':
                         // Directories first, then by name
@@ -239,11 +247,11 @@ document.addEventListener('alpine:init', () => {
                         comparison = extA.localeCompare(extB);
                         break;
                 }
-                
+
                 return this.sortDirection === 'asc' ? comparison : -comparison;
             });
         },
-        
+
         /**
          * Check if an item should be visible in tree view based on parent expansion
          */
@@ -252,19 +260,19 @@ document.addEventListener('alpine:init', () => {
             if (item.depth_level === 0) {
                 return true;
             }
-            
+
             // For deeper items, check if all parent directories are expanded
             if (item.parent_path) {
                 // Use default expanded state if not explicitly set
                 const isParentExpanded = this.expandedDirectories.has(item.parent_path);
                 const shouldUseDefault = !this.expandedDirectories.has(item.parent_path) && this.defaultExpanded;
-                
+
                 return isParentExpanded || shouldUseDefault;
             }
-            
+
             return this.defaultExpanded;
         },
-        
+
         /**
          * Get indentation style for tree view item
          */
@@ -274,7 +282,7 @@ document.addEventListener('alpine:init', () => {
                 paddingLeft: `${paddingLeft}px`
             };
         },
-        
+
         /**
          * Get tree expand/collapse icon for directory
          */
@@ -282,13 +290,13 @@ document.addEventListener('alpine:init', () => {
             if (!item.is_directory) {
                 return null; // No icon for files
             }
-            
-            const isExpanded = this.isDirectoryExpanded(item.path) || 
-                             (!this.expandedDirectories.has(item.path) && this.defaultExpanded);
-            
+
+            const isExpanded = this.isDirectoryExpanded(item.path) ||
+                (!this.expandedDirectories.has(item.path) && this.defaultExpanded);
+
             return isExpanded ? '📂' : '📁';
         },
-        
+
         /**
          * Get tree line decorations (lines connecting tree items)
          */
@@ -296,14 +304,14 @@ document.addEventListener('alpine:init', () => {
             // This could be enhanced to show connecting lines
             // For now, just return basic indentation markers
             const decorations = [];
-            
+
             for (let i = 0; i < item.depth_level; i++) {
                 decorations.push('│');
             }
-            
+
             return decorations.join(' ');
         },
-        
+
         /**
          * Toggle sort direction or change sort field
          */
@@ -316,22 +324,25 @@ document.addEventListener('alpine:init', () => {
                 this.sortBy = field;
                 this.sortDirection = 'asc';
             }
+            // Automatically switch to flat view when sorting is applied
+            this.viewMode = 'flat';
+            console.log('View mode after sort:', this.viewMode);
         },
-        
+
         /**
          * Toggle hidden files visibility
          */
         toggleHidden() {
             this.showHidden = !this.showHidden;
         },
-        
+
         /**
          * Toggle recursive scanning
          */
         toggleRecursive() {
             this.recursive = !this.recursive;
         },
-        
+
         /**
          * Set maximum recursion depth
          */
@@ -341,19 +352,19 @@ document.addEventListener('alpine:init', () => {
                 this.maxDepth = newDepth;
             }
         },
-        
+
         /**
          * Toggle view mode between tree and flat
          */
         toggleViewMode() {
             this.viewMode = this.viewMode === 'tree' ? 'flat' : 'tree';
-            
+
             // If switching to tree mode and we have default expanded, expand all directories
             if (this.viewMode === 'tree' && this.defaultExpanded) {
                 this.expandAllDirectories();
             }
         },
-        
+
         /**
          * Toggle directory expansion
          */
@@ -366,14 +377,14 @@ document.addEventListener('alpine:init', () => {
             // Force reactivity by creating new Set
             this.expandedDirectories = new Set(this.expandedDirectories);
         },
-        
+
         /**
          * Check if directory is expanded
          */
         isDirectoryExpanded(directoryPath) {
             return this.expandedDirectories.has(directoryPath);
         },
-        
+
         /**
          * Expand all directories
          */
@@ -384,7 +395,7 @@ document.addEventListener('alpine:init', () => {
             });
             this.expandedDirectories = new Set(this.expandedDirectories);
         },
-        
+
         /**
          * Collapse all directories
          */
@@ -392,31 +403,31 @@ document.addEventListener('alpine:init', () => {
             this.expandedDirectories.clear();
             this.expandedDirectories = new Set();
         },
-        
+
         /**
          * Format file size for display
          */
         formatFileSize(bytes) {
             if (!bytes || bytes === 0) return '';
-            
+
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
             let size = bytes;
             let unitIndex = 0;
-            
+
             while (size >= 1024 && unitIndex < units.length - 1) {
                 size /= 1024;
                 unitIndex++;
             }
-            
+
             return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
         },
-        
+
         /**
          * Format datetime for display
          */
         formatDateTime(dateString) {
             if (!dateString) return '';
-            
+
             try {
                 const date = new Date(dateString);
                 return date.toLocaleString('da-DK', {
@@ -431,7 +442,7 @@ document.addEventListener('alpine:init', () => {
                 return dateString;
             }
         },
-        
+
         /**
          * Get file icon based on type
          */
@@ -439,9 +450,9 @@ document.addEventListener('alpine:init', () => {
             if (item.is_directory) {
                 return item.is_hidden ? '📁' : '📂';
             }
-            
+
             const extension = item.name.split('.').pop()?.toLowerCase() || '';
-            
+
             switch (extension) {
                 case 'mxf':
                 case 'mov':
@@ -466,7 +477,7 @@ document.addEventListener('alpine:init', () => {
                     return item.is_hidden ? '📄' : '📄';
             }
         },
-        
+
         /**
          * Get status summary for display
          */
@@ -478,7 +489,7 @@ document.addEventListener('alpine:init', () => {
                     icon: '❌'
                 };
             }
-            
+
             if (!this.isAccessible) {
                 return {
                     text: 'Utilgængelig',
@@ -486,7 +497,7 @@ document.addEventListener('alpine:init', () => {
                     icon: '🚫'
                 };
             }
-            
+
             if (this.isLoading) {
                 return {
                     text: 'Indlæser...',
@@ -494,7 +505,7 @@ document.addEventListener('alpine:init', () => {
                     icon: '⏳'
                 };
             }
-            
+
             return {
                 text: `${this.totalItems} elementer (${this.totalFiles} filer, ${this.totalDirectories} mapper)`,
                 color: 'text-green-400',
