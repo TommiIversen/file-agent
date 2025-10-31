@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -92,8 +93,7 @@ async def get_log_content(filename: str, settings: Settings = Depends(get_settin
         logs_directory = Path("logs")
         log_file_path = logs_directory / filename
 
-        # Security check - ensure the file is within the logs directory
-        if not str(log_file_path.resolve()).startswith(str(logs_directory.resolve())):
+        if not str(await asyncio.to_thread(log_file_path.resolve)).startswith(str(await asyncio.to_thread(logs_directory.resolve))):
             raise HTTPException(status_code=400, detail="Invalid file path")
 
         if not await aiofiles.os.path.exists(log_file_path):
