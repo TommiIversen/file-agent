@@ -124,8 +124,9 @@ class GrowingFileCopyStrategy():
                 logging.error(f"Directory creation failed for: {dest_dir}: {e}")
                 return False
 
+            network_detector = NetworkErrorDetector()
             success = await self._copy_growing_file(
-                source_path, dest_path, tracked_file
+                source_path, dest_path, tracked_file, network_detector
             )
 
             if success:
@@ -205,29 +206,12 @@ class GrowingFileCopyStrategy():
         except NetworkError:
             raise
         except Exception as e:
-            error_str = str(e).lower()
-            network_indicators = {
-                "invalid argument",
-                "errno 22",
-                "network path was not found",
-                "winerror 53",
-                "the network name cannot be found",
-                "winerror 67",
-                "access is denied",
-                "input/output error",
-                "errno 5",
-                "connection refused",
-                "network is unreachable",
-            }
-            is_network_error = any(
-                indicator in error_str for indicator in network_indicators
-            )
-            if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
-                is_network_error = True
-            if is_network_error:
+            network_detector = NetworkErrorDetector()
+            try:
+                network_detector.check_write_error(e, "growing copy strategy")
+            except NetworkError:
                 logging.error(f"Network error detected in growing copy strategy: {e}")
-                raise NetworkError(f"Network error during growing copy: {e}")
-
+                raise
             logging.error(f"Error in growing copy strategy: {e}")
             return False
         finally:
@@ -240,7 +224,7 @@ class GrowingFileCopyStrategy():
                     )
 
     async def _copy_growing_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
+        self, source_path: str, dest_path: str, tracked_file: TrackedFile, network_detector: NetworkErrorDetector
     ) -> bool:
         try:
             # Check if this is a static or growing file
@@ -275,8 +259,6 @@ class GrowingFileCopyStrategy():
                 pause_ms = 0
                 no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
-            network_detector = NetworkErrorDetector()
-
             async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
                     source_path,
@@ -298,29 +280,11 @@ class GrowingFileCopyStrategy():
         except NetworkError:
             raise
         except Exception as e:
-            error_str = str(e).lower()
-            network_indicators = {
-                "invalid argument",
-                "errno 22",
-                "network path was not found",
-                "winerror 53",
-                "the network name cannot be found",
-                "winerror 67",
-                "access is denied",
-                "input/output error",
-                "errno 5",
-                "connection refused",
-                "network is unreachable",
-            }
-            is_network_error = any(
-                indicator in error_str for indicator in network_indicators
-            )
-            if hasattr(e, "errno") and e.errno in {22, 5, 53, 67, 1231, 13}:
-                is_network_error = True
-            if is_network_error:
-                logging.error(f"Network error detected in growing copy: {e}")
-                raise NetworkError(f"Network error during growing copy: {e}")
-
+            try:
+                network_detector.check_write_error(e, "growing file copy")
+            except NetworkError:
+                logging.error(f"Network error detected in growing file copy: {e}")
+                raise
             logging.error(f"Error in growing file copy: {e}")
             return False
 
@@ -366,6 +330,9 @@ class GrowingFileCopyStrategy():
                 break
             except OSError:
                 logging.warning(f"Cannot access source file: {source_path}")
+                break
+            except Exception as e:
+                logging.error(f"Error checking file size: {e}")
                 break
 
             if not file_finished_growing:
