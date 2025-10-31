@@ -15,6 +15,7 @@ class AddFileCommand(Command):
     file_path: str
     file_size: int
     last_write_time: Optional[datetime] = None
+    creation_time: Optional[datetime] = None
 
 
 @dataclass

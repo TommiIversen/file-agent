@@ -23,7 +23,7 @@ class JobQueueService:
         self.file_repository = file_repository
         self.storage_monitor = storage_monitor
         self._event_bus = event_bus
-        self.job_queue: Optional[asyncio.Queue[QueueJob]] = None
+        self.job_queue: Optional[asyncio.PriorityQueue[QueueJob]] = None
 
         self._total_jobs_added = 0
         self._total_jobs_processed = 0
@@ -41,7 +41,7 @@ class JobQueueService:
             return
 
         if self.job_queue is None:
-            self.job_queue = asyncio.Queue[QueueJob]()
+            self.job_queue = asyncio.PriorityQueue[QueueJob]()
             logging.info("Typed Queue oprettet med kapacitet: unlimited")
 
         self._running = True

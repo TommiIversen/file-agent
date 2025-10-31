@@ -34,6 +34,7 @@ async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:
             "path": path,
             "size": stat_result.st_size,
             "last_write_time": datetime.fromtimestamp(stat_result.st_mtime),
+            "creation_time": datetime.fromtimestamp(getattr(stat_result, 'st_birthtime', stat_result.st_ctime)),
         }
     except (OSError, IOError):
         return None
@@ -245,7 +246,8 @@ class FileScanner:
                 command = AddFileCommand(
                     file_path=file_path,
                     file_size=metadata["size"],
-                    last_write_time=metadata["last_write_time"]
+                    last_write_time=metadata["last_write_time"],
+                    creation_time=metadata["creation_time"]
                 )
                 await self._command_bus.execute(command)
                 logging.info(

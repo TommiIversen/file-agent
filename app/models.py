@@ -111,6 +111,10 @@ class TrackedFile(BaseModel):
         default_factory=datetime.now, description="Tidspunkt hvor filen blev opdaget"
     )
 
+    creation_time: Optional[datetime] = Field(
+        default=None, description="Tidspunkt hvor filen blev oprettet på filsystemet"
+    )
+
     started_copying_at: Optional[datetime] = Field(
         default=None, description="Tidspunkt hvor kopiering startede"
     )

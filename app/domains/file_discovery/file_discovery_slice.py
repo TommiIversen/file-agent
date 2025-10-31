@@ -156,7 +156,8 @@ class FileDiscoverySlice:
         self, 
         file_path: str, 
         file_size: int, 
-        last_write_time: Optional[datetime] = None
+        last_write_time: Optional[datetime] = None,
+        creation_time: Optional[datetime] = None
     ) -> TrackedFile:
         """
         Add a newly discovered file to the system.
@@ -180,6 +181,7 @@ class FileDiscoverySlice:
             file_path=file_path,
             file_size=file_size,
             last_write_time=last_write_time,
+            creation_time=creation_time,
             status=FileStatus.DISCOVERED,
         )
         

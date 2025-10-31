@@ -26,7 +26,8 @@ class AddFileCommandHandler(CommandHandler[AddFileCommand, TrackedFile]):
         return await self._file_discovery_slice.add_discovered_file(
             file_path=command.file_path,
             file_size=command.file_size,
-            last_write_time=command.last_write_time
+            last_write_time=command.last_write_time,
+            creation_time=command.creation_time
         )
 
 

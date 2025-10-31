@@ -21,6 +21,17 @@ class QueueJob:
     requeued_at: Optional[datetime] = None
     last_error_message: Optional[str] = None
 
+    def __lt__(self, other: "QueueJob") -> bool:
+        """Prioritize jobs by the creation time of the tracked file (oldest first)."""
+        if not isinstance(other, QueueJob):
+            return NotImplemented
+        
+        # Handle cases where creation_time might be None (though it should be set now)
+        self_creation_time = self.tracked_file.creation_time or datetime.min
+        other_creation_time = other.tracked_file.creation_time or datetime.min
+
+        return self_creation_time < other_creation_time
+
     @property
     def file_id(self) -> str:
         """Get the UUID of the tracked file."""
