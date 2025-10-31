@@ -17,10 +17,9 @@ from datetime import datetime
 from unittest.mock import Mock, AsyncMock, patch
 
 from app.config import Settings
+from app.services.copy.models import CopyProgress, CopyResult
 from app.services.copy.file_copy_executor import (
     FileCopyExecutor,
-    CopyResult,
-    CopyProgress,
 )
 
 

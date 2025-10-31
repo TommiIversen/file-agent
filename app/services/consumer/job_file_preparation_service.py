@@ -9,7 +9,7 @@ from typing import Optional
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile, QueueJob
-from app.services.copy.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
 from app.utils.file_operations import (

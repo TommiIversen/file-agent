@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from app.config import Settings
 from app.services.consumer.job_models import QueueJob

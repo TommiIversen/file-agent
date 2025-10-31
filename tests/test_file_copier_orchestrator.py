@@ -12,7 +12,7 @@ from unittest.mock import Mock, AsyncMock, MagicMock
 from app.services.copy.file_copier import FileCopierService
 from app.services.job_queue import JobQueueService
 from app.config import Settings
-from app.services.copy.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.growing_copy import GrowingFileCopyStrategy
 
 
 class TestFileCopierServiceOrchestrator:

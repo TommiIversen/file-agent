@@ -12,7 +12,7 @@ from app.services.consumer.job_file_preparation_service import JobFilePreparatio
 from app.services.consumer.job_finalization_service import JobFinalizationService
 from app.services.consumer.job_models import ProcessResult, QueueJob
 from app.services.consumer.job_space_manager import JobSpaceManager
-from app.services.copy.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.services.job_queue import JobQueueService
 from app.utils.output_folder_template import OutputFolderTemplateEngine
 
