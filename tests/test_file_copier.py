@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 from app.config import Settings
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
-from app.services.file_copier import FileCopierService
+from app.services.copy.file_copier import FileCopierService
 
 
 class TestFileCopierService:

@@ -13,10 +13,10 @@ from unittest.mock import Mock, AsyncMock
 
 from app.config import Settings
 from app.models import TrackedFile, FileStatus
-from app.services.file_copier import FileCopierService
+from app.services.copy.file_copier import FileCopierService
 from app.services.state_manager import StateManager
 from app.services.job_queue import JobQueueService
-from app.services.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.copy_strategies import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.consumer.job_processor import JobProcessor
 

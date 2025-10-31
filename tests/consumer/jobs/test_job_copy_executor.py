@@ -13,7 +13,7 @@ from datetime import datetime
 from app.services.consumer.job_copy_executor import JobCopyExecutor
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import PreparedFile
-from app.services.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.copy_strategies import GrowingFileCopyStrategy
 
 
 @pytest.fixture

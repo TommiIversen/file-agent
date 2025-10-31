@@ -13,7 +13,7 @@ from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
 from app.services.copy.network_error_detector import NetworkError
-from app.services.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.copy_strategies import GrowingFileCopyStrategy
 from app.core.file_repository import FileRepository
 
 

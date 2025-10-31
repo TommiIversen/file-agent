@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.config import Settings
 from app.models import FileStatus, TrackedFile
-from app.services.copy_strategies import GrowingFileCopyStrategy
+from app.services.copy.copy_strategies import GrowingFileCopyStrategy
 from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.state_manager import StateManager
 

@@ -16,8 +16,8 @@ from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
 from .services.copy.file_copy_executor import FileCopyExecutor
-from .services.copy_strategies import GrowingFileCopyStrategy
-from .services.file_copier import FileCopierService
+from .services.copy.copy_strategies import GrowingFileCopyStrategy
+from .services.copy.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
 from .domains.file_discovery.file_scanner_service import FileScannerService
