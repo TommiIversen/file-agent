@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', () => {
         // File State
         items: new Map(),               // Map<fileId, TrackedFile> - bruger ID i stedet for path!
         sortBy: 'discovered',          // Current sort method
+        activeFilter: 'all',           // Current filter: 'all', 'active', 'growing', 'completed', 'failed'
 
         // Statistics State
         statistics: {
@@ -21,6 +22,12 @@ document.addEventListener('alpine:init', () => {
             completedFiles: 0,
             failedFiles: 0,
             growingFiles: 0
+        },
+
+        // Filter Management
+        setFilter(filterName) {
+            this.activeFilter = filterName;
+            console.log(`Filter changed to: ${filterName}`);
         },
 
         // File Management Actions
@@ -150,6 +157,30 @@ document.addEventListener('alpine:init', () => {
         },
 
         // Computed Properties - File Lists
+        get filteredFiles() {
+            let filesToFilter = Array.from(this.items.values());
+
+            switch (this.activeFilter) {
+                case 'active':
+                    filesToFilter = filesToFilter.filter(file => !['Completed', 'Failed'].includes(file.status));
+                    break;
+                case 'completed':
+                    filesToFilter = filesToFilter.filter(file => file.status === 'Completed');
+                    break;
+                case 'growing':
+                    filesToFilter = filesToFilter.filter(file => ['Growing', 'ReadyToStartGrowing', 'GrowingCopy'].includes(file.status));
+                    break;
+                case 'failed':
+                    filesToFilter = filesToFilter.filter(file => file.status === 'Failed');
+                    break;
+                case 'all':
+                default:
+                    // No filter needed, return all files
+                    break;
+            }
+            return this.sortFiles(filesToFilter);
+        },
+
         get allFiles() {
             if (!this.items) {
                 console.warn('fileStore.items is not initialized yet');

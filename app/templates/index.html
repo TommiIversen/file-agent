@@ -104,26 +104,26 @@
             <!-- File Statistics (centered) -->
             <div class="flex justify-center">
                 <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-                    <div class="text-center">
+                    <button @click="$store.files.setFilter('all')" :class="{'bg-blue-700': $store.files.activeFilter === 'all'}" class="p-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200">
                         <div class="text-blue-300">Total</div>
                         <strong class="text-white" x-text="$store.files.statistics.totalFiles">0</strong>
-                    </div>
-                    <div class="text-center">
+                    </button>
+                    <button @click="$store.files.setFilter('active')" :class="{'bg-yellow-700': $store.files.activeFilter === 'active'}" class="p-2 rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-colors duration-200">
                         <div class="text-yellow-300">Aktive</div>
                         <strong class="text-white" x-text="$store.files.statistics.activeFiles">0</strong>
-                    </div>
-                    <div class="text-center">
+                    </button>
+                    <button @click="$store.files.setFilter('growing')" :class="{'bg-orange-700': $store.files.activeFilter === 'growing'}" class="p-2 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition-colors duration-200">
                         <div class="text-orange-300">Growing</div>
                         <strong class="text-white" x-text="$store.files.statistics.growingFiles">0</strong>
-                    </div>
-                    <div class="text-center">
+                    </button>
+                    <button @click="$store.files.setFilter('completed')" :class="{'bg-green-700': $store.files.activeFilter === 'completed'}" class="p-2 rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors duration-200">
                         <div class="text-green-300">Færdige</div>
                         <strong class="text-white" x-text="$store.files.statistics.completedFiles">0</strong>
-                    </div>
-                    <div class="text-center">
+                    </button>
+                    <button @click="$store.files.setFilter('failed')" :class="{'bg-red-700': $store.files.activeFilter === 'failed'}" class="p-2 rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors duration-200">
                         <div class="text-red-300">Fejlede</div>
                         <strong class="text-white" x-text="$store.files.statistics.failedFiles">0</strong>
-                    </div>
+                    </button>
                 </div>
             </div>
 
@@ -353,7 +353,7 @@
     <!-- Files List -->
     <div class="space-y-2 mt-2">
 
-        <template x-for="file in $store.files.allFiles" :key="file.id">
+        <template x-for="file in $store.files.filteredFiles" :key="file.id">
             <!-- Simple File Row with Hover Tooltip -->
             <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
                 <div class="flex items-center space-x-4">
@@ -470,7 +470,7 @@
         </template>
 
         <!-- Empty State -->
-        <div x-show="$store.files.allFiles.length === 0" class="text-center">
+        <div x-show="$store.files.filteredFiles.length === 0" class="text-center">
             <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
                 <div class="text-4xl mb-4">📁</div>
                 Ingen filer fundet
