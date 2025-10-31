@@ -27,7 +27,6 @@ Ikke FileScanner først - det vil skabe kaos! Start med fundamentet først, så 
 # FileScanner har 15+ direkte StateManager kald:
 await self.state_manager.add_file(...)
 await self.state_manager.update_file_status_by_id(...)  
-await self.state_manager.get_files_by_status(...)
 await self.state_manager.is_file_stable(...)
 # ... og mange flere
 ```

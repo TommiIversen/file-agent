@@ -17,6 +17,7 @@ from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.state_manager import StateManager
 from app.utils.progress_utils import calculate_transfer_rate
+from app.core.events.file_events import FileCopyProgressEvent
 
 
 async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
@@ -130,16 +131,16 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 f"(rate: {tracked_file.growth_rate_mbps:.2f}MB/s)"
             )
 
-            latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
-            if latest_tracked_file:
-                tracked_file = latest_tracked_file
-                logging.debug(
-                    f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}"
-                )
-            else:
-                logging.warning(
-                    f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}..."
-                )
+            # latest_tracked_file = await self.state_manager.get_file_by_path(source_path)
+            # if latest_tracked_file:
+            #     tracked_file = latest_tracked_file
+            #     logging.debug(
+            #         f"🔄 Using latest tracked file UUID: {tracked_file.id[:8]}... for {os.path.basename(source_path)}"
+            #     )
+            # else:
+            #     logging.warning(
+            #         f"⚠️ Could not get latest tracked file for {source_path}, using provided reference: {tracked_file.id[:8]}..."
+            #     )
 
             dest_dir = Path(dest_path).parent
             try:
@@ -281,9 +282,7 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 pause_ms = 0
                 no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
-            network_detector = NetworkErrorDetector(
-                destination_path=dest_path, check_interval_bytes=chunk_size * 10
-            )
+            network_detector = NetworkErrorDetector()
 
             async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
@@ -502,14 +501,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 bytes_copied += chunk_len
                 bytes_to_copy -= chunk_len
 
-                try:
-                    await network_detector.check_destination_connectivity(bytes_copied)
-                except NetworkError as ne:
-                    logging.error(
-                        f"Network connectivity lost during growing copy: {ne}"
-                    )
-                    raise ne
-
                 copy_ratio = (
                     (bytes_copied / current_file_size) * 100
                     if current_file_size > 0
@@ -531,7 +522,6 @@ class GrowingFileCopyStrategy(FileCopyStrategy):
                 copy_speed_mbps = transfer_rate / (1024 * 1024)
 
                 if self._event_bus and progress_percent > last_progress_percent:
-                    from app.core.events.file_events import FileCopyProgressEvent
 
                     progress_event = FileCopyProgressEvent(
                         file_id=tracked_file.id,

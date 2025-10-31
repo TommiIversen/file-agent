@@ -298,7 +298,6 @@ def get_state_manager() -> StateManager:
 ```python
 # Real-world scenarie: NAS går ned under kopi
 # T+0ms:    FileCopyExecutor encounters network error  
-# T+5ms:    NetworkErrorDetector identifies network failure
 # T+10ms:   NetworkFailureDetectedEvent published via event bus
 # T+15ms:   FileScanner receives event, pauses scanning IMMEDIATELY  
 # T+20ms:   JobProcessor receives event, stops processing new files

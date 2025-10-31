@@ -612,66 +612,7 @@ class GrowingFileCopyStrategy:
         )
 ```
 
-### **Step 3: FileScanner Network-Aware Pausing**
-```python
-# app/domains/file_discovery/scanner.py
-class FileScanner:
-    def __init__(self, event_bus: EventBus):
-        self.event_bus = event_bus
-        self._scanning_paused = False
-        self._pending_files = []
-        
-        # Subscribe to network status changes
-        event_bus.subscribe(NetworkStatusChanged, self._handle_network_change)
-        
-    async def _handle_network_change(self, event: NetworkStatusChanged):
-        if not event.network_available:
-            await self._pause_operations()
-        else:
-            await self._resume_operations()
-            
-    async def _pause_operations(self):
-        """Immediate pause of all scanning operations"""
-        self._scanning_paused = True
-        
-        # Mark any files currently being processed as waiting
-        discovered_files = await self.state_manager.get_files_by_status(FileStatus.DISCOVERED)
-        ready_files = await self.state_manager.get_files_by_status(FileStatus.READY)
-        
-        for file in discovered_files + ready_files:
-            await self.state_manager.update_file_status_by_id(
-                file.id, 
-                FileStatus.WAITING_FOR_NETWORK,
-                error_message="Network unavailable - waiting for recovery"
-            )
-            
-        logging.warning(f"📂 FILE SCANNING PAUSED: {len(discovered_files + ready_files)} files marked as waiting")
-        
-    async def _resume_operations(self):
-        """Resume scanning and reprocess waiting files"""
-        self._scanning_paused = False
-        
-        # Requeue files that were waiting for network
-        waiting_files = await self.state_manager.get_files_by_status(FileStatus.WAITING_FOR_NETWORK)
-        
-        for file in waiting_files:
-            await self.state_manager.update_file_status_by_id(
-                file.id,
-                FileStatus.READY,  # Back to ready for processing
-                error_message=None
-            )
-            
-        logging.info(f"📂 FILE SCANNING RESUMED: {len(waiting_files)} files requeued")
-        
-    async def discover_files(self):
-        """Normal file discovery - now network-aware"""
-        if self._scanning_paused:
-            logging.debug("📂 Skipping file discovery - network unavailable")
-            return
-            
-        # Normal discovery logic
-        await self._scan_source_directory()
-```
+
 
 ### **Step 4: Coordination Timeline**
 ```python

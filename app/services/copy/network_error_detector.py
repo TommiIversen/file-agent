@@ -1,20 +1,4 @@
-"""
-Network Error Detector for immediate failure detection in copy strategies.
-
-This module provides utilities to detect network errors early in copy operations,
-enabling fail-fast behavior instead of waiting for the full operation to fail.
-
-Strategy:
-1. Primary detection: Analyze copy operation errors for network patterns
-2. Secondary check: Lightweight read-only connectivity checks (no test file writing)
-3. Fail-fast: Immediately classify and escalate network errors
-"""
-
-import asyncio
 import errno
-import logging
-import time
-from pathlib import Path
 
 
 class NetworkError(Exception):
@@ -74,105 +58,17 @@ class NetworkErrorDetector:
         1231,  # Windows-specific network error codes
     }
 
-    def __init__(
-        self,
-        destination_path: str,
-        check_interval_bytes: int = 10 * 1024 * 1024,
-        connectivity_timeout: float = 3.0,
-    ):
+    def __init__(self):
+     """
+        Initialiserer den reaktive netværksfejl-detektor.
+        Denne klasse analyserer kun fejl, efter de er sket.
         """
-        Initialize network error detector.
-
-        Args:
-            destination_path: Path to destination to monitor
-            check_interval_bytes: Check connectivity every N bytes copied (default: 10MB)
-            connectivity_timeout: Timeout for connectivity checks in seconds (default: 3.0)
-        """
-        self.destination_path = Path(destination_path)
-        self.check_interval_bytes = check_interval_bytes
-        self.connectivity_timeout = connectivity_timeout
-        self.last_check_bytes = 0
-        self.last_check_time = time.time()
-
-    def should_check_network(self, bytes_copied: int) -> bool:
-        """Determine if we should check network connectivity."""
-        return bytes_copied - self.last_check_bytes >= self.check_interval_bytes
-
-    async def check_destination_connectivity(self, bytes_copied: int) -> None:
-        """
-        Check if destination is still accessible using lightweight read-only operations with timeout.
-
-        This approach avoids creating test files on the network during large
-        copy operations, reducing I/O conflicts and improving performance.
-        Uses directory listing instead of file creation for connectivity checks.
-
-        Raises NetworkError if destination appears to be unreachable or timeout occurs.
-        """
-        if not self.should_check_network(bytes_copied):
-            return
-
-        try:
-            # Run connectivity check with timeout to prevent hanging
-            await asyncio.wait_for(
-                self._perform_connectivity_check(), timeout=self.connectivity_timeout
-            )
-
-            self.last_check_bytes = bytes_copied
-            self.last_check_time = time.time()
-
-        except asyncio.TimeoutError:
-            raise NetworkError(
-                f"Network connectivity check timed out after {self.connectivity_timeout}s"
-            )
-        except NetworkError:
-            # Re-raise network errors
-            raise
-        except Exception as e:
-            # Check if this looks like a network error
-            error_str = str(e).lower()
-            if self._is_network_error_string(error_str) or self._is_network_errno(e):
-                raise NetworkError(f"Network error during connectivity check: {e}")
-            # Otherwise, log but don't fail the copy for non-network issues
-            logging.debug(f"Non-network error during connectivity check: {e}")
-
-    async def _perform_connectivity_check(self) -> None:
-        """
-        Perform the actual connectivity check operations.
-        This runs in executor to avoid blocking the event loop.
-        """
-
-        def _sync_connectivity_check():
-            # Lightweight connectivity check - only read operations, no writing
-            dest_parent = self.destination_path.parent
-
-            # Quick stat check - just read directory metadata
-            if not dest_parent.exists():
-                raise NetworkError(
-                    f"Destination directory no longer accessible: {dest_parent}"
-                )
-
-            # Try to list directory contents (read-only operation)
-            try:
-                # This will fail fast if network is down, but doesn't write anything
-                list(dest_parent.iterdir())
-            except Exception as e:
-                error_str = str(e).lower()
-                if self._is_network_error_string(error_str):
-                    raise NetworkError(
-                        f"Network connectivity lost during directory read: {e}"
-                    )
-                # If it's not a network error, continue (might be permissions etc.)
-
-        # Run sync operation in thread executor to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _sync_connectivity_check)
+    pass
 
     def _is_network_error_string(self, error_str: str) -> bool:
-        """Check if error string indicates network issue."""
         return any(indicator in error_str for indicator in self.NETWORK_ERROR_STRINGS)
 
     def _is_network_errno(self, error: Exception) -> bool:
-        """Check if error has network-related errno."""
         return hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES
 
     def check_write_error(self, error: Exception, operation: str = "write") -> None:

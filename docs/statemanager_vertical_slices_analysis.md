@@ -19,7 +19,6 @@ Efter at have gennemgået StateManager's faktiske kode, kan den opdeles i **6 st
 **2. Query & Filtering Engine - ~200 linjer** 
 ```python
 # Complex filtering logic:
-- get_files_by_status()                     # Status-based filtering
 - get_active_file_by_path()                 # Active file prioritization  
 - get_all_files_for_path()                  # Path-based queries
 - _get_current_file_for_path()              # Priority-based selection

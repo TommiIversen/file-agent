@@ -69,20 +69,6 @@ class TestStateManager:
         assert file_by_id is not None
         assert file_by_id.id == tracked_file.id
 
-    async def test_get_files_by_status(self, state_manager):
-        file1 = await state_manager.add_file("/test/file1.mxf", 1024)
-        file2 = await state_manager.add_file("/test/file2.mxf", 2048)
-        file3 = await state_manager.add_file("/test/file3.mxf", 4096)
-        await state_manager.update_file_status_by_id(file1.id, FileStatus.READY)
-        await state_manager.update_file_status_by_id(file2.id, FileStatus.READY)
-        # Test get_files_by_status
-        discovered_files = await state_manager.get_files_by_status(
-            FileStatus.DISCOVERED
-        )
-        ready_files = await state_manager.get_files_by_status(FileStatus.READY)
-        assert all(f.status == FileStatus.DISCOVERED for f in discovered_files)
-        assert all(f.status == FileStatus.READY for f in ready_files)
-        assert file3.id in [f.id for f in discovered_files]
 
     async def test_cleanup_missing_files(self, state_manager):
         await state_manager.add_file("/test/file1.mxf", 1024)
@@ -129,10 +115,6 @@ class TestStateManager:
         all_files = await state_manager.get_all_files()
         assert len(all_files) == 100
 
-        # Verificer at de fleste filer blev opdateret til READY
-        ready_files = await state_manager.get_files_by_status(FileStatus.READY)
-        # Der kan være race conditions, så vi tillader at nogle ikke blev opdateret
-        assert len(ready_files) >= 90
 
     async def test_status_counts_and_statistics(self, state_manager):
         file1 = await state_manager.add_file("/test/file1.mxf", 1024)

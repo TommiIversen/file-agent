@@ -81,18 +81,6 @@ class StateManager:
         time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
         return time1 > time2
 
-    async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
-        async with self._lock:
-            current_files = {}
-            all_files = await self._file_repository.get_all()
-            for tracked_file in all_files:
-                if tracked_file.status == status:
-                    current = current_files.get(tracked_file.file_path)
-                    if not current or self._is_more_current(tracked_file, current):
-                        current_files[tracked_file.file_path] = tracked_file
-            return list(current_files.values())
-
-
     async def get_file_by_id(self, file_id: str) -> Optional[TrackedFile]:
         async with self._lock:
             result = await self._file_repository.get_by_id(file_id)
@@ -127,6 +115,3 @@ class StateManager:
                 tracked_file.failed_at = datetime.now()
             await self._file_repository.update(tracked_file)
         return tracked_file
-
-
-

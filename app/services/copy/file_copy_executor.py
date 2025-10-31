@@ -9,7 +9,7 @@ import aiofiles
 from app.config import Settings
 from app.utils.file_operations import validate_file_sizes, create_temp_file_path
 from app.utils.progress_utils import should_report_progress_with_bytes
-from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
+from app.services.copy.network_error_detector import NetworkErrorDetector
 
 
 @dataclass
@@ -273,10 +273,7 @@ class FileCopyExecutor:
         )
 
         # Initialize network error detector for fail-fast behavior
-        network_detector = NetworkErrorDetector(
-            destination_path=str(dest),
-            check_interval_bytes=1024 * 1024,  # Check every 1MB
-        )
+        network_detector = NetworkErrorDetector()
 
         try:
             async with (
@@ -298,14 +295,6 @@ class FileCopyExecutor:
 
                     bytes_copied += len(chunk)
 
-                    # Check network connectivity periodically for fail-fast behavior
-                    try:
-                        await network_detector.check_destination_connectivity(
-                            bytes_copied
-                        )
-                    except NetworkError as ne:
-                        logging.error(f"Network connectivity lost during copy: {ne}")
-                        raise ne
 
                     if progress_callback:
                         current_time = datetime.now()
