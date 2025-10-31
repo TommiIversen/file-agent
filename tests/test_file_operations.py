@@ -60,70 +60,72 @@ class TestCalculateRelativePath:
 class TestGenerateConflictFreePath:
     """Test generate_conflict_free_path function."""
 
-    def test_no_conflict(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_no_conflict(self, tmp_path):
         """Test when no conflict exists."""
         dest_path = tmp_path / "video.mxf"
 
-        result = generate_conflict_free_path(dest_path)
+        result = await generate_conflict_free_path(dest_path)
 
         assert result == dest_path
 
-    def test_single_conflict(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_single_conflict(self, tmp_path):
         """Test with one existing file."""
         dest_path = tmp_path / "video.mxf"
         dest_path.touch()  # Create conflicting file
 
-        result = generate_conflict_free_path(dest_path)
+        result = await generate_conflict_free_path(dest_path)
 
         assert result == tmp_path / "video_1.mxf"
         assert not result.exists()
 
-    def test_multiple_conflicts(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_multiple_conflicts(self, tmp_path):
         """Test with multiple existing files."""
         base_path = tmp_path / "video.mxf"
         base_path.touch()
         (tmp_path / "video_1.mxf").touch()
         (tmp_path / "video_2.mxf").touch()
 
-        result = generate_conflict_free_path(base_path)
+        result = await generate_conflict_free_path(base_path)
 
         assert result == tmp_path / "video_3.mxf"
         assert not result.exists()
 
-    def test_different_extensions(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_different_extensions(self, tmp_path):
         """Test with different file extensions."""
         dest_path = tmp_path / "archive.tar.gz"
         dest_path.touch()
 
-        result = generate_conflict_free_path(dest_path)
+        result = await generate_conflict_free_path(dest_path)
 
         assert result == tmp_path / "archive_1.tar.gz"
 
-    def test_no_extension(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_no_extension(self, tmp_path):
         """Test with file without extension."""
         dest_path = tmp_path / "README"
         dest_path.touch()
 
-        result = generate_conflict_free_path(dest_path)
+        result = await generate_conflict_free_path(dest_path)
 
         assert result == tmp_path / "README_1"
 
-    def test_max_conflicts_raises_error(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_max_conflicts_raises_error(self, tmp_path, mocker):
         """Test that excessive conflicts raise RuntimeError."""
         dest_path = tmp_path / "video.mxf"
 
         # Mock exists() to always return True (simulating infinite conflicts)
-        original_exists = Path.exists
-        Path.exists = lambda self: True
+        mocker.patch("aiofiles.os.path.exists", return_value=True)
 
-        try:
-            with pytest.raises(
-                RuntimeError,
-                match="Could not resolve name conflict after 9999 attempts",
-            ):
-                generate_conflict_free_path(dest_path)
-        finally:
-            Path.exists = original_exists
+        with pytest.raises(
+            RuntimeError,
+            match="Could not resolve name conflict after 9999 attempts",
+        ):
+            await generate_conflict_free_path(dest_path)
 
 
 
