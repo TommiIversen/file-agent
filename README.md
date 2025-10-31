@@ -33,7 +33,6 @@ The core components reside in the `app/services` directory:
 
 - **`FileCopyService` & `JobProcessor` (The Consumer):** These services work together to consume jobs from the queue. `JobProcessor` handles the logic for a single job (like checking for destination space), while `FileCopyService` manages the worker pool.
 
-- **Strategy Pattern (`CopyStrategyFactory`, `FileCopyExecutor`):** The actual file copying is handled by different "strategies." The `CopyStrategyFactory` selects the best strategy for a given file (e.g., `NormalFileCopyStrategy`, `GrowingFileCopyStrategy`, `ResumableNormalFileCopyStrategy`). This makes the copy logic flexible and easy to extend.
 
 - **`WebSocketManager` (The Notifier):** This service subscribes to the `StateManager` and broadcasts any state changes to the web UI in real-time, providing a live view of the operations.
 

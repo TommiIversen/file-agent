@@ -1,10 +1,3 @@
-"""
-Dependency Injection for File Transfer Agent.
-
-Centraliseret sted hvor alle services og afhængigheder registreres.
-Sikrer singleton pattern og proper dependency management.
-"""
-
 import asyncio
 from functools import lru_cache
 from typing import Dict, Any, Optional
@@ -15,7 +8,6 @@ from app.core.file_repository import FileRepository
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
-from .services.copy.file_copy_executor import FileCopyExecutor
 from .services.copy.growing_copy import GrowingFileCopyStrategy
 from .services.copy.file_copier import FileCopierService
 from .services.job_queue import JobQueueService
@@ -219,21 +211,13 @@ def get_job_error_classifier() -> JobErrorClassifier:
     return _singletons["job_error_classifier"]
 
 
-def get_file_copy_executor() -> FileCopyExecutor:
-    if "file_copy_executor" not in _singletons:
-        settings = get_settings()
-        _singletons["file_copy_executor"] = FileCopyExecutor(settings)
-    return _singletons["file_copy_executor"]
-
 
 def get_copy_strategy() -> GrowingFileCopyStrategy:
     if "copy_strategy" not in _singletons:
-        settings = get_settings()
-        state_manager = get_state_manager()
-        file_copy_executor = get_file_copy_executor()
-        event_bus = get_event_bus()
         _singletons["copy_strategy"] = GrowingFileCopyStrategy(
-            settings, state_manager, file_copy_executor, event_bus=event_bus
+            settings=get_settings(), 
+            state_manager=get_state_manager(), 
+            event_bus=get_event_bus()
         )
     return _singletons["copy_strategy"]
 

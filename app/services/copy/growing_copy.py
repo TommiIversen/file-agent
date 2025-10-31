@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,7 +12,6 @@ from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus, TrackedFile
-from app.services.copy.file_copy_executor import FileCopyExecutor
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.state_manager import StateManager
 from app.utils.progress_utils import calculate_transfer_rate
@@ -36,31 +34,19 @@ async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
         return False
 
 
-class FileCopyStrategy(ABC):
+class GrowingFileCopyStrategy():
+
     def __init__(
         self,
         settings: Settings,
         state_manager: StateManager,
-        file_copy_executor: FileCopyExecutor,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.state_manager = state_manager
-        self.file_copy_executor = file_copy_executor
         self._event_bus = event_bus
 
-    @abstractmethod
-    async def copy_file(
-        self, source_path: str, dest_path: str, tracked_file: TrackedFile
-    ) -> bool:
-        pass
 
-    @abstractmethod
-    def supports_file(self, tracked_file: TrackedFile) -> bool:
-        pass
-
-
-class GrowingFileCopyStrategy(FileCopyStrategy):
     def supports_file(self, tracked_file: TrackedFile) -> bool:
         return True
 
