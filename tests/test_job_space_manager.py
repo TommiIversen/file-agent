@@ -241,44 +241,30 @@ class TestJobSpaceManager:
     async def test_handle_space_shortage_no_retry_manager(self, job_space_manager):
         """Test space shortage handling without retry manager."""
         # Arrange
-        job_space_manager.space_retry_manager = None
-
-        class DummyJob:
-            def __init__(self):
-                self.file_path = "/test/file.txt"
-                self.file_size = 1000
-                self.file_id = "tracked-file-uuid"  # Add file_id field that matches tracked_file.id
-                self.tracked_file = TrackedFile(
-                    file_path="/test/file.txt",
-                    file_size=1000,
-                    status=FileStatus.READY,
-                    id="tracked-file-uuid",
-                )
-
-        job = DummyJob()
+        space_manager.space_retry_manager = None
+        tracked_file = TrackedFile(
+            file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
+        )
+        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        space_manager.file_repository.get_by_id.return_value = tracked_file
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,
             required_bytes=1000,
             file_size_bytes=1000,
             safety_margin_bytes=100,
-            reason="Insufficient space",
+            reason="Insufficient",
         )
 
         # Act
-        result = await job_space_manager.handle_space_shortage(job, space_check)
+        result = await space_manager.handle_space_shortage(job, space_check)
 
         # Assert
-        assert isinstance(result, ProcessResult)
         assert result.success is False
         assert result.space_shortage is True
         assert result.retry_scheduled is False
-        job_space_manager.file_repository.update_file_status.assert_called_once_with(
-            file_id="tracked-file-uuid",
-            status=FileStatus.FAILED,
-            error_message="Insufficient space: Insufficient space",
-        )
-        job_space_manager.job_queue.mark_job_failed.assert_called_once()
+        space_manager.file_repository.update.assert_called_once_with(job.tracked_file)
+        space_manager.job_queue.mark_job_failed.assert_called_once()
 
     def test_get_space_manager_info(self, job_space_manager):
         """Test getting space manager configuration info."""

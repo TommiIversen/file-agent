@@ -131,7 +131,8 @@ class TestStaticFileCopyOptimization:
         )
 
         # Mock the file repository to return our static file
-        file_repository.get_by_path.return_value = static_file
+        static_file.id = "static-file-id"
+        file_repository.get_by_id.return_value = static_file
         file_repository.get_by_id.return_value = static_file
 
         # Mock file operations
@@ -144,7 +145,7 @@ class TestStaticFileCopyOptimization:
                         return_value=75 * 1024 * 1024,
                     ) as mock_loop:
                         with patch(
-                            "app.services.copy_strategies._verify_file_integrity",
+                            "app.services.copy.growing_copy._verify_file_integrity",
                             return_value=True,
                         ):
                             with patch("aiofiles.os.remove"):
@@ -191,7 +192,8 @@ class TestStaticFileCopyOptimization:
         )
 
         # Mock the file repository
-        file_repository.get_by_path.return_value = growing_file
+        growing_file.id = "growing-file-id"
+        file_repository.get_by_id.return_value = growing_file
         file_repository.get_by_id.return_value = growing_file
 
         # Mock file operations
@@ -204,7 +206,7 @@ class TestStaticFileCopyOptimization:
                         return_value=150 * 1024 * 1024,
                     ) as mock_loop:
                         with patch(
-                            "app.services.copy_strategies._verify_file_integrity",
+                            "app.services.copy.growing_copy._verify_file_integrity",
                             return_value=True,
                         ):
                             with patch("aiofiles.os.remove"):

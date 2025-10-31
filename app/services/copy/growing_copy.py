@@ -564,14 +564,32 @@ class GrowingFileCopyStrategy():
 
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
-        Determine if a file is currently growing based on its status.
+        Determine if a file is currently growing based on its status and growth history.
 
         Returns:
-            True if file has a growing-related status.
+            True if file has a growing-related status, a positive growth rate,
+            or has significantly increased in size since first seen.
             False otherwise.
         """
-        return tracked_file.status in [
+        # Primary check: status indicates active growth
+        if tracked_file.status in [
             FileStatus.GROWING,
             FileStatus.READY_TO_START_GROWING,
             FileStatus.GROWING_COPY,
-        ]
+        ]:
+            return True
+
+        # Secondary check: if status is READY, but still has a growth rate or has grown significantly
+        # This can happen if a file was growing, became stable, but then started growing again
+        if tracked_file.status == FileStatus.READY:
+            # Check for positive growth rate
+            if tracked_file.growth_rate_mbps > 0:
+                return True
+
+            # Check for significant size increase since first seen (e.g., more than 10% or 1MB)
+            if tracked_file.first_seen_size and tracked_file.file_size:
+                size_increase = tracked_file.file_size - tracked_file.first_seen_size
+                if size_increase > (tracked_file.first_seen_size * 0.1) or size_increase > (1 * 1024 * 1024): # 10% or 1MB
+                    return True
+
+        return False
