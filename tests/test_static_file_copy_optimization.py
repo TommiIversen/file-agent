@@ -133,7 +133,6 @@ class TestStaticFileCopyOptimization:
         # Mock the file repository to return our static file
         static_file.id = "static-file-id"
         file_repository.get_by_id.return_value = static_file
-        file_repository.get_by_id.return_value = static_file
 
         # Mock file operations
         with patch("aiofiles.os.path.getsize", return_value=75 * 1024 * 1024):
