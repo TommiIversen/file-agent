@@ -7,6 +7,9 @@
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('files', {
+        // Configuration
+        MAX_FILES: 400, // Maximum number of files to keep in the store
+
         // File State
         items: new Map(),               // Map<fileId, TrackedFile> - bruger ID i stedet for path!
         sortBy: 'discovered',          // Current sort method
@@ -28,6 +31,16 @@ document.addEventListener('alpine:init', () => {
             }
             
             this.items.set(file.id, file);  // Brug ID som key
+
+            if (this.items.size > this.MAX_FILES) {
+                // Get the first (oldest) key in the Map
+                const oldestFileId = this.items.keys().next().value;
+                if (oldestFileId) {
+                    this.items.delete(oldestFileId);
+                    console.log(`Removed oldest file (ID: ${oldestFileId}) to maintain limit of ${this.MAX_FILES}`);
+                }
+            }
+
             this.updateStatisticsFromFiles();
             console.log(`File added: ${file.file_path} (ID: ${file.id})`);
         },
