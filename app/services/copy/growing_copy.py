@@ -259,7 +259,7 @@ class GrowingFileCopyStrategy():
                 pause_ms = 0
                 no_growth_cycles = max_no_growth_cycles  # Skip growth detection
 
-            async with aiofiles.open(dest_path, "wb") as dst:
+            async with asyncio.wait_for(aiofiles.open(dest_path, "wb"), timeout=self.settings.file_operation_timeout_seconds) as dst:
                 bytes_copied = await self._growing_copy_loop(
                     source_path,
                     dst,
@@ -440,18 +440,18 @@ class GrowingFileCopyStrategy():
         bytes_copied = start_bytes
         bytes_to_copy = end_bytes - start_bytes
 
-        async with aiofiles.open(source_path, "rb") as src:
-            await src.seek(bytes_copied)
+        async with asyncio.wait_for(aiofiles.open(source_path, "rb"), timeout=self.settings.file_operation_timeout_seconds) as src:
+            await asyncio.wait_for(src.seek(bytes_copied), timeout=self.settings.file_operation_timeout_seconds)
 
             while bytes_to_copy > 0:
                 read_size = min(chunk_size, bytes_to_copy)
-                chunk = await src.read(read_size)
+                chunk = await asyncio.wait_for(src.read(read_size), timeout=self.settings.file_operation_timeout_seconds)
 
                 if not chunk:
                     break
 
                 try:
-                    await dst.write(chunk)
+                    await asyncio.wait_for(dst.write(chunk), timeout=self.settings.file_operation_timeout_seconds)
                 except Exception as write_error:
                     network_detector.check_write_error(
                         write_error, "growing copy chunk write"

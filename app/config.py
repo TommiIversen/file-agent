@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     copy_progress_update_interval: int = (
         1  # Update progress every N percent (10 = every 10%)
     )
+    file_operation_timeout_seconds: int = 30 # Timeout for individual file operations (open, read, write)
 
     # Simple, optimal chunk size for all file transfers
     chunk_size_kb: int = 2048  # 2MB chunks - optimal for network transfers
