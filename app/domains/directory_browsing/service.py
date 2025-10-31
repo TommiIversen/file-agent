@@ -217,10 +217,11 @@ class DirectoryScannerService:
                 aiofiles.os.listdir(directory_path), timeout=self._item_timeout
             )
 
-            # Process each entry with individual timeouts
+            # Create a list of tasks for fetching metadata concurrently
+            tasks = []
             for entry_name in dir_entries:
-                try:
-                    item = await asyncio.wait_for(
+                tasks.append(
+                    asyncio.wait_for(
                         self._get_item_metadata(
                             directory_path,
                             entry_name,
@@ -229,10 +230,13 @@ class DirectoryScannerService:
                         ),
                         timeout=self._item_timeout,
                     )
-                    if item:
-                        items.append(item)
+                )
 
-                except asyncio.TimeoutError:
+            # Run all metadata fetching tasks concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for entry_name, result in zip(dir_entries, results):
+                if isinstance(result, asyncio.TimeoutError):
                     logging.warning(f"Metadata fetch timed out for: {entry_name}")
                     # Create basic item without metadata
                     item_path = str(Path(directory_path) / entry_name)
@@ -244,11 +248,12 @@ class DirectoryScannerService:
                             is_hidden=entry_name.startswith("."),
                         )
                     )
-
-                except Exception as e:
-                    logging.debug(f"Error getting metadata for {entry_name}: {e}")
+                elif isinstance(result, Exception):
+                    logging.debug(f"Error getting metadata for {entry_name}: {result}")
                     # Skip items we can't read
                     continue
+                elif result:
+                    items.append(result)
 
             # Recursive scanning if enabled and depth allows
             if recursive and current_depth < max_depth:
@@ -257,10 +262,11 @@ class DirectoryScannerService:
                     item for item in items if item.is_directory and not item.is_hidden
                 ]
 
+                # Create a list of tasks for recursive subdirectory scanning
+                recursive_tasks = []
                 for subdir in subdirectories:
-                    try:
-                        # Recursively scan subdirectory
-                        subdir_result = await asyncio.wait_for(
+                    recursive_tasks.append(
+                        asyncio.wait_for(
                             self._perform_directory_scan(
                                 subdir.path,
                                 recursive=True,
@@ -270,21 +276,26 @@ class DirectoryScannerService:
                             timeout=self._scan_timeout
                             // (current_depth + 2),  # Reduced timeout for deeper levels
                         )
+                    )
 
-                        # Add subdirectory items to our list
-                        if subdir_result.is_accessible and subdir_result.items:
-                            items.extend(subdir_result.items)
+                # Run all recursive scanning tasks concurrently
+                recursive_results = await asyncio.gather(
+                    *recursive_tasks, return_exceptions=True
+                )
 
-                    except asyncio.TimeoutError:
+                for subdir, subdir_result in zip(subdirectories, recursive_results):
+                    if isinstance(subdir_result, asyncio.TimeoutError):
                         logging.warning(
                             f"Recursive scan timed out for subdirectory: {subdir.path}"
                         )
                         continue
-                    except Exception as e:
+                    elif isinstance(subdir_result, Exception):
                         logging.debug(
-                            f"Error during recursive scan of {subdir.path}: {e}"
+                            f"Error during recursive scan of {subdir.path}: {subdir_result}"
                         )
                         continue
+                    elif subdir_result.is_accessible and subdir_result.items:
+                        items.extend(subdir_result.items)
 
             return DirectoryScanResult(
                 path=directory_path, is_accessible=True, items=items

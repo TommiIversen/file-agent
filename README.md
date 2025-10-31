@@ -128,6 +128,9 @@ python3 -m uvicorn app.main:app --reload
 # Start manually (production mode)
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+debug 
+$env:PYTHONASYNCIODEBUG=1; python -m uvicorn app.main:app
+
 # Stop manual app
 Ctrl+C (in the terminal where it's running)
 ```
