@@ -38,12 +38,11 @@ class JobFilePreparationService:
 
     async def prepare_file_for_copy(self, job: QueueJob) -> Optional[PreparedFile]:
         """Prepare file information for copying with strategy selection."""
-        tracked_file = await self.file_repository.get_by_id(job.file_id)
         file_path = job.file_path
 
         strategy_name = self.copy_strategy.__class__.__name__
 
-        initial_status = self._determine_file_status(tracked_file)
+        initial_status = await self._determine_file_status(job)
         destination_path = await self._calculate_destination_path(file_path)
 
         # Eksempel på Update & Announce hvis destination_path skal gemmes
@@ -61,36 +60,31 @@ class JobFilePreparationService:
         #     ))
 
         return PreparedFile(
-            tracked_file=tracked_file,
+            job=job,
             strategy_name=strategy_name,
             initial_status=initial_status,
             destination_path=destination_path,
         )
 
-    def _determine_file_status(
-        self, tracked_file: TrackedFile | None
-    ) -> FileStatus:
+    async def _determine_file_status(self, job: QueueJob) -> FileStatus:
         """Determine initial file status based on whether file is static or growing."""
+        tracked_file = await self.file_repository.get_by_id(job.file_id)
         if not tracked_file:
-            # If there's no tracked file, it cannot be growing. Default to static copy.
-            # The copy operation will likely fail later, but this method shouldn't crash.
+            logging.warning(f"Tracked file not found for job ID: {job.file_id} in _determine_file_status.")
+            # Default to static copy if tracked file is not found, copy will likely fail later.
             return FileStatus.COPYING
 
         # If file is already in copy processing (COPYING or GROWING_COPY), keep current status
         # This prevents infinite loops where we re-evaluate files already being processed
         if tracked_file.status in [FileStatus.COPYING, FileStatus.GROWING_COPY]:
-            logging.debug(f"🔄 File already in copy processing with status {tracked_file.status}: {tracked_file.file_path}")
+            logging.debug(f"🔄 File already in copy processing with status {tracked_file.status}: {job.file_path}")
             return tracked_file.status
 
-        # Use the copy strategy's logic to determine if this is a growing file
-        # Only for files not yet in copy processing
-        is_growing_file = self.copy_strategy._is_file_currently_growing(tracked_file)
-
-        if is_growing_file:
-            logging.info(f"🌱 File marked for GROWING_COPY: {tracked_file.file_path}")
+        if job.is_growing_at_queue_time:
+            logging.info(f"🌱 File marked for GROWING_COPY (from queue snapshot): {job.file_path}")
             return FileStatus.GROWING_COPY
         else:
-            logging.info(f"⚡ File marked for STATIC COPY: {tracked_file.file_path}")
+            logging.info(f"⚡ File marked for STATIC COPY (from queue snapshot): {job.file_path}")
             return FileStatus.COPYING  # Static files go straight to copying
 
     async def _calculate_destination_path(self, file_path: str) -> Path:

@@ -106,7 +106,7 @@ class JobProcessor:
             try:
                 await self.copy_executor.execute_copy(prepared_file)
                 await self.finalization_service.finalize_success(
-                    job, prepared_file.tracked_file.file_size
+                    job, prepared_file.job.file_size
                 )
                 return ProcessResult(success=True, file_path=file_path)
 

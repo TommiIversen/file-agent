@@ -53,7 +53,7 @@ class JobSpaceManager:
                 reason="No space checker configured",
             )
 
-        file_size = job.tracked_file.file_size
+        file_size = job.file_size
         return self.space_checker.check_space_for_file(file_size)
 
     async def handle_space_shortage(
@@ -61,6 +61,15 @@ class JobSpaceManager:
     ) -> ProcessResult:
         """Handle space shortage by scheduling retry or marking as failed."""
         file_path = job.file_path
+
+        tracked_file = await self.file_repository.get_by_id(job.file_id)
+        if not tracked_file:
+            logging.warning(f"Tracked file not found for job {job.file_path} in handle_space_shortage")
+            return ProcessResult(
+                success=False,
+                file_path=file_path,
+                error_message="Tracked file not found for space shortage handling",
+            )
 
         # Check if this is a network accessibility issue vs actual space shortage
         is_network_issue = "not accessible" in space_check.reason.lower()
@@ -85,7 +94,7 @@ class JobSpaceManager:
                 await self.event_bus.publish(FileStatusChangedEvent(
                     file_id=tracked_file.id,
                     file_path=tracked_file.file_path,
-                    old_status=job.tracked_file.status,
+                    old_status=tracked_file.status,
                     new_status=FileStatus.WAITING_FOR_NETWORK,
                     timestamp=datetime.now()
                 ))
@@ -111,7 +120,7 @@ class JobSpaceManager:
             if self.space_retry_manager:
                 try:
                     await self.space_retry_manager.schedule_space_retry(
-                        job.tracked_file, space_check
+                        tracked_file, space_check
                     )
                     return ProcessResult(
                         success=False,
@@ -125,7 +134,6 @@ class JobSpaceManager:
 
 
         try:
-            tracked_file = await self.file_repository.get_by_id(job.file_id)
             if tracked_file:
                 tracked_file.status = FileStatus.FAILED
                 tracked_file.error_message = f"Insufficient space: {space_check.reason}"
@@ -135,7 +143,7 @@ class JobSpaceManager:
                     await self.event_bus.publish(FileStatusChangedEvent(
                         file_id=tracked_file.id,
                         file_path=tracked_file.file_path,
-                        old_status=job.tracked_file.status,
+                        old_status=tracked_file.status,
                         new_status=FileStatus.FAILED,
                         timestamp=datetime.now()
                     ))
@@ -144,7 +152,6 @@ class JobSpaceManager:
             logging.error(
                 f"Error marking job as failed due to space shortage {file_path}: {e}"
             )
-
         return ProcessResult(
             success=False,
             file_path=file_path,

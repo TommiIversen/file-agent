@@ -53,7 +53,7 @@ class JobFinalizationService:
         await self.event_bus.publish(FileStatusChangedEvent(
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
-            old_status=job.tracked_file.status,
+            old_status=tracked_file.status,
             new_status=FileStatus.COMPLETED,
             timestamp=datetime.now()
         ))
@@ -80,11 +80,10 @@ class JobFinalizationService:
         await self.event_bus.publish(FileStatusChangedEvent(
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
-            old_status=job.tracked_file.status,
+            old_status=tracked_file.status,
             new_status=FileStatus.FAILED,
             timestamp=datetime.now()
         ))
-        logging.error(f"Job failed permanently: {job.file_path} - {error_message}")
 
     async def finalize_max_retries(self, job: QueueJob) -> None:
         """Finalize job that failed after maximum retry attempts."""
@@ -103,7 +102,7 @@ class JobFinalizationService:
         await self.event_bus.publish(FileStatusChangedEvent(
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
-            old_status=job.tracked_file.status,
+            old_status=tracked_file.status,
             new_status=FileStatus.FAILED,
             timestamp=datetime.now()
         ))

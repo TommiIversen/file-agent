@@ -45,6 +45,7 @@ class MessageHandler {
                     break;
 
                 case 'file_progress_update':
+                    console.log('File progress update received:', message.data);
                     this.handleFileProgressUpdate(message.data);
                     break;
 
@@ -159,6 +160,7 @@ class MessageHandler {
         this.fileStore.updateFile(data.file_id, {
             copy_progress: data.progress_percent,
             bytes_copied: data.bytes_copied,
+            file_size: data.total_bytes,
             copy_speed_mbps: data.copy_speed_mbps,
         });
     }

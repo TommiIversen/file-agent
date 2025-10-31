@@ -9,6 +9,7 @@ from app.core.events.file_events import FileReadyEvent, FileStatusChangedEvent
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
+from app.services.copy.growing_copy import GrowingFileCopyStrategy
 
 
 class JobQueueService:
@@ -18,11 +19,13 @@ class JobQueueService:
         file_repository: FileRepository,
         event_bus: Optional[DomainEventBus] = None,
         storage_monitor=None,
+        copy_strategy=None,
     ):
         self.settings = settings
         self.file_repository = file_repository
         self.storage_monitor = storage_monitor
         self._event_bus = event_bus
+        self.copy_strategy = copy_strategy
         self.job_queue: Optional[asyncio.PriorityQueue[QueueJob]] = None
 
         self._total_jobs_added = 0
@@ -192,8 +195,18 @@ class JobQueueService:
             return
 
         try:
+            is_growing_at_queue_time = False
+            if tracked_file.status == FileStatus.READY_TO_START_GROWING:
+                is_growing_at_queue_time = True
+            elif self.copy_strategy:
+                is_growing_at_queue_time = self.copy_strategy._is_file_currently_growing(tracked_file)
+
             job = QueueJob(
-                tracked_file=tracked_file,
+                file_id=tracked_file.id,
+                file_path=tracked_file.file_path,
+                file_size=tracked_file.file_size,
+                creation_time=tracked_file.creation_time,
+                is_growing_at_queue_time=is_growing_at_queue_time,
                 added_to_queue_at=datetime.now(),
                 retry_count=0,
             )

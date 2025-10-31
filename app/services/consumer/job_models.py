@@ -14,7 +14,11 @@ from app.models import TrackedFile, FileStatus
 class QueueJob:
     """Typed job object for the job queue system with UUID-based architecture."""
 
-    tracked_file: TrackedFile
+    file_id: str
+    file_path: str
+    file_size: int
+    creation_time: Optional[datetime]
+    is_growing_at_queue_time: bool  # Snapshot of growing status when added to queue
     added_to_queue_at: datetime
     retry_count: int = 0
     last_retry_at: Optional[datetime] = None
@@ -27,25 +31,10 @@ class QueueJob:
             return NotImplemented
         
         # Handle cases where creation_time might be None (though it should be set now)
-        self_creation_time = self.tracked_file.creation_time or datetime.min
-        other_creation_time = other.tracked_file.creation_time or datetime.min
+        self_creation_time = self.creation_time or datetime.min
+        other_creation_time = other.creation_time or datetime.min
 
         return self_creation_time < other_creation_time
-
-    @property
-    def file_id(self) -> str:
-        """Get the UUID of the tracked file."""
-        return self.tracked_file.id
-
-    @property
-    def file_path(self) -> str:
-        """Get the file path for logging and compatibility."""
-        return self.tracked_file.file_path
-
-    @property
-    def file_size(self) -> int:
-        """Get the file size for progress tracking."""
-        return self.tracked_file.file_size
 
     def mark_retry(self, error_message: str) -> None:
         """Mark this job for retry with error information."""
@@ -62,7 +51,8 @@ class QueueJob:
             f"QueueJob(id={self.file_id[:8]}, "
             f"path={self.file_path}, "
             f"size={self.file_size:,}, "
-            f"retries={self.retry_count})"
+            f"retries={self.retry_count}, "
+            f"growing_at_queue={self.is_growing_at_queue_time})"
         )
 
 
@@ -140,7 +130,7 @@ class PreparedFile:
     including strategy selection and destination path calculation.
     """
 
-    tracked_file: TrackedFile
+    job: QueueJob
     strategy_name: str
     initial_status: FileStatus
     destination_path: Path
@@ -148,17 +138,17 @@ class PreparedFile:
     @property
     def file_id(self) -> str:
         """Get the UUID of the tracked file."""
-        return self.tracked_file.id
+        return self.job.file_id
 
     @property
     def file_path(self) -> str:
         """Get the source file path."""
-        return self.tracked_file.file_path
+        return self.job.file_path
 
     @property
     def file_size(self) -> int:
         """Get the file size."""
-        return self.tracked_file.file_size
+        return self.job.file_size
 
     def __str__(self) -> str:
         """Human-readable representation for logging."""
