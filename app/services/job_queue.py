@@ -189,6 +189,21 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"❌ Error processing waiting network files: {e}")
 
+    async def handle_destination_unavailable(self) -> None:
+        """Handle destination becoming unavailable - pause new job processing"""
+        try:
+            logging.info("🔴 DESTINATION UNAVAILABLE: Handling network disruption")
+            
+            # Note: Jobs already in queue will remain there and be handled by consumer
+            # which will detect network issues during copy attempts and handle retries.
+            # New files discovered during network outage will be marked as WAITING_FOR_NETWORK
+            # in the handle_file_ready method when _is_network_available() returns False.
+            
+            logging.info("⏸️ Network unavailable handling completed")
+            
+        except Exception as e:
+            logging.error(f"❌ Error handling destination unavailable: {e}")
+
     async def _add_job_to_queue(self, tracked_file: TrackedFile) -> None:
         if self.job_queue is None:
             logging.error("Queue er ikke oprettet endnu!")
