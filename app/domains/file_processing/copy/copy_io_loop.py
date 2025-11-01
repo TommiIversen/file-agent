@@ -10,7 +10,7 @@ from app.core.events.file_events import FileCopyProgressEvent
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus
-from app.services.copy.network_error_detector import NetworkErrorDetector
+from app.domains.file_processing.copy.network_error_detector import NetworkErrorDetector
 from app.utils.progress_utils import calculate_transfer_rate
 
 

@@ -14,10 +14,10 @@ from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus, TrackedFile
-from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
-from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
-from app.services.copy.file_verification import FileVerificationService
-from app.services.copy.copy_io_loop import CopyIoLoop
+from app.domains.file_processing.copy.network_error_detector import NetworkErrorDetector, NetworkError
+from app.domains.file_processing.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
+from app.domains.file_processing.copy.file_verification import FileVerificationService
+from app.domains.file_processing.copy.copy_io_loop import CopyIoLoop
 from app.core.events.file_events import FileCopyProgressEvent
 
 

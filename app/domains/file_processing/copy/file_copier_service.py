@@ -3,9 +3,9 @@ import logging
 from typing import List
 
 from app.config import Settings
-from app.services.consumer.job_models import QueueJob
-from app.services.consumer.job_processor import JobProcessor
-from app.services.job_queue import JobQueueService
+from app.domains.file_processing.consumer.job_models import QueueJob
+from app.domains.file_processing.consumer.job_processor import JobProcessor
+from app.domains.file_processing.job_queue import JobQueueService
 
 
 class FileCopierService:

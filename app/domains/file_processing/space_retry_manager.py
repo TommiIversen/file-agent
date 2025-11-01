@@ -9,7 +9,7 @@ from app.core.events.event_bus import DomainEventBus
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus, RetryInfo, SpaceCheckResult
-from ..config import Settings
+from app.config import Settings
 
 
 

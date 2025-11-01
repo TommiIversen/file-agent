@@ -1,9 +1,9 @@
 import logging
 from typing import Optional
 
-from ..config import Settings
-from ..models import SpaceCheckResult
-from ..services.storage_monitor import StorageMonitorService
+from app.config import Settings
+from app.models import SpaceCheckResult
+from app.services.storage_monitor import StorageMonitorService
 
 
 class SpaceChecker:

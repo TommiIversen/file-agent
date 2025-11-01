@@ -6,7 +6,7 @@ import logging
 
 from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
-from app.services.consumer.job_models import ProcessResult, QueueJob
+from app.domains.file_processing.consumer.job_models import ProcessResult, QueueJob
 from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.events.event_bus import DomainEventBus

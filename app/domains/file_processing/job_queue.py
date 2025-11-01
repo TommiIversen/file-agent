@@ -9,7 +9,7 @@ from app.core.events.file_events import FileReadyEvent
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus, TrackedFile
-from app.services.consumer.job_models import QueueJob, JobResult
+from app.domains.file_processing.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
 
 

@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Tuple
 
 from app.models import StorageStatus, FileStatus
-from app.services.copy.network_error_detector import NetworkError
-from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
+from app.domains.file_processing.copy.network_error_detector import NetworkError
+from app.domains.file_processing.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
 from app.services.storage_monitor.storage_monitor import StorageMonitorService
 
 

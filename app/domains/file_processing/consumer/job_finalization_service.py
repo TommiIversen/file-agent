@@ -8,7 +8,7 @@ from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_state_machine import FileStateMachine
 from app.models import FileStatus
-from app.services.consumer.job_models import QueueJob
+from app.domains.file_processing.consumer.job_models import QueueJob
 from app.core.file_repository import FileRepository
 from app.core.events.file_events import FileCopyCompletedEvent
 from datetime import datetime

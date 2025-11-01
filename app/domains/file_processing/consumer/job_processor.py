@@ -7,13 +7,13 @@ import logging
 from app.config import Settings
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
-from app.services.consumer.job_copy_executor import JobCopyExecutor
-from app.services.consumer.job_file_preparation_service import JobFilePreparationService
-from app.services.consumer.job_finalization_service import JobFinalizationService
-from app.services.consumer.job_models import ProcessResult, QueueJob
-from app.services.consumer.job_space_manager import JobSpaceManager
-from app.services.copy.growing_copy import GrowingFileCopyStrategy
-from app.services.job_queue import JobQueueService
+from app.domains.file_processing.consumer.job_copy_executor import JobCopyExecutor
+from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
+from app.domains.file_processing.consumer.job_finalization_service import JobFinalizationService
+from app.domains.file_processing.consumer.job_models import ProcessResult, QueueJob
+from app.domains.file_processing.consumer.job_space_manager import JobSpaceManager
+from app.domains.file_processing.copy.growing_copy import GrowingFileCopyStrategy
+from app.domains.file_processing.job_queue import JobQueueService
 from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
