@@ -8,12 +8,15 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.events.event_bus import DomainEventBus
 from app.dependencies import (
     get_job_queue_service, get_file_repository, get_file_state_machine, 
-    get_storage_monitor, get_copy_strategy
+    get_storage_monitor, get_copy_strategy, get_job_space_manager,
+    get_job_copy_executor, get_job_finalization_service, get_settings, get_event_bus
 )
+from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
+from app.utils.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
 from .event_handlers import FileProcessingEventHandler
-from .command_handlers import QueueFileCommandHandler
-from .commands import QueueFileCommand
+from .command_handlers import QueueFileCommandHandler, ProcessJobCommandHandler
+from .commands import QueueFileCommand, ProcessJobCommand
 
 
 async def register_file_processing_domain(
@@ -47,6 +50,25 @@ async def register_file_processing_domain(
     )
     command_bus.register(QueueFileCommand, queue_handler.handle)
 
-    # Note: ProcessJobCommandHandler will be added in Phase 3
-    # process_handler = ProcessJobCommandHandler(...)
-    # command_bus.register(ProcessJobCommand, process_handler.handle)
+    # 3. Create ProcessJobCommandHandler 
+    # Create JobFilePreparationService on demand (like JobProcessor did)
+    settings = get_settings()
+    template_engine = OutputFolderTemplateEngine(settings)
+    file_preparation_service = JobFilePreparationService(
+        settings=settings,
+        file_repository=get_file_repository(),
+        event_bus=event_bus,
+        copy_strategy=get_copy_strategy(),
+        template_engine=template_engine,
+    )
+    
+    process_handler = ProcessJobCommandHandler(
+        space_manager=get_job_space_manager(),
+        file_preparation_service=file_preparation_service,
+        copy_executor=get_job_copy_executor(),
+        finalization_service=get_job_finalization_service(),
+        job_queue_service=job_queue_service,
+    )
+    command_bus.register(ProcessJobCommand, process_handler.handle)
+
+    # Note: Both command handlers are now registered and ready for use

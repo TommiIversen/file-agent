@@ -9,7 +9,6 @@ from app.domains.file_processing.copy.file_copier_service import FileCopierServi
 
 from .config import Settings
 from .domains.file_processing.consumer.job_error_classifier import JobErrorClassifier
-from .domains.file_processing.consumer.job_processor import JobProcessor
 from .domains.file_processing.consumer.job_copy_executor import JobCopyExecutor
 from .domains.file_processing.consumer.job_space_manager import JobSpaceManager
 from .domains.file_processing.consumer.job_finalization_service import JobFinalizationService
@@ -120,7 +119,7 @@ def get_file_copier() -> FileCopierService:
         _singletons["file_copier"] = FileCopierService(
             settings=get_settings(),
             job_queue=get_job_queue_service(),
-            job_processor=get_job_processor(),
+            command_bus=get_command_bus(),
         )
     return _singletons["file_copier"]
 
@@ -261,39 +260,6 @@ def get_copy_io_loop() -> CopyIoLoop:
             event_bus=get_event_bus()
         )
     return _singletons["copy_io_loop"]
-
-
-def get_job_processor() -> JobProcessor:
-    if "job_processor" not in _singletons:
-        settings = get_settings()
-        file_repository = get_file_repository()
-        job_queue_service = get_job_queue_service()
-        copy_strategy = get_copy_strategy()
-        space_checker = (
-            get_space_checker() if settings.enable_pre_copy_space_check else None
-        )
-        space_retry_manager = get_space_retry_manager() if space_checker else None
-        error_classifier = get_job_error_classifier()
-        event_bus = get_event_bus()
-        finalization_service = get_job_finalization_service()
-        copy_executor = get_job_copy_executor()
-        space_manager = get_job_space_manager()
-
-        _singletons["job_processor"] = JobProcessor(
-            settings=settings,
-            file_repository=file_repository,
-            event_bus=event_bus,
-            job_queue=job_queue_service,
-            copy_strategy=copy_strategy,
-            space_checker=space_checker,
-            space_retry_manager=space_retry_manager,
-            error_classifier=error_classifier,
-            finalization_service=finalization_service,
-            copy_executor=copy_executor,
-            space_manager=space_manager,
-        )
-
-    return _singletons["job_processor"]
 
 
 async def get_job_queue() -> Optional[asyncio.Queue]:

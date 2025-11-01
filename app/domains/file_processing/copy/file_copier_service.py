@@ -3,8 +3,9 @@ import logging
 from typing import List
 
 from app.config import Settings
+from app.core.cqrs.command_bus import CommandBus
 from app.domains.file_processing.consumer.job_models import QueueJob
-from app.domains.file_processing.consumer.job_processor import JobProcessor
+from app.domains.file_processing.commands import ProcessJobCommand
 from app.domains.file_processing.job_queue import JobQueueService
 
 
@@ -13,11 +14,11 @@ class FileCopierService:
         self,
         settings: Settings,
         job_queue: JobQueueService,
-        job_processor: JobProcessor,
+        command_bus: CommandBus,
     ):
         self.settings = settings
         self.job_queue = job_queue
-        self.job_processor = job_processor
+        self.command_bus = command_bus
 
         # Worker management
         self._workers: List[asyncio.Task] = []
@@ -27,11 +28,6 @@ class FileCopierService:
         logging.info(
             f"FileCopierService initialiseret med {self._worker_count} workers"
         )
-
-
-    @property
-    def file_copy_executor(self):
-        return self.job_processor.copy_executor
 
     async def start_workers(self) -> None:
         if self._running:
@@ -73,7 +69,9 @@ class FileCopierService:
                     await asyncio.sleep(1)
                     continue
 
-                await self.job_processor.process_job(job)
+                # Use CQRS CommandBus instead of direct JobProcessor call
+                command = ProcessJobCommand(job=job)
+                await self.command_bus.execute(command)
 
         except asyncio.CancelledError:
             raise

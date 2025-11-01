@@ -134,19 +134,87 @@ class ProcessJobCommandHandler:
     """
     Handles the complete logic for processing a single job.
     
-    This handler will be implemented in Phase 3 to orchestrate the job processing
-    workflow using the existing sub-services (space manager, file preparation, etc.).
+    This handler orchestrates the entire job processing workflow by coordinating
+    specialized services following the same pattern as JobProcessor but within
+    the CQRS architecture.
     """
     
-    def __init__(self):
-        # Implementation will be added in Phase 3
-        pass
+    def __init__(
+        self,
+        space_manager,
+        file_preparation_service,
+        copy_executor,
+        finalization_service,
+        job_queue_service,
+    ):
+        # Inject all the sub-services that JobProcessor used to create
+        self._space_manager = space_manager
+        self._file_preparation_service = file_preparation_service
+        self._copy_executor = copy_executor
+        self._finalization_service = finalization_service
+        self._job_queue_service = job_queue_service
 
     async def handle(self, command: ProcessJobCommand):
         """
-        Will execute the logic from JobProcessor.process_job.
+        Executes the complete logic from JobProcessor.process_job.
         
-        Implementation will be added in Phase 3 of the refactoring plan.
+        This method orchestrates the entire job processing workflow:
+        1. Space checking
+        2. File preparation
+        3. Copy initialization and execution
+        4. Success/failure finalization
         """
-        # To be implemented in Phase 3
-        raise NotImplementedError("ProcessJobCommandHandler will be implemented in Phase 3")
+        job = command.job
+        file_path = job.file_path
+
+        try:
+            logging.info(f"Processing job: {file_path}")
+
+            # Step 1: Space checking
+            if self._space_manager.should_check_space():
+                space_check = await self._space_manager.check_space_for_job(job)
+                if not space_check.has_space:
+                    # Handle space shortage and return early
+                    await self._space_manager.handle_space_shortage(job, space_check)
+                    return  # Space shortage handled, job processing complete
+
+            # Step 2: File preparation
+            prepared_file = await self._file_preparation_service.prepare_file_for_copy(job)
+            if not prepared_file:
+                # File not found - mark job as failed and return
+                await self._finalization_service.finalize_failure(
+                    job, Exception("File not found in state manager")
+                )
+                return
+
+            # Step 3: Copy initialization
+            await self._copy_executor.initialize_copy_status(prepared_file)
+
+            try:
+                # Step 4: Copy execution
+                await self._copy_executor.execute_copy(prepared_file)
+                
+                # Step 5: Success finalization
+                await self._finalization_service.finalize_success(
+                    job, prepared_file.job.file_size
+                )
+                
+                # Mark job as completed in queue after successful finalization
+                await self._job_queue_service.mark_job_completed(job)
+                
+                logging.info(f"Job processing completed successfully: {file_path}")
+
+            except Exception as copy_error:
+                logging.warning(f"Copy exception for {file_path}: {copy_error}")
+
+                # Step 6: Failure handling
+                await self._copy_executor.handle_copy_failure(prepared_file, copy_error)
+                
+                # The JobErrorClassifier will have set the appropriate status
+                # Job processing complete (failure handled by copy executor)
+                logging.info(f"Job processing completed with copy failure: {file_path}")
+
+        except Exception as e:
+            logging.error(f"Unexpected error during ProcessJobCommand for {file_path}: {e}")
+            # Call finalization service for unexpected errors
+            await self._finalization_service.finalize_failure(job, e)
