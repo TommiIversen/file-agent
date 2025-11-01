@@ -5,7 +5,9 @@ from typing import Optional, List
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileReadyEvent, FileStatusChangedEvent
+from app.core.events.file_events import FileReadyEvent
+from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
@@ -16,7 +18,8 @@ class JobQueueService:
         self,
         settings: Settings,
         file_repository: FileRepository,
-        event_bus: Optional[DomainEventBus] = None,
+        event_bus: DomainEventBus,
+        state_machine: FileStateMachine,
         storage_monitor=None,
         copy_strategy=None,
     ):
@@ -24,6 +27,7 @@ class JobQueueService:
         self.file_repository = file_repository
         self.storage_monitor = storage_monitor
         self._event_bus = event_bus
+        self._state_machine = state_machine
         self.copy_strategy = copy_strategy
         self.job_queue: Optional[asyncio.PriorityQueue[QueueJob]] = None
 
@@ -102,21 +106,17 @@ class JobQueueService:
             if await self._is_network_available():
                 await self._add_job_to_queue(tracked_file)
             else:
-                tracked_file.status = FileStatus.WAITING_FOR_NETWORK
-                tracked_file.error_message = "Network unavailable - waiting for recovery"
-                await self.file_repository.update(tracked_file)
-                await self._event_bus.publish(
-                    FileStatusChangedEvent(
+                try:
+                    await self._state_machine.transition(
                         file_id=event.file_id,
-                        file_path=event.file_path,
-                        old_status=FileStatus.READY,
                         new_status=FileStatus.WAITING_FOR_NETWORK,
-                        timestamp=datetime.now()
+                        error_message="Network unavailable - waiting for recovery"
                     )
-                )
-                logging.info(
-                    f"⏸️ NETWORK DOWN: {event.file_path} ready but waiting for network"
-                )
+                    logging.info(
+                        f"⏸️ NETWORK DOWN: {event.file_path} ready but waiting for network"
+                    )
+                except (InvalidTransitionError, ValueError) as e:
+                    logging.warning(f"Kunne ikke sætte fil {event.file_id} til WAITING_FOR_NETWORK: {e}")
         except Exception as e:
             logging.error(f"Error handling FileReadyEvent: {e}")
 
@@ -158,24 +158,16 @@ class JobQueueService:
 
             for tracked_file in waiting_files:
                 try:
-                    old_status = tracked_file.status
-                    tracked_file.status = FileStatus.DISCOVERED
-                    tracked_file.error_message = None
-                    await self.file_repository.update(tracked_file)
-                    await self._event_bus.publish(
-                        FileStatusChangedEvent(
-                            file_id=tracked_file.id,
-                            file_path=tracked_file.file_path,
-                            old_status=old_status,
-                            new_status=FileStatus.DISCOVERED,
-                            timestamp=datetime.now()
-                        )
+                    await self._state_machine.transition(
+                        file_id=tracked_file.id,
+                        new_status=FileStatus.DISCOVERED,
+                        error_message=None
                     )
-                    # They will be re-evaluated through normal scanner discovery flow
                     logging.info(
                         f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation"
                     )
-
+                except (InvalidTransitionError, ValueError) as e:
+                    logging.warning(f"Kunne ikke re-aktivere fil {tracked_file.id}: {e}")
                 except Exception as e:
                     logging.error(
                         f"❌ Error reactivating {tracked_file.file_path}: {e}"
@@ -226,28 +218,24 @@ class JobQueueService:
                 retry_count=0,
             )
 
+            # TRIN 1: Transitioner staten FØRST
+            await self._state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.IN_QUEUE
+            )
+
+            # TRIN 2: Hvis transition er succesfuld, put på køen
             await self.job_queue.put(job)
             self._total_jobs_added += 1
-
-            old_status = tracked_file.status
-            tracked_file.status = FileStatus.IN_QUEUE
-            await self.file_repository.update(tracked_file)
-            await self._event_bus.publish(
-                FileStatusChangedEvent(
-                    file_id=job.file_id,
-                    file_path=tracked_file.file_path,
-                    old_status=old_status,
-                    new_status=FileStatus.IN_QUEUE,
-                    timestamp=datetime.now()
-                )
-            )
 
             logging.info(f"Typed job tilføjet til queue: {job}")
             logging.debug(f"Queue size nu: {self.job_queue.qsize()}")
 
+        except InvalidTransitionError as e:
+            # Filens status ændrede sig (f.eks. til REMOVED) før vi kunne sætte den i kø
+            logging.warning(f"Kunne ikke tilføje job til kø (state conflict): {e}")
         except asyncio.QueueFull:
             logging.error(f"Queue er fuld! Kan ikke tilføje: {tracked_file.file_path}")
-
         except Exception as e:
             logging.error(f"Fejl ved tilføjelse til queue: {e}")
 

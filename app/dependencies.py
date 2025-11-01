@@ -98,8 +98,17 @@ def get_job_queue_service() -> JobQueueService:
         _singletons["job_queue_service"] = JobQueueService(
             settings=get_settings(), 
             file_repository=get_file_repository(), 
-            event_bus=get_event_bus()
+            event_bus=get_event_bus(),
+            state_machine=get_file_state_machine(),
+            storage_monitor=get_storage_monitor(),
+            copy_strategy=get_copy_strategy()
         )
+        
+        # Set up the circular reference after both objects are created
+        storage_monitor = get_storage_monitor()
+        if storage_monitor._job_queue is None:
+            storage_monitor._job_queue = _singletons["job_queue_service"]
+            
     return _singletons["job_queue_service"]
 
 
@@ -162,18 +171,20 @@ def get_network_mount_service() -> NetworkMountService:
 
 def get_storage_monitor() -> StorageMonitorService:
     if "storage_monitor" not in _singletons:
-        job_queue_service = get_job_queue_service()  # Universal recovery system
         _singletons["storage_monitor"] = StorageMonitorService(
             settings=get_settings(),
             storage_checker=get_storage_checker(),
             event_bus=get_event_bus(),
             network_mount_service=get_network_mount_service(),
-            job_queue=job_queue_service  # Enable universal recovery
+            job_queue=None  # Will be set later to avoid circular dependency
         )
-        # Set storage_monitor reference in JobQueueService for network checking
-        job_queue_service.storage_monitor = _singletons["storage_monitor"]
-
-    return _singletons["storage_monitor"]
+        
+    # Check if we need to set the job_queue reference after both services exist
+    storage_monitor = _singletons["storage_monitor"]
+    if storage_monitor._job_queue is None and "job_queue_service" in _singletons:
+        storage_monitor._job_queue = _singletons["job_queue_service"]
+        
+    return storage_monitor
 
 
 def get_job_error_classifier() -> JobErrorClassifier:
