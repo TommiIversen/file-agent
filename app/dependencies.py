@@ -240,6 +240,7 @@ def get_copy_strategy() -> GrowingFileCopyStrategy:
             settings=get_settings(),
             file_repository=get_file_repository(),
             event_bus=get_event_bus(),
+            state_machine=get_file_state_machine()  # <-- TILFØJ DENNE
         )
     return _singletons["copy_strategy"]
 

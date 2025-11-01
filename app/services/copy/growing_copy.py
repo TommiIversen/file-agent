@@ -9,8 +9,10 @@ import aiofiles.os
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent, FileCopyCompletedEvent
+from app.core.events.file_events import FileCopyCompletedEvent
 from app.core.file_repository import FileRepository
+from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
@@ -41,10 +43,12 @@ class GrowingFileCopyStrategy():
         settings: Settings,
         file_repository: FileRepository,
         event_bus: DomainEventBus,
+        state_machine: FileStateMachine, # <-- TILFØJ DENNE
     ):
         self.settings = settings
         self.file_repository = file_repository
         self.event_bus = event_bus
+        self._state_machine = state_machine # <-- TILFØJ DENNE
 
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
@@ -140,53 +144,32 @@ class GrowingFileCopyStrategy():
                         logging.warning(
                             f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {delete_error}"
                         )
-                        # 1. Get (we have tracked_file)
-                        old_status = tracked_file.status
-
-                        # 2. Modify
-                        tracked_file.status = FileStatus.COMPLETED_DELETE_FAILED
-                        tracked_file.copy_progress = 100.0
-                        tracked_file.destination_path = dest_path
-                        tracked_file.error_message = f"Could not delete source file: {delete_error}"
-
-                        # 3. Save
-                        await self.file_repository.update(tracked_file)
-
-                        # 4. Announce
-                        if self.event_bus:
-                            await self.event_bus.publish(
-                                FileStatusChangedEvent(
-                                    file_id=tracked_file.id,
-                                    file_path=tracked_file.file_path,
-                                    old_status=old_status,
-                                    new_status=FileStatus.COMPLETED_DELETE_FAILED,
-                                )
+                        # Use state machine for atomic transition
+                        try:
+                            await self._state_machine.transition(
+                                file_id=tracked_file.id,
+                                new_status=FileStatus.COMPLETED_DELETE_FAILED,
+                                copy_progress=100.0,
+                                destination_path=dest_path,
+                                error_message=f"Could not delete source file: {delete_error}"
                             )
+                        except (InvalidTransitionError, ValueError) as e:
+                            logging.error(f"Kunne ikke sætte status til COMPLETED_DELETE_FAILED for {tracked_file.id}: {e}")
                         return True  # Still a success from a copy perspective
 
-                    # 1. Get (we have tracked_file)
-                    old_status = tracked_file.status
-
-                    # 2. Modify
-                    tracked_file.status = FileStatus.COMPLETED
-                    tracked_file.copy_progress = 100.0
-                    tracked_file.destination_path = dest_path
-                    tracked_file.error_message = None  # Ryd fejl
-
-                    # 3. Save
-                    await self.file_repository.update(tracked_file)
-
-                    # 4. Announce
-                    if self.event_bus:
-                        await self.event_bus.publish(
-                            FileStatusChangedEvent(
-                                file_id=tracked_file.id,
-                                file_path=tracked_file.file_path,
-                                old_status=old_status,
-                                new_status=FileStatus.COMPLETED,
-                            )
+                    # Use state machine for atomic transition
+                    try:
+                        await self._state_machine.transition(
+                            file_id=tracked_file.id,
+                            new_status=FileStatus.COMPLETED,
+                            copy_progress=100.0,
+                            destination_path=dest_path,
+                            error_message=None # Ryd fejl
                         )
-                        await self.event_bus.publish(
+
+                        # Publicer den domæne-specifikke event
+                        if self.event_bus:
+                            await self.event_bus.publish(
                                 FileCopyCompletedEvent(
                                     file_id=tracked_file.id,
                                     file_path=tracked_file.file_path,
@@ -195,10 +178,12 @@ class GrowingFileCopyStrategy():
                                 )
                             )
 
-                    logging.info(
-                        f"Growing copy completed: {os.path.basename(source_path)}"
-                    )
-                    return True
+                        logging.info(f"Growing copy completed: {os.path.basename(source_path)}")
+                        return True
+
+                    except (InvalidTransitionError, ValueError) as e:
+                        logging.error(f"Kunne ikke sætte status til COMPLETED for {tracked_file.id}: {e}")
+                        raise FileCopyError(f"State transition til COMPLETED fejlede: {e}") from e
                 else:
                     logging.error(f"Growing copy verification failed: {source_path}")
                     raise FileCopyIntegrityError(f"File integrity verification failed: {source_path}")
@@ -318,12 +303,8 @@ class GrowingFileCopyStrategy():
         last_progress_update_time = datetime.now() - timedelta(seconds=1) # Initialize for immediate first update
 
         while True:
-            current_tracked_file = await self.file_repository.get_by_id(
-                initial_tracked_file.id
-            )
-            if not current_tracked_file:
-                logging.warning(f"File disappeared during copy: {source_path}")
-                raise FileCopyError(f"Tracked file disappeared during copy: {source_path}")
+            # Brug 'initial_tracked_file' som reference, omdøb den til 'tracked_file'
+            tracked_file = initial_tracked_file
 
             try:
                 current_file_size = await aiofiles.os.path.getsize(source_path)
@@ -380,7 +361,7 @@ class GrowingFileCopyStrategy():
                     bytes_copied,
                     safe_copy_to,
                     chunk_size,
-                    current_tracked_file, # Use current_tracked_file here
+                    tracked_file, # Use tracked_file here
                     current_file_size,
                     pause_ms if use_pause else 0,
                     network_detector,
@@ -389,20 +370,21 @@ class GrowingFileCopyStrategy():
                     last_progress_update_time, # Pass the new variable
                 )
             elif not file_finished_growing:
-                # 1. Get (we have current_tracked_file)
-                copy_ratio = (
-                    (bytes_copied / current_file_size) * 100
-                    if current_file_size > 0
-                    else 0
-                )
-                # 2. Modify
-                current_tracked_file.status = FileStatus.GROWING_COPY
-                current_tracked_file.copy_progress = copy_ratio
-                current_tracked_file.bytes_copied = bytes_copied
-                current_tracked_file.file_size = current_file_size
+                # Vi lader _copy_chunk_range håndtere status-opdatering,
+                # men vi skal stadig publicere progress, hvis vi venter.
 
-                # 3. Save
-                await self.file_repository.update(current_tracked_file)
+                # Opdater kun, hvis det er nødvendigt (f.eks. > 1 sekund siden sidst)
+                current_time = datetime.now()
+                if (current_time - last_progress_update_time).total_seconds() >= 1.0:
+                    # Send kun en progress-event, SÆT IKKE STATUS
+                    if self.event_bus:
+                        asyncio.create_task(self.event_bus.publish(FileCopyProgressEvent(
+                            file_id=tracked_file.id,
+                            bytes_copied=bytes_copied,
+                            total_bytes=current_file_size,
+                            copy_speed_mbps=0 # Vi venter
+                        )))
+                    last_progress_update_time = current_time # Opdater tiden
 
             if file_finished_growing and bytes_copied >= current_file_size:
                 logging.info(
@@ -473,7 +455,7 @@ class GrowingFileCopyStrategy():
                 progress_percent = int(copy_ratio)
 
                 current_time = datetime.now()
-                if self.event_bus and (current_time - last_progress_update_time).total_seconds() >= 1.0:
+                if (current_time - last_progress_update_time).total_seconds() >= 1.0:
                     if not hasattr(self, "_copy_start_time"):
                         self._copy_start_time = current_time
                         self._copy_start_bytes = bytes_copied
@@ -485,26 +467,33 @@ class GrowingFileCopyStrategy():
                     )
                     copy_speed_mbps = transfer_rate / (1024 * 1024)
 
-                    progress_event = FileCopyProgressEvent(
-                        file_id=tracked_file.id,
-                        bytes_copied=bytes_copied,
-                        total_bytes=current_file_size,
-                        copy_speed_mbps=copy_speed_mbps,
-                    )
-                    asyncio.create_task(self.event_bus.publish(progress_event))
+                    # Publicer progress-event (som før)
+                    if self.event_bus:
+                        progress_event = FileCopyProgressEvent(
+                            file_id=tracked_file.id,
+                            bytes_copied=bytes_copied,
+                            total_bytes=current_file_size,
+                            copy_speed_mbps=copy_speed_mbps,
+                        )
+                        asyncio.create_task(self.event_bus.publish(progress_event))
+
                     last_progress_percent = progress_percent
                     last_progress_update_time = current_time
 
-                    # 1. Get (we have tracked_file)
-                    # 2. Modify
-                    tracked_file.status = status
-                    tracked_file.copy_progress = copy_ratio
-                    tracked_file.bytes_copied = bytes_copied
-                    tracked_file.file_size = current_file_size
-                    tracked_file.copy_speed_mbps = copy_speed_mbps
-
-                    # 3. Save
-                    await self.file_repository.update(tracked_file)
+                    # Opdater status og metadata via StateMachine
+                    try:
+                        await self._state_machine.transition(
+                            file_id=tracked_file.id,
+                            new_status=status, # status er enten COPYING eller GROWING_COPY
+                            # kwargs til at opdatere metadata:
+                            copy_progress=copy_ratio,
+                            bytes_copied=bytes_copied,
+                            file_size=current_file_size,
+                            copy_speed_mbps=copy_speed_mbps
+                        )
+                    except (InvalidTransitionError, ValueError) as e:
+                        # Log, men lad være med at crashe kopieringen pga. en statusfejl
+                        logging.warning(f"Kunne ikke opdatere progress-status for {tracked_file.id}: {e}")
 
                 if pause_ms > 0:
                     await asyncio.sleep(pause_ms / 1000)
