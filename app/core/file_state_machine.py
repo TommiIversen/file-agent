@@ -145,17 +145,19 @@ class FileStateMachine:
             logging.info(f"Transition: {tracked_file.file_path} | {old_status.value} -> {new_status.value}")
             tracked_file.status = new_status
             
+            # 3a. Ryd altid gamle fejl som standard på ENHVER overgang
+            tracked_file.error_message = None 
+                
+            # 3b. Anvend nye værdier (dette vil OVERSKRIVE 'None', hvis 'error_message' er i kwargs)
             for key, value in kwargs.items():
                 if hasattr(tracked_file, key):
                     setattr(tracked_file, key, value)
             
+            # 3c. Sæt automatiske timestamps
             if new_status == FileStatus.COMPLETED and not tracked_file.completed_at:
                 tracked_file.completed_at = datetime.now()
             elif new_status == FileStatus.FAILED and not tracked_file.failed_at:
                 tracked_file.failed_at = datetime.now()
-            
-            if old_status in [FileStatus.FAILED, FileStatus.WAITING_FOR_NETWORK, FileStatus.WAITING_FOR_SPACE]:
-                tracked_file.error_message = None
 
             # 4. SAVE (Atomisk opdatering)
             await self._repository.update(tracked_file)

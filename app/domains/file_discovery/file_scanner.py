@@ -315,6 +315,19 @@ class FileScanner:
                             f"GROWING UPDATE: {file_path} -> GROWING [UUID: {tracked_file.id[:8]}...]"
                         )
                     elif recommended_status == FileStatus.READY_TO_START_GROWING:
+                        # Check if we need to transition through GROWING first
+                        if tracked_file.status == FileStatus.DISCOVERED:
+                            # First transition to GROWING
+                            growing_command = MarkFileGrowingCommand(
+                                file_id=tracked_file.id,
+                                file_path=tracked_file.file_path
+                            )
+                            await self._command_bus.execute(growing_command)
+                            logging.info(
+                                f"GROWING UPDATE: {file_path} -> GROWING [UUID: {tracked_file.id[:8]}...] (intermediate step)"
+                            )
+                        
+                        # Then transition to READY_TO_START_GROWING
                         command = MarkFileReadyToStartGrowingCommand(
                             file_id=tracked_file.id,
                             file_path=tracked_file.file_path

@@ -8,8 +8,10 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent, FileStatusChangedEvent
+from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent
 from app.core.file_repository import FileRepository
+from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus
 
 
@@ -22,10 +24,12 @@ class FileDiscoverySlice:
     def __init__(
         self, 
         file_repository: FileRepository, 
+        state_machine: FileStateMachine,
         event_bus: Optional[DomainEventBus] = None,
         cooldown_minutes: int = 60
     ):
         self._file_repository = file_repository
+        self._state_machine = state_machine
         self._event_bus = event_bus
         self._cooldown_minutes = cooldown_minutes
         logging.info("FileDiscoverySlice initialized")
@@ -215,38 +219,38 @@ class FileDiscoverySlice:
             )
             await self._event_bus.publish(discovery_event)
 
-            # Also publish a status change event to notify the UI
-            status_change_event = FileStatusChangedEvent(
-                file_id=tracked_file.id,
-                file_path=tracked_file.file_path,
-                old_status=None,  # No old status for a new file
-                new_status=FileStatus.DISCOVERED,
-            )
-            await self._event_bus.publish(status_change_event)
+            # StateMachine.transition will handle FileStatusChangedEvent 
+            # when the file transitions from DISCOVERED -> READY
 
         return tracked_file
 
     async def mark_file_ready(self, file_id: str) -> bool:
         """
-        Mark a file as ready for processing.
+        Mark a file as ready for processing using the State Machine.
         Returns True if successful, False if file not found.
         """
-        file = await self._file_repository.get_by_id(file_id)
-        if not file:
+        try:
+            # 1. Let StateMachine perform the transition
+            tracked_file = await self._state_machine.transition(
+                file_id=file_id,
+                new_status=FileStatus.READY
+            )
+
+            # 2. Publish the specific "Ready" event (if needed)
+            #    (Note: FileStatusChangedEvent is already published by StateMachine)
+            if self._event_bus:
+                event = FileReadyEvent(file_id=file_id, file_path=tracked_file.file_path)
+                await self._event_bus.publish(event)
+
+            logging.info(f"File marked as ready: {tracked_file.file_path}")
+            return True
+
+        except InvalidTransitionError as e:
+            logging.warning(f"Could not mark file as READY: {e}")
             return False
-
-        # Update file status
-        file.status = FileStatus.READY
-        
-        await self._file_repository.update(file)  # Use update for existing files
-        
-        # Publish ready event
-        if self._event_bus:
-            event = FileReadyEvent(file_id=file_id, file_path=file.file_path)
-            await self._event_bus.publish(event)
-
-        logging.info(f"File marked as ready: {file.file_path}")
-        return True
+        except ValueError as e:
+            logging.error(f"Error in mark_file_ready (file missing?): {e}")
+            return False
 
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
         """
@@ -356,46 +360,39 @@ class FileDiscoverySlice:
 
     async def mark_file_growing(self, file_id: str) -> bool:
         """
-        Mark a file as growing.
+        Mark a file as growing using the State Machine.
         Returns True if successful, False if file not found.
         """
-        file = await self._file_repository.get_by_id(file_id)
-        if not file:
-            return False
-
-        old_status = file.status
-        file.status = FileStatus.GROWING
-        await self._file_repository.update(file)
-
-        if self._event_bus and old_status != FileStatus.GROWING:
-            await self._event_bus.publish(
-                FileStatusChangedEvent(
-                    file_id=file.id,
-                    file_path=file.file_path,
-                    old_status=old_status,
-                    new_status=FileStatus.GROWING,
-                )
+        try:
+            await self._state_machine.transition(
+                file_id=file_id,
+                new_status=FileStatus.GROWING
             )
-        
-        logging.info(f"File marked as growing: {file.file_path}")
-        return True
+            logging.info(f"File marked as growing via StateMachine: {file_id}")
+            return True
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Could not mark file {file_id} as GROWING: {e}")
+            return False
 
     async def mark_file_ready_to_start_growing(self, file_id: str) -> bool:
         """
-        Mark a file as ready to start growing copy.
+        Mark a file as ready to start growing copy using the State Machine.
         Returns True if successful, False if file not found.
         """
-        file = await self._file_repository.get_by_id(file_id)
-        if not file:
+        try:
+            tracked_file = await self._state_machine.transition(
+                file_id=file_id,
+                new_status=FileStatus.READY_TO_START_GROWING
+            )
+
+            # Publish the specific "Ready" event
+            if self._event_bus:
+                event = FileReadyEvent(file_id=file_id, file_path=tracked_file.file_path)
+                await self._event_bus.publish(event)
+
+            logging.info(f"File marked as ready to start growing: {tracked_file.file_path}")
+            return True
+
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Could not mark file {file_id} as READY_TO_START_GROWING: {e}")
             return False
-
-        file.status = FileStatus.READY_TO_START_GROWING
-        await self._file_repository.update(file)
-        
-        # Publish ready event
-        if self._event_bus:
-            event = FileReadyEvent(file_id=file_id, file_path=file.file_path)
-            await self._event_bus.publish(event)
-
-        logging.info(f"File marked as ready to start growing: {file.file_path}")
-        return True

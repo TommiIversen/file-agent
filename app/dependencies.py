@@ -70,10 +70,12 @@ def get_file_discovery_slice() -> FileDiscoverySlice:
     if "file_discovery_slice" not in _singletons:
         file_repository = get_file_repository()
         event_bus = get_event_bus()
+        state_machine = get_file_state_machine()
         settings = get_settings()
         _singletons["file_discovery_slice"] = FileDiscoverySlice(
             file_repository=file_repository,
             event_bus=event_bus,
+            state_machine=state_machine,
             cooldown_minutes=settings.space_error_cooldown_minutes
         )
     return _singletons["file_discovery_slice"]
