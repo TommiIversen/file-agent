@@ -1,4 +1,6 @@
 from app.core.events.file_events import FileCopyStartedEvent, FileCopyFailedEvent
+from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 
 
 import logging
@@ -8,7 +10,6 @@ from typing import Optional
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent
 from app.models import FileStatus
 from app.services.consumer.job_error_classifier import JobErrorClassifier
 from app.services.consumer.job_models import PreparedFile
@@ -27,47 +28,42 @@ class JobCopyExecutor:
         settings: Settings,
         file_repository: FileRepository,
         copy_strategy: GrowingFileCopyStrategy,
+        state_machine: FileStateMachine,  # <-- TILFØJ DENNE
         error_classifier: Optional[JobErrorClassifier] = None,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.file_repository = file_repository
         self.copy_strategy = copy_strategy
+        self._state_machine = state_machine  # <-- TILFØJ DENNE
         self.error_classifier = error_classifier
         self.event_bus = event_bus
 
     async def initialize_copy_status(self, prepared_file: PreparedFile) -> None:
         """Initialize file status for copying operation and publish event."""
-        tracked_file = await self.file_repository.get_by_id(prepared_file.job.file_id)
-        if not tracked_file:
-            logging.warning(f"TrackedFile not found for job ID: {prepared_file.job.file_id}")
-            return
-
         new_status = prepared_file.initial_status
-        old_status = tracked_file.status
 
-        # Update & Announce-mønsteret
-        tracked_file.status = new_status
-        tracked_file.copy_progress = 0.0
-        tracked_file.started_copying_at = datetime.now()
-        await self.file_repository.update(tracked_file)
-        if self.event_bus and old_status != new_status:
-            await self.event_bus.publish(
-                FileStatusChangedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    old_status=old_status,
-                    new_status=new_status,
-                    timestamp=datetime.now()
-                )
+        # Use state machine for status transition
+        try:
+            await self._state_machine.transition(
+                file_id=prepared_file.job.file_id,
+                new_status=new_status,
+                # kwargs til at sætte data:
+                copy_progress=0.0,
+                started_copying_at=datetime.now()
             )
-            await self.event_bus.publish(
-                FileCopyStartedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    destination_path=str(prepared_file.destination_path)
+
+            # Publicer den domæne-specifikke event (StateMachine publicerer StatusChanged)
+            if self.event_bus:
+                await self.event_bus.publish(
+                    FileCopyStartedEvent(
+                        file_id=prepared_file.job.file_id,
+                        file_path=prepared_file.job.file_path,
+                        destination_path=str(prepared_file.destination_path)
+                    )
                 )
-            )
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Kunne ikke initialisere kopi-status for {prepared_file.job.file_id}: {e}")
     async def execute_copy(self, prepared_file: PreparedFile) -> bool:
         """Execute copy operation using the selected strategy."""
         try:
@@ -133,69 +129,62 @@ class JobCopyExecutor:
         self, prepared_file: PreparedFile, reason: str, error: Exception
     ) -> None:
         """Handle errors where source file disappeared."""
-        tracked_file = await self.file_repository.get_by_id(prepared_file.job.file_id)
-        if not tracked_file:
-            logging.warning(f"TrackedFile not found for job ID: {prepared_file.job.file_id} during remove error handling.")
-            return
+        try:
+            await self._state_machine.transition(
+                file_id=prepared_file.job.file_id,
+                new_status=FileStatus.REMOVED,
+                # kwargs til at sætte data:
+                copy_progress=0.0,
+                bytes_copied=0,
+                error_message=f"Removed: {reason}"
+            )
 
-        tracked_file.status = FileStatus.REMOVED
-        tracked_file.copy_progress = 0.0
-        tracked_file.bytes_copied = 0
-        tracked_file.error_message = f"Removed: {reason}"
-        await self.file_repository.update(tracked_file)
-        if self.event_bus:
-            await self.event_bus.publish(
-                FileStatusChangedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    old_status=tracked_file.status,
-                    new_status=FileStatus.REMOVED,
-                    timestamp=datetime.now()
+            # Publicer den domæne-specifikke event
+            if self.event_bus:
+                await self.event_bus.publish(
+                    FileCopyFailedEvent(
+                        file_id=prepared_file.job.file_id,
+                        file_path=prepared_file.job.file_path,
+                        error_message=f"Removed: {reason}"
+                    )
                 )
-            )
-            await self.event_bus.publish(
-                FileCopyFailedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    error_message=f"Removed: {reason}"
-                )
-            )
-        file_name = Path(prepared_file.job.file_path).name
-        logging.info(f"File removed during copy: {file_name} - {reason}")
+
+            file_name = Path(prepared_file.job.file_path).name
+            logging.info(f"File removed during copy: {file_name} - {reason}")
+
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Kunne ikke sætte fil {prepared_file.job.file_id} til REMOVED: {e}")
 
     async def _handle_fail_error(
         self, prepared_file: PreparedFile, reason: str, error: Exception
     ) -> None:
         """Handle errors that should result in immediate failure."""
-        tracked_file = await self.file_repository.get_by_id(prepared_file.job.file_id)
-        if not tracked_file:
-            logging.warning(f"TrackedFile not found for job ID: {prepared_file.job.file_id} during fail error handling.")
-            return
+        try:
+            await self._state_machine.transition(
+                file_id=prepared_file.job.file_id,
+                new_status=FileStatus.FAILED,
+                # kwargs til at sætte data:
+                copy_progress=0.0,
+                bytes_copied=0,
+                error_message=f"Failed: {reason}",
+                failed_at=datetime.now()  # StateMachine sætter også dette, men eksplicit er ok
+            )
 
-        tracked_file.status = FileStatus.FAILED
-        tracked_file.copy_progress = 0.0
-        tracked_file.bytes_copied = 0
-        tracked_file.error_message = f"Failed: {reason}"
-        await self.file_repository.update(tracked_file)
-        if self.event_bus:
-            await self.event_bus.publish(
-                FileStatusChangedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    old_status=tracked_file.status,
-                    new_status=FileStatus.FAILED,
-                    timestamp=datetime.now()
+            # Publicer den domæne-specifikke event
+            if self.event_bus:
+                await self.event_bus.publish(
+                    FileCopyFailedEvent(
+                        file_id=prepared_file.job.file_id,
+                        file_path=prepared_file.job.file_path,
+                        error_message=f"Failed: {reason}"
+                    )
                 )
-            )
-            await self.event_bus.publish(
-                FileCopyFailedEvent(
-                    file_id=prepared_file.job.file_id,
-                    file_path=prepared_file.job.file_path,
-                    error_message=f"Failed: {reason}"
-                )
-            )
-        file_name = Path(prepared_file.job.file_path).name
-        logging.error(f"Copy failed: {file_name} - {reason}")
+
+            file_name = Path(prepared_file.job.file_path).name
+            logging.error(f"Copy failed: {file_name} - {reason}")
+
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Kunne ikke sætte fil {prepared_file.job.file_id} til FAILED: {e}")
 
     def get_copy_executor_info(self) -> dict:
         """Get copy executor configuration details."""

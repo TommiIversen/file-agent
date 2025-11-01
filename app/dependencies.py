@@ -10,6 +10,7 @@ from app.services.copy.file_copier_service import FileCopierService
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
+from .services.consumer.job_copy_executor import JobCopyExecutor
 from .services.consumer.job_finalization_service import JobFinalizationService
 from .services.copy.growing_copy import GrowingFileCopyStrategy
 from .services.job_queue import JobQueueService
@@ -157,6 +158,19 @@ def get_job_finalization_service() -> JobFinalizationService:
     return _singletons["job_finalization_service"]
 
 
+def get_job_copy_executor() -> JobCopyExecutor:
+    if "job_copy_executor" not in _singletons:
+        _singletons["job_copy_executor"] = JobCopyExecutor(
+            settings=get_settings(),
+            file_repository=get_file_repository(),
+            copy_strategy=get_copy_strategy(),
+            state_machine=get_file_state_machine(),  # <-- TILFØJ DENNE
+            error_classifier=get_job_error_classifier(),
+            event_bus=get_event_bus()
+        )
+    return _singletons["job_copy_executor"]
+
+
 def get_websocket_manager() -> WebSocketManager:
     """Gets the singleton instance of the pure WebSocketManager."""
     if "websocket_manager" not in _singletons:
@@ -229,6 +243,7 @@ def get_job_processor() -> JobProcessor:
         error_classifier = get_job_error_classifier()
         event_bus = get_event_bus()
         finalization_service = get_job_finalization_service()
+        copy_executor = get_job_copy_executor()
 
         _singletons["job_processor"] = JobProcessor(
             settings=settings,
@@ -240,6 +255,7 @@ def get_job_processor() -> JobProcessor:
             space_retry_manager=space_retry_manager,
             error_classifier=error_classifier,
             finalization_service=finalization_service,
+            copy_executor=copy_executor,
         )
 
     return _singletons["job_processor"]

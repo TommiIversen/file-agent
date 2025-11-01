@@ -28,6 +28,7 @@ class JobProcessor:
         job_queue: JobQueueService,
         copy_strategy: GrowingFileCopyStrategy,
         finalization_service: JobFinalizationService,
+        copy_executor: JobCopyExecutor,
         space_checker=None,
         space_retry_manager=None,
         error_classifier=None,
@@ -38,6 +39,7 @@ class JobProcessor:
         self.job_queue = job_queue
         self.copy_strategy = copy_strategy
         self.finalization_service = finalization_service
+        self.copy_executor = copy_executor
 
         self.space_manager = JobSpaceManager(
             settings=settings,
@@ -56,14 +58,6 @@ class JobProcessor:
             event_bus=event_bus,
             copy_strategy=copy_strategy,
             template_engine=self.template_engine,
-        )
-
-        self.copy_executor = JobCopyExecutor(
-            settings=settings,
-            file_repository=file_repository,
-            copy_strategy=copy_strategy,
-            error_classifier=error_classifier,
-            event_bus=event_bus,
         )
 
         logging.debug("JobProcessor initialized")
