@@ -102,16 +102,17 @@ class PresentationEventHandlers:
         }
         await self.websocket_manager.broadcast_message(message_data)
 
-    async def handle_mount_status_event(self, update: MountStatusChangedEvent) -> None:
+    async def handle_mount_status_event(self, event: MountStatusChangedEvent) -> None:
+        update_data = event.update
         message_data = {
             "type": "mount_status",
             "data": {
-                "storage_type": update.storage_type,
-                "mount_status": update.mount_status.value,
-                "share_url": update.share_url,
-                "mount_path": update.mount_path,
-                "target_path": update.target_path,
-                "error_message": update.error_message,
+                "storage_type": update_data.storage_type,
+                "mount_status": update_data.mount_status.value,
+                "share_url": update_data.share_url,
+                "mount_path": update_data.mount_path,
+                "target_path": update_data.target_path,
+                "error_message": update_data.error_message,
                 "timestamp": self._get_timestamp(),
             },
         }

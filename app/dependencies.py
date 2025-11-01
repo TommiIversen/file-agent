@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
-from app.services.copy.file_copier import FileCopierService
+from app.services.copy.file_copier_service import FileCopierService
 
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
