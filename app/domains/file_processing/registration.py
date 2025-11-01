@@ -9,7 +9,7 @@ from app.core.events.event_bus import DomainEventBus
 from app.dependencies import (
     get_job_queue_service, get_file_repository, get_file_state_machine, 
     get_storage_monitor, get_copy_strategy, get_job_space_manager,
-    get_job_copy_executor, get_job_finalization_service, get_settings, get_event_bus
+    get_job_copy_executor, get_job_finalization_service, get_settings
 )
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
 from app.utils.output_folder_template import OutputFolderTemplateEngine
