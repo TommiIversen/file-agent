@@ -33,7 +33,6 @@ class FileDiscoverySlice:
     async def get_active_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
         """
         Get the currently active file for a given path.
-        Matches original StateManager._get_active_file_for_path_internal logic exactly.
         """
         active_statuses = {
             FileStatus.DISCOVERED,

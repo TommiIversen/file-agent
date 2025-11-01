@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
+from app.core.file_state_machine import FileStateMachine
 from app.services.copy.file_copier_service import FileCopierService
 
 from .config import Settings
@@ -56,6 +57,13 @@ def get_file_repository() -> FileRepository:
         _singletons["file_repository"] = FileRepository()
     return _singletons["file_repository"]
 
+def get_file_state_machine() -> FileStateMachine:
+    if "file_state_machine" not in _singletons:
+        _singletons["file_state_machine"] = FileStateMachine(
+            file_repository=get_file_repository(),
+            event_bus=get_event_bus()
+        )
+    return _singletons["file_state_machine"]
 
 def get_file_discovery_slice() -> FileDiscoverySlice:
     """Get the File Discovery vertical slice."""
