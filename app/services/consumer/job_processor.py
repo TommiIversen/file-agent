@@ -27,6 +27,7 @@ class JobProcessor:
         event_bus: DomainEventBus,
         job_queue: JobQueueService,
         copy_strategy: GrowingFileCopyStrategy,
+        finalization_service: JobFinalizationService,
         space_checker=None,
         space_retry_manager=None,
         error_classifier=None,
@@ -36,6 +37,7 @@ class JobProcessor:
         self.event_bus = event_bus
         self.job_queue = job_queue
         self.copy_strategy = copy_strategy
+        self.finalization_service = finalization_service
 
         self.space_manager = JobSpaceManager(
             settings=settings,
@@ -44,13 +46,6 @@ class JobProcessor:
             job_queue=job_queue,
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
-        )
-
-        self.finalization_service = JobFinalizationService(
-            settings=settings,
-            file_repository=file_repository,
-            job_queue=job_queue,
-            event_bus=event_bus
         )
 
         self.template_engine = OutputFolderTemplateEngine(settings)
@@ -108,6 +103,8 @@ class JobProcessor:
                 await self.finalization_service.finalize_success(
                     job, prepared_file.job.file_size
                 )
+                # Mark job as completed in queue after successful finalization
+                await self.job_queue.mark_job_completed(job)
                 return ProcessResult(success=True, file_path=file_path)
 
             except Exception as copy_error:

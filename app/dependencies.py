@@ -10,6 +10,7 @@ from app.services.copy.file_copier_service import FileCopierService
 from .config import Settings
 from .services.consumer.job_error_classifier import JobErrorClassifier
 from .services.consumer.job_processor import JobProcessor
+from .services.consumer.job_finalization_service import JobFinalizationService
 from .services.copy.growing_copy import GrowingFileCopyStrategy
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
@@ -145,6 +146,17 @@ def get_space_retry_manager() -> SpaceRetryManager:
     return _singletons["space_retry_manager"]
 
 
+def get_job_finalization_service() -> JobFinalizationService:
+    if "job_finalization_service" not in _singletons:
+        _singletons["job_finalization_service"] = JobFinalizationService(
+            settings=get_settings(),
+            file_repository=get_file_repository(),
+            event_bus=get_event_bus(),
+            state_machine=get_file_state_machine()
+        )
+    return _singletons["job_finalization_service"]
+
+
 def get_websocket_manager() -> WebSocketManager:
     """Gets the singleton instance of the pure WebSocketManager."""
     if "websocket_manager" not in _singletons:
@@ -216,6 +228,7 @@ def get_job_processor() -> JobProcessor:
         space_retry_manager = get_space_retry_manager() if space_checker else None
         error_classifier = get_job_error_classifier()
         event_bus = get_event_bus()
+        finalization_service = get_job_finalization_service()
 
         _singletons["job_processor"] = JobProcessor(
             settings=settings,
@@ -226,6 +239,7 @@ def get_job_processor() -> JobProcessor:
             space_checker=space_checker,
             space_retry_manager=space_retry_manager,
             error_classifier=error_classifier,
+            finalization_service=finalization_service,
         )
 
     return _singletons["job_processor"]

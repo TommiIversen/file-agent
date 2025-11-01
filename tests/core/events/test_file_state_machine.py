@@ -67,7 +67,7 @@ async def test_valid_transition(
     mock_repository.get_by_id.return_value = sample_file
     
     # Act: Udfør overgangen
-    await state_machine.transition(sample_file.id, FileStatus.READY)
+    await state_machine.transition(file_id=sample_file.id, new_status=FileStatus.READY)
     
     # Giv event loop'en en chance til at køre den task, som 'create_task' oprettede
     await asyncio.sleep(0) 
@@ -108,7 +108,7 @@ async def test_invalid_transition(
     
     # Act & Assert: Tjek at den korrekte exception bliver kastet
     with pytest.raises(InvalidTransitionError) as e:
-        await state_machine.transition(sample_file.id, FileStatus.IN_QUEUE)
+        await state_machine.transition(file_id=sample_file.id, new_status=FileStatus.IN_QUEUE)
         
     # Assert (at fejlen er informativ)
     assert "Discovered" in str(e.value)
@@ -128,7 +128,7 @@ async def test_file_not_found(state_machine: FileStateMachine, mock_repository: 
     
     # Act & Assert
     with pytest.raises(ValueError) as e:
-        await state_machine.transition("non-existent-id", FileStatus.READY)
+        await state_machine.transition(file_id="non-existent-id", new_status=FileStatus.READY)
         
     assert "findes ikke" in str(e.value)
 
@@ -147,7 +147,7 @@ async def test_no_op_transition(
     mock_repository.get_by_id.return_value = sample_file
     
     # Act
-    await state_machine.transition(sample_file.id, FileStatus.READY)
+    await state_machine.transition(file_id=sample_file.id, new_status=FileStatus.READY)
     
     # Giv event loop'en en chance (selvom intet burde ske)
     await asyncio.sleep(0)
@@ -173,8 +173,8 @@ async def test_transition_with_kwargs(
     # Act
     test_error = "En specifik fejlbesked"
     await state_machine.transition(
-        sample_file.id, 
-        FileStatus.FAILED, 
+        file_id=sample_file.id, 
+        new_status=FileStatus.FAILED, 
         error_message=test_error,
         failed_at=datetime.now() # Test at vi også kan sætte tid
     )
@@ -202,7 +202,7 @@ async def test_automatic_timestamps(
     mock_repository.get_by_id.return_value = sample_file
     
     # Act
-    await state_machine.transition(sample_file.id, FileStatus.COMPLETED)
+    await state_machine.transition(file_id=sample_file.id, new_status=FileStatus.COMPLETED)
     
     # Assert
     mock_repository.update.assert_called_once()

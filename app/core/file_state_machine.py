@@ -98,6 +98,7 @@ class FileStateMachine:
 
     async def transition(
         self,
+        *,  # Force all parameters to be keyword-only
         file_id: str,
         new_status: FileStatus,
         **kwargs
@@ -106,9 +107,15 @@ class FileStateMachine:
         Udfører en status-overgang atomisk og publicerer en event.
         
         Args:
-            file_id: ID på filen, der skal transitioneres.
-            new_status: Den ønskede nye status.
+            file_id: ID på filen, der skal transitioneres (keyword-only).
+            new_status: Den ønskede nye status (keyword-only).
             **kwargs: Valgfri felter, der skal opdateres (f.eks. error_message).
+
+        Usage:
+            await state_machine.transition(
+                file_id="abc123",
+                new_status=FileStatus.COMPLETED
+            )
 
         Returns:
             Det opdaterede TrackedFile-objekt.
@@ -116,6 +123,7 @@ class FileStateMachine:
         Raises:
             InvalidTransitionError: Hvis overgangen ikke er tilladt.
             ValueError: Hvis filen ikke findes.
+            TypeError: Hvis positional arguments anvendes.
         """
         
         event_to_publish: Optional[FileStatusChangedEvent] = None

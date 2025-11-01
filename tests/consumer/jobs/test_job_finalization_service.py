@@ -14,7 +14,7 @@ from app.models import FileStatus
 from app.models import TrackedFile
 from app.services.consumer.job_models import QueueJob
 from app.core.file_repository import FileRepository
-from app.services.job_queue import JobQueueService
+from app.core.file_state_machine import FileStateMachine
 from app.core.events.event_bus import DomainEventBus
 
 
@@ -23,10 +23,10 @@ def finalizer():
     """Simple finalizer for testing."""
     settings = MagicMock(max_retry_attempts=3)
     file_repository = AsyncMock(spec=FileRepository)
-    job_queue = AsyncMock(spec=JobQueueService)
+    state_machine = AsyncMock(spec=FileStateMachine)
     event_bus = AsyncMock(spec=DomainEventBus)
 
-    return JobFinalizationService(settings, file_repository, job_queue, event_bus)
+    return JobFinalizationService(settings, file_repository, event_bus, state_machine)
 
 
 class TestJobFinalizationService:
@@ -47,11 +47,17 @@ class TestJobFinalizationService:
             added_to_queue_at=datetime.now(),
         )
 
+        # Setup mock to return the tracked file
+        finalizer.file_repository.get_by_id.return_value = tracked_file
+
         file_size = 100
         await finalizer.finalize_success(job, file_size)
 
-        finalizer.job_queue.mark_job_completed.assert_called_once_with(job)
-        finalizer.file_repository.update.assert_called_once()
+        # Verify state machine transition is called instead of job_queue
+        finalizer.state_machine.transition.assert_called_once_with(
+            file_id=tracked_file.id, new_status=FileStatus.COMPLETED
+        )
+        finalizer.event_bus.publish.assert_called()
 
     @pytest.mark.asyncio
     async def test_finalize_failure(self, finalizer):
@@ -69,10 +75,15 @@ class TestJobFinalizationService:
         )
         error = Exception("Test error")
 
+        # Setup mock to return the tracked file
+        finalizer.file_repository.get_by_id.return_value = tracked_file
+
         await finalizer.finalize_failure(job, error)
 
-        finalizer.job_queue.mark_job_failed.assert_called_once_with(job, "Test error")
-        finalizer.file_repository.update.assert_called_once()
+        # Verify state machine transition is called instead of job_queue
+        finalizer.state_machine.transition.assert_called_once_with(
+            file_id=tracked_file.id, new_status=FileStatus.FAILED
+        )
 
     @pytest.mark.asyncio
     async def test_finalize_max_retries(self, finalizer):
@@ -89,12 +100,15 @@ class TestJobFinalizationService:
             added_to_queue_at=datetime.now(),
         )
 
+        # Setup mock to return the tracked file
+        finalizer.file_repository.get_by_id.return_value = tracked_file
+
         await finalizer.finalize_max_retries(job)
 
-        finalizer.job_queue.mark_job_failed.assert_called_once_with(
-            job, "Max retry attempts reached"
+        # Verify state machine transition is called instead of job_queue
+        finalizer.state_machine.transition.assert_called_once_with(
+            file_id=tracked_file.id, new_status=FileStatus.FAILED
         )
-        finalizer.file_repository.update.assert_called_once()
 
     def test_get_finalization_info(self, finalizer):
         """Test configuration info retrieval."""
@@ -102,4 +116,4 @@ class TestJobFinalizationService:
 
         assert info["max_retry_attempts"] == 3
         assert info["file_repository_available"] is True
-        assert info["job_queue_available"] is True
+        assert info["state_machine_available"] is True

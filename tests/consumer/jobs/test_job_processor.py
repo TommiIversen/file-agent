@@ -29,14 +29,14 @@ class TestJobProcessor:
         copy_strategy = MagicMock()
 
         processor = JobProcessor(
-            settings, file_repository, event_bus, job_queue, copy_strategy
+            settings, file_repository, event_bus, job_queue, copy_strategy, finalization_service=MagicMock()
         )
 
-        # Verify all services were created
+        # Verify all services were created (except finalization_service which is injected)
         mock_space.assert_called_once()
-        mock_final.assert_called_once()
         mock_prep.assert_called_once()
         mock_executor.assert_called_once()
+        # mock_final is NOT called because finalization_service is now injected
         assert processor.space_manager == mock_space.return_value
 
     def test_get_processor_info(self):
@@ -53,7 +53,7 @@ class TestJobProcessor:
             event_bus = AsyncMock()
             job_queue = AsyncMock()
             copy_strategy = MagicMock()
-            processor = JobProcessor(settings, file_repository, event_bus, job_queue, copy_strategy)
+            processor = JobProcessor(settings, file_repository, event_bus, job_queue, copy_strategy, finalization_service=MagicMock())
 
             info = processor.get_processor_info()
 
