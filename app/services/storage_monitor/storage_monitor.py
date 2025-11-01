@@ -106,11 +106,37 @@ class StorageMonitorService:
         critical_threshold: float,
     ) -> None:
         try:
-            new_info = await self._storage_checker.check_path(
-                path=path,
-                warning_threshold_gb=warning_threshold,
-                critical_threshold_gb=critical_threshold,
-            )
+            # Add aggressive timeout wrapper for the entire storage check operation
+            # to prevent blocking the event loop on network timeouts
+            try:
+                new_info = await asyncio.wait_for(
+                    self._storage_checker.check_path(
+                        path=path,
+                        warning_threshold_gb=warning_threshold,
+                        critical_threshold_gb=critical_threshold,
+                    ),
+                    timeout=8.0  # Aggressive 8-second timeout for entire operation
+                )
+            except asyncio.TimeoutError:
+                logging.warning(
+                    f"⏱️ TIMEOUT: Storage check for {storage_type} at {path} timed out after 8 seconds - assuming network is down"
+                )
+                # Create a synthetic StorageInfo for timeout case
+                from app.models import StorageInfo, StorageStatus
+                from datetime import datetime
+                new_info = StorageInfo(
+                    path=path,
+                    is_accessible=False,
+                    has_write_access=False,
+                    free_space_gb=0.0,
+                    total_space_gb=0.0,
+                    used_space_gb=0.0,
+                    status=StorageStatus.ERROR,
+                    warning_threshold_gb=warning_threshold,
+                    critical_threshold_gb=critical_threshold,
+                    last_checked=datetime.now(),
+                    error_message="Storage check timed out - network may be unavailable",
+                )
 
             if not new_info.is_accessible:
                 logging.warning(

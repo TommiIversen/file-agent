@@ -77,7 +77,7 @@ class StorageChecker:
 
             return await asyncio.wait_for(
                 _async_check(),
-                timeout=5.0,  # 5 second timeout
+                timeout=3.0,  # Reduced from 5 to 3 seconds for faster response
             )
         except asyncio.TimeoutError:
             logging.warning(f"Accessibility check timed out for {path}")
@@ -100,7 +100,7 @@ class StorageChecker:
 
             free_gb, total_gb, used_gb = await asyncio.wait_for(
                 asyncio.to_thread(_sync_disk_usage),
-                timeout=10.0,  # 10 second timeout
+                timeout=5.0,  # Reduced from 10 to 5 seconds
             )
 
             logging.debug(
