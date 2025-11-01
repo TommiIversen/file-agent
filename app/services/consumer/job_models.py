@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from app.models import TrackedFile, FileStatus
+from app.models import FileStatus
 
 
 @dataclass

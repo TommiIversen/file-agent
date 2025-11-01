@@ -106,7 +106,7 @@ async def main():
     dest_dir = os.path.dirname(DESTINATION_FILE)
     
     if not dest_dir: # Hvis stien kun er et filnavn
-        print(f"❌ FEJL: Angiv venligst en fuld sti til destinationen, inklusiv mappe.")
+        print("❌ FEJL: Angiv venligst en fuld sti til destinationen, inklusiv mappe.")
         sys.exit(1)
         
     if not os.path.isdir(dest_dir):

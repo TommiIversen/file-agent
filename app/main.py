@@ -211,7 +211,8 @@ async def lifespan(app: FastAPI):
     logging.info("FileCopierService workers startet som background task")
 
     # Initialize WebSocketManager (subscription happens automatically)
-    get_websocket_manager()  # Initialize singleton
+    ws_manager = get_websocket_manager()  # Initialize singleton
+    ws_manager.start_sender_task()
     logging.info("WebSocketManager initialiseret")
 
     # Start StorageMonitorService som background task
@@ -239,6 +240,7 @@ async def lifespan(app: FastAPI):
     logging.info("File Transfer Agent shutting down...")
 
     # Stop alle background tasks gracefully
+    get_websocket_manager().stop_sender_task()
     await file_scanner.stop_scanning()
     job_queue_service.stop_producer()
     await file_copier.stop_workers()

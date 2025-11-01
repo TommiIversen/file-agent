@@ -9,7 +9,6 @@ from app.core.events.file_events import FileReadyEvent, FileStatusChangedEvent
 from app.models import FileStatus, TrackedFile
 from app.services.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
-from app.services.copy.growing_copy import GrowingFileCopyStrategy
 
 
 class JobQueueService:

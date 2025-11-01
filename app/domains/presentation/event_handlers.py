@@ -59,7 +59,7 @@ class PresentationEventHandlers:
                 "timestamp": update.timestamp.isoformat(),
             },
         }
-        await self.websocket_manager.broadcast_message(message_data)
+        self.websocket_manager.broadcast_message(message_data)
 
     async def handle_file_copy_progress(self, event: FileCopyProgressEvent) -> None:
         progress_percent = (event.bytes_copied / event.total_bytes) * 100 if event.total_bytes > 0 else 0
@@ -74,7 +74,7 @@ class PresentationEventHandlers:
                 "timestamp": event.timestamp.isoformat(),
             },
         }
-        await self.websocket_manager.broadcast_message(message_data)
+        self.websocket_manager.broadcast_message(message_data)
 
     async def handle_scanner_status_event(self, event: ScannerStatusChangedEvent) -> None:
         self._scanner_status = {"scanning": event.is_scanning, "paused": event.is_paused}
@@ -86,7 +86,7 @@ class PresentationEventHandlers:
                 "timestamp": self._get_timestamp(),
             },
         }
-        await self.websocket_manager.broadcast_message(message_data)
+        self.websocket_manager.broadcast_message(message_data)
 
     async def handle_storage_status_event(self, event: StorageStatusChangedEvent) -> None:
         update_data = event.update
@@ -100,7 +100,7 @@ class PresentationEventHandlers:
                 "timestamp": self._get_timestamp(),
             },
         }
-        await self.websocket_manager.broadcast_message(message_data)
+        self.websocket_manager.broadcast_message(message_data)
 
     async def handle_mount_status_event(self, event: MountStatusChangedEvent) -> None:
         update_data = event.update
@@ -116,4 +116,4 @@ class PresentationEventHandlers:
                 "timestamp": self._get_timestamp(),
             },
         }
-        await self.websocket_manager.broadcast_message(message_data)
+        self.websocket_manager.broadcast_message(message_data)
