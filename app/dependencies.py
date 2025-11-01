@@ -105,8 +105,6 @@ def get_job_queue_service() -> JobQueueService:
             file_repository=get_file_repository(), 
             event_bus=get_event_bus(),
             state_machine=get_file_state_machine(),
-            storage_monitor=get_storage_monitor(),
-            copy_strategy=get_copy_strategy()
         )
         
         # Set up the circular reference after both objects are created

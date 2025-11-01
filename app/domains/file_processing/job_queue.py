@@ -1,14 +1,12 @@
 import asyncio
 import logging
-from datetime import datetime
 from typing import Optional, List
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileReadyEvent
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
-from app.models import FileStatus, TrackedFile
+from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
 
@@ -20,15 +18,11 @@ class JobQueueService:
         file_repository: FileRepository,
         event_bus: DomainEventBus,
         state_machine: FileStateMachine,
-        storage_monitor=None,
-        copy_strategy=None,
     ):
         self.settings = settings
         self.file_repository = file_repository
-        self.storage_monitor = storage_monitor
         self._event_bus = event_bus
         self._state_machine = state_machine
-        self.copy_strategy = copy_strategy
         self.job_queue: Optional[asyncio.PriorityQueue[QueueJob]] = None
 
         self._total_jobs_added = 0
@@ -52,17 +46,9 @@ class JobQueueService:
 
         self._running = True
 
-        if self._event_bus:
-            asyncio.create_task(
-                self._event_bus.subscribe(FileReadyEvent, self.handle_file_ready)
-            )
-            logging.info("Subscribed to FileReadyEvent on the event bus")
-        else:
-            # This should not happen in normal operation with DI, but it's a safeguard.
-            logging.error(
-                "DomainEventBus not injected, JobQueueService will not be able to queue new files!"
-            )
-
+        # Event subscription is now handled by CQRS registration
+        # No longer subscribing directly to FileReadyEvent here
+        
         logging.info("Job Queue Producer startet")
 
         try:
@@ -82,64 +68,6 @@ class JobQueueService:
     def stop_producer(self) -> None:
         self._running = False
         logging.info("Job Queue Producer stop request")
-
-    async def handle_file_ready(self, event: FileReadyEvent) -> None:
-        """Handles the FileReadyEvent from the event bus."""
-        try:
-            # Use event.file_id and event.file_path directly
-            tracked_file = await self.file_repository.get_by_id(event.file_id)
-            if not tracked_file:
-                logging.warning(
-                    f"Received FileReadyEvent for unknown file ID: {event.file_id}"
-                )
-                return
-
-            # Guard against re-queuing files that are already being processed.
-            # Accept both READY and READY_TO_START_GROWING status
-            if tracked_file.status not in [FileStatus.READY, FileStatus.READY_TO_START_GROWING]:
-                logging.warning(
-                    f"Ignoring FileReadyEvent for {event.file_path} because its status is "
-                    f"'{tracked_file.status.value}' instead of READY or READY_TO_START_GROWING."
-                )
-                return
-
-            if await self._is_network_available():
-                await self._add_job_to_queue(tracked_file)
-            else:
-                try:
-                    await self._state_machine.transition(
-                        file_id=event.file_id,
-                        new_status=FileStatus.WAITING_FOR_NETWORK,
-                        error_message="Network unavailable - waiting for recovery"
-                    )
-                    logging.info(
-                        f"⏸️ NETWORK DOWN: {event.file_path} ready but waiting for network"
-                    )
-                except (InvalidTransitionError, ValueError) as e:
-                    logging.warning(f"Kunne ikke sætte fil {event.file_id} til WAITING_FOR_NETWORK: {e}")
-        except Exception as e:
-            logging.error(f"Error handling FileReadyEvent: {e}")
-
-    async def _is_network_available(self) -> bool:
-        """Check if destination network is available"""
-        if not self.storage_monitor:
-            return True  # Assume available if no storage monitor
-
-        try:
-            storage_state = self.storage_monitor._storage_state
-            dest_info = storage_state.get_destination_info()
-
-            if not dest_info:
-                return False  # No destination info = not available
-
-            # Available if status is OK or WARNING (WARNING still allows copying)
-            from app.models import StorageStatus
-
-            return dest_info.status in [StorageStatus.OK, StorageStatus.WARNING]
-
-        except Exception as e:
-            logging.error(f"Error checking network availability: {e}")
-            return True  # Default to available on error
 
     async def process_waiting_network_files(self) -> None:
         """Process all files waiting for network when network becomes available"""
@@ -196,48 +124,14 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"❌ Error handling destination unavailable: {e}")
 
-    async def _add_job_to_queue(self, tracked_file: TrackedFile) -> None:
-        if self.job_queue is None:
-            logging.error("Queue er ikke oprettet endnu!")
-            return
-
-        try:
-            is_growing_at_queue_time = False
-            if tracked_file.status == FileStatus.READY_TO_START_GROWING:
-                is_growing_at_queue_time = True
-            elif self.copy_strategy:
-                is_growing_at_queue_time = self.copy_strategy._is_file_currently_growing(tracked_file)
-
-            job = QueueJob(
-                file_id=tracked_file.id,
-                file_path=tracked_file.file_path,
-                file_size=tracked_file.file_size,
-                creation_time=tracked_file.creation_time,
-                is_growing_at_queue_time=is_growing_at_queue_time,
-                added_to_queue_at=datetime.now(),
-                retry_count=0,
-            )
-
-            # TRIN 1: Transitioner staten FØRST
-            await self._state_machine.transition(
-                file_id=tracked_file.id,
-                new_status=FileStatus.IN_QUEUE
-            )
-
-            # TRIN 2: Hvis transition er succesfuld, put på køen
-            await self.job_queue.put(job)
-            self._total_jobs_added += 1
-
-            logging.info(f"Typed job tilføjet til queue: {job}")
-            logging.debug(f"Queue size nu: {self.job_queue.qsize()}")
-
-        except InvalidTransitionError as e:
-            # Filens status ændrede sig (f.eks. til REMOVED) før vi kunne sætte den i kø
-            logging.warning(f"Kunne ikke tilføje job til kø (state conflict): {e}")
-        except asyncio.QueueFull:
-            logging.error(f"Queue er fuld! Kan ikke tilføje: {tracked_file.file_path}")
-        except Exception as e:
-            logging.error(f"Fejl ved tilføjelse til queue: {e}")
+    def get_queue(self) -> Optional[asyncio.PriorityQueue[QueueJob]]:
+        """
+        Returns the actual queue for command handlers to use.
+        
+        This method provides access to the underlying queue for the CQRS
+        command handlers to add jobs directly.
+        """
+        return self.job_queue
 
     async def get_next_job(self) -> Optional[QueueJob]:
         if self.job_queue is None:

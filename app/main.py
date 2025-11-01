@@ -34,6 +34,7 @@ from .dependencies import (
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
 from app.domains.file_discovery.registration import register_file_discovery_handlers  # Import the new registration function
+from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
 
 from .logging_config import setup_logging
 from .routers import views
@@ -163,6 +164,7 @@ async def lifespan(app: FastAPI):
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
     register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
+    await register_file_processing_domain(command_bus, event_bus)  # File processing CQRS registration
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
     logging.info("Handler-registrering fuldført.")
