@@ -41,9 +41,18 @@ class TestJobFilePreparationService:
         tracked_file = TrackedFile(
             file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
 
         preparer.file_repository.get_by_id.return_value = tracked_file
+
+        preparer.copy_strategy._is_file_currently_growing.return_value = False
 
         # Mock the utils functions
         with (
@@ -60,9 +69,9 @@ class TestJobFilePreparationService:
             result = await preparer.prepare_file_for_copy(job)
 
         assert result is not None
-        assert result.tracked_file == tracked_file
+        assert result.job.file_id == tracked_file.id
         assert result.strategy_name == "GrowingFileCopyStrategy"
-        assert result.initial_status == FileStatus.GROWING_COPY
+        assert result.initial_status == FileStatus.COPYING
         assert result.destination_path == Path("/dst/test.mxf")
 
     @pytest.mark.asyncio
@@ -72,28 +81,47 @@ class TestJobFilePreparationService:
         mock_tracked_file = MagicMock(spec=TrackedFile)
         mock_tracked_file.id = "nonexistent-id"
         mock_tracked_file.file_path = "/src/nonexistent.mxf"
-        job = QueueJob(tracked_file=mock_tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=mock_tracked_file.id,
+            file_path=mock_tracked_file.file_path,
+            file_size=0,
+            creation_time=None,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         preparer.file_repository.get_by_id.return_value = None
 
         result = await preparer.prepare_file_for_copy(job)
 
         assert result is not None
-        assert result.tracked_file is None
+        assert result.job is not None
         assert result.strategy_name == "GrowingFileCopyStrategy"
 
-    def test_determine_initial_status(self, preparer):
+    @pytest.mark.asyncio
+    async def test_determine_initial_status(self, preparer):
         """Test status determination for growing and static files."""
         # Create a mock tracked_file
         mock_tracked_file = MagicMock(spec=TrackedFile)
+        mock_tracked_file.id = "test-id"
         mock_tracked_file.file_path = "/mock/file.mxf"
         mock_tracked_file.status = FileStatus.READY
 
+        job = QueueJob(
+            file_id=mock_tracked_file.id,
+            file_path=mock_tracked_file.file_path,
+            file_size=0,
+            creation_time=None,
+            is_growing_at_queue_time=True,  # Set to True for growing file case
+            added_to_queue_at=datetime.now(),
+        )
+
+        preparer.file_repository.get_by_id.return_value = mock_tracked_file
+
         # Test the growing file case
-        preparer.copy_strategy._is_file_currently_growing.return_value = True
-        status = preparer._determine_file_status(mock_tracked_file)
+        status = await preparer._determine_file_status(job)
         assert status == FileStatus.GROWING_COPY
 
         # Test the static file case
-        preparer.copy_strategy._is_file_currently_growing.return_value = False
-        status = preparer._determine_file_status(mock_tracked_file)
+        job.is_growing_at_queue_time = False  # Set to False for static file case
+        status = await preparer._determine_file_status(job)
         assert status == FileStatus.COPYING

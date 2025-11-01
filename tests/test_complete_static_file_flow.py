@@ -81,7 +81,13 @@ class TestCompleteStaticFileFlow:
         from datetime import datetime
 
         job = QueueJob(
-            tracked_file=static_file, added_to_queue_at=datetime.now(), retry_count=0
+            file_id=static_file.id,
+            file_path=static_file.file_path,
+            file_size=static_file.file_size,
+            creation_time=static_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+            retry_count=0,
         )
 
         # Prepare the file
@@ -111,7 +117,13 @@ class TestCompleteStaticFileFlow:
         from datetime import datetime
 
         job = QueueJob(
-            tracked_file=growing_file, added_to_queue_at=datetime.now(), retry_count=0
+            file_id=growing_file.id,
+            file_path=growing_file.file_path,
+            file_size=growing_file.file_size,
+            creation_time=growing_file.creation_time,
+            is_growing_at_queue_time=True,
+            added_to_queue_at=datetime.now(),
+            retry_count=0,
         )
 
         # Mock the copy strategy to identify the file as growing

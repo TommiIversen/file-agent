@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.services.consumer.job_copy_executor import JobCopyExecutor
 from app.models import FileStatus, TrackedFile
-from app.services.consumer.job_models import PreparedFile
+from app.services.consumer.job_models import PreparedFile, QueueJob
 from app.services.copy.growing_copy import GrowingFileCopyStrategy
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
@@ -37,8 +37,16 @@ def prepared_file():
     tracked_file = TrackedFile(
         file_path="/src/test.mxf", file_size=1000, status=FileStatus.READY
     )
+    job = QueueJob(
+        file_id=tracked_file.id,
+        file_path=tracked_file.file_path,
+        file_size=tracked_file.file_size,
+        creation_time=tracked_file.creation_time,
+        is_growing_at_queue_time=False,
+        added_to_queue_at=datetime.now(),
+    )
     return PreparedFile(
-        tracked_file=tracked_file,
+        job=job,
         strategy_name="GrowingFileCopyStrategy",
         initial_status=FileStatus.COPYING,
         destination_path=Path("/dst/test.mxf"),
@@ -51,14 +59,20 @@ class TestJobCopyExecutor:
     @pytest.mark.asyncio
     async def test_initialize_copy_status(self, executor, prepared_file):
         """Test copy status initialization."""
-        with patch("app.services.consumer.job_copy_executor.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2025, 10, 12, 12, 0, 0)
-
-            await executor.initialize_copy_status(prepared_file)
-
-        executor.file_repository.update.assert_called_once_with(
-            prepared_file.tracked_file
+        tracked_file = TrackedFile(
+            id=prepared_file.job.file_id,
+            file_path=prepared_file.job.file_path,
+            file_size=prepared_file.job.file_size,
+            status=FileStatus.COPYING,
+            copy_progress=0.0,
+            started_copying_at=datetime(2025, 10, 12, 12, 0, 0),
         )
+
+        executor.file_repository.get_by_id.return_value = tracked_file
+
+        await executor.initialize_copy_status(prepared_file)
+
+        executor.file_repository.update.assert_called_once_with(tracked_file)
 
     @pytest.mark.asyncio
     async def test_execute_copy_success(self, executor, prepared_file):
@@ -84,12 +98,24 @@ class TestJobCopyExecutor:
     @pytest.mark.asyncio
     async def test_handle_copy_failure(self, executor, prepared_file):
         """Test copy failure handling."""
-        executor.error_classifier.classify_copy_error.return_value = (FileStatus.FAILED, "Test error")
-        await executor.handle_copy_failure(prepared_file, "Test error")
-
-        executor.file_repository.update.assert_called_once_with(
-            prepared_file.tracked_file
+        tracked_file = TrackedFile(
+            id=prepared_file.job.file_id,
+            file_path=prepared_file.job.file_path,
+            file_size=prepared_file.job.file_size,
+            status=FileStatus.FAILED,
+            error_message="Failed: Test error",
         )
+
+        executor.file_repository.get_by_id.return_value = tracked_file
+
+        executor.error_classifier.classify_copy_error.return_value = (FileStatus.FAILED, "Test error")
+
+        await executor.handle_copy_failure(prepared_file, Exception("Test error"))
+
+        # Verify that the file_repository.update method was called with the correct status
+        updated_tracked_file = executor.file_repository.update.call_args[0][0]
+        assert updated_tracked_file.status == FileStatus.FAILED
+        assert updated_tracked_file.error_message == "Failed: Test error"
 
     def test_get_copy_executor_info(self, executor):
         """Test configuration info retrieval."""

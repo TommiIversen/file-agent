@@ -103,6 +103,7 @@ class TestJobSpaceManager:
         class DummyJob:
             def __init__(self, tracked_file):
                 self.tracked_file = tracked_file
+                self.file_size = tracked_file.file_size
 
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
@@ -176,8 +177,7 @@ class TestJobSpaceManager:
         job = DummyJob()
 
         # Mock file_size directly on the tracked_file property
-        # This avoids AttributeError when job_space_manager tries to access job.tracked_file.file_size
-        job.tracked_file.file_size = 2000
+        job.file_size = 2000
 
         # Mock the space_checker call to avoid actual file system checks
         expected_result = SpaceCheckResult(
@@ -211,6 +211,7 @@ class TestJobSpaceManager:
                 self.file_path = "/test/file.txt"
                 self.file_size = 1000
                 self.id = "test-job-id"
+                self.file_id = "tracked-file-uuid"  # Add file_id attribute
                 self.tracked_file = TrackedFile(
                     file_path="/test/file.txt",
                     file_size=1000,
@@ -246,7 +247,14 @@ class TestJobSpaceManager:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         job_space_manager.file_repository.get_by_id.return_value = tracked_file
         space_check = SpaceCheckResult(
             has_space=False,
@@ -264,7 +272,7 @@ class TestJobSpaceManager:
         assert result.success is False
         assert result.space_shortage is True
         assert result.retry_scheduled is False
-        job_space_manager.file_repository.update.assert_called_once_with(job.tracked_file)
+        job_space_manager.file_repository.update.assert_called_once_with(tracked_file)
         job_space_manager.job_queue.mark_job_failed.assert_called_once()
 
     def test_get_space_manager_info(self, job_space_manager):

@@ -38,9 +38,16 @@ class TestJobFinalizationService:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=100, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
-        file_size = 1000
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
 
+        file_size = 100
         await finalizer.finalize_success(job, file_size)
 
         finalizer.job_queue.mark_job_completed.assert_called_once_with(job)
@@ -52,7 +59,14 @@ class TestJobFinalizationService:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=100, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         error = Exception("Test error")
 
         await finalizer.finalize_failure(job, error)
@@ -66,7 +80,14 @@ class TestJobFinalizationService:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=100, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
 
         await finalizer.finalize_max_retries(job)
 

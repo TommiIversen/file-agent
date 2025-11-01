@@ -101,7 +101,14 @@ class TestJobSpaceManager:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         expected = SpaceCheckResult(
             has_space=True,
             available_bytes=5000,
@@ -122,7 +129,14 @@ class TestJobSpaceManager:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         space_check = SpaceCheckResult(
             has_space=False,
             available_bytes=500,
@@ -146,7 +160,14 @@ class TestJobSpaceManager:
         tracked_file = TrackedFile(
             file_path="/test/file.txt", file_size=1000, status=FileStatus.READY
         )
-        job = QueueJob(tracked_file=tracked_file, added_to_queue_at=datetime.now())
+        job = QueueJob(
+            file_id=tracked_file.id,
+            file_path=tracked_file.file_path,
+            file_size=tracked_file.file_size,
+            creation_time=tracked_file.creation_time,
+            is_growing_at_queue_time=False,
+            added_to_queue_at=datetime.now(),
+        )
         space_manager.file_repository.get_by_id.return_value = tracked_file
         space_check = SpaceCheckResult(
             has_space=False,
@@ -161,5 +182,5 @@ class TestJobSpaceManager:
 
         assert result.success is False
         assert result.space_shortage is True
-        space_manager.file_repository.update.assert_called_once_with(job.tracked_file)
+        space_manager.file_repository.update.assert_called_once_with(tracked_file)
         space_manager.job_queue.mark_job_failed.assert_called_once()
