@@ -16,24 +16,9 @@ from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus, TrackedFile
 from app.services.copy.network_error_detector import NetworkErrorDetector, NetworkError
 from app.services.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
-from app.utils.progress_utils import calculate_transfer_rate
+from app.services.copy.file_verification import FileVerificationService
+from app.services.copy.copy_io_loop import CopyIoLoop
 from app.core.events.file_events import FileCopyProgressEvent
-
-
-async def _verify_file_integrity(source_path: str, dest_path: str) -> bool:
-    try:
-        source_size = await aiofiles.os.path.getsize(source_path)
-        dest_size = await aiofiles.os.path.getsize(dest_path)
-
-        if source_size != dest_size:
-            logging.error(f"Size mismatch: source={source_size}, dest={dest_size}")
-            return False
-
-        return True
-
-    except Exception as e:
-        logging.error(f"Error verifying file integrity: {e}")
-        return False
 
 
 class GrowingFileCopyStrategy():
@@ -43,12 +28,16 @@ class GrowingFileCopyStrategy():
         settings: Settings,
         file_repository: FileRepository,
         event_bus: DomainEventBus,
-        state_machine: FileStateMachine, # <-- TILFØJ DENNE
+        state_machine: FileStateMachine, # <-- NY
+        verification_service: FileVerificationService, # <-- NY
+        io_loop: CopyIoLoop, # <-- NY
     ):
         self.settings = settings
         self.file_repository = file_repository
         self.event_bus = event_bus
-        self._state_machine = state_machine # <-- TILFØJ DENNE
+        self._state_machine = state_machine
+        self._verification_service = verification_service
+        self._io_loop = io_loop
 
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
@@ -138,8 +127,8 @@ class GrowingFileCopyStrategy():
             )
 
             if success:
-                if await _verify_file_integrity(source_path, dest_path):
-                    delete_success, delete_error = await self._delete_source_file_with_retry(source_path)
+                if await self._verification_service.verify_integrity(source_path, dest_path):
+                    delete_success, delete_error = await self._verification_service.delete_source_file(source_path)
                     if not delete_success:
                         logging.warning(
                             f"Could not delete source file (may still be in use): {os.path.basename(source_path)} - {delete_error}"
@@ -355,7 +344,7 @@ class GrowingFileCopyStrategy():
                     )
 
             if safe_copy_to > bytes_copied:
-                bytes_copied, last_progress_percent, last_progress_update_time = await self._copy_chunk_range(
+                bytes_copied, last_progress_percent, last_progress_update_time = await self._io_loop.copy_chunk_range(
                     source_path,
                     dst,
                     bytes_copied,
@@ -396,129 +385,6 @@ class GrowingFileCopyStrategy():
                 await asyncio.sleep(poll_interval)
 
         return bytes_copied
-
-    async def _copy_chunk_range(
-        self,
-        source_path: str,
-        dst,
-        start_bytes: int,
-        end_bytes: int,
-        chunk_size: int,
-        tracked_file: TrackedFile,
-        current_file_size: int,
-        pause_ms: int,
-        network_detector: NetworkErrorDetector,
-        status: FileStatus = FileStatus.GROWING_COPY,
-        last_progress_percent: int = -1,
-        last_progress_update_time: datetime = None,
-    ) -> tuple[int, int, datetime]:
-        """
-        Copy a range of bytes from source to destination with network error detection.
-        Args:
-            status: FileStatus to use for progress updates (GROWING_COPY or COPYING)
-        Returns the final bytes copied count.
-        """
-        bytes_copied = start_bytes
-        bytes_to_copy = end_bytes - start_bytes
-
-        async with aiofiles.open(source_path, "rb") as src:
-            # Anvend timeout på seek
-            await asyncio.wait_for(
-                src.seek(bytes_copied),
-                timeout=self.settings.file_operation_timeout_seconds
-            )
-            while bytes_to_copy > 0:
-                read_size = min(chunk_size, bytes_to_copy)
-                chunk = await asyncio.wait_for(src.read(read_size), timeout=self.settings.file_operation_timeout_seconds)
-
-                if not chunk:
-                    break
-
-                try:
-                    await asyncio.wait_for(dst.write(chunk), timeout=self.settings.file_operation_timeout_seconds)
-                except Exception as write_error:
-                    network_detector.check_write_error(
-                        write_error, "growing copy chunk write"
-                    )
-                    raise write_error
-
-                chunk_len = len(chunk)
-                bytes_copied += chunk_len
-                bytes_to_copy -= chunk_len
-
-                copy_ratio = (
-                    (bytes_copied / current_file_size) * 100
-                    if current_file_size > 0
-                    else 0
-                )
-
-                progress_percent = int(copy_ratio)
-
-                current_time = datetime.now()
-                if (current_time - last_progress_update_time).total_seconds() >= 1.0:
-                    if not hasattr(self, "_copy_start_time"):
-                        self._copy_start_time = current_time
-                        self._copy_start_bytes = bytes_copied
-
-                    elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
-                    transfer_rate = calculate_transfer_rate(
-                        bytes_copied - self._copy_start_bytes,
-                        elapsed_seconds,
-                    )
-                    copy_speed_mbps = transfer_rate / (1024 * 1024)
-
-                    # Publicer progress-event (som før)
-                    if self.event_bus:
-                        progress_event = FileCopyProgressEvent(
-                            file_id=tracked_file.id,
-                            bytes_copied=bytes_copied,
-                            total_bytes=current_file_size,
-                            copy_speed_mbps=copy_speed_mbps,
-                        )
-                        asyncio.create_task(self.event_bus.publish(progress_event))
-
-                    last_progress_percent = progress_percent
-                    last_progress_update_time = current_time
-
-                    # Opdater status og metadata via StateMachine
-                    try:
-                        await self._state_machine.transition(
-                            file_id=tracked_file.id,
-                            new_status=status, # status er enten COPYING eller GROWING_COPY
-                            # kwargs til at opdatere metadata:
-                            copy_progress=copy_ratio,
-                            bytes_copied=bytes_copied,
-                            file_size=current_file_size,
-                            copy_speed_mbps=copy_speed_mbps
-                        )
-                    except (InvalidTransitionError, ValueError) as e:
-                        # Log, men lad være med at crashe kopieringen pga. en statusfejl
-                        logging.warning(f"Kunne ikke opdatere progress-status for {tracked_file.id}: {e}")
-
-                if pause_ms > 0:
-                    await asyncio.sleep(pause_ms / 1000)
-
-        return bytes_copied, last_progress_percent, last_progress_update_time
-
-    async def _delete_source_file_with_retry(self, source_path: str) -> tuple[bool, str | None]:
-        """
-        Attempt to delete the source file with a few retries.
-        Returns (success, error_message). error_message is None if successful.
-        """
-        last_error = None
-        for i in range(3):
-            try:
-                await aiofiles.os.remove(source_path)
-                logging.debug(f"Source file deleted: {os.path.basename(source_path)}")
-                return True, None
-            except Exception as e:
-                last_error = str(e)
-                logging.warning(
-                    f"Delete attempt {i + 1}/3 failed for {os.path.basename(source_path)}: {e}"
-                )
-                if i < 2:
-                    await asyncio.sleep(2)
-        return False, last_error
 
     def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """

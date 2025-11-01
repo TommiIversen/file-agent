@@ -14,6 +14,8 @@ from .services.consumer.job_copy_executor import JobCopyExecutor
 from .services.consumer.job_space_manager import JobSpaceManager
 from .services.consumer.job_finalization_service import JobFinalizationService
 from .services.copy.growing_copy import GrowingFileCopyStrategy
+from .services.copy.file_verification import FileVerificationService
+from .services.copy.copy_io_loop import CopyIoLoop
 from .services.job_queue import JobQueueService
 from .services.network_mount import NetworkMountService
 from .domains.file_discovery.file_scanner_service import FileScannerService
@@ -240,9 +242,27 @@ def get_copy_strategy() -> GrowingFileCopyStrategy:
             settings=get_settings(),
             file_repository=get_file_repository(),
             event_bus=get_event_bus(),
-            state_machine=get_file_state_machine()  # <-- TILFØJ DENNE
+            state_machine=get_file_state_machine(),
+            verification_service=get_file_verification_service(), # <-- NY
+            io_loop=get_copy_io_loop() # <-- NY
         )
     return _singletons["copy_strategy"]
+
+
+def get_file_verification_service() -> FileVerificationService:
+    if "file_verification_service" not in _singletons:
+        _singletons["file_verification_service"] = FileVerificationService()
+    return _singletons["file_verification_service"]
+
+
+def get_copy_io_loop() -> CopyIoLoop:
+    if "copy_io_loop" not in _singletons:
+        _singletons["copy_io_loop"] = CopyIoLoop(
+            settings=get_settings(),
+            state_machine=get_file_state_machine(),
+            event_bus=get_event_bus()
+        )
+    return _singletons["copy_io_loop"]
 
 
 def get_job_processor() -> JobProcessor:
