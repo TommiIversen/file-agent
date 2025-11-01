@@ -190,16 +190,17 @@ class JobQueueService:
             logging.error(f"❌ Error processing waiting network files: {e}")
 
     async def handle_destination_unavailable(self) -> None:
-        """Handle destination becoming unavailable - pause new job processing"""
+        """Handle destination becoming unavailable - similar to previous StateManager version"""
         try:
-            logging.info("🔴 DESTINATION UNAVAILABLE: Handling network disruption")
+            logging.info("🔴 DESTINATION UNAVAILABLE: Network disruption detected")
             
-            # Note: Jobs already in queue will remain there and be handled by consumer
-            # which will detect network issues during copy attempts and handle retries.
-            # New files discovered during network outage will be marked as WAITING_FOR_NETWORK
-            # in the handle_file_ready method when _is_network_available() returns False.
+            # In the previous version, files would automatically be checked for network availability
+            # before queueing in _handle_state_change. Here we don't need to do much since:
+            # 1. New files will be caught by _is_network_available() in handle_file_ready()
+            # 2. Files in queue will be handled by consumer with retry logic
+            # 3. Recovery happens through process_waiting_network_files()
             
-            logging.info("⏸️ Network unavailable handling completed")
+            logging.info("⏸️ Destination unavailable handling completed - relying on existing network checks")
             
         except Exception as e:
             logging.error(f"❌ Error handling destination unavailable: {e}")
