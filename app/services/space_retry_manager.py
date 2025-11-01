@@ -2,11 +2,12 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict
 
 from app.core.file_repository import FileRepository
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.file_events import FileStatusChangedEvent
+from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus, RetryInfo, SpaceCheckResult
 from ..config import Settings
 
@@ -18,10 +19,12 @@ class SpaceRetryManager:
         settings: Settings,
         file_repository: FileRepository,
         event_bus: DomainEventBus,
+        state_machine: FileStateMachine,
     ):
         self._settings = settings
         self._file_repository = file_repository
         self._event_bus = event_bus
+        self._state_machine = state_machine
         self._lock = asyncio.Lock()
         self._retry_tasks: Dict[str, asyncio.Task] = {}
 
@@ -51,11 +54,15 @@ class SpaceRetryManager:
         delay_seconds = self._settings.space_retry_delay_seconds // 2
 
         # Update file status to WAITING_FOR_SPACE
-        await self._update_file_status_and_notify(
-            file_id=tracked_file.id,
-            status=FileStatus.WAITING_FOR_SPACE,
-            error_message=f"Temporary space shortage: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
-        )
+        try:
+            await self._state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.WAITING_FOR_SPACE,
+                error_message=f"Temporary space shortage: {space_check.reason}. Retrying in {delay_seconds // 60} minutes."
+            )
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Kunne ikke sætte fil {tracked_file.id} til WAITING_FOR_SPACE: {e}")
+            return  # Afbryd, hvis vi ikke kan sætte status
 
         # Schedule retry using SpaceRetryManager
         success = await self.schedule_retry(
@@ -80,11 +87,15 @@ class SpaceRetryManager:
         delay_seconds = self._settings.space_retry_delay_seconds
 
         # Update file status to WAITING_FOR_SPACE
-        await self._update_file_status_and_notify(
-            file_id=tracked_file.id,
-            status=FileStatus.WAITING_FOR_SPACE,
-            error_message=f"Insufficient space: {space_check.reason}. Retrying in {delay_seconds // 60} minutes.",
-        )
+        try:
+            await self._state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.WAITING_FOR_SPACE,
+                error_message=f"Insufficient space: {space_check.reason}. Retrying in {delay_seconds // 60} minutes."
+            )
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Kunne ikke sætte fil {tracked_file.id} til WAITING_FOR_SPACE: {e}")
+            return  # Afbryd, hvis vi ikke kan sætte status
 
         # Schedule retry using SpaceRetryManager
         success = await self.schedule_retry(
@@ -107,15 +118,18 @@ class SpaceRetryManager:
         self, tracked_file: TrackedFile, space_check: SpaceCheckResult
     ) -> None:
         if tracked_file:
-            await self._update_file_status_and_notify(
-                file_id=tracked_file.id,
-                status=FileStatus.SPACE_ERROR,
-                space_error_at=datetime.now(),
-                error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}",
-            )
-            logging.debug(
-                f"PERMANENT SPACE ERROR: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]"
-            )
+            try:
+                await self._state_machine.transition(
+                    file_id=tracked_file.id,
+                    new_status=FileStatus.SPACE_ERROR,
+                    space_error_at=datetime.now(),
+                    error_message=f"Permanent space issue after {self._settings.max_space_retries} retries: {space_check.reason}"
+                )
+                logging.debug(
+                    f"PERMANENT SPACE ERROR: {tracked_file.file_path} [UUID: {tracked_file.id[:8]}...]"
+                )
+            except (InvalidTransitionError, ValueError) as e:
+                logging.warning(f"Kunne ikke sætte fil {tracked_file.id} til SPACE_ERROR: {e}")
         else:
             logging.warning(
                 f"Cannot mark space error - file not tracked: {tracked_file.file_path}"
@@ -219,25 +233,21 @@ class SpaceRetryManager:
                         f"Retry cancelled - file status changed: {tracked_file.file_path} (status: {tracked_file.status.value})"
                     )
                     return
-                tracked_file.status = FileStatus.READY
-                tracked_file.error_message = None
-                tracked_file.retry_info = None  # Clear retry info
-                logging.info(
-                    f"Retry executed for {tracked_file.file_path} - reset to READY"
-                )
-                self._retry_tasks.pop(file_id, None)
-                await self._file_repository.update(tracked_file)
-
-                # Publish status change event
-                await self._event_bus.publish(
-                    FileStatusChangedEvent(
-                        file_id=tracked_file.id,
-                        file_path=tracked_file.file_path,
-                        old_status=FileStatus.WAITING_FOR_SPACE,
+                try:
+                    # StateMachine vil automatisk rydde error_message
+                    await self._state_machine.transition(
+                        file_id=file_id,
                         new_status=FileStatus.READY,
-                        timestamp=datetime.now()
+                        retry_info=None  # Sørg for at rydde retry_info
                     )
-                )
+                    logging.info(
+                        f"Retry executed for {tracked_file.file_path} - reset to READY"
+                    )
+                except (InvalidTransitionError, ValueError) as e:
+                    logging.warning(f"Kunne ikke resette fil {file_id} til READY efter retry: {e}")
+
+                # Pop tasken UANSET hvad
+                self._retry_tasks.pop(file_id, None)
 
         except asyncio.CancelledError:
             async with self._lock:
@@ -270,42 +280,3 @@ class SpaceRetryManager:
                 f"Incremented retry count for {tracked_file.file_path} to {tracked_file.retry_count}"
             )
             return tracked_file.retry_count
-
-    async def _update_file_status_and_notify(
-        self, file_id: str, status: FileStatus, **kwargs
-    ) -> Optional[TrackedFile]:
-        """Opdaterer filstatus, annullerer retries ved terminal-status og publicerer event."""
-        async with self._lock:
-            tracked_file = await self._file_repository.get_by_id(file_id)
-            if not tracked_file:
-                logging.warning(f"Forsøg på at opdatere ukendt fil ID: {file_id}")
-                return None
-            old_status = tracked_file.status
-            if old_status == status:
-                return tracked_file  # Ingen ændring
-            logging.info(
-                f"Status opdateret (RetryManager): {tracked_file.file_path} {old_status} -> {status}"
-            )
-            tracked_file.status = status
-            # Håndter kwargs (f.eks. error_message, space_error_at)
-            for key, value in kwargs.items():
-                if hasattr(tracked_file, key):
-                    setattr(tracked_file, key, value)
-                else:
-                    logging.warning(f"Ukendt attribut ignored: {key}")
-            # Annuller retry-task, hvis filen når en terminal-status
-            terminal_statuses = {FileStatus.FAILED, FileStatus.COMPLETED, FileStatus.REMOVED, FileStatus.SPACE_ERROR}
-            if status in terminal_statuses:
-                await self._cancel_existing_retry_unlocked(file_id)
-            await self._file_repository.update(tracked_file)
-        # Publicer event UDEN FOR LÅSEN
-        await self._event_bus.publish(
-            FileStatusChangedEvent(
-                file_id=tracked_file.id,
-                file_path=tracked_file.file_path,
-                old_status=old_status,
-                new_status=status,
-                timestamp=datetime.now()
-            )
-        )
-        return tracked_file

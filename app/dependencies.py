@@ -139,7 +139,8 @@ def get_space_retry_manager() -> SpaceRetryManager:
         _singletons["space_retry_manager"] = SpaceRetryManager(
             settings=get_settings(),
             file_repository=get_file_repository(),
-            event_bus=get_event_bus()
+            event_bus=get_event_bus(),
+            state_machine=get_file_state_machine()
         )
     return _singletons["space_retry_manager"]
 
