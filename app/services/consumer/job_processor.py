@@ -29,6 +29,7 @@ class JobProcessor:
         copy_strategy: GrowingFileCopyStrategy,
         finalization_service: JobFinalizationService,
         copy_executor: JobCopyExecutor,
+        space_manager: JobSpaceManager,
         space_checker=None,
         space_retry_manager=None,
         error_classifier=None,
@@ -40,15 +41,7 @@ class JobProcessor:
         self.copy_strategy = copy_strategy
         self.finalization_service = finalization_service
         self.copy_executor = copy_executor
-
-        self.space_manager = JobSpaceManager(
-            settings=settings,
-            file_repository=file_repository,
-            event_bus=event_bus,
-            job_queue=job_queue,
-            space_checker=space_checker,
-            space_retry_manager=space_retry_manager,
-        )
+        self.space_manager = space_manager
 
         self.template_engine = OutputFolderTemplateEngine(settings)
 
