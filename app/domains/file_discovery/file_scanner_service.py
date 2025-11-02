@@ -86,7 +86,7 @@ class FileScannerService:
         if self._event_bus:
             try:
                 await self._event_bus.publish(
-                    ScannerStatusChangedEvent(is_scanning=False, is_paused=False)
+                    ScannerStatusChangedEvent(is_scanning=False, is_paused=True)
                 )
                 logging.debug("Published ScannerStatusChangedEvent on stop")
             except Exception as e:
@@ -96,7 +96,11 @@ class FileScannerService:
 
     def is_scanning(self) -> bool:
         """Check if the scanner is currently running."""
-        return self._file_scanner._running if self._file_scanner else False
+        return self._file_scanner.is_scanning() if self._file_scanner else False
+
+    def is_paused(self) -> bool:
+        """Check if the scanner is currently paused."""
+        return self._file_scanner.is_paused() if self._file_scanner else True
 
     async def get_active_file_by_path(self, file_path: str):
         """Get active file by path using CQRS query."""

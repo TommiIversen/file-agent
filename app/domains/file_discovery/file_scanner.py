@@ -67,6 +67,7 @@ class FileScanner:
         self.settings = settings
         self._event_bus = event_bus
         self._running = False
+        self._paused = False
         self._scan_task: Optional[asyncio.Task] = None
 
         # Initialize GrowingFileDetector with CQRS
@@ -83,12 +84,19 @@ class FileScanner:
         logging.info(f"File stability: {config.file_stable_time_seconds}s")
         logging.info(f"Polling interval: {config.polling_interval_seconds}s")
 
+    def is_scanning(self) -> bool:
+        return self._running and not self._paused
+
+    def is_paused(self) -> bool:
+        return self._paused
+
     async def start_scanning(self) -> None:
         if self._running:
             logging.warning("Scanner is already running")
             return
 
         self._running = True
+        self._paused = False
         logging.info("File Scanner started")
 
         # Start growing file detector monitoring
@@ -106,6 +114,7 @@ class FileScanner:
             return
 
         self._running = False
+        self._paused = True
         logging.info("File Scanner stop requested")
 
         # Cancel and cleanup scan task

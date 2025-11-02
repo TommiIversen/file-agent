@@ -37,7 +37,7 @@ from app.domains.file_discovery.registration import register_file_discovery_hand
 from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
 
 from .logging_config import setup_logging
-from .routers import views
+from app.domains.presentation import views
 
 settings = Settings()
 

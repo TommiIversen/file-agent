@@ -112,13 +112,11 @@ async def restart_application():
 async def pause_file_scanner(scanner=Depends(get_file_scanner)):
     """Pause the file scanner (stop polling for new jobs)"""
     await scanner.stop_scanning()
-    is_scanning = scanner.is_scanning()
-    return {"success": True, "paused": True, "scanning": is_scanning}
+    return {"success": True, "paused": scanner.is_paused(), "scanning": scanner.is_scanning()}
 
 
 @router.post("/scanner/resume")
 async def resume_file_scanner(scanner=Depends(get_file_scanner)):
     """Resume the file scanner (start polling for new jobs)"""
     await scanner.start_scanning()
-    is_scanning = scanner.is_scanning()
-    return {"success": True, "paused": False, "scanning": is_scanning}
+    return {"success": True, "paused": scanner.is_paused(), "scanning": scanner.is_scanning()}
