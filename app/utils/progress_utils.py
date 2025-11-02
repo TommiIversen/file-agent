@@ -1,23 +1,6 @@
 """Progress calculation utilities for File Transfer Agent."""
 
-from typing import Dict, Any, Tuple
-
-
-def calculate_copy_progress(bytes_copied: int, total_bytes: int) -> float:
-    if total_bytes == 0:
-        return 100.0  # Empty file is "complete"
-
-    if bytes_copied >= total_bytes:
-        return 100.0
-
-    if bytes_copied <= 0:
-        return 0.0
-
-    return (bytes_copied / total_bytes) * 100.0
-
-
-def calculate_progress_percent_int(bytes_copied: int, total_bytes: int) -> int:
-    return int(calculate_copy_progress(bytes_copied, total_bytes))
+from typing import Dict, Any
 
 
 def should_report_progress(
@@ -40,21 +23,6 @@ def should_report_progress(
 
     return False
 
-
-def should_report_progress_with_bytes(
-    bytes_copied: int,
-    total_bytes: int,
-    last_reported_percent: int,
-    update_interval: int,
-) -> Tuple[bool, int]:
-    current_percent = calculate_progress_percent_int(bytes_copied, total_bytes)
-    is_complete = bytes_copied >= total_bytes
-
-    should_report = should_report_progress(
-        current_percent, last_reported_percent, update_interval, is_complete
-    )
-
-    return should_report, current_percent
 
 
 def format_progress_info(

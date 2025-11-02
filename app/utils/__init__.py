@@ -12,10 +12,7 @@ from .file_operations import (
 )
 
 from .progress_utils import (
-    calculate_copy_progress,
-    calculate_progress_percent_int,
     should_report_progress,
-    should_report_progress_with_bytes,
     format_progress_info,
     create_simple_progress_bar,
     format_bytes_human_readable,
@@ -30,10 +27,7 @@ __all__ = [
     "generate_conflict_free_path",
     "build_destination_path",
     # Progress utilities
-    "calculate_copy_progress",
-    "calculate_progress_percent_int",
     "should_report_progress",
-    "should_report_progress_with_bytes",
     "format_progress_info",
     "create_simple_progress_bar",
     "format_bytes_human_readable",

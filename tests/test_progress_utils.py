@@ -8,10 +8,7 @@ Part of Fase 1.2 refactoring tests.
 """
 
 from app.utils.progress_utils import (
-    calculate_copy_progress,
-    calculate_progress_percent_int,
     should_report_progress,
-    should_report_progress_with_bytes,
     format_progress_info,
     create_simple_progress_bar,
     format_bytes_human_readable,
@@ -19,52 +16,6 @@ from app.utils.progress_utils import (
     format_transfer_rate_human_readable,
     estimate_time_remaining,
 )
-
-
-class TestCalculateCopyProgress:
-    """Test calculate_copy_progress function."""
-
-    def test_zero_percent(self):
-        """Test 0% progress."""
-        assert calculate_copy_progress(0, 1000) == 0.0
-
-    def test_fifty_percent(self):
-        """Test 50% progress."""
-        assert calculate_copy_progress(500, 1000) == 50.0
-
-    def test_complete(self):
-        """Test 100% progress."""
-        assert calculate_copy_progress(1000, 1000) == 100.0
-
-    def test_empty_file(self):
-        """Test empty file edge case."""
-        assert calculate_copy_progress(0, 0) == 100.0
-
-    def test_over_complete(self):
-        """Test bytes copied exceeds total."""
-        assert calculate_copy_progress(1200, 1000) == 100.0
-
-    def test_fractional_progress(self):
-        """Test fractional progress values."""
-        result = calculate_copy_progress(333, 1000)
-        assert abs(result - 33.3) < 0.1
-
-
-class TestCalculateProgressPercentInt:
-    """Test calculate_progress_percent_int function."""
-
-    def test_integer_conversion(self):
-        """Test conversion to integer percentages."""
-        assert calculate_progress_percent_int(333, 1000) == 33
-        assert calculate_progress_percent_int(999, 1000) == 99
-        assert calculate_progress_percent_int(1000, 1000) == 100
-
-    def test_rounding_behavior(self):
-        """Test rounding behavior."""
-        assert calculate_progress_percent_int(334, 1000) == 33  # 33.4% -> 33
-        assert (
-            calculate_progress_percent_int(335, 1000) == 33
-        )  # 33.5% -> 33 (int truncates)
 
 
 class TestShouldReportProgress:
@@ -96,27 +47,6 @@ class TestShouldReportProgress:
         assert should_report_progress(1, -1, 1) is True
         assert should_report_progress(25, 20, 25) is True
 
-
-class TestShouldReportProgressWithBytes:
-    """Test should_report_progress_with_bytes function."""
-
-    def test_combined_calculation_and_decision(self):
-        """Test combined progress calculation and reporting decision."""
-        should_report, percent = should_report_progress_with_bytes(500, 1000, -1, 5)
-        assert should_report is True
-        assert percent == 50
-
-    def test_no_report_between_intervals(self):
-        """Test no report between interval boundaries."""
-        should_report, percent = should_report_progress_with_bytes(520, 1000, 50, 5)
-        assert should_report is False
-        assert percent == 52
-
-    def test_completion_detection(self):
-        """Test completion detection."""
-        should_report, percent = should_report_progress_with_bytes(1000, 1000, 95, 5)
-        assert should_report is True
-        assert percent == 100
 
 
 class TestFormatProgressInfo:
@@ -261,56 +191,3 @@ class TestEstimateTimeRemaining:
         assert estimate_time_remaining(500, 1000, -10.0) == 0.0
 
 
-class TestIntegrationScenarios:
-    """Integration tests combining multiple progress functions."""
-
-    def test_complete_progress_workflow(self):
-        """Test complete progress tracking workflow."""
-        total_bytes = 1000
-        chunk_size = 100
-        update_interval = 10
-
-        bytes_copied = 0
-        last_reported = -1
-        updates = []
-
-        # Simulate copying in chunks
-        for i in range(10):
-            bytes_copied += chunk_size
-
-            should_report, current_percent = should_report_progress_with_bytes(
-                bytes_copied, total_bytes, last_reported, update_interval
-            )
-
-            if should_report:
-                progress_info = format_progress_info(
-                    calculate_copy_progress(bytes_copied, total_bytes),
-                    bytes_copied,
-                    total_bytes,
-                )
-                updates.append((current_percent, progress_info))
-                last_reported = current_percent
-
-        # Should have updates at 10%, 20%, 30%, etc.
-        expected_percents = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        actual_percents = [update[0] for update in updates]
-
-        assert actual_percents == expected_percents
-
-        # Check completion status
-        for percent, progress_info in updates:
-            assert progress_info["is_complete"] == (percent == 100)
-
-    def test_small_file_progress(self):
-        """Test progress tracking for very small files."""
-        total_bytes = 50
-        bytes_copied = 50
-
-        progress = calculate_copy_progress(bytes_copied, total_bytes)
-        assert progress == 100.0
-
-        should_report, percent = should_report_progress_with_bytes(
-            bytes_copied, total_bytes, -1, 5
-        )
-        assert should_report is True  # Complete files always report
-        assert percent == 100
