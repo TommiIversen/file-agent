@@ -11,7 +11,7 @@ from .notification_handler import NotificationHandler
 from .storage_state import StorageState
 from ..storage_checker import StorageChecker
 from app.config import Settings
-from app.models import StorageInfo, StorageStatus, MountStatus
+from app.models import StorageInfo, StorageStatus
 
 
 class StorageMonitorService:

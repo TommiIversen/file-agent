@@ -1,6 +1,5 @@
 import errno
 import asyncio
-import logging
 from typing import Optional
 
 from app.core.events.event_bus import DomainEventBus

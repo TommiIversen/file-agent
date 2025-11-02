@@ -12,7 +12,6 @@ Event Sources:
 Event Output:
 - NetworkStatusChanged (autoritativ status til alle subscribers)
 """
-import asyncio
 import logging
 from typing import Optional
 from datetime import datetime
@@ -139,7 +138,7 @@ class NetworkCoordinator:
         
         # Log kun hvis status faktisk ændrer sig
         if previous_status != available:
-            print(f"DEBUG: Status changed! Publishing event...")
+            print("DEBUG: Status changed! Publishing event...")
             logger.info(
                 f"🎯 NETWORK STATUS CHANGED: {status_text} "
                 f"(reason: {reason}, source: {source})"
@@ -152,18 +151,18 @@ class NetworkCoordinator:
                 source=source
             )
             
-            print(f"DEBUG: About to publish event...")
+            print("DEBUG: About to publish event...")
             # Await event publishing for testing (normally fire-and-forget)
             await self._event_bus.publish(event)
-            print(f"DEBUG: Event published successfully!")
+            print("DEBUG: Event published successfully!")
         else:
-            print(f"DEBUG: Status unchanged, skipping event publishing")
+            print("DEBUG: Status unchanged, skipping event publishing")
             logger.debug(
                 f"Network status uændret ({status_text}), "
                 f"men opdateret reason: {reason} (source: {source})"
             )
         
-        print(f"DEBUG: _update_network_status complete")
+        print("DEBUG: _update_network_status complete")
 
     async def get_status_summary(self) -> dict:
         """
