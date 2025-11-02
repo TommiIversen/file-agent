@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import Settings
+from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import PreparedFile, QueueJob
 from app.domains.file_processing.copy.growing_copy import GrowingFileCopyStrategy
@@ -16,7 +17,6 @@ from app.utils.file_operations import (
     build_destination_path_with_template,
     generate_conflict_free_path,
 )
-from app.utils.output_folder_template import OutputFolderTemplateEngine
 
 
 class JobFilePreparationService:

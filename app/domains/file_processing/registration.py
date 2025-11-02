@@ -12,7 +12,7 @@ from app.dependencies import (
     get_job_copy_executor, get_job_finalization_service, get_settings
 )
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
-from app.utils.output_folder_template import OutputFolderTemplateEngine
+from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
 from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent
 from .event_handlers import FileProcessingEventHandler

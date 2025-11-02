@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import pytest
 from app.config import Settings
-from app.utils.output_folder_template import OutputFolderTemplateEngine
+from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 
 
 def test_output_folder_template_cross_platform_paths():

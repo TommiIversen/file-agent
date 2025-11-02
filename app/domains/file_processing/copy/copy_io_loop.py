@@ -11,7 +11,13 @@ from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus
 from app.domains.file_processing.copy.network_error_detector import NetworkErrorDetector
-from app.utils.progress_utils import calculate_transfer_rate
+
+
+def calculate_transfer_rate(bytes_copied: int, elapsed_seconds: float) -> float:
+    if elapsed_seconds <= 0:
+        return 0.0
+
+    return bytes_copied / elapsed_seconds
 
 
 class CopyIoLoop:

@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import Settings
-from app.utils.output_folder_template import OutputFolderTemplateEngine
+from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 
 
 def test_file_organization():
