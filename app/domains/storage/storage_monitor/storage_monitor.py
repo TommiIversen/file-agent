@@ -222,10 +222,7 @@ class StorageMonitorService:
                                     share_url=share_url,
                                     target_path=path,
                                 )
-                    else:
-                        await self._mount_broadcaster.broadcast_not_configured(
-                            storage_type=storage_type, target_path=path
-                        )
+                    # Note: Mount status for non-network scenarios will be sent later with storage status
 
                 if not new_info.is_accessible and not mount_attempted:
                     logging.info(f"Attempting directory recreation: {path}")
