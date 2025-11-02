@@ -54,7 +54,6 @@ def job_queue(mock_settings, mock_file_repository, mock_storage_monitor, mock_ev
     queue = JobQueueService(
         settings=mock_settings,
         file_repository=mock_file_repository,
-        storage_monitor=mock_storage_monitor,
         event_bus=mock_event_bus,
         state_machine=mock_state_machine
     )

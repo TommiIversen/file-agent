@@ -14,6 +14,7 @@ from app.dependencies import (
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
 from app.utils.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
+from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent
 from .event_handlers import FileProcessingEventHandler
 from .command_handlers import QueueFileCommandHandler, ProcessJobCommandHandler
 from .commands import QueueFileCommand, ProcessJobCommand
@@ -35,9 +36,16 @@ async def register_file_processing_domain(
     # 1. Create Event Handler
     event_handler = FileProcessingEventHandler(
         command_bus=command_bus,
-        file_repository=get_file_repository()
+        file_repository=get_file_repository(),
+        job_queue_service=get_job_queue_service()
     )
+    
+    # Subscribe to file events
     await event_bus.subscribe(FileReadyEvent, event_handler.handle_file_ready)
+    
+    # Subscribe to storage events for destination availability
+    await event_bus.subscribe(DestinationUnavailableEvent, event_handler.handle_destination_unavailable)
+    await event_bus.subscribe(DestinationRecoveredEvent, event_handler.handle_destination_recovered)
 
     # 2. Create Command Handlers
     job_queue_service = get_job_queue_service()

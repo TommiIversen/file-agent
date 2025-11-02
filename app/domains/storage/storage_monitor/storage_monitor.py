@@ -20,12 +20,10 @@ class StorageMonitorService:
         storage_checker: StorageChecker,
         event_bus: DomainEventBus,
         network_mount_service=None,
-        job_queue=None,
     ):
         self._settings = settings
         self._storage_checker = storage_checker
         self._network_mount_service = network_mount_service
-        self._job_queue = job_queue
 
         self._storage_state = StorageState()
         self._directory_manager = DirectoryManager()
@@ -351,10 +349,6 @@ class StorageMonitorService:
     async def _handle_destination_unavailable(
         self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
     ) -> None:
-        if not self._job_queue:
-            logging.warning("⚠️ Job queue not available - cannot pause operations")
-            return
-
         try:
             unavailable_reason = f"{old_info.status} → {new_info.status}"
 
@@ -363,9 +357,13 @@ class StorageMonitorService:
                 f"(Reason: {new_info.error_message or 'Unknown'})"
             )
 
-            await self._job_queue.handle_destination_unavailable()
+            # Publish domain event instead of directly calling job queue
+            await self._notification_handler.publish_destination_unavailable(
+                reason=unavailable_reason,
+                storage_info=new_info
+            )
 
-            logging.info("⏸️ Operations paused successfully - awaiting recovery")
+            logging.info("⏸️ Destination unavailable event published - awaiting recovery")
 
         except Exception as e:
             logging.error(f"ERROR: Error during destination pause handling: {e}")
@@ -373,12 +371,6 @@ class StorageMonitorService:
     async def _handle_destination_recovery(
         self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
     ) -> None:
-        if not self._job_queue:
-            logging.warning(
-                "⚠️ Job queue not available - cannot perform automatic recovery"
-            )
-            return
-
         try:
             recovery_reason = f"{old_info.status} → {new_info.status}"
 
@@ -387,10 +379,13 @@ class StorageMonitorService:
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
             )
 
-            # Process files waiting for network when destination comes back online
-            await self._job_queue.process_waiting_network_files()
+            # Publish domain event instead of directly calling job queue
+            await self._notification_handler.publish_destination_recovered(
+                reason=recovery_reason,
+                storage_info=new_info
+            )
 
-            logging.info("✅ Intelligent resume initiated successfully")
+            logging.info("✅ Destination recovery event published - intelligent resume initiated")
 
         except Exception as e:
             logging.error(f"ERROR: Error during universal recovery: {e}")

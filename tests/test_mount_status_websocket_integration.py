@@ -259,7 +259,7 @@ class TestMountStatusSizeCompliance:
         """Verify NotificationHandler stays within limits after mount status integration."""
         from pathlib import Path
 
-        file_path = Path("app/services/storage_monitor/notification_handler.py")
+        file_path = Path("app/domains/storage/storage_monitor/notification_handler.py")
         with open(file_path, "r") as f:
             lines = f.readlines()
 
@@ -276,7 +276,7 @@ class TestMountStatusSizeCompliance:
         """Verify StorageMonitorService stays within limits after mount broadcasting."""
         from pathlib import Path
 
-        file_path = Path("app/services/storage_monitor/storage_monitor.py")
+        file_path = Path("app/domains/storage/storage_monitor/storage_monitor.py")
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 

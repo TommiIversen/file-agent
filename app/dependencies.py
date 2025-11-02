@@ -105,11 +105,6 @@ def get_job_queue_service() -> JobQueueService:
             event_bus=get_event_bus(),
             state_machine=get_file_state_machine(),
         )
-        
-        # Set up the circular reference after both objects are created
-        storage_monitor = get_storage_monitor()
-        if storage_monitor._job_queue is None:
-            storage_monitor._job_queue = _singletons["job_queue_service"]
             
     return _singletons["job_queue_service"]
 
@@ -215,16 +210,10 @@ def get_storage_monitor() -> StorageMonitorService:
             settings=get_settings(),
             storage_checker=get_storage_checker(),
             event_bus=get_event_bus(),
-            network_mount_service=get_network_mount_service(),
-            job_queue=None  # Will be set later to avoid circular dependency
+            network_mount_service=get_network_mount_service()
         )
         
-    # Check if we need to set the job_queue reference after both services exist
-    storage_monitor = _singletons["storage_monitor"]
-    if storage_monitor._job_queue is None and "job_queue_service" in _singletons:
-        storage_monitor._job_queue = _singletons["job_queue_service"]
-        
-    return storage_monitor
+    return _singletons["storage_monitor"]
 
 
 def get_job_error_classifier() -> JobErrorClassifier:

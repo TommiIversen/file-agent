@@ -7,8 +7,10 @@ by sending appropriate commands via the command bus.
 import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.events.file_events import FileReadyEvent
+from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent
 from app.core.file_repository import FileRepository
 from app.domains.file_processing.commands import QueueFileCommand
+from app.domains.file_processing.job_queue import JobQueueService
 
 
 class FileProcessingEventHandler:
@@ -20,9 +22,15 @@ class FileProcessingEventHandler:
     only handling event-to-command translation.
     """
     
-    def __init__(self, command_bus: CommandBus, file_repository: FileRepository):
+    def __init__(
+        self, 
+        command_bus: CommandBus, 
+        file_repository: FileRepository, 
+        job_queue_service: JobQueueService
+    ):
         self._command_bus = command_bus
         self._file_repository = file_repository
+        self._job_queue_service = job_queue_service
 
     async def handle_file_ready(self, event: FileReadyEvent):
         """
@@ -42,3 +50,33 @@ class FileProcessingEventHandler:
         # Send command to queue the file
         command = QueueFileCommand(tracked_file=tracked_file)
         await self._command_bus.execute(command)
+
+    async def handle_destination_unavailable(self, event: DestinationUnavailableEvent):
+        """
+        Handles DestinationUnavailableEvent by pausing file processing operations.
+        
+        This method receives storage unavailable events and pauses the job queue
+        to prevent failed copy attempts.
+        """
+        logging.info(f"Handling destination unavailable: {event.reason}")
+        
+        try:
+            await self._job_queue_service.handle_destination_unavailable()
+            logging.info("⏸️ Operations paused successfully due to destination unavailable")
+        except Exception as e:
+            logging.error(f"Error pausing operations: {e}")
+
+    async def handle_destination_recovered(self, event: DestinationRecoveredEvent):
+        """
+        Handles DestinationRecoveredEvent by resuming file processing operations.
+        
+        This method receives storage recovery events and resumes the job queue
+        to continue processing waiting files.
+        """
+        logging.info(f"Handling destination recovery: {event.reason}")
+        
+        try:
+            await self._job_queue_service.process_waiting_network_files()
+            logging.info("✅ Operations resumed successfully after destination recovery")
+        except Exception as e:
+            logging.error(f"Error resuming operations: {e}")

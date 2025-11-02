@@ -15,8 +15,10 @@ class DirectoryManager:
         try:
             path_obj = Path(path)
 
-            # Quick check if directory already exists
-            if path_obj.exists() and path_obj.is_dir():
+            # Quick check if directory already exists, performed in a thread
+            if await asyncio.to_thread(path_obj.exists) and await asyncio.to_thread(
+                path_obj.is_dir
+            ):
                 return True
 
             logging.info(f"Creating missing {storage_type} directory: {path}")
@@ -33,7 +35,9 @@ class DirectoryManager:
                 )
                 return False
 
-            if path_obj.exists() and path_obj.is_dir():
+            if await asyncio.to_thread(
+                path_obj.exists
+            ) and await asyncio.to_thread(path_obj.is_dir):
                 logging.info(f"Successfully created {storage_type} directory: {path}")
                 return True
             else:
@@ -48,7 +52,4 @@ class DirectoryManager:
 
     async def _create_directory_async(self, path_obj: Path) -> None:
         """Create directory in executor to avoid blocking event loop"""
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, lambda: path_obj.mkdir(parents=True, exist_ok=True)
-        )
+        await asyncio.to_thread(path_obj.mkdir, parents=True, exist_ok=True)

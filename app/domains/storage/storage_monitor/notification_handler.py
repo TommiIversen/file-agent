@@ -2,7 +2,12 @@ import logging
 from typing import Optional
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
+from app.core.events.storage_events import (
+    MountStatusChangedEvent, 
+    StorageStatusChangedEvent,
+    DestinationUnavailableEvent,
+    DestinationRecoveredEvent
+)
 
 from app.models import StorageInfo, StorageUpdate, MountStatusUpdate
 
@@ -67,4 +72,28 @@ class NotificationHandler:
             await self._event_bus.publish(MountStatusChangedEvent(update=mount_update))
         except Exception as e:
             logging.error(f"Error publishing MountStatusChangedEvent: {e}")
+
+    async def publish_destination_unavailable(
+        self, reason: str, storage_info: StorageInfo
+    ) -> None:
+        """Publish domain event when destination becomes unavailable."""
+        try:
+            await self._event_bus.publish(
+                DestinationUnavailableEvent(reason=reason, storage_info=storage_info)
+            )
+            logging.debug(f"Published DestinationUnavailableEvent: {reason}")
+        except Exception as e:
+            logging.error(f"Error publishing DestinationUnavailableEvent: {e}")
+
+    async def publish_destination_recovered(
+        self, reason: str, storage_info: StorageInfo
+    ) -> None:
+        """Publish domain event when destination recovers."""
+        try:
+            await self._event_bus.publish(
+                DestinationRecoveredEvent(reason=reason, storage_info=storage_info)
+            )
+            logging.debug(f"Published DestinationRecoveredEvent: {reason}")
+        except Exception as e:
+            logging.error(f"Error publishing DestinationRecoveredEvent: {e}")
 

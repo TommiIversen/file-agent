@@ -300,7 +300,7 @@ class TestIntegrationSizeCompliance:
 
     def test_storage_monitor_size_with_integration(self):
         """Verify StorageMonitorService stays within size limits after integration."""
-        file_path = Path("app/services/storage_monitor/storage_monitor.py")
+        file_path = Path("app/domains/storage/storage_monitor/storage_monitor.py")
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
@@ -356,7 +356,7 @@ class TestIntegrationSizeCompliance:
         # despite integration with NetworkMountService
 
         # Read the StorageMonitorService file
-        file_path = Path("app/services/storage_monitor/storage_monitor.py")
+        file_path = Path("app/domains/storage/storage_monitor/storage_monitor.py")
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
