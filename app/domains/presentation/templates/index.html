@@ -130,24 +130,6 @@
 
             <!-- Connection Status og Settings (højre) -->
             <div class="flex justify-end items-center space-x-4">
-                <!-- Logs Button -->
-                <button @click="openLogViewerModal()"
-                        class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                    📝 Logs
-                </button>
-
-                <!-- Events Button -->
-                <button @click="$store.eventsViewer.openModal()"
-                        class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                    📊 Events
-                </button>
-
-                <!-- Settings Button -->
-                <button @click="openSettingsModal()"
-                        class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                    ⚙️ Settings
-                </button>
-
                 <!-- Connection Status -->
                 <div class="text-right">
                     <div class="flex items-center justify-end mb-1">
@@ -328,9 +310,9 @@
         </div>
 
         <!-- Sort Options og Scanner Status -->
-        <div class="flex justify-between items-center">
+        <div class="flex items-center">
             <!-- Scanner Status (venstre) -->
-            <div class="flex items-center">
+            <div class="flex items-center flex-1">
                 <div class="status-indicator rounded-full mr-2"
                      :class="$store.ui?.scanner?.scanning ? 'bg-green-500' : ($store.ui?.scanner?.paused ? 'bg-orange-500' : 'bg-gray-500')"></div>
                 <span class="text-xs text-gray-300">
@@ -340,8 +322,29 @@
                 </span>
             </div>
 
+            <!-- Action Buttons (midten) -->
+            <div class="flex items-center justify-center space-x-3 flex-1">
+                <!-- Logs Button -->
+                <button @click="openLogViewerModal()"
+                        class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                    📝 Logs
+                </button>
+
+                <!-- Events Button -->
+                <button @click="$store.eventsViewer.openModal()"
+                        class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                    📊 Events
+                </button>
+
+                <!-- Settings Button -->
+                <button @click="openSettingsModal()"
+                        class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                    ⚙️ Settings
+                </button>
+            </div>
+
             <!-- Sort Options (højre) -->
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center justify-end space-x-4 flex-1">
                 <span class="text-gray-300 text-sm">Sorter efter:</span>
                 <select x-model="$store.files.sortBy"
                         @change="$store.files.setSortBy($event.target.value)"
