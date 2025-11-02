@@ -49,20 +49,14 @@ document.addEventListener('alpine:init', () => {
             try {
                 console.log('📂 Loading log files...');
 
-                const response = await fetch('/api/log-files');
+                const response = await fetch('/api/logs/');
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                const result = await response.json();
-
-                if (result.success) {
-                    this.logFiles = result.log_files || [];
-                    console.log('✅ Log files loaded successfully', this.logFiles);
-                } else {
-                    this.logFilesError = result.message || 'Failed to load log files';
-                    console.error('❌ Failed to load log files:', result.message);
-                }
+                const logFiles = await response.json();
+                this.logFiles = logFiles || [];
+                console.log('✅ Log files loaded successfully', this.logFiles);
 
             } catch (error) {
                 console.error('❌ Failed to load log files:', error);
@@ -91,8 +85,8 @@ document.addEventListener('alpine:init', () => {
             this.currentChunkInfo = null;
             this.chunkError = null;
 
-            // For large files (>5MB), use chunked loading by default
-            const useLazyLoading = logFile.size_mb > 5;
+            // For large files (>1MB), use chunked loading by default
+            const useLazyLoading = logFile.size_mb > 1;
             this.viewMode = useLazyLoading ? 'chunked' : 'full';
 
             try {
@@ -122,7 +116,7 @@ document.addEventListener('alpine:init', () => {
          */
         async loadFullLogContent(logFile) {
             // Use the new API endpoint that handles active log files properly
-            const response = await fetch(`/api/log-content/${encodeURIComponent(logFile.filename)}`);
+            const response = await fetch(`/api/logs/${encodeURIComponent(logFile.filename)}/content`);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => null);
@@ -131,41 +125,34 @@ document.addEventListener('alpine:init', () => {
 
             const data = await response.json();
 
-            if (!data.success) {
-                throw new Error(data.message || 'Failed to load log content');
-            }
-
             this.logContent = data.content;
 
             // Update the selected log file with fresh metadata
             this.selectedLogFile = {
                 ...logFile,
-                size_bytes: data.size_bytes,
-                size_mb: data.size_mb,
-                modified_time: data.modified_time,
-                is_current: data.is_current,
+                size_bytes: data.size,
+                size_mb: (data.size / (1024 * 1024)).toFixed(2),
                 lines: data.lines
             };
 
             console.log('✅ Full log file content loaded successfully');
         },
 
-        async loadLogChunk(filename, offset = 0, direction = 'forward', limit = 1000) {
+        async loadLogChunk(filename, start = 0, direction = 'forward', limit = 1000) {
             if (this.loadingChunk) return;
 
             this.loadingChunk = true;
             this.chunkError = null;
 
             try {
-                console.log(`📄 Loading log chunk: ${filename} (offset: ${offset}, direction: ${direction})`);
+                console.log(`📄 Loading log chunk: ${filename} (start: ${start}, direction: ${direction})`);
 
                 const params = new URLSearchParams({
-                    offset: offset.toString(),
-                    limit: limit.toString(),
-                    direction: direction
+                    start: start.toString(),
+                    limit: limit.toString()
                 });
 
-                const response = await fetch(`/api/log-content/${encodeURIComponent(filename)}/chunk?${params}`);
+                const response = await fetch(`/api/logs/${encodeURIComponent(filename)}/content/chunk?${params}`);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => null);
@@ -174,36 +161,36 @@ document.addEventListener('alpine:init', () => {
 
                 const data = await response.json();
 
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to load log chunk');
-                }
-
-                // Update chunk info
-                this.currentChunkInfo = data.chunk_info;
+                // Update chunk info - adapt to new API structure
+                this.currentChunkInfo = {
+                    has_more_forward: data.has_more,
+                    has_more_backward: data.start > 0,
+                    next_forward_offset: data.start + data.returned,
+                    next_backward_offset: Math.max(0, data.start - limit),
+                    total_lines: data.total_lines
+                };
 
                 // Update file info
                 this.selectedLogFile = {
                     ...this.selectedLogFile,
-                    filename: data.filename,
-                    size_bytes: data.file_info.size_bytes,
-                    size_mb: data.file_info.size_mb,
-                    modified_time: data.file_info.modified_time,
-                    is_current: data.file_info.is_current,
-                    lines: data.chunk_info.total_lines
+                    lines: data.total_lines
                 };
 
-                if (direction === 'forward' && offset === 0) {
+                // Parse content into lines
+                const lines = data.content ? data.content.split('\n') : [];
+
+                if (direction === 'forward' && start === 0) {
                     // Initial load - replace chunks
-                    this.logChunks = data.lines;
+                    this.logChunks = lines;
                 } else if (direction === 'forward') {
                     // Load more forward - append
-                    this.logChunks.push(...data.lines);
+                    this.logChunks.push(...lines);
                 } else {
                     // Load more backward - prepend
-                    this.logChunks.unshift(...data.lines);
+                    this.logChunks.unshift(...lines);
                 }
 
-                console.log(`✅ Log chunk loaded successfully (${data.lines.length} lines)`);
+                console.log(`✅ Log chunk loaded successfully (${lines.length} lines)`);
 
             } catch (error) {
                 console.error('❌ Failed to load log chunk:', error);
@@ -246,7 +233,7 @@ document.addEventListener('alpine:init', () => {
                 console.log(`💾 Downloading log file: ${filename}`);
 
                 // Create a temporary link to trigger download
-                const downloadUrl = `/api/log-download/${encodeURIComponent(filename)}`;
+                const downloadUrl = `/api/logs/${encodeURIComponent(filename)}/download`;
                 const link = document.createElement('a');
                 link.href = downloadUrl;
                 link.download = filename;

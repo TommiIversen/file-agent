@@ -9,7 +9,9 @@ from app.domains.file_discovery.commands import (
     MarkFileStableCommand,
     UpdateFileGrowthInfoCommand,
     MarkFileGrowingCommand,
-    MarkFileReadyToStartGrowingCommand
+    MarkFileReadyToStartGrowingCommand,
+    PauseScannerCommand,
+    ResumeScannerCommand
 )
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 from app.models import TrackedFile
@@ -93,3 +95,35 @@ class MarkFileReadyToStartGrowingCommandHandler(CommandHandler[MarkFileReadyToSt
     async def handle(self, command: MarkFileReadyToStartGrowingCommand) -> bool:
         """Mark a file as ready to start growing copy."""
         return await self._file_discovery_slice.mark_file_ready_to_start_growing(command.file_id)
+
+
+class PauseScannerCommandHandler(CommandHandler[PauseScannerCommand, dict]):
+    """Handles PauseScannerCommand by pausing the file scanner."""
+
+    def __init__(self, scanner_service):
+        self._scanner_service = scanner_service
+
+    async def handle(self, command: PauseScannerCommand) -> dict:
+        """Pause the file scanner."""
+        await self._scanner_service.stop_scanning()
+        return {
+            "success": True, 
+            "paused": self._scanner_service.is_paused(), 
+            "scanning": self._scanner_service.is_scanning()
+        }
+
+
+class ResumeScannerCommandHandler(CommandHandler[ResumeScannerCommand, dict]):
+    """Handles ResumeScannerCommand by resuming the file scanner."""
+
+    def __init__(self, scanner_service):
+        self._scanner_service = scanner_service
+
+    async def handle(self, command: ResumeScannerCommand) -> dict:
+        """Resume the file scanner."""
+        await self._scanner_service.start_scanning()
+        return {
+            "success": True, 
+            "paused": self._scanner_service.is_paused(), 
+            "scanning": self._scanner_service.is_scanning()
+        }

@@ -1,12 +1,15 @@
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
+from app.dependencies import get_file_scanner
 from app.domains.file_discovery.command_handlers import (
     AddFileCommandHandler,
     MarkFileReadyCommandHandler,
     MarkFileStableCommandHandler,
     UpdateFileGrowthInfoCommandHandler,
     MarkFileGrowingCommandHandler,
-    MarkFileReadyToStartGrowingCommandHandler
+    MarkFileReadyToStartGrowingCommandHandler,
+    PauseScannerCommandHandler,
+    ResumeScannerCommandHandler
 )
 from app.domains.file_discovery.commands import (
     AddFileCommand,
@@ -14,7 +17,9 @@ from app.domains.file_discovery.commands import (
     MarkFileStableCommand,
     UpdateFileGrowthInfoCommand,
     MarkFileGrowingCommand,
-    MarkFileReadyToStartGrowingCommand
+    MarkFileReadyToStartGrowingCommand,
+    PauseScannerCommand,
+    ResumeScannerCommand
 )
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 from app.domains.file_discovery.queries import (
@@ -39,6 +44,7 @@ def register_file_discovery_handlers(
     file_discovery_slice: FileDiscoverySlice
 ):
     """Register all File Discovery CQRS handlers."""
+    # Register existing file discovery handlers
     command_bus.register(AddFileCommand, AddFileCommandHandler(file_discovery_slice).handle)
     command_bus.register(MarkFileReadyCommand, MarkFileReadyCommandHandler(file_discovery_slice).handle)
     command_bus.register(MarkFileStableCommand, MarkFileStableCommandHandler(file_discovery_slice).handle)
@@ -46,6 +52,12 @@ def register_file_discovery_handlers(
     command_bus.register(MarkFileGrowingCommand, MarkFileGrowingCommandHandler(file_discovery_slice).handle)
     command_bus.register(MarkFileReadyToStartGrowingCommand, MarkFileReadyToStartGrowingCommandHandler(file_discovery_slice).handle)
 
+    # Register new scanner control handlers
+    scanner_service = get_file_scanner()
+    command_bus.register(PauseScannerCommand, PauseScannerCommandHandler(scanner_service).handle)
+    command_bus.register(ResumeScannerCommand, ResumeScannerCommandHandler(scanner_service).handle)
+
+    # Register query handlers
     query_bus.register(GetActiveFileByPathQuery, GetActiveFileByPathQueryHandler(file_discovery_slice).handle)
     query_bus.register(ShouldSkipFileProcessingQuery, ShouldSkipFileProcessingQueryHandler(file_discovery_slice).handle)
     query_bus.register(GetCurrentFileForPathQuery, GetCurrentFileForPathQueryHandler(file_discovery_slice).handle)

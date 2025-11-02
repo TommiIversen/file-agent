@@ -11,7 +11,8 @@ from app.domains.presentation.registration import register_presentation_domain
 
 from .domains.presentation import websockets_endpoint
 
-from .api import storage, logfiles, uiactions
+from app.domains.shared.api import config_api, logs_api, storage_api
+from app.domains.file_discovery.api import scanner_api
 
 from .domains.presentation.api_endpoints import presentation_router
 from .domains.directory_browsing import api as directory
@@ -35,6 +36,7 @@ from .dependencies import (
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
 from app.domains.file_discovery.registration import register_file_discovery_handlers  # Import the new registration function
 from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
+from app.domains.shared.registration import register_shared_domain  # Import shared domain registration
 
 from .logging_config import setup_logging
 from app.domains.presentation import views
@@ -43,110 +45,6 @@ settings = Settings()
 
 # Global reference til background tasks
 _background_tasks = []
-
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     """Application lifespan manager"""
-#     # Startup
-#     setup_logging(settings)
-
-#     # === START: NYT REGISTRERINGSTRIN ===
-#     logging.info("Registrerer CQRS handlers...")
-#     query_bus = get_query_bus()
-#     command_bus = get_command_bus()
-#     event_bus = get_event_bus()
-    
-#     # Kald registrerings-funktionerne for hvert domæne
-#     register_directory_browsing_handlers(query_bus, command_bus)
-#     register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
-#     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
-    
-#     logging.info("Handler-registrering fuldført.")
-
-#     # Log configuration file information
-#     config_info = settings.config_file_info
-#     logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
-#     logging.info(f"Running on hostname: {config_info['hostname']}")
-#     if len(config_info["all_available_configs"]) > 1:
-#         logging.info(
-#             f"Available config files: {', '.join(config_info['all_available_configs'])}"
-#         )
-
-#     logging.info("File Transfer Agent starting up...")
-#     logging.info(f"Source directory: {settings.source_directory}")
-#     logging.info(f"Destination directory: {settings.destination_directory}")
-#     logging.info("StateManager klar til brug")
-
-#     # Cleanup old test files at startup
-#     storage_checker = get_storage_checker()
-#     try:
-#         cleaned_count = await storage_checker.cleanup_all_test_files(
-#             settings.source_directory, settings.destination_directory
-#         )
-#         if cleaned_count > 0:
-#             logging.info(f"Startup cleanup: removed {cleaned_count} old test files")
-#     except Exception as e:
-#         logging.warning(f"Startup cleanup failed (non-critical): {e}")
-
-#     # Start CQRS File Scanner Service som background task
-#     file_scanner = get_file_scanner()
-#     scanner_task = asyncio.create_task(file_scanner.start_scanning())
-#     _background_tasks.append(scanner_task)
-#     logging.info("CQRS FileScannerService startet som background task")
-
-#     # Start JobQueueService producer som background task
-#     job_queue_service = get_job_queue_service()
-#     queue_task = asyncio.create_task(job_queue_service.start_producer())
-#     _background_tasks.append(queue_task)
-#     logging.info("JobQueueService producer startet som background task")
-
-#     # Start FileCopierService workers som background task
-#     file_copier = get_file_copier()
-#     copier_task = asyncio.create_task(file_copier.start_workers())
-#     _background_tasks.append(copier_task)
-#     logging.info("FileCopierService workers startet som background task")
-
-#     # Initialize WebSocketManager (subscription happens automatically)
-#     get_websocket_manager()  # Initialize singleton
-#     logging.info("WebSocketManager initialiseret")
-
-#     # Start StorageMonitorService som background task
-#     storage_monitor = get_storage_monitor()
-#     storage_task = asyncio.create_task(storage_monitor.start_monitoring())
-#     _background_tasks.append(storage_task)
-
-#     yield
-
-#     # Shutdown
-#     logging.info("File Transfer Agent shutting down...")
-
-#     # Stop alle background tasks gracefully
-#     await file_scanner.stop_scanning()
-#     job_queue_service.stop_producer()
-#     await file_copier.stop_workers()
-#     await storage_monitor.stop_monitoring()
-
-#     # Cancel alle background tasks
-#     for task in _background_tasks:
-#         task.cancel()
-
-#     # Vent på at tasks bliver cancelled
-#     if _background_tasks:
-#         await asyncio.gather(*_background_tasks, return_exceptions=True)
-
-#     logging.info("Alle background tasks stoppet")
-
-
-# # Create FastAPI application
-# app = FastAPI(
-#     title="File Transfer Agent",
-#     description="Automatiseret service til at flytte videofiler fra lokal mappe til NAS",
-#     version="0.1.0",
-#     lifespan=lifespan,
-# )
-
-
 
 
 @asynccontextmanager
@@ -164,6 +62,7 @@ async def lifespan(app: FastAPI):
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
     register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
+    register_shared_domain(command_bus, query_bus)  # Register shared domain handlers
     await register_file_processing_domain(command_bus, event_bus)  # File processing CQRS registration
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
@@ -223,7 +122,7 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(storage_task)
 
     # Mount static files
-    static_path = Path(__file__).parent / "static"
+    static_path = Path(__file__).parent / "domains" / "presentation" / "static"
     if await asyncio.to_thread(static_path.exists):
         app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
         logging.info(f"Static files mounted at /static from {static_path}")
@@ -298,10 +197,11 @@ async def log_requests(request: Request, call_next):
 
 
 # Include routers
-app.include_router(uiactions.router)
+app.include_router(config_api.router)  # New shared domain config API
+app.include_router(logs_api.router)  # New shared domain logs API
+app.include_router(storage_api.router)  # New shared domain storage API
+app.include_router(scanner_api.router)  # New file discovery scanner API
 app.include_router(websockets_endpoint.router)
-app.include_router(storage.router)
-app.include_router(logfiles.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)
 app.include_router(views.router)

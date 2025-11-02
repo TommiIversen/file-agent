@@ -1,0 +1,1 @@
+# Shared Domain - System-wide functionality

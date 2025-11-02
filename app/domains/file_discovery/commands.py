@@ -54,3 +54,15 @@ class MarkFileReadyToStartGrowingCommand(Command):
     """Command to mark a file as ready to start growing copy."""
     file_id: str
     file_path: str
+
+
+@dataclass
+class PauseScannerCommand(Command):
+    """Kommando om at pause file scanneren."""
+    pass
+
+
+@dataclass
+class ResumeScannerCommand(Command):
+    """Kommando om at genoptage file scanneren."""
+    pass

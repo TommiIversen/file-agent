@@ -39,7 +39,7 @@ document.addEventListener('alpine:init', () => {
             this.settingsError = null;
             try {
                 console.log('📡 Loading settings from API...');
-                const response = await fetch('/api/settings');
+                const response = await fetch('/api/system/settings');
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -65,7 +65,7 @@ document.addEventListener('alpine:init', () => {
             this.actionMessage = null;
             try {
                 console.log('🔄 Reloading configuration...');
-                const response = await fetch('/api/reload-config', {
+                const response = await fetch('/api/system/reload-config', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -103,7 +103,7 @@ document.addEventListener('alpine:init', () => {
             this.restartCountdown = 2;
             try {
                 console.log('🚀 Restarting application...');
-                const response = await fetch('/api/restart-application', {
+                const response = await fetch('/api/system/restart-application', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
