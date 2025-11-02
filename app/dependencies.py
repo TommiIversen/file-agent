@@ -284,6 +284,14 @@ def get_presentation_event_handlers() -> PresentationEventHandlers:
     return _singletons["presentation_event_handlers"]
 
 
+def get_global_event_logger():
+    """Get the GlobalEventLogger singleton for UI event visibility."""
+    if "global_event_logger" not in _singletons:
+        from app.core.global_event_logger import GlobalEventLogger
+        _singletons["global_event_logger"] = GlobalEventLogger(max_size=200)
+    return _singletons["global_event_logger"]
+
+
 def reset_singletons() -> None:
     global _singletons
     _singletons.clear()

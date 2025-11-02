@@ -56,22 +56,37 @@ class NotificationHandler:
 
 
     async def handle_mount_status(self, mount_update: MountStatusUpdate) -> None:
-        logging.info(
-            f"Mount status update: {mount_update.storage_type} -> {mount_update.mount_status.value}",
-            extra={
-                "operation": "mount_status_update",
-                "storage_type": mount_update.storage_type,
-                "mount_status": mount_update.mount_status.value,
-                "share_url": mount_update.share_url,
-                "target_path": mount_update.target_path,
-                "error_message": mount_update.error_message,
-            },
-        )
-
-        try:
-            await self._event_bus.publish(MountStatusChangedEvent(update=mount_update))
-        except Exception as e:
-            logging.error(f"Error publishing MountStatusChangedEvent: {e}")
+        # Check if this is actually a status change
+        storage_key = f"{mount_update.storage_type}_{mount_update.share_url}"
+        last_status = self._last_mount_status.get(storage_key)
+        current_status = mount_update.mount_status
+        
+        # Only log and publish event if status actually changed
+        if last_status != current_status:
+            logging.info(
+                f"Mount status update: {mount_update.storage_type} -> {current_status.value}",
+                extra={
+                    "operation": "mount_status_update",
+                    "storage_type": mount_update.storage_type,
+                    "mount_status": current_status.value,
+                    "share_url": mount_update.share_url,
+                    "target_path": mount_update.target_path,
+                    "error_message": mount_update.error_message,
+                },
+            )
+            
+            try:
+                await self._event_bus.publish(MountStatusChangedEvent(update=mount_update))
+            except Exception as e:
+                logging.error(f"Error publishing MountStatusChangedEvent: {e}")
+        else:
+            # Just debug log for unchanged status
+            logging.debug(
+                f"Mount status unchanged: {mount_update.storage_type} -> {current_status.value}"
+            )
+        
+        # Update last known status
+        self._last_mount_status[storage_key] = current_status
 
     async def publish_destination_unavailable(
         self, reason: str, storage_info: StorageInfo

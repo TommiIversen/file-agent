@@ -14,6 +14,7 @@
     <script src="/static/js/stores/storageStore.js"></script>
     <script src="/static/js/stores/uiStore.js"></script>
     <script src="/static/js/stores/logViewerStore.js"></script>
+    <script src="/static/js/stores/eventsViewerStore.js"></script>
     <script src="/static/js/stores/settingsStore.js"></script>
     <script src="/static/js/stores/directoryBrowserStore.js"></script>
 
@@ -133,6 +134,12 @@
                 <button @click="openLogViewerModal()"
                         class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
                     📝 Logs
+                </button>
+
+                <!-- Events Button -->
+                <button @click="$store.eventsViewer.openModal()"
+                        class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                    📊 Events
                 </button>
 
                 <!-- Settings Button -->
@@ -481,6 +488,9 @@
 
 <!-- Log Viewer Modal -->
 {% include "components/log_viewer_modal.html" %}
+
+<!-- Events Viewer Modal -->
+{% include "components/events_viewer_modal.html" %}
 
 <!-- Settings Modal -->
 {% include "components/settings_modal.html" %}

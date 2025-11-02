@@ -11,7 +11,7 @@ from app.domains.presentation.registration import register_presentation_domain
 
 from .domains.presentation import websockets_endpoint
 
-from app.domains.shared.api import config_api, logs_api, storage_api
+from app.domains.shared.api import config_api, logs_api, storage_api, events_api
 from app.domains.file_discovery.api import scanner_api
 
 from .domains.presentation.api_endpoints import presentation_router
@@ -59,6 +59,12 @@ async def lifespan(app: FastAPI):
     query_bus = get_query_bus()
     command_bus = get_command_bus()
     event_bus = get_event_bus()
+    
+    # 🔧 Register GlobalEventLogger to capture all domain events for UI visibility
+    from app.dependencies import get_global_event_logger
+    global_event_logger = get_global_event_logger()
+    await global_event_logger.register_with_event_bus(event_bus)
+    logging.info("GlobalEventLogger registered for UI event visibility")
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
@@ -214,6 +220,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(config_api.router)  # New shared domain config API
 app.include_router(logs_api.router)  # New shared domain logs API
 app.include_router(storage_api.router)  # New shared domain storage API
+app.include_router(events_api.router)  # New shared domain events API
 app.include_router(scanner_api.router)  # New file discovery scanner API
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
