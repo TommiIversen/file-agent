@@ -19,6 +19,7 @@ class StorageAccessError(Exception):
 class StorageChecker:
     def __init__(self, test_file_prefix: str = ".storage_test_"):
         self._test_file_prefix = test_file_prefix
+        self._io_timeout = 3.0  # 3 sekunders timeout for skrive-operationer
 
     async def check_path(
         self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
@@ -133,8 +134,16 @@ class StorageChecker:
         test_file_path = os.path.join(directory, test_filename)
 
         try:
-            async with aiofiles.open(test_file_path, "w") as f:
-                await f.write("storage_write_test")
+            # Åbn filen med timeout
+            file_opener = aiofiles.open(test_file_path, "w")
+            f = await asyncio.wait_for(file_opener, timeout=self._io_timeout)
+
+            # Brug 'try...finally' til at sikre, at filen lukkes
+            try:
+                await asyncio.wait_for(f.write("storage_write_test"), timeout=self._io_timeout)
+            finally:
+                await f.close()  # Luk filen manuelt
+
             logging.debug(f"Test file created: {test_file_path}")
             return test_file_path
         except Exception as e:
@@ -143,8 +152,15 @@ class StorageChecker:
     async def _cleanup_test_file(self, test_file_path: str) -> None:
         """Cleanup test file using aiofiles."""
         try:
-            if await aiofiles.os.path.exists(test_file_path):
-                await aiofiles.os.remove(test_file_path)
+            exists = await asyncio.wait_for(
+                aiofiles.os.path.exists(test_file_path), 
+                timeout=self._io_timeout
+            )
+            if exists:
+                await asyncio.wait_for(
+                    aiofiles.os.remove(test_file_path), 
+                    timeout=self._io_timeout
+                )
                 logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
             logging.warning(f"Could not clean up test file {test_file_path}: {e}")
