@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
     logging.info("File Transfer Agent starting up...")
     logging.info(f"Source directory: {settings.source_directory}")
     logging.info(f"Destination directory: {settings.destination_directory}")
-    logging.info("StateManager klar til brug")
+    logging.info("CQRS arkitektur klar til brug")
 
     # Cleanup old test files at startup
     storage_checker = get_storage_checker()
