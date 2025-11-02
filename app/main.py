@@ -37,6 +37,7 @@ from app.domains.directory_browsing.registration import register_directory_brows
 from app.domains.file_discovery.registration import register_file_discovery_handlers  # Import the new registration function
 from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
 from app.domains.shared.registration import register_shared_domain  # Import shared domain registration
+from app.domains.network_mount.registration import register_network_mount_domain  # 🚀 NetworkCoordinator registration
 
 from .logging_config import setup_logging
 from app.domains.presentation import views
@@ -63,6 +64,15 @@ async def lifespan(app: FastAPI):
     register_directory_browsing_handlers(query_bus, command_bus)
     register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
     register_shared_domain(command_bus, query_bus)  # Register shared domain handlers
+    
+    # 🚀 IMPORTANT: Register NetworkCoordinator FIRST before other domains that depend on it!
+    network_services = await register_network_mount_domain(event_bus)  # 🚀 NetworkCoordinator registration!
+    
+    # Store NetworkCoordinator for dependency injection
+    from app.dependencies import _singletons
+    _singletons["network_coordinator"] = network_services["network_coordinator"]
+    
+    # Now register domains that depend on NetworkCoordinator
     await register_file_processing_domain(command_bus, event_bus)  # File processing CQRS registration
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
@@ -118,6 +128,10 @@ async def lifespan(app: FastAPI):
 
     # Start StorageMonitorService som background task
     storage_monitor = get_storage_monitor()
+    
+    # Subscribe StorageMonitor to network events for immediate response
+    await storage_monitor.subscribe_to_events()
+    
     storage_task = asyncio.create_task(storage_monitor.start_monitoring())
     _background_tasks.append(storage_task)
 

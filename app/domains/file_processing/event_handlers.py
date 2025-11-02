@@ -7,7 +7,7 @@ by sending appropriate commands via the command bus.
 import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.events.file_events import FileReadyEvent
-from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent
+from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent, NetworkStatusChanged
 from app.core.file_repository import FileRepository
 from app.domains.file_processing.commands import QueueFileCommand
 from app.domains.file_processing.job_queue import JobQueueService
@@ -80,3 +80,28 @@ class FileProcessingEventHandler:
             logging.info("✅ Operations resumed successfully after destination recovery")
         except Exception as e:
             logging.error(f"Error resuming operations: {e}")
+
+    async def handle_network_status_changed(self, event: NetworkStatusChanged):
+        """
+        🚀 Handles NetworkStatusChanged - The AUTHORITATIVE network status event!
+        
+        This is the main event handler that responds to NetworkCoordinator's
+        definitive network status changes. It replaces the old direct storage_monitor
+        coupling with clean event-based reactions.
+        """
+        logging.info(
+            f"🎯 NETWORK STATUS CHANGED: {event.available} "
+            f"(source: {event.source}, reason: {event.reason})"
+        )
+        
+        try:
+            if event.available:
+                # Network is available - process waiting files
+                await self._job_queue_service.process_waiting_network_files()
+                logging.info("🌐 Network available - resumed file processing")
+            else:
+                # Network is unavailable - pause operations
+                await self._job_queue_service.handle_destination_unavailable()
+                logging.info("⏸️ Network unavailable - paused file processing")
+        except Exception as e:
+            logging.error(f"Error handling network status change: {e}")

@@ -23,3 +23,17 @@ class DestinationRecoveredEvent(DomainEvent):
     """Publiceres når destinationen går fra ERROR/CRITICAL -> OK."""
     reason: str
     storage_info: StorageInfo
+
+@dataclass(frozen=True)
+class NetworkFailureDetectedEvent(DomainEvent):
+    """Publiceres når NetworkErrorDetector finder en netværksfejl under kopiering."""
+    error_message: str
+    file_id: str
+    operation: str
+
+@dataclass(frozen=True)
+class NetworkStatusChanged(DomainEvent):
+    """Autoritativ event fra NetworkCoordinator om netværksstatus ændringer."""
+    available: bool
+    reason: str
+    source: str  # "periodic_check" | "copy_failure" | "recovery"

@@ -47,6 +47,7 @@ class FileStateMachine:
             },
             FileStatus.READY_TO_START_GROWING: {
                 FileStatus.IN_QUEUE,
+                FileStatus.WAITING_FOR_NETWORK,
                 FileStatus.REMOVED,
             },
             FileStatus.READY: {
@@ -72,6 +73,7 @@ class FileStateMachine:
             },
             FileStatus.WAITING_FOR_NETWORK: {
                 FileStatus.READY, 
+                FileStatus.READY_TO_START_GROWING,
                 FileStatus.DISCOVERED, # Kan også gen-scannes
             },
             FileStatus.WAITING_FOR_SPACE: {

@@ -86,14 +86,29 @@ class JobQueueService:
 
             for tracked_file in waiting_files:
                 try:
+                    # Determine if this was a growing file by checking file metadata
+                    # A file that had growth_rate_mbps > 0 was likely a growing file
+                    was_growing_file = tracked_file.growth_rate_mbps > 0
+                    
+                    if was_growing_file:
+                        # For growing files, transition back to READY_TO_START_GROWING
+                        new_status = FileStatus.READY_TO_START_GROWING
+                        logging.info(
+                            f"🔄 NETWORK RECOVERY: Growing file {tracked_file.file_path} -> READY_TO_START_GROWING"
+                        )
+                    else:
+                        # For regular files, transition back to DISCOVERED for re-evaluation
+                        new_status = FileStatus.DISCOVERED
+                        logging.info(
+                            f"🔄 NETWORK RECOVERY: Regular file {tracked_file.file_path} -> DISCOVERED"
+                        )
+                    
                     await self._state_machine.transition(
                         file_id=tracked_file.id,
-                        new_status=FileStatus.DISCOVERED,
+                        new_status=new_status,
                         error_message=None
                     )
-                    logging.info(
-                        f"🔄 NETWORK RECOVERY: Reactivated {tracked_file.file_path} for re-evaluation"
-                    )
+                    
                 except (InvalidTransitionError, ValueError) as e:
                     logging.warning(f"Kunne ikke re-aktivere fil {tracked_file.id}: {e}")
                 except Exception as e:

@@ -204,6 +204,19 @@ def get_network_mount_service() -> NetworkMountService:
     return _singletons["network_mount_service"]
 
 
+def get_network_coordinator():
+    """
+    🚀 Get NetworkCoordinator - Single Source of Truth for network status!
+    
+    Returns the NetworkCoordinator instance that was created during
+    network_mount domain registration.
+    """
+    if "network_coordinator" not in _singletons:
+        raise RuntimeError("NetworkCoordinator not initialized! Ensure register_network_mount_domain() was called.")
+    
+    return _singletons["network_coordinator"]
+
+
 def get_storage_monitor() -> StorageMonitorService:
     if "storage_monitor" not in _singletons:
         _singletons["storage_monitor"] = StorageMonitorService(

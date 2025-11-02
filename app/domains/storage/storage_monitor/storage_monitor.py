@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.storage_events import NetworkFailureDetectedEvent
 
 from .directory_manager import DirectoryManager
 from .mount_status_broadcaster import MountStatusBroadcaster
@@ -10,7 +11,7 @@ from .notification_handler import NotificationHandler
 from .storage_state import StorageState
 from ..storage_checker import StorageChecker
 from app.config import Settings
-from app.models import StorageInfo, StorageStatus
+from app.models import StorageInfo, StorageStatus, MountStatus
 
 
 class StorageMonitorService:
@@ -23,6 +24,7 @@ class StorageMonitorService:
     ):
         self._settings = settings
         self._storage_checker = storage_checker
+        self._event_bus = event_bus
         self._network_mount_service = network_mount_service
 
         self._storage_state = StorageState()
@@ -63,6 +65,42 @@ class StorageMonitorService:
 
         logging.info("Storage monitoring stopped")
 
+    async def subscribe_to_events(self) -> None:
+        """Subscribe to relevant events"""
+        await self._event_bus.subscribe(NetworkFailureDetectedEvent, self.handle_network_failure_detected)
+        logging.info("StorageMonitor subscribed to NetworkFailureDetectedEvent")
+
+    async def handle_network_failure_detected(self, event: NetworkFailureDetectedEvent) -> None:
+        """
+        🔥 Immediately check destination when network failure is detected from copy operations.
+        
+        This provides instant feedback to UI instead of waiting for next periodic check.
+        """
+        logging.warning(
+            f"🔥 IMMEDIATE network failure detected - checking destination accessibility: {event.error_message}"
+        )
+        
+        # Immediately check destination storage with faster timeout
+        await self._check_destination_immediate()
+        
+        # Also immediately broadcast mount status as NOT_CONFIGURED to prioritize over storage info
+        await self._mount_broadcaster.broadcast_not_configured(
+            storage_type="destination",
+            target_path=self._settings.destination_directory
+        )
+
+    async def _check_destination_immediate(self) -> None:
+        """
+        Immediate destination check with aggressive timeout for network failure scenarios.
+        """
+        await self._check_single_storage(
+            storage_type="destination",
+            path=self._settings.destination_directory,
+            warning_threshold=self._settings.destination_warning_threshold_gb,
+            critical_threshold=self._settings.destination_critical_threshold_gb,
+            immediate_timeout=2.0  # Aggressive 2-second timeout for immediate checks
+        )
+
     async def _monitoring_loop(self) -> None:
         logging.info(
             f"Storage monitoring loop starting - checking every {self._settings.storage_check_interval_seconds}s"
@@ -102,6 +140,7 @@ class StorageMonitorService:
         path: str,
         warning_threshold: float,
         critical_threshold: float,
+        immediate_timeout: float = 8.0,  # Default to 8 seconds, but allow override
     ) -> None:
         try:
             # Add aggressive timeout wrapper for the entire storage check operation
@@ -113,14 +152,14 @@ class StorageMonitorService:
                         warning_threshold_gb=warning_threshold,
                         critical_threshold_gb=critical_threshold,
                     ),
-                    timeout=8.0  # Aggressive 8-second timeout for entire operation
+                    timeout=immediate_timeout
                 )
             except asyncio.TimeoutError:
                 logging.warning(
-                    f"⏱️ TIMEOUT: Storage check for {storage_type} at {path} timed out after 8 seconds - assuming network is down"
+                    f"⏱️ TIMEOUT: Storage check for {storage_type} at {path} timed out after {immediate_timeout} seconds - assuming network is down"
                 )
                 # Create a synthetic StorageInfo for timeout case
-                from app.models import StorageInfo, StorageStatus
+                from app.models import StorageInfo
                 from datetime import datetime
                 new_info = StorageInfo(
                     path=path,
@@ -224,6 +263,25 @@ class StorageMonitorService:
             await self._notification_handler.handle_status_change(
                 storage_type, old_info, new_info
             )
+
+            # Send mount status for destination to provide consistent UI feedback
+            if storage_type == "destination":
+                if new_info.is_accessible and new_info.status == StorageStatus.OK:
+                    # Destination is accessible - broadcast SUCCESS
+                    # For UNC paths, use the destination path as share_url
+                    share_url = self._settings.destination_directory
+                    await self._mount_broadcaster.broadcast_mount_success(
+                        storage_type="destination",
+                        share_url=share_url,
+                        target_path=self._settings.destination_directory,
+                        mount_path=new_info.path
+                    )
+                else:
+                    # Destination is not accessible - broadcast NOT_CONFIGURED
+                    await self._mount_broadcaster.broadcast_not_configured(
+                        storage_type="destination",
+                        target_path=self._settings.destination_directory
+                    )
 
             if self._is_destination_unavailable(storage_type, old_info, new_info):
                 await self._handle_destination_unavailable(
@@ -377,6 +435,16 @@ class StorageMonitorService:
             logging.info(
                 f"🚀 INITIATING UNIVERSAL RECOVERY: {recovery_reason} "
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
+            )
+
+            # Broadcast mount status SUCCESS to prioritize over storage info in UI
+            # For UNC paths, use the destination path as share_url
+            share_url = self._settings.destination_directory
+            await self._mount_broadcaster.broadcast_mount_success(
+                storage_type="destination",
+                share_url=share_url,
+                target_path=self._settings.destination_directory,
+                mount_path=new_info.path
             )
 
             # Publish domain event instead of directly calling job queue

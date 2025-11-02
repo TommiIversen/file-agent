@@ -10,7 +10,7 @@ from datetime import datetime
 from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
-from app.models import FileStatus, StorageStatus
+from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import QueueJob
 from app.domains.file_processing.copy.growing_copy import GrowingFileCopyStrategy
 from app.domains.file_processing.commands import QueueFileCommand, ProcessJobCommand
@@ -30,13 +30,13 @@ class QueueFileCommandHandler:
         job_queue_service,  # Pass the service instead of the queue directly
         file_repository: FileRepository,
         state_machine: FileStateMachine,
-        storage_monitor,
+        network_coordinator,  # 🚀 NetworkCoordinator instead of storage_monitor!
         copy_strategy: GrowingFileCopyStrategy,
     ):
         self._job_queue_service = job_queue_service
         self._file_repository = file_repository
         self._state_machine = state_machine
-        self._storage_monitor = storage_monitor
+        self._network_coordinator = network_coordinator  # 🎯 Single source of truth!
         self._copy_strategy = copy_strategy
 
     async def handle(self, command: QueueFileCommand):
@@ -56,7 +56,7 @@ class QueueFileCommandHandler:
             )
             return
 
-        if not await self._is_network_available():
+        if not self._network_coordinator.is_network_available:
             try:
                 await self._state_machine.transition(
                     file_id=tracked_file.id,
@@ -105,29 +105,6 @@ class QueueFileCommandHandler:
             logging.warning(f"Could not add job to queue (state conflict): {e}")
         except Exception as e:
             logging.error(f"Error adding to queue: {e}")
-
-    async def _is_network_available(self) -> bool:
-        """
-        Check if destination network is available.
-        
-        Moved from JobQueueService to maintain encapsulation of network checking logic.
-        """
-        if not self._storage_monitor:
-            return True  # Assume available if no storage monitor
-
-        try:
-            storage_state = self._storage_monitor._storage_state
-            dest_info = storage_state.get_destination_info()
-
-            if not dest_info:
-                return False  # No destination info = not available
-
-            # Available if status is OK or WARNING (WARNING still allows copying)
-            return dest_info.status in [StorageStatus.OK, StorageStatus.WARNING]
-
-        except Exception as e:
-            logging.error(f"Error checking network availability: {e}")
-            return True  # Default to available on error
 
 
 class ProcessJobCommandHandler:

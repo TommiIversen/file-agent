@@ -34,7 +34,7 @@ class GrowingFileCopyStrategy():
     ):
         self.settings = settings
         self.file_repository = file_repository
-        self.event_bus = event_bus
+        self._event_bus = event_bus  # 🚀 Fix: Use _event_bus (with underscore) for consistency
         self._state_machine = state_machine
         self._verification_service = verification_service
         self._io_loop = io_loop
@@ -121,7 +121,10 @@ class GrowingFileCopyStrategy():
                 logging.error(f"Directory creation failed for: {dest_dir}: {e}")
                 raise FileCopyIOError(f"Directory creation failed for {dest_dir}: {e}") from e
 
-            network_detector = NetworkErrorDetector()
+            network_detector = NetworkErrorDetector(
+                event_bus=self._event_bus,
+                current_file_id=tracked_file.id
+            )
             success = await self._copy_growing_file(
                 source_path, dest_path, tracked_file, network_detector
             )
@@ -157,8 +160,8 @@ class GrowingFileCopyStrategy():
                         )
 
                         # Publicer den domæne-specifikke event
-                        if self.event_bus:
-                            await self.event_bus.publish(
+                        if self._event_bus:
+                            await self._event_bus.publish(
                                 FileCopyCompletedEvent(
                                     file_id=tracked_file.id,
                                     file_path=tracked_file.file_path,
@@ -184,7 +187,10 @@ class GrowingFileCopyStrategy():
         except NetworkError:
             raise
         except Exception as e:
-            network_detector = NetworkErrorDetector()
+            network_detector = NetworkErrorDetector(
+                event_bus=self._event_bus,
+                current_file_id=tracked_file.id
+            )
             try:
                 network_detector.check_write_error(e, "growing copy strategy")
             except NetworkError:
@@ -366,8 +372,8 @@ class GrowingFileCopyStrategy():
                 current_time = datetime.now()
                 if (current_time - last_progress_update_time).total_seconds() >= 1.0:
                     # Send kun en progress-event, SÆT IKKE STATUS
-                    if self.event_bus:
-                        asyncio.create_task(self.event_bus.publish(FileCopyProgressEvent(
+                    if self._event_bus:
+                        asyncio.create_task(self._event_bus.publish(FileCopyProgressEvent(
                             file_id=tracked_file.id,
                             bytes_copied=bytes_copied,
                             total_bytes=current_file_size,

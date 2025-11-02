@@ -8,13 +8,13 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.events.event_bus import DomainEventBus
 from app.dependencies import (
     get_job_queue_service, get_file_repository, get_file_state_machine, 
-    get_storage_monitor, get_copy_strategy, get_job_space_manager,
+    get_network_coordinator, get_copy_strategy, get_job_space_manager,  # 🚀 NetworkCoordinator!
     get_job_copy_executor, get_job_finalization_service, get_settings
 )
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
 from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
-from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent
+from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent, NetworkStatusChanged
 from .event_handlers import FileProcessingEventHandler
 from .command_handlers import QueueFileCommandHandler, ProcessJobCommandHandler
 from .commands import QueueFileCommand, ProcessJobCommand
@@ -46,6 +46,9 @@ async def register_file_processing_domain(
     # Subscribe to storage events for destination availability
     await event_bus.subscribe(DestinationUnavailableEvent, event_handler.handle_destination_unavailable)
     await event_bus.subscribe(DestinationRecoveredEvent, event_handler.handle_destination_recovered)
+    
+    # 🚀 Subscribe to NetworkCoordinator's authoritative network status events!
+    await event_bus.subscribe(NetworkStatusChanged, event_handler.handle_network_status_changed)
 
     # 2. Create Command Handlers
     job_queue_service = get_job_queue_service()
@@ -53,7 +56,7 @@ async def register_file_processing_domain(
         job_queue_service=job_queue_service,  # Pass the service, not the queue
         file_repository=get_file_repository(),
         state_machine=get_file_state_machine(),
-        storage_monitor=get_storage_monitor(),
+        network_coordinator=get_network_coordinator(),  # 🚀 NetworkCoordinator instead of storage_monitor!
         copy_strategy=get_copy_strategy()
     )
     command_bus.register(QueueFileCommand, queue_handler.handle)
