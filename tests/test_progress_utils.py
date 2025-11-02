@@ -8,110 +8,12 @@ Part of Fase 1.2 refactoring tests.
 """
 
 from app.utils.progress_utils import (
-    should_report_progress,
-    format_progress_info,
-    create_simple_progress_bar,
     format_bytes_human_readable,
     calculate_transfer_rate,
     format_transfer_rate_human_readable,
     estimate_time_remaining,
 )
 
-
-class TestShouldReportProgress:
-    """Test should_report_progress function."""
-
-    def test_first_update_at_interval(self):
-        """Test first update when reaching interval."""
-        assert should_report_progress(5, -1, 5) is True
-        assert should_report_progress(3, -1, 5) is False
-
-    def test_interval_boundary_updates(self):
-        """Test updates at interval boundaries."""
-        assert should_report_progress(10, 5, 5) is True
-        assert should_report_progress(15, 10, 5) is True
-        assert should_report_progress(7, 5, 5) is False
-
-    def test_completion_always_reports(self):
-        """Test that completion is always reported."""
-        assert should_report_progress(99, 95, 5, is_complete=True) is True
-        assert should_report_progress(97, 95, 5, is_complete=True) is True
-
-    def test_no_change_no_update(self):
-        """Test no update when progress hasn't changed."""
-        assert should_report_progress(10, 10, 5) is False
-
-    def test_different_intervals(self):
-        """Test with different update intervals."""
-        assert should_report_progress(10, 0, 10) is True
-        assert should_report_progress(1, -1, 1) is True
-        assert should_report_progress(25, 20, 25) is True
-
-
-
-class TestFormatProgressInfo:
-    """Test format_progress_info function."""
-
-    def test_basic_formatting(self):
-        """Test basic progress info formatting."""
-        info = format_progress_info(50.0, 512000, 1024000)
-
-        assert info["percent"] == 50.0
-        assert info["bytes_copied"] == 512000
-        assert info["total_bytes"] == 1024000
-        assert info["bytes_remaining"] == 512000
-        assert info["bytes_copied_kb"] == 500.0
-        assert info["bytes_copied_mb"] == 0.49
-        assert info["is_complete"] is False
-        assert "progress_bar" in info
-
-    def test_completion_formatting(self):
-        """Test formatting when complete."""
-        info = format_progress_info(100.0, 1024, 1024)
-
-        assert info["is_complete"] is True
-        assert info["bytes_remaining"] == 0
-
-    def test_over_completion(self):
-        """Test formatting when bytes exceed total."""
-        info = format_progress_info(100.0, 1200, 1000)
-
-        assert info["bytes_remaining"] == 0  # Should not be negative
-
-
-class TestCreateSimpleProgressBar:
-    """Test create_simple_progress_bar function."""
-
-    def test_empty_progress_bar(self):
-        """Test empty progress bar."""
-        bar = create_simple_progress_bar(0.0, 10)
-        assert bar == "[          ]"
-
-    def test_half_progress_bar(self):
-        """Test half-filled progress bar."""
-        bar = create_simple_progress_bar(50.0, 10)
-        assert bar == "[#####     ]"
-
-    def test_full_progress_bar(self):
-        """Test full progress bar."""
-        bar = create_simple_progress_bar(100.0, 10)
-        assert bar == "[##########]"
-
-    def test_different_widths(self):
-        """Test different progress bar widths."""
-        bar = create_simple_progress_bar(25.0, 4)
-        assert bar == "[#   ]"
-
-        bar = create_simple_progress_bar(75.0, 8)
-        assert bar == "[######  ]"
-
-    def test_edge_cases(self):
-        """Test edge cases for progress bar."""
-        bar = create_simple_progress_bar(-10.0, 5)
-        assert bar == "[     ]"  # Negative becomes 0
-
-        bar = create_simple_progress_bar(150.0, 5)
-        assert bar == "[#####]"  # Over 100% becomes 100%
 
 
 class TestFormatBytesHumanReadable:
