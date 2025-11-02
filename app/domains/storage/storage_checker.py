@@ -9,7 +9,7 @@ import asyncio
 import aiofiles
 import aiofiles.os
 
-from ..models import StorageInfo, StorageStatus
+from app.models import StorageInfo, StorageStatus
 
 
 class StorageAccessError(Exception):

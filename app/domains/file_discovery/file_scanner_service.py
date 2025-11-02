@@ -14,7 +14,7 @@ from app.domains.file_discovery.file_scanner import FileScanner
 from app.domains.file_discovery.domain_objects import ScanConfiguration
 
 if TYPE_CHECKING:
-    from app.services.storage_monitor import StorageMonitorService
+    from app.domains.storage.storage_monitor import StorageMonitorService
 
 
 class FileScannerService:

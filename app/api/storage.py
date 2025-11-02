@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 
 from ..dependencies import get_storage_monitor
 from ..models import StorageInfo, StorageStatus
-from ..services.storage_monitor import StorageMonitorService
+from ..domains.storage.storage_monitor import StorageMonitorService
 
 router = APIRouter(prefix="/api", tags=["storage"])
 

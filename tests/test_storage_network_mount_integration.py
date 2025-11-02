@@ -17,8 +17,8 @@ from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
 
-from app.services.storage_monitor.storage_monitor import StorageMonitorService
-from app.services.network_mount.mount_service import NetworkMountService
+from app.domains.storage.storage_monitor.storage_monitor import StorageMonitorService
+from app.domains.network_mount.mount_service import NetworkMountService
 from app.config import Settings
 from app.models import StorageInfo, StorageStatus
 

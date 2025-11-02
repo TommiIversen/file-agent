@@ -7,7 +7,7 @@ from .base_mounter import BaseMounter
 from .mount_config import MountConfigHandler
 from .platform_factory import PlatformFactory, UnsupportedPlatformError
 from .windows_mounter import WindowsMounter
-from ...config import Settings
+from app.config import Settings
 
 
 class NetworkMountService:

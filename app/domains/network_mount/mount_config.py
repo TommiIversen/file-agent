@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from ...config import Settings
+from app.config import Settings
 
 
 class MountConfigHandler:

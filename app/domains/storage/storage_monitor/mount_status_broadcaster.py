@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from ...models import MountStatus, MountStatusUpdate
+from app.models import MountStatus, MountStatusUpdate
 
 
 class MountStatusBroadcaster:

@@ -3,7 +3,7 @@ from typing import Optional
 
 from app.config import Settings
 from app.models import SpaceCheckResult
-from app.services.storage_monitor import StorageMonitorService
+from app.domains.storage.storage_monitor import StorageMonitorService
 
 
 class SpaceChecker:

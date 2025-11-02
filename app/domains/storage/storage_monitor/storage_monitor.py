@@ -9,8 +9,8 @@ from .mount_status_broadcaster import MountStatusBroadcaster
 from .notification_handler import NotificationHandler
 from .storage_state import StorageState
 from ..storage_checker import StorageChecker
-from ...config import Settings
-from ...models import StorageInfo, StorageStatus
+from app.config import Settings
+from app.models import StorageInfo, StorageStatus
 
 
 class StorageMonitorService:

@@ -16,12 +16,12 @@ from .domains.file_processing.copy.growing_copy import GrowingFileCopyStrategy
 from .domains.file_processing.copy.file_verification import FileVerificationService
 from .domains.file_processing.copy.copy_io_loop import CopyIoLoop
 from .domains.file_processing.job_queue import JobQueueService
-from .services.network_mount import NetworkMountService
+from .domains.network_mount.mount_service import NetworkMountService
 from .domains.file_discovery.file_scanner_service import FileScannerService
 from .domains.file_processing.space_checker import SpaceChecker
 from .domains.file_processing.space_retry_manager import SpaceRetryManager
-from .services.storage_checker import StorageChecker
-from .services.storage_monitor import StorageMonitorService
+from .domains.storage.storage_checker import StorageChecker
+from .domains.storage.storage_monitor import StorageMonitorService
 from .domains.presentation.websocket_manager import WebSocketManager
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
 

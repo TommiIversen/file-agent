@@ -4,7 +4,7 @@ from typing import Optional
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 
-from ...models import StorageInfo, StorageUpdate, MountStatusUpdate
+from app.models import StorageInfo, StorageUpdate, MountStatusUpdate
 
 
 class NotificationHandler:

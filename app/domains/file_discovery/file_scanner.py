@@ -19,7 +19,7 @@ from .queries import ShouldSkipFileProcessingQuery, GetActiveFileByPathQuery, Ge
 from .growing_file_detector import GrowingFileDetector
 
 if TYPE_CHECKING:
-    from app.services.storage_monitor import StorageMonitorService
+    from app.domains.storage.storage_monitor import StorageMonitorService
 
 
 async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:

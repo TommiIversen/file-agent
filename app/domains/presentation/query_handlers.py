@@ -5,7 +5,7 @@ from app.core.cqrs.query import QueryHandler
 from app.core.file_repository import FileRepository
 from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuery, GetStorageStatusQuery
 from app.models import FileStatus, TrackedFile
-from app.services.storage_monitor import StorageMonitorService
+from app.domains.storage.storage_monitor import StorageMonitorService
 
 
 class GetStatisticsQueryHandler(QueryHandler[GetStatisticsQuery, Dict[str, Any]]):

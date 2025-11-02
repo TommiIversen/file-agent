@@ -1,6 +1,6 @@
 from typing import Optional
 
-from ...models import StorageInfo, StorageStatus
+from app.models import StorageInfo, StorageStatus
 
 
 class StorageState:
