@@ -4,9 +4,10 @@ File Repository - A pure data access layer for TrackedFile objects.
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Set
 
-from app.models import TrackedFile
+from app.models import TrackedFile, FileStatus
 
 
 class FileRepository:
@@ -62,3 +63,46 @@ class FileRepository:
         """Return the total number of files in the repository."""
         async with self._lock:
             return len(self._files_by_id)
+
+    async def prune_terminal_files(
+        self, 
+        terminal_states: Set[FileStatus], 
+        cutoff_date: datetime
+    ) -> int:
+        """
+        Find and delete all files that are in a terminal state
+        AND older than cutoff_date.
+
+        Returns the number of files that were deleted.
+
+        IMPORTANT: This in-memory implementation iterates, but 
+        the SQL version will make a single, efficient DELETE call.
+        """
+        files_to_prune = []
+        pruned_count = 0
+
+        # Take the lock once for the entire operation
+        async with self._lock:
+            # Find candidates (iterate over a copy to avoid 'dict changed size')
+            all_files = list(self._files_by_id.values()) 
+
+            for file in all_files:
+                if file.status in terminal_states:
+                    # Find the most recent relevant timestamp
+                    last_activity_time = (
+                        file.completed_at or 
+                        file.failed_at or 
+                        file.space_error_at or 
+                        file.discovered_at  # Fallback
+                    )
+
+                    if last_activity_time and last_activity_time < cutoff_date:
+                        files_to_prune.append(file.id)
+
+            # Perform deletion
+            for file_id in files_to_prune:
+                if file_id in self._files_by_id:
+                    del self._files_by_id[file_id]
+                    pruned_count += 1
+
+        return pruned_count

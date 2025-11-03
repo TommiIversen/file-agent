@@ -30,6 +30,7 @@ from app.core.cqrs.query_bus import QueryBus
 
 from app.domains.directory_browsing.service import DirectoryScannerService
 from app.domains.presentation.event_handlers import PresentationEventHandlers
+from app.domains.lifecycle.service import LifecycleService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -290,6 +291,21 @@ def get_global_event_logger():
         from app.core.global_event_logger import GlobalEventLogger
         _singletons["global_event_logger"] = GlobalEventLogger(max_size=200)
     return _singletons["global_event_logger"]
+
+
+def get_lifecycle_service() -> LifecycleService:
+    """
+    Get the LifecycleService singleton for background file cleanup.
+    
+    This service is responsible for periodic cleanup of old,
+    terminal files from the in-memory repository.
+    """
+    if "lifecycle_service" not in _singletons:
+        _singletons["lifecycle_service"] = LifecycleService(
+            command_bus=get_command_bus(),
+            settings=get_settings()
+        )
+    return _singletons["lifecycle_service"]
 
 
 def reset_singletons() -> None:

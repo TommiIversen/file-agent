@@ -30,7 +30,8 @@ from .dependencies import (
     get_query_bus,
     get_command_bus,
     get_file_discovery_slice,  # Import the new slice getter
-    get_file_scanner
+    get_file_scanner,
+    get_lifecycle_service  # Import lifecycle service
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -38,6 +39,7 @@ from app.domains.file_discovery.registration import register_file_discovery_hand
 from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
 from app.domains.shared.registration import register_shared_domain  # Import shared domain registration
 from app.domains.network_mount.registration import register_network_mount_domain  # 🚀 NetworkCoordinator registration
+from app.domains.lifecycle.registration import register_lifecycle_domain  # Import lifecycle domain registration
 
 from .logging_config import setup_logging
 from app.domains.presentation import views
@@ -70,6 +72,7 @@ async def lifespan(app: FastAPI):
     register_directory_browsing_handlers(query_bus, command_bus)
     register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
     register_shared_domain(command_bus, query_bus)  # Register shared domain handlers
+    register_lifecycle_domain(command_bus)  # Register lifecycle domain handlers
     
     # 🚀 IMPORTANT: Register NetworkCoordinator FIRST before other domains that depend on it!
     network_services = await register_network_mount_domain(event_bus)  # 🚀 NetworkCoordinator registration!
@@ -141,6 +144,12 @@ async def lifespan(app: FastAPI):
     storage_task = asyncio.create_task(storage_monitor.start_monitoring())
     _background_tasks.append(storage_task)
 
+    # Start LifecycleService som background task for periodic cleanup
+    lifecycle_service = get_lifecycle_service()
+    lifecycle_task = asyncio.create_task(lifecycle_service.start_pruning_loop())
+    _background_tasks.append(lifecycle_task)
+    logging.info("LifecycleService startet som background task for periodic file cleanup")
+
     # Mount static files
     static_path = Path(__file__).parent / "domains" / "presentation" / "static"
     if await asyncio.to_thread(static_path.exists):
@@ -166,6 +175,7 @@ async def lifespan(app: FastAPI):
     job_queue_service.stop_producer()
     await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
+    get_lifecycle_service().stop_pruning_loop()  # Stop lifecycle service
 
     # Cancel alle background tasks
     for task in _background_tasks:
