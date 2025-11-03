@@ -76,6 +76,11 @@ class MessageHandler {
                     this.handleFileProgressUpdate(message.data);
                     break;
 
+                case 'file_copy_completed':
+                    console.log('File copy completed:', message.data);
+                    this.handleFileCopyCompleted(message.data);
+                    break;
+
                 case 'statistics_update':
                     this.handleStatisticsUpdate(message.data);
                     break;
@@ -212,6 +217,49 @@ class MessageHandler {
             file_size: data.total_bytes,
             copy_speed_mbps: data.copy_speed_mbps,
         });
+
+        // If this is the final progress update, log it
+        if (data.is_final) {
+            console.log(`Final progress update: ${data.file_id} reached 100%`);
+        }
+    }
+
+    /**
+     * Handle file copy completion notifications
+     */
+    handleFileCopyCompleted(data) {
+        console.log('File copy completed:', data.file_path);
+        
+        if (!this.fileStore) {
+            return;
+        }
+
+        // Ensure the file shows as 100% completed with actual copied bytes
+        this.fileStore.updateFile(data.file_id, {
+            copy_progress: 100.0,
+            bytes_copied: data.bytes_copied,
+            file_size: data.bytes_copied,  // Update to actual copied size
+            copy_speed_mbps: 0.0,
+            destination_path: data.destination_path
+        });
+
+        // Log detailed completion info
+        const sizeMB = (data.bytes_copied / (1024*1024)).toFixed(2);
+        let logMessage = `✅ Copy completed: ${data.file_path} (${sizeMB} MB)`;
+        
+        // Add extra info for growing files
+        if (data.is_growing_file) {
+            const sourceMB = (data.source_size / (1024*1024)).toFixed(2);
+            const destMB = (data.dest_size / (1024*1024)).toFixed(2);
+            logMessage += ` - Growing file: source ${sourceMB} MB → dest ${destMB} MB`;
+        }
+        
+        console.log(logMessage);
+
+        // Could add a visual notification here if needed for growing files
+        if (data.is_growing_file) {
+            console.log(`📈 Growing file copy completed with size difference: ${data.source_size - data.dest_size} bytes`);
+        }
     }
 
     /**

@@ -130,7 +130,11 @@ class GrowingFileCopyStrategy():
             )
 
             if success:
-                if await self._verification_service.verify_integrity(source_path, dest_path):
+                verification_success, source_bytes, dest_bytes = await self._verification_service.verify_integrity(source_path, dest_path)
+                if verification_success:
+                    # For growing files bruger vi destination størrelsen som det faktiske antal bytes kopieret
+                    actual_bytes_copied = dest_bytes
+                    
                     delete_success, delete_error = await self._verification_service.delete_source_file(source_path)
                     if not delete_success:
                         logging.warning(
@@ -143,6 +147,7 @@ class GrowingFileCopyStrategy():
                                 new_status=FileStatus.COMPLETED_DELETE_FAILED,
                                 copy_progress=100.0,
                                 destination_path=dest_path,
+                                bytes_copied=actual_bytes_copied,  # Opdater med faktiske bytes
                                 error_message=f"Could not delete source file: {delete_error}"
                             )
                         except (InvalidTransitionError, ValueError) as e:
@@ -156,17 +161,20 @@ class GrowingFileCopyStrategy():
                             new_status=FileStatus.COMPLETED,
                             copy_progress=100.0,
                             destination_path=dest_path,
+                            bytes_copied=actual_bytes_copied,  # Opdater med faktiske bytes
                             error_message=None # Ryd fejl
                         )
 
-                        # Publicer den domæne-specifikke event
+                        # Publicer den domæne-specifikke event med rigtige bytes
                         if self._event_bus:
                             await self._event_bus.publish(
                                 FileCopyCompletedEvent(
                                     file_id=tracked_file.id,
                                     file_path=tracked_file.file_path,
                                     destination_path=dest_path,
-                                    bytes_copied=tracked_file.file_size
+                                    bytes_copied=actual_bytes_copied,  # Brug faktiske kopierede bytes
+                                    source_size=source_bytes,  # Tilføj source størrelse
+                                    dest_size=dest_bytes       # Tilføj destination størrelse
                                 )
                             )
 

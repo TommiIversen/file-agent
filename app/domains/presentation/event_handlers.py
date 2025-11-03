@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 from app.core.file_repository import FileRepository
@@ -92,6 +92,41 @@ class PresentationEventHandlers:
             },
         }
         self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_file_copy_completed(self, event: FileCopyCompletedEvent) -> None:
+        """Handle when a file copy operation completes - send final progress update."""
+        logging.info(f"File copy completed: {event.file_path} ({event.bytes_copied} bytes)")
+        
+        # Send final progress update to ensure UI shows 100%
+        message_data = {
+            "type": "file_progress_update",
+            "data": {
+                "file_id": event.file_id,
+                "bytes_copied": event.bytes_copied,
+                "total_bytes": event.bytes_copied,  # Use actual copied bytes for final update
+                "copy_speed_mbps": 0.0,  # Speed is 0 since copy is done
+                "progress_percent": 100.0,  # Explicitly set to 100%
+                "timestamp": event.timestamp.isoformat(),
+                "is_final": True,  # Flag to indicate this is the final progress update
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+        # Also send a completion notification with both source and destination info
+        completion_data = {
+            "type": "file_copy_completed",
+            "data": {
+                "file_id": event.file_id,
+                "file_path": event.file_path,
+                "destination_path": event.destination_path,
+                "bytes_copied": event.bytes_copied,  # Faktiske kopierede bytes
+                "source_size": event.source_size,    # Original source størrelse
+                "dest_size": event.dest_size,        # Destination størrelse
+                "is_growing_file": event.source_size != event.dest_size,  # Flag for growing files
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(completion_data)
 
     async def handle_scanner_status_event(self, event: ScannerStatusChangedEvent) -> None:
         self._scanner_status = {"scanning": event.is_scanning, "paused": event.is_paused}
