@@ -59,6 +59,7 @@ class FileStateMachine:
                 FileStatus.COPYING,
                 FileStatus.GROWING_COPY,
                 FileStatus.READY, # Kan "bounces" tilbage
+                FileStatus.WAITING_FOR_NETWORK,
             },
             FileStatus.COPYING: {
                 FileStatus.COMPLETED,
