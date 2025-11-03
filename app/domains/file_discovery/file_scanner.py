@@ -157,8 +157,7 @@ class FileScanner:
         current_files = await self._discover_all_files()
         await self._cleanup_missing_files(current_files)
 
-        # StateManager handles its own cleanup - no need for separate tracking cleanup
-        await self._cleanup_old_files()
+        # Note: Old files cleanup is now handled by LifecycleService running every 6 hours
 
         current_files = await self._discover_all_files()
         await self._process_discovered_files(current_files)
@@ -179,18 +178,6 @@ class FileScanner:
 
         except Exception as e:
             logging.error(f"Error cleaning up missing files: {e}")
-            return 0
-
-    async def _cleanup_old_files(self) -> int:
-        """Clean up old files from memory based on configured retention period."""
-        try:
-            # TODO: Implement via CQRS - CleanupOldFilesCommand
-            # For now, skip this functionality until we create the command
-            logging.debug(f"Cleanup old files - max age: {self.config.keep_files_hours} hours")
-            return 0
-
-        except Exception as e:
-            logging.error(f"Error cleaning up old files: {e}")
             return 0
 
     async def _discover_all_files(self) -> Set[Path]:
