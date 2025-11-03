@@ -10,17 +10,33 @@ class MessageHandler {
         this.fileStore = null;
         this.storageStore = null;
         this.connectionStore = null;
+        this.messageQueue = [];
 
         // Initialize after Alpine is ready
         document.addEventListener('alpine:init', () => {
-            // Wait for stores to be available
-            setTimeout(() => {
+            // Use $nextTick to ensure all stores are ready
+            Alpine.nextTick(() => {
                 this.fileStore = Alpine.store('files');
                 this.storageStore = Alpine.store('storage');
                 this.connectionStore = Alpine.store('connection');
                 console.log('MessageHandler initialized with stores');
-            }, 100);
+                
+                // Process any queued messages
+                this.processQueue();
+            });
         });
+    }
+
+    /**
+     * Process any messages that were queued while stores were initializing
+     */
+    processQueue() {
+        if (this.messageQueue.length > 0) {
+            console.log(`Processing ${this.messageQueue.length} queued messages`);
+            const messages = [...this.messageQueue];
+            this.messageQueue = [];
+            messages.forEach(message => this.handleMessage(message));
+        }
     }
 
     /**
@@ -29,6 +45,13 @@ class MessageHandler {
     handleMessage(message) {
         if (!message || !message.type) {
             console.warn('Invalid message received:', message);
+            return;
+        }
+
+        // If stores aren't ready, queue the message for later
+        if (!this.fileStore) {
+            console.log('Stores not ready, queueing message:', message.type);
+            this.messageQueue.push(message);
             return;
         }
 
