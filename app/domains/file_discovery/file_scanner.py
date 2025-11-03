@@ -159,7 +159,6 @@ class FileScanner:
 
         # Note: Old files cleanup is now handled by LifecycleService running every 6 hours
 
-        current_files = await self._discover_all_files()
         await self._process_discovered_files(current_files)
         await self._check_file_stability()
 
