@@ -7,9 +7,9 @@ set TAILWIND_EXE=tailwindcss-windows-x64.exe
 set TAILWIND_URL=https://github.com/tailwindlabs/tailwindcss/releases/download/%TAILWIND_VERSION%/%TAILWIND_EXE%
 set PROJECT_ROOT=%~dp0
 set INPUT_CSS=%PROJECT_ROOT%tailwind.css
-set OUTPUT_CSS=%PROJECT_ROOT%app\static\css\tailwind.css
-set CONTENT_PATH1=%PROJECT_ROOT%app\templates\**\*.html
-set CONTENT_PATH2=%PROJECT_ROOT%app\static\js\**\*.js
+set OUTPUT_CSS=%PROJECT_ROOT%app\domains\presentation\static\css\tailwind.css
+set CONTENT_PATH1=%PROJECT_ROOT%app\domains\presentation\templates\**\*.html
+set CONTENT_PATH2=%PROJECT_ROOT%app\domains\presentation\static\js\**\*.js
 
 echo.
 echo ========================================
@@ -52,9 +52,9 @@ if not exist "%INPUT_CSS%" (
 )
 
 REM Create output directory if it doesn't exist
-if not exist "%PROJECT_ROOT%app\static\css\" (
-    echo [INFO] Creating output directory: app\static\css\
-    mkdir "%PROJECT_ROOT%app\static\css\"
+if not exist "%PROJECT_ROOT%app\domains\presentation\static\css\" (
+    echo [INFO] Creating output directory: app\domains\presentation\static\css\
+    mkdir "%PROJECT_ROOT%app\domains\presentation\static\css\"
 )
 
 echo [INFO] Building Tailwind CSS...
@@ -77,6 +77,3 @@ if !errorlevel! equ 0 (
     echo.
     echo [ERROR] Tailwind CSS build failed.
 )
-
-echo.
-pause
