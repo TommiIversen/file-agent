@@ -14,7 +14,7 @@ from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuer
 from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, GetAllFilesQueryHandler, GetStorageStatusQueryHandler
 
 # Importer de events, den skal lytte til (NYT)
-from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 
@@ -39,6 +39,7 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     handlers = get_presentation_event_handlers()
     
     # 5. Flyt al abonnementslogik hertil
+    await event_bus.subscribe(FileDiscoveredEvent, handlers.handle_file_discovered_event)
     await event_bus.subscribe(FileStatusChangedEvent, handlers.handle_file_status_changed_event)
     await event_bus.subscribe(FileCopyProgressEvent, handlers.handle_file_copy_progress)
     await event_bus.subscribe(ScannerStatusChangedEvent, handlers.handle_scanner_status_event)

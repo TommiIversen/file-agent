@@ -75,14 +75,57 @@ document.addEventListener('alpine:init', () => {
                 }
 
             } else {
-                // If it's a full file object, add it. Otherwise, ignore.
+                // Check if this might be a discovered file that now has a real ID
                 if (partialFile.id && partialFile.file_path) {
+                    // Look for a discovered file with the same path
+                    const discoveredFile = Array.from(this.items.entries()).find(([id, file]) => 
+                        file.file_path === partialFile.file_path && file.isDiscovered
+                    );
+
+                    if (discoveredFile) {
+                        // Remove the old discovered file and add the new real file
+                        console.log(`Converting discovered file to tracked file: ${partialFile.file_path} (${discoveredFile[0]} -> ${fileId})`);
+                        this.items.delete(discoveredFile[0]);
+                    }
+
                     console.log(`Auto-adding unknown file during update: ${partialFile.file_path} (ID: ${fileId})`);
                     this.addFile(partialFile);
                 } else {
                     console.warn(`Ignoring partial update for unknown file: ${fileId}`);
                 }
             }
+        },
+
+        addDiscoveredFile(discoveredFile) {
+            if (!discoveredFile || !discoveredFile.file_path) {
+                console.error('addDiscoveredFile called with invalid parameters:', discoveredFile);
+                return;
+            }
+
+            // Check if we already have a file with this path
+            const existingFile = Array.from(this.items.values()).find(file => 
+                file.file_path === discoveredFile.file_path
+            );
+
+            if (existingFile) {
+                console.log(`File already exists: ${discoveredFile.file_path}, updating instead`);
+                // Update the existing file with new discovery info if relevant
+                if (!existingFile.id) {
+                    // If existing file doesn't have ID, it might be an old discovered file
+                    Object.assign(existingFile, discoveredFile);
+                }
+                return;
+            }
+
+            // Create a temporary ID for discovered files until they get real IDs
+            const tempId = `discovered_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            discoveredFile.id = tempId;
+            discoveredFile.isDiscovered = true;
+
+            this.items.set(tempId, discoveredFile);
+            this.updateStatisticsFromFiles();
+            
+            console.log(`Discovered file added: ${discoveredFile.file_path} (temp ID: ${tempId})`);
         },
 
         // Initial State Management

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent
+from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 from app.core.file_repository import FileRepository
@@ -41,6 +41,23 @@ class PresentationEventHandlers:
 
     def _get_timestamp(self) -> str:
         return datetime.now().isoformat()
+
+    async def handle_file_discovered_event(self, event: FileDiscoveredEvent) -> None:
+        """Handle when a new file is discovered by the scanner."""
+        logging.info(f"File discovered event: {event.file_path} ({event.file_size} bytes)")
+        
+        message_data = {
+            "type": "file_discovered",
+            "data": {
+                "file_path": event.file_path,
+                "file_size": event.file_size,
+                "file_size_mb": round(event.file_size / (1024 * 1024), 2),
+                "last_write_time": datetime.fromtimestamp(event.last_write_time).isoformat(),
+                "status": "DISCOVERED",
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
 
     async def handle_file_status_changed_event(self, update: FileStatusChangedEvent) -> None:
         logging.info(f"Received event: {update.file_path} -> {update.new_status.value}")

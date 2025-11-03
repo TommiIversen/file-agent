@@ -67,6 +67,10 @@ class MessageHandler {
                     this.handleFileUpdate(message.data);
                     break;
 
+                case 'file_discovered':
+                    this.handleFileDiscovered(message.data);
+                    break;
+
                 case 'file_progress_update':
                     console.log('File progress update received:', message.data);
                     this.handleFileProgressUpdate(message.data);
@@ -160,6 +164,38 @@ class MessageHandler {
         if (data.file.status) {
             console.log(`File ${data.file_path} (ID: ${data.file.id}) status: ${data.file.status}`);
         }
+    }
+
+    /**
+     * Handle newly discovered files
+     */
+    handleFileDiscovered(data) {
+        console.log('File discovered:', data.file_path);
+
+        if (!data.file_path) {
+            console.warn('Invalid file discovered data - missing file_path:', data);
+            return;
+        }
+
+        // Create a simplified file object for discovered files
+        // Since we don't have the full TrackedFile object yet, we create a minimal representation
+        const discoveredFile = {
+            file_path: data.file_path,
+            file_size: data.file_size,
+            file_size_mb: data.file_size_mb,
+            status: data.status || 'DISCOVERED',
+            last_write_time: data.last_write_time,
+            discovered_at: data.timestamp,
+            // These will be filled in when the file gets proper ID and full tracking
+            id: null, 
+            progress: 0,
+            bytes_copied: 0
+        };
+
+        // Add to file store as a discovered file
+        this.fileStore.addDiscoveredFile(discoveredFile);
+
+        console.log(`File discovered: ${data.file_path} (${data.file_size_mb} MB)`);
     }
 
     /**
