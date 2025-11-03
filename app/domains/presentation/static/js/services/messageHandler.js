@@ -106,11 +106,6 @@ class MessageHandler {
     handleInitialState(data) {
         console.log('Received initial state:', data);
 
-        if (!this.fileStore) {
-            console.error('FileStore not available for initial state');
-            return;
-        }
-
         // Update files
         if (data.files && Array.isArray(data.files)) {
             this.fileStore.setInitialFiles(data.files);
@@ -153,11 +148,6 @@ class MessageHandler {
     handleFileUpdate(data) {
         console.log('File update received:', data.file_path);
 
-        if (!this.fileStore) {
-            console.error('FileStore not available for file update');
-            return;
-        }
-
         if (!data.file || !data.file.id) {
             console.warn('Invalid file update data - missing file ID:', data);
             return;
@@ -194,11 +184,6 @@ class MessageHandler {
     handleStatisticsUpdate(data) {
         console.log('Statistics update received');
 
-        if (!this.fileStore) {
-            console.error('FileStore not available for statistics update');
-            return;
-        }
-
         if (data.statistics) {
             this.fileStore.updateStatistics(data.statistics);
         }
@@ -210,11 +195,6 @@ class MessageHandler {
     handleStorageUpdate(data) {
         console.log('Storage update received:', data.storage_type);
 
-        if (!this.storageStore) {
-            console.error('StorageStore not available for storage update');
-            return;
-        }
-
         this.storageStore.handleStorageUpdate(data);
     }
 
@@ -223,11 +203,6 @@ class MessageHandler {
      */
     handleMountStatus(data) {
         console.log('Mount status update received:', data.storage_type, data.mount_status);
-
-        if (!this.storageStore) {
-            console.error('StorageStore not available for mount status update');
-            return;
-        }
 
         this.storageStore.handleMountStatus(data);
     }
@@ -239,15 +214,12 @@ class MessageHandler {
         console.log('Scanner status update received:', data);
 
         const uiStore = Alpine.store('ui');
-        if (!uiStore) {
-            console.error('UIStore not available for scanner status update');
-            return;
+        if (uiStore) {
+            uiStore.updateScannerStatus({
+                scanning: data.scanning,
+                paused: data.paused
+            });
         }
-
-        uiStore.updateScannerStatus({
-            scanning: data.scanning,
-            paused: data.paused
-        });
     }
 
     /**
