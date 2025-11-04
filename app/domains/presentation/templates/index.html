@@ -403,20 +403,20 @@
                  class="mt-4 pt-4 border-t border-gray-600 overflow-hidden">
                 
                 <!-- Statistics Row -->
-                <div class="grid grid-cols-4 gap-3 mb-4">
-                    <div class="bg-gray-800 rounded-lg p-3 text-center">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
                         <div class="text-lg font-bold text-white" x-text="$store.ingest?.statistics?.totalChannels || 0"></div>
                         <div class="text-xs text-gray-300">Total</div>
                     </div>
-                    <div class="bg-gray-800 rounded-lg p-3 text-center">
+                    <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
                         <div class="text-lg font-bold text-red-400" x-text="$store.ingest?.statistics?.recordingChannels || 0"></div>
                         <div class="text-xs text-gray-300">Recording</div>
                     </div>
-                    <div class="bg-gray-800 rounded-lg p-3 text-center">
+                    <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
                         <div class="text-lg font-bold text-yellow-400" x-text="$store.ingest?.statistics?.errorChannels || 0"></div>
                         <div class="text-xs text-gray-300">Errors</div>
                     </div>
-                    <div class="bg-gray-800 rounded-lg p-3 text-center">
+                    <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
                         <div class="text-lg font-bold text-orange-400" x-text="$store.ingest?.statistics?.signalLostChannels || 0"></div>
                         <div class="text-xs text-gray-300">No Signal</div>
                     </div>
