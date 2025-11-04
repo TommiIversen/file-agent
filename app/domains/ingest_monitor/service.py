@@ -68,7 +68,10 @@ class IngestMonitorService:
         self._running = True
         logging.info("IngestMonitorService starting...")
         logging.info(f"Fast polling interval: {self._fast_poll_interval}s (recording status)")
-        logging.info(f"Slow polling interval: {self._slow_poll_interval}s (error checking)")
+        logging.info(f"Slow polling interval: {self._slow_poll_interval}s (active channels + error checking)")
+
+        # Initialize active channels before starting loops
+        await self._update_active_channels()
 
         # Start both loops in parallel
         self._fast_loop_task = asyncio.create_task(self._fast_polling_loop())
@@ -119,11 +122,12 @@ class IngestMonitorService:
                 await asyncio.sleep(5)
 
     async def _slow_polling_loop(self) -> None:
-        """Slow polling loop - fetches error status every 30 seconds."""
+        """Slow polling loop - fetches active channels and error status every 30 seconds."""
         while self._running:
             try:
                 await asyncio.sleep(self._slow_poll_interval)  # Wait first, then check
                 if self._running:  # Check if still running after sleep
+                    await self._update_active_channels()
                     await self._fetch_all_channel_errors()
             except asyncio.CancelledError:
                 logging.info("Slow polling loop cancelled")
@@ -138,15 +142,16 @@ class IngestMonitorService:
         Fetch status for all channels in parallel (Fan-out/Fan-in pattern).
         
         This is the core of the fast polling loop that updates recording status.
+        Uses the cached channel list from the slow polling loop.
         """
         try:
-            # 1. Fetch the list of active channels
-            response = await self._client.get("/ingest/activeChannels")
-            response.raise_for_status()
-            channel_data = JustInActiveChannels.model_validate(response.json())
-            channel_names = channel_data.channel_names
+            # Use cached channel names instead of fetching activeChannels every time
+            channel_names = list(self._status_cache.keys())
+            if not channel_names:
+                logging.debug("No channels in cache, skipping fast poll")
+                return
 
-            logging.debug(f"Found {len(channel_names)} active channels: {channel_names}")
+            logging.debug(f"Polling {len(channel_names)} cached channels: {channel_names}")
 
             # 2. Create tasks to fetch status for each channel in parallel
             async with asyncio.TaskGroup() as tg:
@@ -241,6 +246,40 @@ class IngestMonitorService:
             self._status_cache[channel_name] = new_state
 
         return events
+
+    async def _update_active_channels(self) -> None:
+        """
+        Update the list of active channels (slow polling operation).
+        
+        This method fetches the current list of active channels from Just In Engine
+        and initializes cache entries for any new channels discovered.
+        """
+        try:
+            response = await self._client.get("/ingest/activeChannels")
+            response.raise_for_status()
+            channel_data = JustInActiveChannels.model_validate(response.json())
+            channel_names = channel_data.channel_names
+
+            logging.debug(f"Active channels update: {len(channel_names)} channels: {channel_names}")
+
+            # Initialize cache entries for new channels
+            for channel_name in channel_names:
+                if channel_name not in self._status_cache:
+                    self._status_cache[channel_name] = ChannelState(name=channel_name)
+                    logging.info(f"Added new channel to cache: {channel_name}")
+
+            # Optional: Remove channels that are no longer active
+            # (Comment out if you want to keep historical data)
+            # current_channels = set(channel_names)
+            # cached_channels = set(self._status_cache.keys())
+            # for removed_channel in cached_channels - current_channels:
+            #     del self._status_cache[removed_channel]
+            #     logging.info(f"Removed inactive channel from cache: {removed_channel}")
+
+        except httpx.RequestError as e:
+            logging.warning(f"Could not fetch activeChannels: {e}")
+        except Exception as e:
+            logging.error(f"Error in _update_active_channels: {e}")
 
     async def _fetch_all_channel_errors(self) -> None:
         """Fetch error status for all channels in parallel (slow polling loop)."""
