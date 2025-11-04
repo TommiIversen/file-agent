@@ -10,6 +10,7 @@ class MessageHandler {
         this.fileStore = null;
         this.storageStore = null;
         this.connectionStore = null;
+        this.ingestStore = null;
         this.messageQueue = [];
 
         // Initialize after Alpine is ready
@@ -19,6 +20,7 @@ class MessageHandler {
                 this.fileStore = Alpine.store('files');
                 this.storageStore = Alpine.store('storage');
                 this.connectionStore = Alpine.store('connection');
+                this.ingestStore = Alpine.store('ingest');
                 console.log('MessageHandler initialized with stores');
                 
                 // Process any queued messages
@@ -99,6 +101,14 @@ class MessageHandler {
 
                 case 'system_status':
                     this.handleSystemStatus(message.data);
+                    break;
+
+                case 'ingest_status_update':
+                    this.handleIngestStatusUpdate(message.data);
+                    break;
+
+                case 'channel_error':
+                    this.handleChannelError(message.data);
                     break;
 
                 default:
@@ -322,6 +332,41 @@ class MessageHandler {
             // Update service status
             console.log('Service status:', data.services);
         }
+    }
+
+    /**
+     * Handle ingest status updates from Just In Engine
+     */
+    handleIngestStatusUpdate(data) {
+        if (!this.ingestStore) {
+            console.warn('IngestStore not available for ingest status update');
+            return;
+        }
+
+        console.log('📡 Ingest status update received:', Object.keys(data.channels || {}).length, 'channels');
+        
+        if (data.channels) {
+            this.ingestStore.updateChannels(data.channels);
+            this.ingestStore.setConnected(true);
+        }
+    }
+
+    /**
+     * Handle channel error events from Just In Engine
+     */
+    handleChannelError(data) {
+        if (!this.ingestStore) {
+            console.warn('IngestStore not available for channel error');
+            return;
+        }
+
+        console.log('⚠️ Channel error received:', data.channel_name, '-', data.error_message);
+        
+        this.ingestStore.addChannelError(
+            data.channel_name,
+            data.error_message,
+            data.error_code
+        );
     }
 
 }
