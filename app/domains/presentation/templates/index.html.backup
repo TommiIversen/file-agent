@@ -477,7 +477,175 @@
             </div>
         </div>
 
+        <!-- Sort Options og Scanner Status -->
+                <h3 class="text-lg font-semibold flex items-center">
+                    🎥 Just In Engine Monitor
+                </h3>
+                <div class="flex items-center space-x-2">
+                    <!-- Connection Status -->
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full mr-2"
+                             :class="$store.ingest?.isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
+                        <span class="text-xs font-medium"
+                              :class="$store.ingest?.isConnected ? 'text-green-400' : 'text-red-400'"
+                              x-text="$store.ingest?.isConnected ? 'Connected' : 'Disconnected'"></span>
+                    </div>
+                    <!-- Refresh Button -->
+                    <button @click="$store.ingest?.loadInitialData()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
 
+            <!-- Ingest Statistics -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-white" x-text="$store.ingest?.statistics?.totalChannels || 0"></div>
+                    <div class="text-xs text-gray-300">Total Channels</div>
+                </div>
+                <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-red-400" x-text="$store.ingest?.statistics?.recordingChannels || 0"></div>
+                    <div class="text-xs text-gray-300">Recording</div>
+                </div>
+                <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-yellow-400" x-text="$store.ingest?.statistics?.errorChannels || 0"></div>
+                    <div class="text-xs text-gray-300">Errors</div>
+                </div>
+                <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-orange-400" x-text="$store.ingest?.statistics?.signalLostChannels || 0"></div>
+                    <div class="text-xs text-gray-300">Signal Lost</div>
+                </div>
+            </div>
+
+            <!-- Tally Light Status -->
+            <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 mb-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span class="text-sm font-medium text-gray-300 mr-3">🚨 Tally Light Status:</span>
+                        <div class="flex items-center">
+                            <template x-if="$store.ingest?.getRecordingStatus() === 'none'">
+                                <div class="flex items-center">
+                                    <div class="w-4 h-4 bg-gray-500 rounded-full mr-2"></div>
+                                    <span class="text-gray-400 text-sm">OFF - No Recording</span>
+                                </div>
+                            </template>
+                            <template x-if="$store.ingest?.getRecordingStatus() === 'all'">
+                                <div class="flex items-center">
+                                    <div class="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                                    <span class="text-red-400 text-sm">SOLID - All Recording</span>
+                                </div>
+                            </template>
+                            <template x-if="$store.ingest?.getRecordingStatus() === 'some'">
+                                <div class="flex items-center">
+                                    <div class="w-4 h-4 bg-red-500 rounded-full mr-2 animate-pulse"></div>
+                                    <span class="text-red-400 text-sm">BLINKING - Some Recording</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-400" x-text="$store.ingest?.lastUpdate ? 'Last update: ' + new Date($store.ingest.lastUpdate).toLocaleTimeString() : 'No data'"></div>
+                </div>
+            </div>
+
+            <!-- Channel Grid -->
+            <template x-if="$store.ingest?.getChannelsArray()?.length > 0">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <template x-for="channel in $store.ingest?.getChannelsSorted() || []" :key="channel.name">
+                        <div class="bg-gray-800 bg-opacity-60 rounded-lg p-3 border-l-4"
+                             :class="channel.is_recording ? 'border-red-500' : (channel.has_signal ? 'border-green-500' : 'border-yellow-500')">
+                            
+                            <!-- Channel Header -->
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-white" x-text="channel.name"></span>
+                                <div class="flex items-center space-x-1">
+                                    <!-- Recording Indicator -->
+                                    <template x-if="channel.is_recording">
+                                        <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse" title="Recording"></div>
+                                    </template>
+                                    <!-- Signal Indicator -->
+                                    <div class="w-3 h-3 rounded-full"
+                                         :class="channel.has_signal ? 'bg-green-500' : 'bg-yellow-500'"
+                                         :title="channel.has_signal ? 'Signal OK' : 'No Signal'"></div>
+                                    <!-- Error Indicator -->
+                                    <template x-if="channel.has_errors">
+                                        <div class="w-3 h-3 bg-yellow-500 rounded-full" title="Has Errors"></div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Recording Status -->
+                            <div class="text-xs mb-2">
+                                <template x-if="channel.is_recording">
+                                    <div class="text-red-400 font-medium">
+                                        ● RECORDING
+                                        <span class="text-gray-300 ml-1" 
+                                              x-text="$store.ingest?.formatDuration(channel.hours, channel.minutes, channel.seconds)"></span>
+                                    </div>
+                                </template>
+                                <template x-if="!channel.is_recording">
+                                    <div class="text-gray-400">○ STANDBY</div>
+                                </template>
+                            </div>
+
+                            <!-- Signal Status -->
+                            <div class="text-xs mb-2">
+                                <span :class="channel.has_signal ? 'text-green-400' : 'text-yellow-400'"
+                                      x-text="channel.has_signal ? '📡 Signal OK' : '📡 No Signal'"></span>
+                            </div>
+
+                            <!-- Timecode Display -->
+                            <template x-if="channel.is_recording">
+                                <div class="text-xs text-gray-300 font-mono">
+                                    TC: <span x-text="$store.ingest?.formatTimecode(channel.hours, channel.minutes, channel.seconds, channel.frames)"></span>
+                                </div>
+                            </template>
+
+                            <!-- Error Status -->
+                            <template x-if="channel.has_errors && channel.last_error">
+                                <div class="mt-2 p-2 bg-yellow-900 bg-opacity-50 rounded text-xs">
+                                    <div class="text-yellow-400 font-medium">⚠️ Error</div>
+                                    <div class="text-yellow-300" x-text="channel.last_error?.error_message"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- No Channels Message -->
+            <template x-if="!$store.ingest?.getChannelsArray()?.length">
+                <div class="text-gray-400 text-center py-4">
+                    <div class="text-lg mb-2">📺</div>
+                    <div>No ingest channels available</div>
+                    <div class="text-xs mt-1">Check Just In Engine connection</div>
+                </div>
+            </template>
+
+            <!-- Recent Errors Log -->
+            <template x-if="$store.ingest?.getRecentErrors()?.length > 0">
+                <div class="mt-4 bg-gray-800 bg-opacity-60 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-white">Recent Errors</h4>
+                        <button @click="$store.ingest?.clearErrors()"
+                                class="text-xs text-red-400 hover:text-red-300 transition-colors">
+                            Clear All
+                        </button>
+                    </div>
+                    <div class="space-y-2 max-h-32 overflow-y-auto">
+                        <template x-for="error in $store.ingest?.getRecentErrors() || []" :key="error.id">
+                            <div class="flex items-center justify-between text-xs p-2 bg-gray-900 bg-opacity-40 rounded">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-yellow-400" x-text="error.channel_name"></span>
+                                    <span class="text-gray-300" x-text="error.error_message"></span>
+                                </div>
+                                <span class="text-gray-500" x-text="new Date(error.timestamp).toLocaleTimeString()"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
 
         <!-- Sort Options og Scanner Status -->
         <div class="flex items-center">
