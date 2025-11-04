@@ -40,6 +40,11 @@ class ChannelRequest(BaseModel):
     """Matcher den POST-body, vi forventer."""
     channel: str
 
+class ErrorRequest(BaseModel):
+    """Request model for /ingest/errors endpoint."""
+    channel: str
+    clear: int = 0
+
 # --- Hjælpefunktioner ---
 
 def _create_mock_response(channel_name: str, rec_status: bool) -> Dict[str, Any]:
@@ -68,6 +73,29 @@ def _create_mock_response(channel_name: str, rec_status: bool) -> Dict[str, Any]
         },
         "name": channel_name,
         "minutes": 24
+    }
+
+def _create_mock_error_response(channel_name: str) -> Dict[str, Any]:
+    """Genererer mock error response for en kanal."""
+    # Note: EPOC har altid forkert år (1994 i stedet for 2025)
+    # Dette simulerer det samme problem som det rigtige Just In system
+    wrong_year_timestamp = time.time() - (31 * 365.25 * 24 * 60 * 60)  # Cirka 31 år tilbage
+    
+    return {
+        "channel": channel_name,
+        "name": channel_name,
+        "errors": [
+            {
+                "date": wrong_year_timestamp,
+                "errorCode": -8995,
+                "errorDomain": "TOAErrorDomainGeneric",
+                "errorUIDescription": "No signal",
+                "errorUserInfo": {
+                    "NSLocalizedDescription": "No signal, please check the incoming video format."
+                },
+                "errorType": 3
+            }
+        ]
     }
 
 async def _state_cycler_task():
@@ -162,6 +190,33 @@ async def get_recording_status(request: ChannelRequest):
         f"Returnerer 'rec: {current_status_data['rec']}'"
     )
     return current_status_data
+
+@app.post("/ingest/errors")
+async def get_channel_errors(request: ErrorRequest):
+    """
+    Returnerer mock error data for en specifik kanal.
+    Simulerer kun errors for KAM_4 for at demonstrere funktionaliteten.
+    """
+    channel_name = request.channel
+    
+    logging.info(
+        f"Modtog POST /ingest/errors for '{channel_name}' (clear: {request.clear})"
+    )
+    
+    if channel_name not in CHANNEL_NAMES:
+        logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")
+        return {"error": "Channel not found"}
+    
+    # Simuler kun errors for KAM_4
+    if channel_name == "KAM_4":
+        return _create_mock_error_response(channel_name)
+    else:
+        # Andre kanaler har ingen errors
+        return {
+            "channel": channel_name,
+            "name": channel_name,
+            "errors": []
+        }
 
 # --- Kør serveren ---
 
