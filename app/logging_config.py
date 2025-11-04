@@ -55,6 +55,7 @@ def setup_logging(settings: Settings) -> None:
 
     # Silence noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     # Prevent propagation to avoid duplicate logs
     logging.getLogger().propagate = False
