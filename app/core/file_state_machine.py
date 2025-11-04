@@ -144,16 +144,26 @@ class FileStateMachine:
 
             # 2. VALIDATE
             if new_status == old_status:
-                return tracked_file # Ingen ændring
+                # Allow progress updates even if status doesn't change
+                # Check if any other fields are being updated
+                has_updates = any(
+                    hasattr(tracked_file, key) and getattr(tracked_file, key) != value 
+                    for key, value in kwargs.items()
+                )
+                if not has_updates:
+                    return tracked_file # No changes at all
+                # Continue with update if there are field changes (like progress)
 
             allowed_transitions = self._transitions.get(old_status, set())
-            if new_status not in allowed_transitions:
+            if new_status != old_status and new_status not in allowed_transitions:
                 raise InvalidTransitionError(
                     tracked_file.file_path, old_status.value, new_status.value
                 )
 
             # 3. MODIFY (Anvend ændringer)
-            logging.info(f"Transition: {tracked_file.file_path} | {old_status.value} -> {new_status.value}")
+            status_changed = new_status != old_status
+            if status_changed:
+                logging.info(f"Transition: {tracked_file.file_path} | {old_status.value} -> {new_status.value}")
             tracked_file.status = new_status
             
             # 3a. Ryd altid gamle fejl som standard på ENHVER overgang
@@ -174,13 +184,15 @@ class FileStateMachine:
             await self._repository.update(tracked_file)
 
             # 5. FORBERED ANNONCERING
-            event_to_publish = FileStatusChangedEvent(
-                file_id=tracked_file.id,
-                file_path=tracked_file.file_path,
-                old_status=old_status,
-                new_status=new_status,
-                timestamp=datetime.now()
-            )
+            event_to_publish = None
+            if status_changed:
+                event_to_publish = FileStatusChangedEvent(
+                    file_id=tracked_file.id,
+                    file_path=tracked_file.file_path,
+                    old_status=old_status,
+                    new_status=new_status,
+                    timestamp=datetime.now()
+                )
             
             # --- SLUT AF KRITISK SEKTION ---
         
