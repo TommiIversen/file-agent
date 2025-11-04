@@ -5,6 +5,7 @@ from typing import Dict, Any
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
 from app.core.file_repository import FileRepository
 from app.domains.presentation.websocket_manager import WebSocketManager
 
@@ -165,6 +166,34 @@ class PresentationEventHandlers:
                 "mount_path": update_data.mount_path,
                 "target_path": update_data.target_path,
                 "error_message": update_data.error_message,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_ingest_status_updated_event(self, event: IngestStatusUpdatedEvent) -> None:
+        """Handle ingest status updates from Just In Engine monitoring."""
+        logging.debug(f"Broadcasting ingest status update with {len(event.status_snapshot)} channels")
+        
+        message_data = {
+            "type": "ingest_status_update",
+            "data": {
+                "channels": event.status_snapshot,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_channel_error_detected_event(self, event: ChannelErrorDetectedEvent) -> None:
+        """Handle channel error events from Just In Engine monitoring."""
+        logging.warning(f"Broadcasting channel error: {event.channel_name} - {event.error_message}")
+        
+        message_data = {
+            "type": "channel_error",
+            "data": {
+                "channel_name": event.channel_name,
+                "error_message": event.error_message,
+                "error_code": event.error_code,
                 "timestamp": self._get_timestamp(),
             },
         }

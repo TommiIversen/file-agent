@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from .utils.host_config import get_hostname_settings_file
 
@@ -81,6 +82,38 @@ class Settings(BaseSettings):
     network_share_url: str = ""  # Network share URL (e.g., smb://server/share)
     windows_drive_letter: str = ""  # Windows drive letter (e.g., "Z") or empty for UNC
     macos_mount_point: str = ""  # macOS mount point prefix (default: /Volumes)
+
+    # Just In Engine integration
+    justin_api_base_url: str = Field(
+        default="http://localhost:8080",
+        description="Base URL for Just In Engine API"
+    )
+    justin_fast_poll_interval_seconds: float = Field(
+        default=2.0,
+        description="Fast polling interval for recording status (seconds)"
+    )
+    justin_slow_poll_interval_seconds: float = Field(
+        default=30.0,
+        description="Slow polling interval for error checking (seconds)"
+    )
+    justin_api_timeout_seconds: float = Field(
+        default=2.0,
+        description="HTTP timeout for Just In API calls (seconds)"
+    )
+
+    # Tally Light integration
+    tally_light_api_url: str = Field(
+        default="http://localhost:8001/api/switch",
+        description="Base URL for IP Power Switch (Tally Light)"
+    )
+    tally_light_blink_interval_seconds: float = Field(
+        default=0.5,
+        description="Blink interval for tally light (seconds)"
+    )
+    tally_light_api_timeout_seconds: float = Field(
+        default=1.0,
+        description="HTTP timeout for Tally Light API calls (seconds)"
+    )
 
     model_config = SettingsConfigDict(env_file=get_hostname_settings_file())
 

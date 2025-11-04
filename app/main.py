@@ -13,6 +13,7 @@ from .domains.presentation import websockets_endpoint
 
 from app.domains.shared.api import config_api, logs_api, storage_api, events_api
 from app.domains.file_discovery.api import scanner_api
+from app.domains.ingest_monitor.api import router as ingest_monitor_api
 
 from .domains.presentation.api_endpoints import presentation_router
 from .domains.directory_browsing import api as directory
@@ -31,7 +32,9 @@ from .dependencies import (
     get_command_bus,
     get_file_discovery_slice,  # Import the new slice getter
     get_file_scanner,
-    get_lifecycle_service  # Import lifecycle service
+    get_lifecycle_service,  # Import lifecycle service
+    get_ingest_monitor_service,  # Import ingest monitor service
+    get_tally_light_event_handler  # Import tally light handler
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -40,6 +43,8 @@ from app.domains.file_processing.registration import register_file_processing_do
 from app.domains.shared.registration import register_shared_domain  # Import shared domain registration
 from app.domains.network_mount.registration import register_network_mount_domain  # 🚀 NetworkCoordinator registration
 from app.domains.lifecycle.registration import register_lifecycle_domain  # Import lifecycle domain registration
+from app.domains.tally_light.registration import register_tally_light_domain  # Import tally light domain registration
+from app.domains.ingest_monitor.registration import register_ingest_monitor_domain  # Import ingest monitor domain registration
 
 from .logging_config import setup_logging
 from app.domains.presentation import views
@@ -84,6 +89,14 @@ async def lifespan(app: FastAPI):
     # Now register domains that depend on NetworkCoordinator
     await register_file_processing_domain(command_bus, event_bus)  # File processing CQRS registration
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
+    
+    # Register IngestMonitor domain (enables API queries)
+    ingest_monitor_service = get_ingest_monitor_service()
+    await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_service)
+    
+    # Register TallyLight domain (depends on IngestMonitor events)
+    tally_handler = get_tally_light_event_handler()
+    await register_tally_light_domain(command_bus, event_bus, tally_handler)
     
     logging.info("Handler-registrering fuldført.")
 
@@ -150,6 +163,12 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(lifecycle_task)
     logging.info("LifecycleService startet som background task for periodic file cleanup")
 
+    # Start IngestMonitorService som background task for Just In Engine monitoring
+    ingest_monitor_service = get_ingest_monitor_service()
+    ingest_monitor_task = asyncio.create_task(ingest_monitor_service.start_monitoring())
+    _background_tasks.append(ingest_monitor_task)
+    logging.info("IngestMonitorService startet som background task for Just In Engine monitoring")
+
     # Mount static files
     static_path = Path(__file__).parent / "domains" / "presentation" / "static"
     if await asyncio.to_thread(static_path.exists):
@@ -176,6 +195,15 @@ async def lifespan(app: FastAPI):
     await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
     get_lifecycle_service().stop_pruning_loop()  # Stop lifecycle service
+    
+    # Stop Just In Engine monitoring and tally light services
+    if 'ingest_monitor_service' in locals():
+        await ingest_monitor_service.stop_monitoring()
+        logging.info("IngestMonitorService stopped")
+    
+    if 'tally_handler' in locals() and hasattr(tally_handler, 'shutdown'):
+        await tally_handler.shutdown()
+        logging.info("TallyLight domain shutdown completed")
 
     # Cancel alle background tasks
     for task in _background_tasks:
@@ -232,6 +260,7 @@ app.include_router(logs_api.router)  # New shared domain logs API
 app.include_router(storage_api.router)  # New shared domain storage API
 app.include_router(events_api.router)  # New shared domain events API
 app.include_router(scanner_api.router)  # New file discovery scanner API
+app.include_router(ingest_monitor_api)  # New ingest monitor API
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)

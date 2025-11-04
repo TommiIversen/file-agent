@@ -31,6 +31,8 @@ from app.core.cqrs.query_bus import QueryBus
 from app.domains.directory_browsing.service import DirectoryScannerService
 from app.domains.presentation.event_handlers import PresentationEventHandlers
 from app.domains.lifecycle.service import LifecycleService
+from app.domains.tally_light.event_handlers import TallyLightEventHandler
+from app.domains.ingest_monitor.service import IngestMonitorService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -306,6 +308,35 @@ def get_lifecycle_service() -> LifecycleService:
             settings=get_settings()
         )
     return _singletons["lifecycle_service"]
+
+
+def get_tally_light_event_handler() -> TallyLightEventHandler:
+    """
+    Get the TallyLightEventHandler singleton for IP Power Switch control.
+    
+    This handler is responsible for managing tally light states
+    based on ingest recording status.
+    """
+    if "tally_light_event_handler" not in _singletons:
+        _singletons["tally_light_event_handler"] = TallyLightEventHandler(
+            settings=get_settings()
+        )
+    return _singletons["tally_light_event_handler"]
+
+
+def get_ingest_monitor_service() -> IngestMonitorService:
+    """
+    Get the IngestMonitorService singleton for Just In Engine monitoring.
+    
+    This service is responsible for polling Just In Engine APIs
+    and maintaining channel status cache.
+    """
+    if "ingest_monitor_service" not in _singletons:
+        _singletons["ingest_monitor_service"] = IngestMonitorService(
+            settings=get_settings(),
+            event_bus=get_event_bus()
+        )
+    return _singletons["ingest_monitor_service"]
 
 
 def reset_singletons() -> None:

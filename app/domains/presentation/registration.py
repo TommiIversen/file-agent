@@ -17,6 +17,7 @@ from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, G
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
 
 # 3. Gør funktionen async og tilføj event_bus
 async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEventBus):
@@ -46,5 +47,9 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(ScannerStatusChangedEvent, handlers.handle_scanner_status_event)
     await event_bus.subscribe(StorageStatusChangedEvent, handlers.handle_storage_status_event)
     await event_bus.subscribe(MountStatusChangedEvent, handlers.handle_mount_status_event)
+    
+    # Subscribe to ingest monitor events for real-time UI updates
+    await event_bus.subscribe(IngestStatusUpdatedEvent, handlers.handle_ingest_status_updated_event)
+    await event_bus.subscribe(ChannelErrorDetectedEvent, handlers.handle_channel_error_detected_event)
     
     logging.info("Presentation domain-registrering (CQRS & Events) fuldført.")

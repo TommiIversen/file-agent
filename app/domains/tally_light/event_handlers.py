@@ -1,0 +1,169 @@
+"""
+Tally Light Domain Event Handlers
+
+Handles IP Power Switch tally light control based on ingest status.
+Manages three states: OFF, SOLID ON, and BLINKING.
+"""
+import asyncio
+import logging
+import httpx
+from enum import Enum
+from typing import Optional
+
+from app.config import Settings
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+
+
+class TallyState(Enum):
+    """Defines the 3 desired states for the shared Tally light."""
+    OFF = "off"
+    SOLID_ON = "on"
+    BLINKING = "blink"
+
+
+class TallyLightEventHandler:
+    """
+    Manages the shared Tally light by starting/stopping a
+    background blinker task based on overall recording status.
+    
+    This class adheres to SRP by focusing solely on tally light
+    control logic and state management.
+    """
+
+    def __init__(self, settings: Settings):
+        self._client = httpx.AsyncClient(
+            base_url=settings.tally_light_api_url, 
+            timeout=settings.tally_light_api_timeout_seconds
+        )
+        self._current_tally_state: TallyState = TallyState.OFF
+        self._blinker_task: Optional[asyncio.Task] = None
+        self._blink_interval_sec: float = settings.tally_light_blink_interval_seconds
+        self._lock = asyncio.Lock()  # Protects access to _blinker_task
+        
+        logging.info("TallyLightEventHandler initialized with software blinker logic")
+        logging.info(f"Tally API URL: {settings.tally_light_api_url}")
+        logging.info(f"Blink interval: {self._blink_interval_sec}s")
+
+    async def handle_ingest_status_update(self, event: IngestStatusUpdatedEvent) -> None:
+        """
+        Receives the complete status snapshot every 2 seconds
+        and updates the Tally light state accordingly.
+        
+        State logic:
+        - No channels recording → OFF
+        - All channels recording → SOLID ON  
+        - Some channels recording → BLINKING
+        """
+        snapshot = event.status_snapshot
+
+        # 1. Determine the desired new state
+        new_state: TallyState
+        if not snapshot:
+            new_state = TallyState.OFF
+        else:
+            total_channels = len(snapshot)
+            recording_channels = sum(
+                1 for state in snapshot.values() if state.get("is_recording", False)
+            )
+
+            if recording_channels == 0:
+                new_state = TallyState.OFF
+            elif recording_channels == total_channels:
+                new_state = TallyState.SOLID_ON  # All channels recording
+            else:
+                new_state = TallyState.BLINKING  # At least one, but not all, recording
+
+        # 2. Apply the change only if it's new
+        if new_state != self._current_tally_state:
+            await self._update_tally_state(
+                new_state, 
+                f"{recording_channels}/{total_channels} channels recording"
+            )
+
+    async def _update_tally_state(self, new_state: TallyState, reason: str) -> None:
+        """
+        Handles the transition between OFF, SOLID_ON, and BLINKING
+        by managing the blinker task.
+        """
+        async with self._lock:
+            if new_state == self._current_tally_state:
+                return  # Another event managed to change it in the meantime
+
+            current_state_str = self._current_tally_state.value
+            new_state_str = new_state.value
+            logging.info(f"Tally state changed: {current_state_str} → {new_state_str} (Reason: {reason})")
+
+            # 1. Always stop the old blinker task (if running)
+            if self._blinker_task and not self._blinker_task.done():
+                self._blinker_task.cancel()
+                try:
+                    await self._blinker_task  # Wait for it to shutdown and turn off light
+                except asyncio.CancelledError:
+                    pass  # Expected
+            self._blinker_task = None
+
+            # 2. Set the new state
+            try:
+                if new_state == TallyState.SOLID_ON:
+                    await self._client.post("/on")
+                    logging.info("Tally light set to SOLID ON")
+                elif new_state == TallyState.OFF:
+                    await self._client.post("/off")
+                    logging.info("Tally light set to OFF")
+                elif new_state == TallyState.BLINKING:
+                    # Start the new blinker task in background
+                    self._blinker_task = asyncio.create_task(self._blinker_loop())
+                    logging.info("Tally light set to BLINKING")
+
+                self._current_tally_state = new_state  # Store the new state
+
+            except httpx.RequestError as e:
+                logging.error(f"Could not update tally light to {new_state_str}: {e}")
+                # We don't update _current_tally_state, so it will try again on next event
+
+    async def _blinker_loop(self) -> None:
+        """
+        Infinite loop that turns the light on/off via /on and /off endpoints.
+        
+        This method runs as a background task and handles its own cancellation.
+        """
+        try:
+            while True:
+                await self._client.post("/on")
+                await asyncio.sleep(self._blink_interval_sec)
+                await self._client.post("/off")
+                await asyncio.sleep(self._blink_interval_sec)
+        except asyncio.CancelledError:
+            # Important cleanup: Make sure to turn off the light when blink stops
+            try:
+                await self._client.post("/off")
+                logging.info("Blinker task stopped, light turned off")
+            except httpx.RequestError as e:
+                logging.error(f"Could not turn off tally light during blink stop: {e}")
+            raise  # Re-raise CancelledError
+        except Exception as e:
+            logging.error(f"Error in blinker loop: {e}")
+            # Reset state to OFF so it can be restarted
+            self._current_tally_state = TallyState.OFF
+
+    async def stop_worker(self) -> None:
+        """
+        Called from main.py lifespan to ensure clean shutdown.
+        
+        This method ensures the tally light is turned off when the
+        application shuts down.
+        """
+        logging.info("Stopping TallyLightEventHandler (turning off light)...")
+        await self._update_tally_state(TallyState.OFF, "Application shutting down")
+        await self._client.aclose()
+        logging.info("TallyLightEventHandler stopped")
+
+    def get_current_state(self) -> TallyState:
+        """Get the current tally light state for debugging/monitoring."""
+        return self._current_tally_state
+
+    def is_blinking(self) -> bool:
+        """Check if the tally light is currently blinking."""
+        return (self._current_tally_state == TallyState.BLINKING and 
+                self._blinker_task is not None and 
+                not self._blinker_task.done())
