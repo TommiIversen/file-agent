@@ -6,6 +6,14 @@ This document describes the API endpoints available for interacting with the Jus
 
 http://10.65.79.29:8080/ingest/requestRecordingStatus
 
+curl -X 'POST' \
+  'http://10.65.79.29:8080/ingest/requestRecordingStatus' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "channel": "KAM_1"
+}'
+
 Response body
 Download
 ```json
@@ -38,6 +46,11 @@ Download
 
 
 http://10.65.79.29:8080/ingest/activeChannels
+
+curl -X 'GET' \
+  'http://10.65.79.29:8080/ingest/activeChannels' \
+  -H 'accept: */*'
+
 ```json
 {
   "channel-names": [
@@ -56,6 +69,17 @@ http://10.65.79.29:8080/ingest/activeChannels
 
 
 http://10.65.79.29:8080/ingest/errors
+
+
+curl -X 'POST' \
+  'http://10.65.79.29:8080/ingest/errors' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "channel": "KAM_4",
+  "clear": 0
+}'
+
 Note: EPOC alway has wrong year in date field ; fredag d. 4. november 1994 kl. 05:30:51.578 GMT+01:00
 ```json
 {
