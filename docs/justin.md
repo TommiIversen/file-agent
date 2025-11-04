@@ -70,3 +70,554 @@ Note: EPOC alway has wrong year in date field ; fredag d. 4. november 1994 kl. 0
     }
   ]
 }
+
+
+
+
+
+Fase 1: Fundament og Konfiguration
+Mål: Oprette de nye domæner og gøre konfigurationen klar.
+
+Opdater Konfiguration:
+
+Fil: app/config.py
+
+Handling: Tilføj de nye API-endpoints til din Settings-klasse.
+
+Python
+
+class Settings(BaseSettings):
+    # ... (dine eksisterende settings)
+
+    # --- NYE INDSTILLINGER ---
+    JUSTIN_API_BASE_URL: str = Field(
+        default="http://localhost:8080",
+        description="Base URL for Just In Engine API'en"
+    )
+    TALLY_LIGHT_API_URL: str = Field(
+        default="http://localhost:8001/api/switch", # Antaget eksempel-URL
+        description="Base URL til IP Power Switch (Tally Light)"
+    )
+Opret Domæne-mapper:
+
+Opret app/domains/ingest_monitor/
+
+Opret app/domains/tally_light/
+
+Definer Datamodeller:
+
+Fil: app/domains/ingest_monitor/models.py (Ny fil)
+
+Handling: Opret Pydantic-modeller, der matcher API-svarene fra Just In, så du arbejder med typer, ikke rå dictionaries.
+
+Python
+
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+
+class JustInOptions(BaseModel):
+    TOAJustInEngineVideoSignalAvailable: bool = True
+    TOAJustInEngineRecordingError: bool = False
+    # ... (tilføj andre felter efter behov) ...
+
+class JustInRecordingStatus(BaseModel):
+    rec: bool
+    channel: str
+    options: JustInOptions
+
+class JustInActiveChannels(BaseModel):
+    channel_names: List[str] = Field(..., alias="channel-names")
+
+class JustInError(BaseModel):
+    date: float
+    errorCode: int
+    errorUIDescription: str
+
+class JustInErrors(BaseModel):
+    channel: str
+    errors: List[JustInError]
+
+class ChannelState(BaseModel):
+    """Vores interne 'Single Source of Truth' for en kanal."""
+    name: str
+    is_recording: bool = False
+    has_signal: bool = True
+    has_errors: bool = False
+    last_errors: List[JustInError] = []
+
+
+Fase 2: Opret IngestMonitor Service (Data-indsamleren)
+Mål: Byg den kerne-service, der kører i baggrunden, henter data fra Just In API'en og holder en intern "cache" af live-status.
+
+Definer Nye Events:
+
+Fil: app/domains/ingest_monitor/events.py (Ny fil)
+
+Handling: Definer de events, denne service vil publicere.
+
+Python
+
+from dataclasses import dataclass
+from app.core.events.domain_event import DomainEvent
+
+@dataclass(frozen=True)
+class ChannelRecordingStartedEvent(DomainEvent):
+    channel_name: str
+
+@dataclass(frozen=True)
+class ChannelRecordingStoppedEvent(DomainEvent):
+    channel_name: str
+
+@dataclass(frozen=True)
+class ChannelErrorDetectedEvent(DomainEvent):
+    channel_name: str
+    error_message: str
+
+@dataclass(frozen=True)
+class IngestStatusUpdatedEvent(DomainEvent):
+    """En samlet event til UI'et med status for alle kanaler."""
+    status_snapshot: Dict[str, dict] # f.eks. {"KAM_1": {"is_recording": true, ...}}
+Opret Servicen:
+
+Fil: app/domains/ingest_monitor/service.py (Ny fil)
+
+Handling: Denne service vil køre to parallelle loops: En hurtig (for rec status) og en langsom (for errors).
+
+Python
+
+import asyncio
+import logging
+import httpx
+from typing import Dict, List, Optional
+from app.config import Settings
+from app.core.events.event_bus import DomainEventBus
+from .models import ChannelState, JustInActiveChannels, JustInRecordingStatus, JustInErrors
+from .events import (
+    ChannelRecordingStartedEvent, ChannelRecordingStoppedEvent, 
+    ChannelErrorDetectedEvent, IngestStatusUpdatedEvent
+)
+
+class IngestMonitorService:
+    def __init__(self, settings: Settings, event_bus: DomainEventBus):
+        self._settings = settings
+        self._event_bus = event_bus
+        self._client = httpx.AsyncClient(base_url=settings.JUSTIN_API_BASE_URL, timeout=2.0)
+        self._status_cache: Dict[str, ChannelState] = {}
+        self._running = False
+
+        # Kør den hurtige "tally"-polling hvert 2. sekund
+        self._fast_poll_interval = 2.0 
+        # Kør den langsomme "error"-polling hvert 30. sekund
+        self._slow_poll_interval = 30.0
+
+    def get_status_cache(self) -> Dict[str, dict]:
+        """Returnerer et snapshot af den nuværende cache til UI'et."""
+        return {name: state.model_dump() for name, state in self._status_cache.items()}
+
+    async def start_monitoring(self):
+        if self._running: return
+        self._running = True
+        logging.info("IngestMonitorService starter...")
+
+        # Start de to loops parallelt
+        self._fast_loop_task = asyncio.create_task(self._fast_polling_loop())
+        self._slow_loop_task = asyncio.create_task(self._slow_polling_loop())
+
+    async def stop_monitoring(self):
+        self._running = False
+        if self._fast_loop_task: self._fast_loop_task.cancel()
+        if self._slow_loop_task: self._slow_loop_task.cancel()
+        await self._client.aclose()
+        logging.info("IngestMonitorService stoppet.")
+
+    async def _fast_polling_loop(self):
+        """Henter 'rec' status hvert 2. sekund."""
+        while self._running:
+            try:
+                await self._fetch_all_channel_statuses()
+            except Exception as e:
+                logging.error(f"Fejl i IngestMonitor fast_polling_loop: {e}")
+            await asyncio.sleep(self._fast_poll_interval)
+
+    async def _slow_polling_loop(self):
+        """Henter 'errors' hvert 30. sekund."""
+        while self._running:
+            try:
+                await self._fetch_all_channel_errors()
+            except Exception as e:
+                logging.error(f"Fejl i IngestMonitor slow_polling_loop: {e}")
+            await asyncio.sleep(self._slow_poll_interval)
+
+    async def _fetch_all_channel_statuses(self):
+        """Henter status for alle kanaler parallelt (Fan-out/Fan-in)."""
+        try:
+            # 1. Hent den samlede kanalliste
+            response = await self._client.get("/ingest/activeChannels")
+            response.raise_for_status()
+            channel_data = JustInActiveChannels.model_validate(response.json())
+            channel_names = channel_data.channel_names
+
+            # 2. Opret en task for hver kanal
+            async with asyncio.TaskGroup() as tg:
+                tasks = [
+                    tg.create_task(self._fetch_single_channel_status(name)) 
+                    for name in channel_names
+                ]
+
+            # 3. Saml resultater og opdater cache
+            new_statuses: List[ChannelState] = [task.result() for task in tasks if task.result()]
+            events_to_publish = self._update_cache_and_detect_changes(new_statuses)
+
+            # 4. Publicer events
+            for event in events_to_publish:
+                await self._event_bus.publish(event)
+
+            # Publicer den samlede snapshot-event til UI
+            await self._event_bus.publish(IngestStatusUpdatedEvent(
+                status_snapshot=self.get_status_cache()
+            ))
+
+        except httpx.RequestError as e:
+            logging.warning(f"Kunne ikke hente activeChannels: {e}")
+        except Exception as e:
+            logging.error(f"Fejl i _fetch_all_channel_statuses: {e}")
+
+    async def _fetch_single_channel_status(self, channel_name: str) -> Optional[ChannelState]:
+        """Henter status for én enkelt kanal."""
+        try:
+            response = await self._client.get(f"/ingest/requestRecordingStatus?channel={channel_name}")
+            status_data = JustInRecordingStatus.model_validate(response.json())
+
+            # Opdater eller opret den interne state
+            state = self._status_cache.get(channel_name, ChannelState(name=channel_name))
+            state.is_recording = status_data.rec
+            state.has_signal = status_data.options.TOAJustInEngineVideoSignalAvailable
+            # Note: Fejlstatus nulstilles kun af den langsomme error-loop
+
+            return state
+        except Exception as e:
+            logging.warning(f"Kunne ikke hente status for {channel_name}: {e}")
+            return None
+
+    def _update_cache_and_detect_changes(self, new_states: List[ChannelState]) -> List[DomainEvent]:
+        """Sammenligner ny state med cachen og genererer Tally-events."""
+        events = []
+        for new_state in new_states:
+            channel_name = new_state.name
+            old_state = self._status_cache.get(channel_name)
+
+            if old_state and old_state.is_recording != new_state.is_recording:
+                if new_state.is_recording:
+                    events.append(ChannelRecordingStartedEvent(channel_name=channel_name))
+                else:
+                    events.append(ChannelRecordingStoppedEvent(channel_name=channel_name))
+
+            # Opdater cachen
+            self._status_cache[channel_name] = new_state
+        return events
+
+    async def _fetch_all_channel_errors(self):
+        """Henter fejlstatus for alle kanaler parallelt (langsom loop)."""
+        channel_names = list(self._status_cache.keys())
+        if not channel_names:
+            return # Ingen kanaler at tjekke
+
+        async with asyncio.TaskGroup() as tg:
+            tasks = [
+                tg.create_task(self._fetch_single_channel_error(name)) 
+                for name in channel_names
+            ]
+
+        # Opdater cache med fejl-info
+        for task in tasks:
+            if task.result():
+                channel_name, errors, has_new_error = task.result()
+                if channel_name in self._status_cache:
+                    self._status_cache[channel_name].has_errors = bool(errors)
+                    self._status_cache[channel_name].last_errors = errors
+                    if has_new_error:
+                        await self._event_bus.publish(ChannelErrorDetectedEvent(
+                            channel_name=channel_name,
+                            error_message=errors[0].errorUIDescription
+                        ))
+
+    async def _fetch_single_channel_error(self, channel_name: str) -> Optional[tuple[str, List[JustInError], bool]]:
+        """Henter fejl for én kanal og tjekker om der er NYE fejl."""
+        try:
+            response = await self._client.get(f"/ingest/errors?channel={channel_name}")
+            error_data = JustInErrors.model_validate(response.json())
+
+            old_errors = self._status_cache.get(channel_name, ChannelState(name=channel_name)).last_errors
+            # Simpel tjek: er den nyeste fejl forskellig fra den gamle nyeste fejl?
+            has_new_error = False
+            if error_data.errors and (not old_errors or error_data.errors[0].date != old_errors[0].date):
+                has_new_error = True
+
+            return channel_name, error_data.errors, has_new_error
+        except Exception as e:
+            logging.warning(f"Kunne ikke hente fejl for {channel_name}: {e}")
+            return None
+
+
+
+Fase 3: Opret TallyLight Domænet (Modificeret)
+Mål: Oprette en "lytter", der abonnerer på det samlede IngestStatusUpdatedEvent og opdaterer en enkelt, fælles Tally-lampe baseret på den samlede status.
+
+Opret Håndterings-filen:
+
+Fil: app/domains/tally_light/event_handlers.py (Ny fil)
+
+Implementer TallyLightEventHandler:
+
+Handling: Erstat den gamle kode med denne nye logik, der vedligeholder sin egen tilstand (_current_tally_state) for at undgå unødvendige API-kald.
+
+Python
+
+import logging
+import httpx
+import asyncio
+from enum import Enum
+from app.config import Settings
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+
+class TallyState(Enum):
+    """Definerer de mulige tilstande for den fælles Tally-lampe."""
+    OFF = "off"
+    SOLID_ON = "on"
+    BLINKING = "blink"
+
+class TallyLightEventHandler:
+    """
+    Håndterer den fælles Tally-lampe.
+    Lytter efter det samlede Ingest-snapshot og beslutter,
+    om lampen skal være tændt, slukket eller blinke.
+    """
+    def __init__(self, settings: Settings):
+        self._client = httpx.AsyncClient(base_url=settings.TALLY_LIGHT_API_URL, timeout=1.0)
+        self._current_tally_state: TallyState = TallyState.OFF
+        self._lock = asyncio.Lock()
+        logging.info("TallyLightEventHandler initialiseret (Fælles Tally-logik)")
+
+    async def handle_ingest_status_update(self, event: IngestStatusUpdatedEvent):
+        """
+        Modtager det komplette status-snapshot og opdaterer Tally-lampen.
+        """
+        snapshot = event.status_snapshot
+
+        if not snapshot:
+            # Ingen kanaler fundet, lampen skal være slukket
+            await self._set_tally_light(TallyState.OFF, "Ingen kanaler fundet")
+            return
+
+        total_channels = len(snapshot)
+        recording_channels = sum(
+            1 for state in snapshot.values() if state.get("is_recording", False)
+        )
+
+        # Bestem den ønskede nye tilstand
+        new_state: TallyState
+        if recording_channels == 0:
+            new_state = TallyState.OFF
+        elif recording_channels == total_channels:
+            new_state = TallyState.SOLID_ON # Alle optager
+        else:
+            new_state = TallyState.BLINKING # Mindst én, men ikke alle, optager
+
+        # Opdater kun lampen, hvis tilstanden har ændret sig
+        await self._set_tally_light(new_state, f"{recording_channels}/{total_channels} optager")
+
+    async def _set_tally_light(self, new_state: TallyState, reason: str):
+        """Opdaterer lampens fysiske tilstand, hvis den har ændret sig."""
+        async with self._lock:
+            if new_state == self._current_tally_state:
+                return # Ingen ændring, intet at gøre
+
+            logging.info(f"Tally-status ændret: {self._current_tally_state.value} -> {new_state.value} (Årsag: {reason})")
+
+            api_endpoint = "/off" # Standard
+            if new_state == TallyState.SOLID_ON:
+                api_endpoint = "/on"
+            elif new_state == TallyState.BLINKING:
+                api_endpoint = "/blink" # Antaget API endpoint for blink
+
+            try:
+                # Antaget API: POST til /on, /off, eller /blink
+                await self._client.post(api_endpoint)
+                self._current_tally_state = new_state # Opdater kun tilstand ved succes
+            except httpx.RequestError as e:
+                logging.error(f"Kunne ikke opdatere Tally-lys til {new_state.value}: {e}")
+                # Vi opdaterer ikke _current_tally_state, så den prøver igen næste gang
+Opret Registrerings-fil:
+
+Fil: app/domains/tally_light/registration.py (Ny fil)
+
+Handling: Sørg for, at den nye handler abonnerer på den korrekte event.
+
+Python
+
+import logging
+from app.core.events.event_bus import DomainEventBus
+from app.core.cqrs.command_bus import CommandBus # Nødvendig for fuld signatur
+from app.dependencies import get_settings
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+from .event_handlers import TallyLightEventHandler
+
+def register_tally_light_domain(
+    command_bus: CommandBus, 
+    event_bus: DomainEventBus, 
+    handler: TallyLightEventHandler # Modtag den instansierede handler
+):
+    """Registrerer alle event-abonnementer for TallyLight-domænet."""
+    logging.info("Registrerer 'TallyLight' domæne handlers...")
+
+    # Abonner på den samlede snapshot-event
+    event_bus.subscribe(
+        IngestStatusUpdatedEvent, 
+        handler.handle_ingest_status_update
+    )
+Opdater app/dependencies.py:
+
+Handling: Tilføj en getter for den nye TallyLightEventHandler.
+
+Python
+
+# ... (andre imports)
+from app.domains.tally_light.event_handlers import TallyLightEventHandler
+
+def get_tally_light_event_handler() -> TallyLightEventHandler:
+    if "tally_light_event_handler" not in _singletons:
+        _singletons["tally_light_event_handler"] = TallyLightEventHandler(
+            settings=get_settings()
+        )
+    return _singletons["tally_light_event_handler"]
+Opdater app/main.py:
+
+Handling: Sørg for at registrere domænet i din lifespan-funktion.
+
+Python
+
+# ... (imports)
+from app.domains.tally_light.registration import register_tally_light_domain
+from app.dependencies import get_tally_light_event_handler
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ... (al din eksisterende startup-kode) ...
+
+    # Hent handler-instansen
+    tally_handler = get_tally_light_event_handler()
+
+    # Registrer domænet (som abonnerer på events)
+    register_tally_light_domain(command_bus, event_bus, tally_handler)
+
+    yield
+    # ...
+
+
+Fase 4: Opret Frontend API'et (CQRS)
+Mål: Gøre IngestMonitor's cachede data tilgængelige for UI'et via et Query.
+
+Definer Query:
+
+Fil: app/domains/ingest_monitor/queries.py (Ny fil)
+
+Python
+
+@dataclass
+class GetIngestStatusQuery:
+    """Henter det cachede snapshot af alle kanalers status."""
+    pass
+Opret Query Handler:
+
+Fil: app/domains/ingest_monitor/handlers.py (Ny fil)
+
+Python
+
+from .queries import GetIngestStatusQuery
+from .service import IngestMonitorService
+from typing import Dict
+
+class GetIngestStatusQueryHandler:
+    def __init__(self, ingest_monitor_service: IngestMonitorService):
+        self._service = ingest_monitor_service
+
+    async def handle(self, query: GetIngestStatusQuery) -> Dict[str, dict]:
+        # Henter direkte fra servicens cache - lynhurtigt
+        return self._service.get_status_cache()
+Opret API Endpoint:
+
+Fil: app/domains/ingest_monitor/api.py (Ny fil)
+
+Python
+
+from fastapi import APIRouter, Depends
+from app.core.cqrs.query_bus import QueryBus
+from app.dependencies import get_query_bus
+from .queries import GetIngestStatusQuery
+
+router = APIRouter(prefix="/api/ingest", tags=["Ingest Monitor"])
+
+@router.get("/status")
+async def get_ingest_status(query_bus: QueryBus = Depends(get_query_bus)):
+    """Henter live-status for alle ingest-kanaler."""
+    return await query_bus.execute(GetIngestStatusQuery())
+
+
+Fase 5: Registrering og Opstart
+Mål: Kable det hele sammen i DI-containeren og main.py.
+
+Opret Registrerings-filer:
+
+app/domains/ingest_monitor/registration.py
+
+app/domains/tally_light/registration.py
+
+Opdater app/dependencies.py:
+
+Tilføj get_ingest_monitor_service() (som singleton).
+
+Tilføj get_tally_light_event_handler() (som singleton).
+
+Opdater app/main.py:
+
+lifespan:
+
+Kald register_ingest_monitor_domain(...) (registrerer Query Handler).
+
+Kald register_tally_light_domain(...) (registrerer Event Handlers til Tally-events).
+
+Hent IngestMonitorService og kald asyncio.create_task(ingest_monitor_service.start_monitoring()).
+
+app:
+
+app.include_router(ingest_api_router)
+
+Opdater PresentationEventHandlers:
+
+Fil: app/domains/presentation/event_handlers.py
+
+Handling: Få denne handler til at abonnere på IngestStatusUpdatedEvent og ChannelErrorDetectedEvent.
+
+Når den modtager disse, skal den formatere en ny WebSocket-besked (f.eks. ingest_status_update eller new_event_log) og broadcaste den, så UI'et opdateres live.
+
+
+Fase 6: Frontend UI (Manuelt Arbejde)
+Opret ingestStore.js:
+
+I init(): Kald fetch('/api/ingest/status') for at få den indledende data.
+
+Opdater messageHandler.js:
+
+Tilføj case "ingest_status_update": til at opdatere ingestStore.js.
+
+Tilføj case "new_event_log": til at tilføje fejlen til din GlobalEventLogger (eller en ny log-store).
+
+Byg UI-panelet:
+
+Brug x-for til at iterere over kanalerne i ingestStore.js.
+
+Vis is_recording (som en rød/grøn prik).
+
+Vis has_errors (som et advarsels-ikon).
+
+Vis den nye event-log.
