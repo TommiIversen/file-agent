@@ -14,7 +14,7 @@ from .handlers import GetIngestStatusQueryHandler
 from .service import IngestMonitorService
 
 
-async def register_ingest_monitor_domain(
+def register_ingest_monitor_domain(
     command_bus: CommandBus, 
     query_bus: QueryBus, 
     event_bus: DomainEventBus,

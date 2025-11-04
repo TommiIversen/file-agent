@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
     
     # Register IngestMonitor domain (enables API queries)
     ingest_monitor_service = get_ingest_monitor_service()
-    await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_service)
+    register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_service)
     
     # Register TallyLight domain (depends on IngestMonitor events)
     tally_handler = get_tally_light_event_handler()
