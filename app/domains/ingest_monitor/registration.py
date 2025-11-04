@@ -33,6 +33,6 @@ async def register_ingest_monitor_domain(
 
     # Register query handlers
     query_handler = GetIngestStatusQueryHandler(ingest_monitor_service)
-    await query_bus.register(GetIngestStatusQuery, query_handler)
+    query_bus.register(GetIngestStatusQuery, query_handler.handle)
     
     logging.info("IngestMonitor domain registration completed")
