@@ -1,0 +1,214 @@
+<!-- Just In Engine Status Bar Component (Compact Design) -->
+<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3 mb-4" x-data="{ showDetails: false }">
+    <!-- Compact Status Bar -->
+    <div class="flex items-center justify-between">
+        <!-- Left side: Channel LEDs -->
+        <div class="flex items-center space-x-1">
+            <span class="text-sm font-medium text-gray-300 mr-3">🎥 Channels:</span>
+            <template x-for="channel in $store.ingest?.getChannelsSorted() || []" :key="channel.name">
+                <div class="relative group">
+                    <!-- LED Indicator -->
+                    <div class="w-6 h-6 rounded-full border-2 border-gray-600 transition-all duration-200 group-hover:animate-none relative"
+                         :class="{
+                             'bg-red-500 border-red-500 shadow-lg shadow-red-400/50': channel.is_recording,
+                             'bg-gray-500 border-gray-400': !channel.is_recording && channel.has_signal,
+                             'bg-red-800 border-red-600': !channel.has_signal
+                         }">
+                        <!-- Error indicator overlay -->
+                        <div x-show="channel.has_errors" 
+                             class="absolute inset-0 flex items-center justify-center text-yellow-500 text-2xl font-black animate-pulse"
+                             style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9), -1px -1px 2px rgba(0, 0, 0, 0.9);">
+                            !
+                        </div>
+                    </div>
+                    <!-- Simple Channel Name Label (shows on hover) -->
+                    <div class="absolute bottom-6 left-1/2  transform-translate-x-1/2 bg-black bg-opacity-90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                         :class="channel.has_errors && channel.last_error ? 'whitespace-normal' : 'whitespace-nowrap  min-w-xs max-w-sm'">
+                        <div x-text="channel.name" class="font-medium"></div>
+                        <div class="text-gray-300 text-xs">
+                            <span x-text="channel.is_recording ? '🔴 REC' : '⚫ Standby'"></span>
+                            <span x-show="!channel.has_signal" class="text-red-400"> • No Signal</span>
+                            <span x-show="channel.has_errors" class="text-yellow-400"> • Errors</span>
+                        </div>
+                        <!-- Error details shown directly under status -->
+                        <div x-show="channel.has_errors" class="text-yellow-300 text-xs mt-1 border-t border-gray-600 pt-1">                                    
+                            <!-- Show ALL errors from last_errors array if available -->
+                            <template x-if="channel.last_errors && channel.last_errors.length > 0">
+                                <div>
+                                    <div class="text-gray-400 text-xs mb-1">
+                                        <span x-text="channel.last_errors.length"></span> error(s):
+                                    </div>
+                                    <template x-for="(error, index) in channel.last_errors" :key="index">
+                                        <div class="mb-2 last:mb-0">
+                                            <div x-text="`${index + 1}. ${error?.errorUIDescription || 'Unknown error'}`" class="max-w-xs whitespace-normal"></div>
+                                            <div x-show="error?.errorCode" class="text-gray-400 text-xs">
+                                                Code: <span x-text="error?.errorCode"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            
+                            <!-- Fallback to channel.last_error if available -->
+                            <template x-if="!channel.last_errors || channel.last_errors.length === 0">
+                                <div x-show="channel.last_error">
+                                    <div x-text="channel.last_error?.error_message || 'Unknown error'" class="max-w-xs whitespace-normal"></div>
+                                    <div x-show="channel.last_error?.error_code" class="text-gray-400 text-xs">
+                                        Code: <span x-text="channel.last_error?.error_code"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <!-- Show if no error data found -->
+                            <template x-if="(!channel.last_errors || channel.last_errors.length === 0) && !channel.last_error">
+                                <div class="text-red-300">No error details available</div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <!-- No channels message -->
+            <span x-show="($store.ingest?.getChannelsSorted() || []).length === 0" 
+                  class="text-gray-400 text-sm">No channels detected</span>
+        </div>
+
+        <!-- Right side: Tally Status & Details Toggle -->
+        <div class="flex items-center space-x-3">
+            <!-- Recording Summary -->
+            <div class="text-xs text-gray-300">
+                <span x-text="($store.ingest?.getChannelsSorted() || []).filter(c => c.is_recording).length"></span>/<span x-text="($store.ingest?.getChannelsSorted() || []).length"></span> rec
+            </div>
+
+            <!-- Tally Light Status -->
+            <div class="flex items-center space-x-2">
+                <span class="text-xs text-gray-400">Tally:</span>
+                <template x-if="$store.ingest?.getRecordingStatus() === 'none'">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 bg-gray-500 rounded-full"></div>
+                        <span class="text-xs text-gray-300 ml-1">OFF</span>
+                    </div>
+                </template>
+                <template x-if="$store.ingest?.getRecordingStatus() === 'all'">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 bg-red-500 rounded-full shadow-lg shadow-red-500/50"></div>
+                        <span class="text-xs text-red-300 ml-1">ON</span>
+                    </div>
+                </template>
+                <template x-if="$store.ingest?.getRecordingStatus() === 'some'">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 bg-red-400 rounded-full animate-pulse shadow-lg shadow-red-400/50"></div>
+                        <span class="text-xs text-red-300 ml-1">BLINK</span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="flex items-center space-x-1">
+                <div class="w-2 h-2 rounded-full"
+                     :class="$store.ingest?.isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
+                <span class="text-xs"
+                      :class="$store.ingest?.isConnected ? 'text-green-400' : 'text-red-400'"
+                      x-text="$store.ingest?.isConnected ? 'Connected' : 'Offline'"></span>
+            </div>
+
+            <!-- Details Toggle Button -->
+            <button @click="showDetails = !showDetails"
+                    class="text-gray-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-gray-600 transition-all duration-200">
+                <span x-text="showDetails ? '▲ Hide' : '▼ Details'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Detailed View (Expandable) -->
+    <div x-show="showDetails" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 max-h-0"
+         x-transition:enter-end="opacity-100 max-h-96"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 max-h-96"
+         x-transition:leave-end="opacity-0 max-h-0"
+         class="mt-4 pt-4 border-t border-gray-600 overflow-hidden">
+        
+        <!-- Statistics Row -->
+        <div class="flex items-center space-x-3 mb-4">
+            <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-white" x-text="$store.ingest?.statistics?.totalChannels || 0"></div>
+                <div class="text-xs text-gray-300">Total</div>
+            </div>
+            <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-red-400" x-text="$store.ingest?.statistics?.recordingChannels || 0"></div>
+                <div class="text-xs text-gray-300">Recording</div>
+            </div>
+            <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-yellow-400" x-text="$store.ingest?.statistics?.errorChannels || 0"></div>
+                <div class="text-xs text-gray-300">Errors</div>
+            </div>
+            <div class="flex-1 bg-gray-800 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-orange-400" x-text="$store.ingest?.statistics?.signalLostChannels || 0"></div>
+                <div class="text-xs text-gray-300">No Signal</div>
+            </div>
+        </div>
+
+        <!-- Channel Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <template x-for="channel in $store.ingest?.getChannelsSorted() || []" :key="channel.name">
+                <div class="bg-gray-800 rounded-lg p-3 border-l-4"
+                     :class="channel.is_recording ? 'border-red-500' : (channel.has_signal ? 'border-gray-500' : 'border-yellow-500')">
+                    <!-- Channel Header -->
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-sm" x-text="channel.name"></span>
+                        <div class="w-3 h-3 rounded-full"
+                             :class="{
+                                 'bg-red-500': channel.is_recording && !channel.has_errors,
+                                 'bg-yellow-500 animate-pulse': channel.is_recording && channel.has_errors,
+                                 'bg-gray-500': !channel.is_recording && channel.has_signal,
+                                 'bg-red-800': !channel.has_signal
+                             }"></div>
+                    </div>
+                    
+                    <!-- Channel Status -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-gray-400">Status:</span>
+                            <span :class="channel.is_recording ? 'text-red-400' : 'text-gray-300'"
+                                  x-text="channel.is_recording ? 'Recording' : 'Standby'"></span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-gray-400">Signal:</span>
+                            <span :class="channel.has_signal ? 'text-green-400' : 'text-red-400'"
+                                  x-text="channel.has_signal ? 'OK' : 'No Signal'"></span>
+                        </div>
+                        <div x-show="channel.is_recording" class="flex justify-between text-xs">
+                            <span class="text-gray-400">Time:</span>
+                            <span class="text-blue-400" 
+                                  x-text="`${channel.hours || 0}:${String(channel.minutes || 0).padStart(2, '0')}:${String(channel.seconds || 0).padStart(2, '0')}`"></span>
+                        </div>
+                        <div x-show="channel.has_errors" class="text-xs">
+                            <div class="text-yellow-400 mb-1">
+                                ⚠️ <span x-text="channel.last_errors?.length || 0"></span> errors
+                            </div>
+                            <div x-show="channel.last_error" class="text-yellow-300 text-xs bg-yellow-900/20 p-2 rounded">
+                                <div class="font-medium">Latest:</div>
+                                <div x-text="channel.last_error?.error_message || 'Unknown error'" class="word-break-words"></div>
+                                <div x-show="channel.last_error?.error_code" class="text-gray-400 text-xs mt-1">
+                                    Code: <span x-text="channel.last_error?.error_code"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-between items-center">
+            <div class="text-xs text-gray-400">
+                Last updated: <span x-text="$store.ingest?.lastUpdate ? new Date($store.ingest.lastUpdate).toLocaleTimeString() : 'Never'"></span>
+            </div>
+            <button @click="$store.ingest?.loadInitialData()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+</div>
