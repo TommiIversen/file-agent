@@ -332,6 +332,36 @@ if [[ -n "$HOME" && -f "$PROJECT_DIR/scripts/service-setup/restart-macos.sh" ]];
     log_success "Restart script copied to your Desktop as restart-fileagent.sh"
 fi
 
+create_browser_launch_agent() {
+    log_info "Creating launch agent to open web UI on login..."
+    PLIST_DIR="$HOME/Library/LaunchAgents"
+    PLIST_FILE="$PLIST_DIR/com.fileagent.openbrowser.plist"
+
+    # Create the directory if it doesn't exist
+    mkdir -p "$PLIST_DIR"
+
+    # Create the plist file
+    cat > "$PLIST_FILE" << EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fileagent.openbrowser</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>open</string>
+        <string>http://localhost:8000</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+EOL
+
+    log_success "Launch agent created: $PLIST_FILE"
+}
+
 # Show status and next steps
 show_completion_info() {
     log_success "🎉 File Transfer Agent macOS service setup complete!"
@@ -385,6 +415,7 @@ main() {
     create_plist_file
     load_service
     create_uninstall_script
+    create_browser_launch_agent
     show_completion_info
 }
 
