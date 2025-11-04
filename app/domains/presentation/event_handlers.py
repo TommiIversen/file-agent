@@ -8,6 +8,7 @@ from app.core.events.storage_events import MountStatusChangedEvent, StorageStatu
 from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
 from app.core.file_repository import FileRepository
 from app.domains.presentation.websocket_manager import WebSocketManager
+from app.models import FileStatus
 
 
 def _serialize_storage_info(storage_info) -> dict:
@@ -54,7 +55,7 @@ class PresentationEventHandlers:
                 "file_size": event.file_size,
                 "file_size_mb": round(event.file_size / (1024 * 1024), 2),
                 "last_write_time": datetime.fromtimestamp(event.last_write_time).isoformat(),
-                "status": "DISCOVERED",
+                "status": FileStatus.DISCOVERED.value,
                 "timestamp": event.timestamp.isoformat(),
             },
         }
