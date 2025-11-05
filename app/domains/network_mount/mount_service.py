@@ -53,20 +53,18 @@ class NetworkMountService:
             return False
 
         try:
-            is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
+            is_accessible = await self._mounter.verify_mount_accessible(
                 local_path
             )
 
-            if is_mounted and is_accessible:
+            if is_accessible:
                 return True
-            if is_mounted and not is_accessible:
-                return False
 
             if await self._mounter.attempt_mount(share_url):
-                is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
+                is_accessible = await self._mounter.verify_mount_accessible(
                     local_path
                 )
-                return is_mounted and is_accessible
+                return is_accessible
             return False
 
         except Exception as e:
@@ -78,10 +76,10 @@ class NetworkMountService:
         if not self._mounter:
             return False
         try:
-            is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
+            is_accessible = await self._mounter.verify_mount_accessible(
                 local_path
             )
-            return is_mounted and is_accessible
+            return is_accessible
         except Exception as e:
             logging.error(f"Error verifying mount accessibility: {e}")
             return False
