@@ -72,8 +72,9 @@ class MacOSMounter(BaseMounter):
             # Use native macOS mount command for SMB shares
             # This approach lets macOS handle mount point creation automatically
             
-            # Parse SMB URL to extract server and share info
+            # Parse SMB URL to extract components for proper mount command
             # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
+            # To: mount_smbfs //svcsk6402@net.dr.dk/nas/videopodcast/SK6402 /Volumes/SK6402
             import urllib.parse
             parsed = urllib.parse.urlparse(share_url)
             
@@ -81,22 +82,26 @@ class MacOSMounter(BaseMounter):
                 logging.error(f"Could not parse hostname from SMB URL: {share_url}")
                 return False
             
-            # Try the mount command without pre-creating mount point
-            # macOS will create the mount point automatically in /Volumes/
-            # Format: mount -t smbfs smb://user@server/share /Volumes/name
+            # Convert SMB URL to mount_smbfs format
+            # Remove 'smb://' and use mount_smbfs instead of generic mount
+            if share_url.startswith('smb://'):
+                mount_url = '//' + share_url[6:]  # Remove 'smb://' prefix
+            else:
+                mount_url = share_url
             
             # Extract share name from URL for mount point
             share_name = "SK6402"  # Use the configured mount point name
             auto_mount_point = f"/Volumes/{share_name}"
             
+            # Use mount_smbfs specifically for SMB shares (not generic mount)
             cmd = [
-                "/sbin/mount", 
-                "-t", "smbfs",
-                share_url,
+                "/sbin/mount_smbfs",
+                mount_url,
                 auto_mount_point
             ]
             
             logging.info(f"Mount command: {' '.join(cmd)}")
+            logging.info(f"Mount URL: {mount_url}")
             logging.info(f"Auto mount point: {auto_mount_point}")
             logging.info(f"Parsed hostname: {parsed.hostname}")
 
