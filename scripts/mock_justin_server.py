@@ -38,6 +38,10 @@ GLOBAL_CHANNEL_STATE: Dict[str, Dict[str, Any]] = {}
 # Global error state - hvilke kanaler har fejl lige nu
 GLOBAL_ERROR_CHANNELS: List[str] = []
 
+# Manual mode state - hvis True, stops auto-cycling
+MANUAL_MODE = False
+AUTO_CYCLER_TASK = None
+
 # --- Pydantic Modeller ---
 
 class ChannelRequest(BaseModel):
@@ -172,24 +176,33 @@ async def _state_cycler_task():
     6. 2 fejl på random kanaler
     
     Total cycle: 24 sekunder
+    
+    Stopper automatisk hvis MANUAL_MODE = True
     """
+    global MANUAL_MODE
     logging.info("State Cycler Task startet. Cykler recording + error status hver 4. sekund.")
     
-    while True:
+    while not MANUAL_MODE:
         try:
             # --- Tilstand 1: ALLE SLUKKET ---
+            if MANUAL_MODE:
+                break
             logging.info("--- STATE 1: ALLE KANALER 'rec: false' ---")
             for name in CHANNEL_NAMES:
                 GLOBAL_CHANNEL_STATE[name]["rec"] = False
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # --- Tilstand 2: ALLE TÆNDT ---
+            if MANUAL_MODE:
+                break
             logging.info("--- STATE 2: ALLE KANALER 'rec: true' ---")
             for name in CHANNEL_NAMES:
                 GLOBAL_CHANNEL_STATE[name]["rec"] = True
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # --- Tilstand 3: ÉN SLUKKET (fejl-tilstand) ---
+            if MANUAL_MODE:
+                break
             logging.info("--- STATE 3: KAM_8 'rec: false', RESTEN 'rec: true' ---")
             for name in CHANNEL_NAMES:
                 if name == "KAM_8":
@@ -201,11 +214,15 @@ async def _state_cycler_task():
             # --- ERROR CYCLES ---
             
             # Error Cycle 1: Ingen fejl
+            if MANUAL_MODE:
+                break
             logging.info("--- ERROR CYCLE 1: INGEN FEJL ---")
             GLOBAL_ERROR_CHANNELS.clear()
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # Error Cycle 2: 1 fejl på random kanal
+            if MANUAL_MODE:
+                break
             logging.info("--- ERROR CYCLE 2: 1 FEJL PÅ RANDOM KANAL ---")
             GLOBAL_ERROR_CHANNELS.clear()
             random_channel = random.choice(CHANNEL_NAMES)
@@ -214,6 +231,8 @@ async def _state_cycler_task():
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # Error Cycle 3: 2 fejl på random kanaler
+            if MANUAL_MODE:
+                break
             logging.info("--- ERROR CYCLE 3: 2 FEJL PÅ RANDOM KANALER ---")
             GLOBAL_ERROR_CHANNELS.clear()
             random_channels = random.sample(CHANNEL_NAMES, 2)
@@ -227,6 +246,8 @@ async def _state_cycler_task():
         except Exception as e:
             logging.error(f"Fejl i State Cycler Task: {e}")
             await asyncio.sleep(STATE_DURATION_SECONDS)
+    
+    logging.info("State Cycler Task afsluttet - MANUAL_MODE aktiveret.")
 
 
 # --- FastAPI App ---
@@ -234,6 +255,7 @@ async def _state_cycler_task():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Håndterer opstart og nedlukning af serveren."""
+    global AUTO_CYCLER_TASK
     
     # Opstart: Initialiser den globale tilstand
     logging.info("Mock-server starter... Initialiserer global tilstand.")
@@ -242,17 +264,18 @@ async def lifespan(app: FastAPI):
         GLOBAL_CHANNEL_STATE[name] = _create_mock_response(name, rec_status=False)
     
     # Start baggrunds-tasken
-    cycler_task = asyncio.create_task(_state_cycler_task())
+    AUTO_CYCLER_TASK = asyncio.create_task(_state_cycler_task())
     
     yield # App'en kører
     
     # Nedlukning: Stop baggrunds-tasken
     logging.info("Mock-server lukker ned... Stopper baggrunds-task.")
-    cycler_task.cancel()
-    try:
-        await cycler_task
-    except asyncio.CancelledError:
-        pass
+    if AUTO_CYCLER_TASK:
+        AUTO_CYCLER_TASK.cancel()
+        try:
+            await AUTO_CYCLER_TASK
+        except asyncio.CancelledError:
+            pass
 
 app = FastAPI(lifespan=lifespan)
 
@@ -311,6 +334,114 @@ async def get_channel_errors(request: ErrorRequest):
             "name": channel_name,
             "errors": []
         }
+
+@app.post("/ingest/startChannel")
+async def start_channel(request: ChannelRequest):
+    """
+    Start en specifik kanal - skifter til manual mode ved første brug.
+    """
+    global MANUAL_MODE, AUTO_CYCLER_TASK
+    channel_name = request.channel
+    
+    logging.info(f"Modtog POST /ingest/startChannel for '{channel_name}'")
+    
+    if channel_name not in CHANNEL_NAMES:
+        logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")
+        return {"error": "Channel not found"}
+    
+    # Skift til manual mode ved første stop/start kommando
+    if not MANUAL_MODE:
+        MANUAL_MODE = True
+        logging.info("🔧 SKIFTER TIL MANUAL MODE - auto-cycling stoppes!")
+        
+        # Stop auto cycler task
+        if AUTO_CYCLER_TASK and not AUTO_CYCLER_TASK.done():
+            AUTO_CYCLER_TASK.cancel()
+            try:
+                await AUTO_CYCLER_TASK
+            except asyncio.CancelledError:
+                pass
+    
+    # Start den angivne kanal
+    GLOBAL_CHANNEL_STATE[channel_name]["rec"] = True
+    logging.info(f"✅ Kanal '{channel_name}' startet (rec: true)")
+    
+    return {"status": "ok", "channel": channel_name, "action": "started"}
+
+@app.post("/ingest/stopChannel")
+async def stop_channel(request: ChannelRequest):
+    """
+    Stop en specifik kanal - skifter til manual mode ved første brug.
+    """
+    global MANUAL_MODE, AUTO_CYCLER_TASK
+    channel_name = request.channel
+    
+    logging.info(f"Modtog POST /ingest/stopChannel for '{channel_name}'")
+    
+    if channel_name not in CHANNEL_NAMES:
+        logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")
+        return {"error": "Channel not found"}
+    
+    # Skift til manual mode ved første stop/start kommando
+    if not MANUAL_MODE:
+        MANUAL_MODE = True
+        logging.info("🔧 SKIFTER TIL MANUAL MODE - auto-cycling stoppes!")
+        
+        # Stop auto cycler task
+        if AUTO_CYCLER_TASK and not AUTO_CYCLER_TASK.done():
+            AUTO_CYCLER_TASK.cancel()
+            try:
+                await AUTO_CYCLER_TASK
+            except asyncio.CancelledError:
+                pass
+    
+    # Stop den angivne kanal
+    GLOBAL_CHANNEL_STATE[channel_name]["rec"] = False
+    logging.info(f"⏹️ Kanal '{channel_name}' stoppet (rec: false)")
+    
+    return {"status": "ok", "channel": channel_name, "action": "stopped"}
+
+@app.post("/mock/reset-auto-mode")
+async def reset_auto_mode():
+    """
+    DEBUG endpoint til at genaktivere auto-cycling mode.
+    """
+    global MANUAL_MODE, AUTO_CYCLER_TASK
+    
+    logging.info("🔄 RESET TIL AUTO MODE - genstartes auto-cycling")
+    
+    # Stop existing task hvis den kører
+    if AUTO_CYCLER_TASK and not AUTO_CYCLER_TASK.done():
+        AUTO_CYCLER_TASK.cancel()
+        try:
+            await AUTO_CYCLER_TASK
+        except asyncio.CancelledError:
+            pass
+    
+    # Reset til auto mode
+    MANUAL_MODE = False
+    
+    # Start auto cycler igen
+    AUTO_CYCLER_TASK = asyncio.create_task(_state_cycler_task())
+    
+    return {"status": "ok", "message": "Auto-cycling mode restarted"}
+
+@app.get("/mock/status")
+async def get_mock_status():
+    """
+    DEBUG endpoint til at se mock server status.
+    """
+    recording_channels = [name for name, state in GLOBAL_CHANNEL_STATE.items() if state.get("rec", False)]
+    
+    return {
+        "manual_mode": MANUAL_MODE,
+        "auto_cycler_running": AUTO_CYCLER_TASK and not AUTO_CYCLER_TASK.done() if AUTO_CYCLER_TASK else False,
+        "total_channels": len(CHANNEL_NAMES),
+        "recording_channels": len(recording_channels),
+        "recording_channel_names": recording_channels,
+        "error_channels": len(GLOBAL_ERROR_CHANNELS),
+        "error_channel_names": GLOBAL_ERROR_CHANNELS
+    }
 
 # --- Kør serveren ---
 
