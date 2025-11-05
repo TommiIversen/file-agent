@@ -93,6 +93,38 @@ class MacOSMounter(BaseMounter):
             share_name = "SK6402"  # Use the configured mount point name
             auto_mount_point = f"/Volumes/{share_name}"
             
+            # Create mount point directory first (mount_smbfs requires it to exist)
+            try:
+                from pathlib import Path
+                mount_path = Path(auto_mount_point)
+                if not await asyncio.to_thread(mount_path.exists):
+                    logging.info(f"Creating mount point directory: {auto_mount_point}")
+                    # Create with sudo since /Volumes/ is system protected
+                    create_cmd = ["sudo", "mkdir", "-p", auto_mount_point]
+                    create_process = await asyncio.create_subprocess_exec(
+                        *create_cmd, 
+                        stdout=asyncio.subprocess.PIPE, 
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    stdout, stderr = await create_process.communicate()
+                    
+                    if create_process.returncode != 0:
+                        logging.error(f"Failed to create mount point with sudo: {stderr.decode()}")
+                        # Fall back to trying without sudo (might work in some cases)
+                        try:
+                            await asyncio.to_thread(mount_path.mkdir, parents=True, exist_ok=True)
+                            logging.info(f"Created mount point without sudo: {auto_mount_point}")
+                        except Exception as e:
+                            logging.error(f"Failed to create mount point: {e}")
+                            return False
+                    else:
+                        logging.info(f"Successfully created mount point with sudo: {auto_mount_point}")
+                else:
+                    logging.info(f"Mount point directory already exists: {auto_mount_point}")
+            except Exception as e:
+                logging.error(f"Failed to create mount point directory: {e}")
+                return False
+                
             # Use mount_smbfs specifically for SMB shares (not generic mount)
             cmd = [
                 "/sbin/mount_smbfs",
