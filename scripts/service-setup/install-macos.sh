@@ -69,6 +69,87 @@ configure_firewall() {
     fi
 }
 
+# Configure macOS system permissions for network mounting
+configure_system_permissions() {
+    log_info "Konfigurerer system-tilladelser til network mounting..."
+    
+    if [[ $EUID -eq 0 ]]; then
+        # Add file-agent to admin group for mount privileges
+        log_info "Tilføjer service bruger til admin-gruppen for mount-rettigheder..."
+        
+        # For system service running as 'nobody', we need different approach
+        # Create a dedicated user for file-agent with proper permissions
+        
+        # Check if fileagent user exists
+        if ! dscl . -read /Users/fileagent &>/dev/null; then
+            log_info "Opretter dedikeret 'fileagent' bruger til service..."
+            
+            # Find next available UID
+            LAST_UID=$(dscl . -list /Users UniqueID | awk '{print $2}' | sort -n | tail -1)
+            NEW_UID=$((LAST_UID + 1))
+            
+            # Create the user
+            dscl . -create /Users/fileagent
+            dscl . -create /Users/fileagent UserShell /bin/bash
+            dscl . -create /Users/fileagent RealName "File Agent Service"
+            dscl . -create /Users/fileagent UniqueID $NEW_UID
+            dscl . -create /Users/fileagent PrimaryGroupID 20  # staff group
+            dscl . -create /Users/fileagent NFSHomeDirectory /var/empty
+            
+            # Add to necessary groups for mounting
+            dscl . -append /Groups/admin GroupMembership fileagent
+            dscl . -append /Groups/_developer GroupMembership fileagent
+            
+            log_success "Fileagent bruger oprettet med UID $NEW_UID"
+            SERVICE_USER="fileagent"
+        else
+            log_info "Fileagent bruger findes allerede"
+            SERVICE_USER="fileagent"
+        fi
+        
+        # Configure TCC (Transparency, Consent, and Control) permissions
+        log_info "Konfigurerer TCC-tilladelser til Finder og Disk adgang..."
+        
+        # This requires manual approval in newer macOS versions
+        log_warning "VIGTIGT: Du skal muligvis manuelt give tilladelser til:"
+        log_warning "  • System Preferences > Security & Privacy > Privacy"
+        log_warning "  • Full Disk Access: Tilføj Python eller din app"
+        log_warning "  • Files and Folders: Tilføj Python adgang til netværksvolumes"
+        
+    else
+        log_warning "Kører ikke som root - kan ikke konfigurere system-tilladelser"
+        log_warning "For bedste network mount support, kør: sudo ./install-macos.sh"
+        SERVICE_USER="$(whoami)"
+    fi
+}
+
+# Create keychain entry for SMB credentials (optional)
+configure_keychain() {
+    log_info "Konfigurerer keychain til SMB credentials..."
+    
+    # Read SMB settings if available
+    if [[ -f "$PROJECT_DIR/mac-settings.env" ]]; then
+        source "$PROJECT_DIR/mac-settings.env"
+        
+        if [[ -n "$SMB_SHARE_URL" ]]; then
+            log_info "Fundet SMB konfiguration: $SMB_SHARE_URL"
+            
+            # Extract hostname for keychain entry
+            SMB_HOST=$(echo "$SMB_SHARE_URL" | sed -E 's|smb://[^@]*@([^/]*)/.*|\1|')
+            SMB_USER=$(echo "$SMB_SHARE_URL" | sed -E 's|smb://([^@]*)@.*|\1|')
+            
+            if [[ -n "$SMB_HOST" && -n "$SMB_USER" ]]; then
+                log_info "SMB Host: $SMB_HOST, User: $SMB_USER"
+                log_info "Du kan tilføje SMB password til keychain med:"
+                log_info "  security add-internet-password -a \"$SMB_USER\" -s \"$SMB_HOST\" -P 445 -r \"smb \" -w"
+                log_info "Dette vil tillade automatisk mount uden password prompts"
+            fi
+        fi
+    else
+        log_info "Ingen mac-settings.env fundet - springer keychain konfiguration over"
+    fi
+}
+
 
 # Check if running as root for system service
 check_permissions() {
@@ -406,6 +487,8 @@ main() {
     check_prerequisites
     install_dependencies
     configure_firewall
+    configure_system_permissions
+    configure_keychain
 
     test_application
     
