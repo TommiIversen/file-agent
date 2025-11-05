@@ -23,7 +23,7 @@ class MacOSMountValidator:
         try:
             # Use mount command to get all mounted filesystems
             process = await asyncio.create_subprocess_exec(
-                "mount",
+                "/sbin/mount",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -66,7 +66,7 @@ class MacOSMountValidator:
         """
         try:
             process = await asyncio.create_subprocess_exec(
-                "mount",
+                "/sbin/mount",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -374,7 +374,7 @@ class MacOSMountCleaner:
         """Unmount a path using diskutil."""
         try:
             process = await asyncio.create_subprocess_exec(
-                "diskutil", "unmount", mount_path,
+                "/usr/sbin/diskutil", "unmount", mount_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
