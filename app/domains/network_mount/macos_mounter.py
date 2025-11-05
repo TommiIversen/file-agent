@@ -69,12 +69,12 @@ class MacOSMounter(BaseMounter):
             logging.info(f"Attempting macOS mount: {share_url}")
             logging.info(f"Expected mount point: {expected_mount_point}")
 
-            # Use native macOS mount command for SMB shares
-            # This approach lets macOS handle mount point creation automatically
+            # Use macOS 'open' command for SMB mounting - this is the most reliable way
+            # It handles mount point creation, credentials, and mount automatically
+            # This is what Finder uses internally and doesn't require sudo
             
-            # Parse SMB URL to extract components for proper mount command
+            # Parse SMB URL to extract server and share info
             # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
-            # To: mount_smbfs //svcsk6402@net.dr.dk/nas/videopodcast/SK6402 /Volumes/SK6402
             import urllib.parse
             parsed = urllib.parse.urlparse(share_url)
             
@@ -82,73 +82,28 @@ class MacOSMounter(BaseMounter):
                 logging.error(f"Could not parse hostname from SMB URL: {share_url}")
                 return False
             
-            # Convert SMB URL to mount_smbfs format
-            # Remove 'smb://' and use mount_smbfs instead of generic mount
-            if share_url.startswith('smb://'):
-                mount_url = '//' + share_url[6:]  # Remove 'smb://' prefix
-            else:
-                mount_url = share_url
-            
-            # Extract share name from URL for mount point
-            share_name = "SK6402"  # Use the configured mount point name
-            auto_mount_point = f"/Volumes/{share_name}"
-            
-            # Create mount point directory first (mount_smbfs requires it to exist)
-            try:
-                from pathlib import Path
-                mount_path = Path(auto_mount_point)
-                if not await asyncio.to_thread(mount_path.exists):
-                    logging.info(f"Creating mount point directory: {auto_mount_point}")
-                    # Create with sudo since /Volumes/ is system protected
-                    create_cmd = ["sudo", "mkdir", "-p", auto_mount_point]
-                    create_process = await asyncio.create_subprocess_exec(
-                        *create_cmd, 
-                        stdout=asyncio.subprocess.PIPE, 
-                        stderr=asyncio.subprocess.PIPE
-                    )
-                    stdout, stderr = await create_process.communicate()
-                    
-                    if create_process.returncode != 0:
-                        logging.error(f"Failed to create mount point with sudo: {stderr.decode()}")
-                        # Fall back to trying without sudo (might work in some cases)
-                        try:
-                            await asyncio.to_thread(mount_path.mkdir, parents=True, exist_ok=True)
-                            logging.info(f"Created mount point without sudo: {auto_mount_point}")
-                        except Exception as e:
-                            logging.error(f"Failed to create mount point: {e}")
-                            return False
-                    else:
-                        logging.info(f"Successfully created mount point with sudo: {auto_mount_point}")
-                else:
-                    logging.info(f"Mount point directory already exists: {auto_mount_point}")
-            except Exception as e:
-                logging.error(f"Failed to create mount point directory: {e}")
-                return False
-                
-            # Use mount_smbfs specifically for SMB shares (not generic mount)
+            # Use the 'open' command which is the macOS way to mount network volumes
+            # This approach mimics what happens when you connect to a server via Finder
             cmd = [
-                "/sbin/mount_smbfs",
-                mount_url,
-                auto_mount_point
+                "/usr/bin/open", 
+                share_url
             ]
             
             logging.info(f"Mount command: {' '.join(cmd)}")
-            logging.info(f"Mount URL: {mount_url}")
-            logging.info(f"Auto mount point: {auto_mount_point}")
+            logging.info(f"Share URL: {share_url}")
             logging.info(f"Parsed hostname: {parsed.hostname}")
 
             process = await asyncio.create_subprocess_exec(
                 *cmd, 
                 stdout=asyncio.subprocess.PIPE, 
-                stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE  # Allow input for credentials if needed
+                stderr=asyncio.subprocess.PIPE
             )
 
             try:
-                # Send empty input to handle any credential prompts non-interactively
+                # open command is usually quick and non-interactive when credentials are cached
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(input=b'\n'), 
-                    timeout=12.0
+                    process.communicate(), 
+                    timeout=15.0
                 )
                 
                 # Log detailed output
@@ -162,22 +117,38 @@ class MacOSMounter(BaseMounter):
                 if stderr_text:
                     logging.warning(f"Mount command stderr: {stderr_text}")
                     
-                # mount returns 0 on success
+                # open returns 0 on success
                 if process.returncode == 0:
-                    logging.info(f"Mount successful! Share mounted at: {auto_mount_point}")
-                    # Verify the mount point exists and is accessible
-                    import os
-                    if os.path.exists(auto_mount_point) and os.path.ismount(auto_mount_point):
-                        logging.info(f"Mount verification successful: {auto_mount_point} is a valid mount")
+                    logging.info("Open command succeeded - waiting for mount to appear...")
+                    
+                    # Wait a bit for the mount to actually appear
+                    for i in range(10):  # Wait up to 10 seconds
+                        await asyncio.sleep(1)
+                        
+                        # Check if mount point exists and is a mount
+                        import os
+                        if os.path.exists(expected_mount_point):
+                            if os.path.ismount(expected_mount_point):
+                                logging.info(f"Mount successful! Share mounted at: {expected_mount_point}")
+                                return True
+                            else:
+                                # Might be a directory that was created but not yet mounted
+                                logging.info(f"Mount point exists but not yet mounted (attempt {i+1}/10)")
+                        else:
+                            logging.info(f"Mount point not yet visible (attempt {i+1}/10)")
+                    
+                    # Final check
+                    if os.path.exists(expected_mount_point) and os.path.ismount(expected_mount_point):
+                        logging.info(f"Mount verification successful: {expected_mount_point}")
                         return True
                     else:
-                        logging.warning(f"Mount command succeeded but mount point not accessible: {auto_mount_point}")
+                        logging.warning(f"Open command succeeded but mount not accessible: {expected_mount_point}")
                         return False
                 else:
-                    logging.error(f"Mount failed with return code: {process.returncode}")
-                    if "Authentication failed" in stderr_text or "authentication" in stderr_text.lower():
-                        logging.error("Mount failed due to authentication issues - check credentials")
-                    elif "No such host" in stderr_text or "not found" in stderr_text.lower():
+                    logging.error(f"Open command failed with return code: {process.returncode}")
+                    if "authentication" in stderr_text.lower() or "password" in stderr_text.lower():
+                        logging.error("Mount failed due to authentication issues - check credentials or keychain")
+                    elif "not found" in stderr_text.lower() or "no such host" in stderr_text.lower():
                         logging.error("Mount failed due to network/host issues")
                     return False
                     
