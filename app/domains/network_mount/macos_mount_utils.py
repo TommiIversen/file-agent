@@ -171,7 +171,7 @@ class MacOSNetworkChecker:
                 # Fallback: test local network gateway connectivity
                 # Try to ping the default gateway
                 process = await asyncio.create_subprocess_exec(
-                    "route", "get", "default",
+                    "/sbin/route", "get", "default",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -186,10 +186,12 @@ class MacOSNetworkChecker:
                 route_output = stdout.decode()
                 gateway_ip = None
                 for line in route_output.splitlines():
-                    if "gateway:" in line.lower():
-                        parts = line.split()
+                    line = line.strip()
+                    if line.startswith("gateway:"):
+                        # Format: "gateway: ua02411-ua6450n01-v2.ip.dr.dk"
+                        parts = line.split(":", 1)
                         if len(parts) >= 2:
-                            gateway_ip = parts[1]
+                            gateway_ip = parts[1].strip()
                             break
                 
                 if not gateway_ip:
@@ -198,7 +200,7 @@ class MacOSNetworkChecker:
                 
                 # Ping the gateway
                 process = await asyncio.create_subprocess_exec(
-                    "ping", "-c", "1", "-W", "2000", gateway_ip,
+                    "/sbin/ping", "-c", "1", "-W", "2000", gateway_ip,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -243,7 +245,7 @@ class MacOSNetworkChecker:
             # First try DNS lookup (faster and more reliable)
             try:
                 process = await asyncio.create_subprocess_exec(
-                    "nslookup", hostname,
+                    "/usr/bin/nslookup", hostname,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -262,7 +264,7 @@ class MacOSNetworkChecker:
             # Fallback to ping if DNS lookup fails
             # macOS ping syntax: -c count -W timeout_in_milliseconds
             process = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", "3000", hostname,
+                "/sbin/ping", "-c", "1", "-W", "3000", hostname,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
