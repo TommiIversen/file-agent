@@ -1,36 +1,15 @@
-import time
-from busylight.lights.kuando import Busylight
+from busylight_core import BlinkStick, Light
 
-try:
-    # Find og initialisér din Busylight
-    # Hvis du kun har én, vil first_light() finde den.
-    light = Busylight.first_light()
+# Find multi-LED devices
+multi_led_devices = []
+for light in Light.all_lights():
+    if hasattr(light, 'on') and 'led' in light.on.__annotations__:
+        multi_led_devices.append(light)
 
-    if not light:
-        print("Kunne ikke finde en Kuando Busylight.")
-        exit()
+if multi_led_devices:
+    device = multi_led_devices[0]
 
-    print("Fandt Busylight! Tænder rødt lys i 5 sekunder...")
-    # Tænd med en RGB-farve (Rød, Grøn, Blå)
-    # (255, 0, 0) er rød
-    light.on((255, 0, 0))
-
-    time.sleep(5) # Venter i 5 sekunder
-
-    print("Skifter til grønt lys i 5 sekunder...")
-    # (0, 255, 0) er grøn
-    light.on((0, 255, 0))
-
-    time.sleep(5) # Venter i 5 sekunder
-
-except Exception as e:
-    print(f"Der opstod en fejl: {e}")
-
-finally:
-    # Sørg for at slukke lyset, uanset hvad
-    print("Slukker lyset.")
-    try:
-        # For at slukke, sætter vi farven til (0, 0, 0)
-        light.on((0, 0, 0)) 
-    except:
-        pass # Lyset blev måske aldrig fundet
+    # Control individual LEDs (if supported)
+    device.on((255, 0, 0), led=0)    # First LED red
+    device.on((0, 255, 0), led=1)    # Second LED green
+    device.on((0, 0, 255), led=2)    # Third LED blue

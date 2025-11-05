@@ -30,13 +30,9 @@ class MacOSMounter(BaseMounter):
         try:
             expected_mount_point = self.get_mount_point_from_url(share_url)
             
-            # Step 1: Check network connectivity first
-            if not await self._network_checker.is_network_available():
-                logging.warning("Network not available - skipping mount attempt")
-                return False
-                
-            if not await self._network_checker.can_reach_share_host(share_url):
-                logging.warning(f"Cannot reach share host for {share_url} - skipping mount attempt")
+            # Step 1: Check network connectivity first - test our specific share host
+            if not await self._network_checker.is_network_available(share_url):
+                logging.warning(f"Network not available for share {share_url} - skipping mount attempt")
                 return False
             
             # Step 2: Clean up any existing problematic state

@@ -156,23 +156,56 @@ class MacOSNetworkChecker:
     def __init__(self):
         pass
     
-    async def is_network_available(self) -> bool:
+    async def is_network_available(self, share_url: str = None) -> bool:
         """
-        Check if network is generally available.
+        Check if network is available for our share.
         
-        Does a basic connectivity check.
+        If share_url is provided, tests connectivity to that share host.
+        Otherwise does a basic local network connectivity test.
         """
         try:
-            # Try to ping a reliable server (Google DNS)
-            process = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", "2000", "8.8.8.8",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            _, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
-            
-            return process.returncode == 0
+            if share_url:
+                # Test connectivity to our actual share host
+                return await self.can_reach_share_host(share_url)
+            else:
+                # Fallback: test local network gateway connectivity
+                # Try to ping the default gateway
+                process = await asyncio.create_subprocess_exec(
+                    "route", "get", "default",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=3.0)
+                
+                if process.returncode != 0:
+                    logging.debug("Could not get default route")
+                    return False
+                
+                # Extract gateway IP from route output
+                route_output = stdout.decode()
+                gateway_ip = None
+                for line in route_output.splitlines():
+                    if "gateway:" in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            gateway_ip = parts[1]
+                            break
+                
+                if not gateway_ip:
+                    logging.debug("Could not extract gateway IP")
+                    return False
+                
+                # Ping the gateway
+                process = await asyncio.create_subprocess_exec(
+                    "ping", "-c", "1", "-t", "2", gateway_ip,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                _, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
+                
+                return process.returncode == 0
             
         except Exception as e:
             logging.warning(f"Network check failed: {e}")
@@ -207,9 +240,9 @@ class MacOSNetworkChecker:
             
             logging.debug(f"Testing connectivity to share host: {hostname}")
             
-            # Try to ping the host
+            # macOS ping syntax: -c count -t timeout_in_seconds  
             process = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", "3000", hostname,
+                "ping", "-c", "1", "-t", "3", hostname,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
