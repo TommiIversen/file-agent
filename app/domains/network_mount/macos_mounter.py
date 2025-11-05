@@ -37,17 +37,23 @@ class MacOSMounter(BaseMounter):
             
             # Step 2: Clean up any existing problematic state
             logging.info(f"Cleaning up any invalid state at mount point: {expected_mount_point}")
+            logging.info(f"Checking for ghost mounts of pattern: {expected_mount_point}_*")
             
             # Clean up any ghost mounts first
             cleaned_ghosts = await self._mount_cleaner.cleanup_ghost_mounts(expected_mount_point)
             if cleaned_ghosts:
                 logging.info(f"Cleaned up ghost mounts: {cleaned_ghosts}")
+            else:
+                logging.info("No ghost mounts found to clean up")
             
             # Clean up invalid local folder at mount point
+            logging.info(f"Checking for invalid local folder at: {expected_mount_point}")
             cleanup_success = await self._mount_cleaner.cleanup_invalid_mount_point(expected_mount_point)
             if not cleanup_success:
                 logging.error(f"Failed to clean up invalid state at {expected_mount_point}")
                 return False
+            else:
+                logging.info("Mount point cleanup completed successfully")
                 
             # Step 3: Check if already properly mounted
             is_mounted, is_accessible = await self.verify_mount_accessible(expected_mount_point)
@@ -61,33 +67,72 @@ class MacOSMounter(BaseMounter):
 
             # Step 4: Attempt the actual mount
             logging.info(f"Attempting macOS mount: {share_url}")
+            logging.info(f"Expected mount point: {expected_mount_point}")
 
-            cmd = ["osascript", "-e", f'mount volume "{share_url}"']
+            # First try: Use Finder/AppleScript mount (non-blocking version)
+            # This avoids the hanging issue by using a different approach
+            
+            applescript_cmd = f'''
+            tell application "Finder"
+                try
+                    mount volume "{share_url}"
+                    return "success"
+                on error errMsg
+                    return "error: " & errMsg
+                end try
+            end tell
+            '''
+            
+            cmd = ["osascript", "-e", applescript_cmd]
+            logging.info("Mount command: osascript with Finder mount")
+            logging.info(f"Share URL: {share_url}")
 
             process = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=8.0)
+                
+                # Log detailed output
+                stdout_text = stdout.decode() if stdout else ""
+                stderr_text = stderr.decode() if stderr else ""
+                
+                logging.info(f"Mount command return code: {process.returncode}")
+                if stdout_text:
+                    logging.info(f"Mount command stdout: {stdout_text}")
+                    # Check if AppleScript returned success
+                    if "success" in stdout_text.lower():
+                        logging.info("AppleScript reported mount success")
+                    elif "error:" in stdout_text.lower():
+                        logging.error(f"AppleScript reported error: {stdout_text}")
+                        
+                if stderr_text:
+                    logging.warning(f"Mount command stderr: {stderr_text}")
+                    
             except asyncio.TimeoutError:
                 logging.error(f"Mount operation timed out for {share_url}")
+                logging.error(f"Command was: {' '.join(['osascript', '-e', 'Finder mount script'])}")
                 process.kill()
                 await process.wait()
                 return False
 
             # Step 5: Check mount result
             if process.returncode == 0:
-                logging.info(f"Mount command completed for {share_url}")
+                logging.info(f"Mount command completed successfully for {share_url}")
                 
                 # Step 6: Verify the mount is actually a real network mount
                 await asyncio.sleep(2)  # Give macOS time to complete the mount
                 
+                logging.info(f"Verifying mount at: {expected_mount_point}")
                 is_real_mount = await self._mount_validator.is_real_network_mount(expected_mount_point)
+                
                 if is_real_mount:
                     logging.info(f"Successfully verified network mount: {share_url} -> {expected_mount_point}")
                     return True
                 else:
+                    logging.warning(f"Mount command succeeded but path is not a real network mount: {expected_mount_point}")
+                    
                     # Check if macOS created a ghost mount instead
                     ghost_mounts = await self._mount_validator.find_ghost_mounts(expected_mount_point)
                     if ghost_mounts:
@@ -99,8 +144,10 @@ class MacOSMounter(BaseMounter):
                     return False
                     
             else:
-                error_msg = stderr.decode() if stderr else "Unknown error"
-                logging.error(f"Mount failed for {share_url}: {error_msg}")
+                logging.error(f"Mount command failed for {share_url}")
+                logging.error(f"Return code: {process.returncode}")
+                if stderr_text:
+                    logging.error(f"Error details: {stderr_text}")
                 return False
 
         except Exception as e:

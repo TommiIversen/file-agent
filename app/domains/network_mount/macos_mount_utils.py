@@ -301,6 +301,8 @@ class MacOSMountCleaner:
         WARNING: Only call this if you're sure it's not supposed to be a local folder!
         """
         try:
+            logging.debug(f"Checking mount point state: {mount_path}")
+            
             # First check if it's a real network mount - don't touch those!
             if await self._validator.is_real_network_mount(mount_path):
                 logging.info(f"Mount point is valid network mount, not cleaning: {mount_path}")
@@ -319,8 +321,9 @@ class MacOSMountCleaner:
                 
                 # Try to remove the invalid local folder
                 try:
+                    logging.info(f"Removing invalid local folder: {mount_path}")
                     await asyncio.to_thread(path_obj.rmdir)
-                    logging.info(f"Removed invalid local folder: {mount_path}")
+                    logging.info(f"Successfully removed invalid local folder: {mount_path}")
                     return True
                 except OSError as e:
                     # Folder might not be empty
@@ -328,6 +331,7 @@ class MacOSMountCleaner:
                     return False
             
             # Path doesn't exist or is not problematic
+            logging.debug(f"Mount point state is OK: {mount_path}")
             return True
             
         except Exception as e:
