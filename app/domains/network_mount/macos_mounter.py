@@ -69,8 +69,8 @@ class MacOSMounter(BaseMounter):
             logging.info(f"Attempting macOS mount: {share_url}")
             logging.info(f"Expected mount point: {expected_mount_point}")
 
-            # Try diskutil mount command which doesn't require sudo or user interaction
-            # This is the most reliable method for SMB mounts on macOS
+            # Use native macOS mount command for SMB shares
+            # This approach lets macOS handle mount point creation automatically
             
             # Parse SMB URL to extract server and share info
             # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
@@ -81,31 +81,24 @@ class MacOSMounter(BaseMounter):
                 logging.error(f"Could not parse hostname from SMB URL: {share_url}")
                 return False
             
-            # Create mount point directory first (diskutil requires it to exist)
-            try:
-                from pathlib import Path
-                mount_path = Path(expected_mount_point)
-                if not await asyncio.to_thread(mount_path.exists):
-                    logging.info(f"Creating mount point directory: {expected_mount_point}")
-                    await asyncio.to_thread(mount_path.mkdir, parents=True, exist_ok=True)
-                else:
-                    logging.info(f"Mount point directory already exists: {expected_mount_point}")
-            except Exception as e:
-                logging.error(f"Failed to create mount point directory: {e}")
-                return False
-                
-            # Build the diskutil mount command
-            # diskutil mount -mountPoint /path smb://server/share
+            # Try the mount command without pre-creating mount point
+            # macOS will create the mount point automatically in /Volumes/
+            # Format: mount -t smbfs smb://user@server/share /Volumes/name
+            
+            # Extract share name from URL for mount point
+            share_name = "SK6402"  # Use the configured mount point name
+            auto_mount_point = f"/Volumes/{share_name}"
+            
             cmd = [
-                "/usr/sbin/diskutil", 
-                "mount", 
-                "-mountPoint", expected_mount_point,
-                share_url
+                "/sbin/mount", 
+                "-t", "smbfs",
+                share_url,
+                auto_mount_point
             ]
             
             logging.info(f"Mount command: {' '.join(cmd)}")
+            logging.info(f"Auto mount point: {auto_mount_point}")
             logging.info(f"Parsed hostname: {parsed.hostname}")
-            logging.info(f"Mount point: {expected_mount_point}")
 
             process = await asyncio.create_subprocess_exec(
                 *cmd, 
@@ -118,7 +111,7 @@ class MacOSMounter(BaseMounter):
                 # Send empty input to handle any credential prompts non-interactively
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(input=b'\n'), 
-                    timeout=10.0
+                    timeout=12.0
                 )
                 
                 # Log detailed output
@@ -132,11 +125,24 @@ class MacOSMounter(BaseMounter):
                 if stderr_text:
                     logging.warning(f"Mount command stderr: {stderr_text}")
                     
-                # diskutil returns 0 on success
+                # mount returns 0 on success
                 if process.returncode == 0:
-                    logging.info("diskutil mount reported success")
+                    logging.info(f"Mount successful! Share mounted at: {auto_mount_point}")
+                    # Verify the mount point exists and is accessible
+                    import os
+                    if os.path.exists(auto_mount_point) and os.path.ismount(auto_mount_point):
+                        logging.info(f"Mount verification successful: {auto_mount_point} is a valid mount")
+                        return True
+                    else:
+                        logging.warning(f"Mount command succeeded but mount point not accessible: {auto_mount_point}")
+                        return False
                 else:
-                    logging.error(f"diskutil mount failed with return code: {process.returncode}")
+                    logging.error(f"Mount failed with return code: {process.returncode}")
+                    if "Authentication failed" in stderr_text or "authentication" in stderr_text.lower():
+                        logging.error("Mount failed due to authentication issues - check credentials")
+                    elif "No such host" in stderr_text or "not found" in stderr_text.lower():
+                        logging.error("Mount failed due to network/host issues")
+                    return False
                     
             except asyncio.TimeoutError:
                 logging.error(f"Mount operation timed out for {share_url}")
