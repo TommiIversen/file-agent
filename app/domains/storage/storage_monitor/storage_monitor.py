@@ -34,6 +34,7 @@ class StorageMonitorService:
 
         self._is_running = False
         self._monitor_task: Optional[asyncio.Task] = None
+        self._mount_in_progress = False  # Prevent parallel mount attempts
 
         logging.info(
             "StorageMonitorService initialized with SRP-compliant architecture"
@@ -183,45 +184,54 @@ class StorageMonitorService:
                 mount_attempted = False
                 if storage_type == "destination" and self._network_mount_service:
                     if self._network_mount_service.is_network_mount_configured():
+                        # Prevent parallel mount attempts
+                        if self._mount_in_progress:
+                            logging.debug(f"Mount already in progress for {path}, skipping")
+                            return
+                            
                         share_url = self._network_mount_service.get_network_share_url()
                         if share_url:
-                            logging.info(
-                                f"Attempting network mount for destination: {share_url}"
-                            )
-
-                            await self._mount_broadcaster.broadcast_mount_attempt(
-                                storage_type=storage_type,
-                                share_url=share_url,
-                                target_path=path,
-                            )
-
-                            mount_success = await self._network_mount_service.ensure_mount_available(
-                                share_url, path
-                            )
-                            mount_attempted = True
-
-                            if mount_success:
+                            self._mount_in_progress = True
+                            try:
                                 logging.info(
-                                    f"Network mount successful, re-checking storage: {path}"
+                                    f"Attempting network mount for destination: {share_url}"
                                 )
 
-                                await self._mount_broadcaster.broadcast_mount_success(
+                                await self._mount_broadcaster.broadcast_mount_attempt(
                                     storage_type=storage_type,
                                     share_url=share_url,
                                     target_path=path,
                                 )
 
-                                new_info = await self._storage_checker.check_path(
-                                    path=path,
-                                    warning_threshold_gb=warning_threshold,
-                                    critical_threshold_gb=critical_threshold,
+                                mount_success = await self._network_mount_service.ensure_mount_available(
+                                    share_url, path
                                 )
-                            else:
-                                await self._mount_broadcaster.broadcast_mount_failure(
-                                    storage_type=storage_type,
-                                    share_url=share_url,
-                                    target_path=path,
-                                )
+                                mount_attempted = True
+
+                                if mount_success:
+                                    logging.info(
+                                        f"Network mount successful, re-checking storage: {path}"
+                                    )
+
+                                    await self._mount_broadcaster.broadcast_mount_success(
+                                        storage_type=storage_type,
+                                        share_url=share_url,
+                                        target_path=path,
+                                    )
+
+                                    new_info = await self._storage_checker.check_path(
+                                        path=path,
+                                        warning_threshold_gb=warning_threshold,
+                                        critical_threshold_gb=critical_threshold,
+                                    )
+                                else:
+                                    await self._mount_broadcaster.broadcast_mount_failure(
+                                        storage_type=storage_type,
+                                        share_url=share_url,
+                                        target_path=path,
+                                    )
+                            finally:
+                                self._mount_in_progress = False
                     # Note: Mount status for non-network scenarios will be sent later with storage status
 
                 if not new_info.is_accessible and not mount_attempted:

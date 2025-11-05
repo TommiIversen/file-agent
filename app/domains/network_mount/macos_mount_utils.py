@@ -198,7 +198,7 @@ class MacOSNetworkChecker:
                 
                 # Ping the gateway
                 process = await asyncio.create_subprocess_exec(
-                    "ping", "-c", "1", "-t", "2", gateway_ip,
+                    "ping", "-c", "1", "-W", "2000", gateway_ip,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -215,7 +215,7 @@ class MacOSNetworkChecker:
         """
         Check if we can reach the host from the share URL.
         
-        Extracts hostname from SMB URL and tests connectivity.
+        Uses DNS lookup first (faster) then ping as backup.
         """
         try:
             # Extract hostname from SMB URL
@@ -240,9 +240,29 @@ class MacOSNetworkChecker:
             
             logging.debug(f"Testing connectivity to share host: {hostname}")
             
-            # macOS ping syntax: -c count -t timeout_in_seconds  
+            # First try DNS lookup (faster and more reliable)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "nslookup", hostname,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
+                
+                if process.returncode == 0:
+                    # DNS lookup succeeded, host is reachable
+                    logging.debug(f"DNS lookup successful for {hostname}")
+                    return True
+                else:
+                    logging.debug(f"DNS lookup failed for {hostname}, trying ping...")
+            except Exception as e:
+                logging.debug(f"DNS lookup error for {hostname}: {e}, trying ping...")
+            
+            # Fallback to ping if DNS lookup fails
+            # macOS ping syntax: -c count -W timeout_in_milliseconds
             process = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-t", "3", hostname,
+                "ping", "-c", "1", "-W", "3000", hostname,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -253,7 +273,8 @@ class MacOSNetworkChecker:
                 logging.debug(f"Successfully pinged share host: {hostname}")
                 return True
             else:
-                logging.warning(f"Cannot reach share host {hostname}: {stderr.decode() if stderr else 'No response'}")
+                error_msg = stderr.decode() if stderr else "No response"
+                logging.warning(f"Cannot reach share host {hostname}: {error_msg}")
                 return False
                 
         except asyncio.TimeoutError:
