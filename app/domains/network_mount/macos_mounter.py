@@ -34,16 +34,21 @@ class MacOSMounter(BaseMounter):
                 logging.info(f"Share already mounted: {share_url} -> {expected_mount_point}")
                 return True
             
-            # Step 2: Simple cleanup - remove any ghost mounts
+            # Step 2: Check network connectivity before mount attempt
+            if not await self._network_checker.is_network_available(share_url):
+                logging.warning(f"Network not available for share {share_url} - skipping mount attempt")
+                return False
+            
+            # Step 3: Simple cleanup - remove any ghost mounts
             ghost_mounts = await self._mount_validator.find_ghost_mounts(expected_mount_point)
             if ghost_mounts:
                 logging.info(f"Cleaning up ghost mounts: {ghost_mounts}")
                 await self._mount_cleaner.cleanup_ghost_mounts(expected_mount_point)
             
-            # Step 3: Clean up any problematic local folder
+            # Step 4: Clean up any problematic local folder
             await self._mount_cleaner.cleanup_invalid_mount_point(expected_mount_point)
             
-            # Step 4: Simple mount - exactly like your AppleScript
+            # Step 5: Simple mount - exactly like your AppleScript
             logging.info(f"Attempting macOS mount: {share_url}")
 
             cmd = ["osascript", "-e", f'mount volume "{share_url}"']
@@ -60,7 +65,7 @@ class MacOSMounter(BaseMounter):
                 await process.wait()
                 return False
 
-            # Step 5: Check if mount succeeded
+            # Step 6: Check if mount succeeded
             if process.returncode == 0:
                 logging.info(f"Mount command completed for {share_url}")
                 

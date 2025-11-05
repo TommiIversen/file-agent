@@ -13,11 +13,51 @@ class MacOSNetworkChecker:
     
     async def is_network_available(self, share_url: str = None) -> bool:
         """
-        Simple network check - just return True.
+        Check if network is available by testing the specific share host.
         
-        The mount will fail if network is down anyway, so no need to pre-check.
+        Extracts hostname from share URL and tests connectivity.
         """
-        return True
+        if not share_url:
+            return True
+            
+        try:
+            # Extract hostname from SMB URL
+            # smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402 -> net.dr.dk
+            if "://" in share_url and "@" in share_url:
+                # Format: smb://user@hostname/path
+                hostname = share_url.split("@")[1].split("/")[0]
+            elif "://" in share_url:
+                # Format: smb://hostname/path
+                hostname = share_url.split("://")[1].split("/")[0]
+            else:
+                logging.warning(f"Cannot extract hostname from share URL: {share_url}")
+                return True  # Don't block if we can't parse
+            
+            logging.debug(f"Testing network connectivity to: {hostname}")
+            
+            # Use ping to test connectivity
+            process = await asyncio.create_subprocess_exec(
+                "/sbin/ping", "-c", "2", "-W", "2000", hostname,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logging.warning(f"Network connectivity test timed out for {hostname}")
+                return False
+            
+            if process.returncode == 0:
+                logging.debug(f"Network connectivity OK to {hostname}")
+                return True
+            else:
+                logging.warning(f"Network connectivity failed to {hostname}: ping failed")
+                return False
+                
+        except Exception as e:
+            logging.warning(f"Network connectivity test failed: {e}")
+            return True  # Don't block on errors, let mount attempt decide
     
     async def can_reach_share_host(self, share_url: str) -> bool:
         """
