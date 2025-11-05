@@ -103,598 +103,2763 @@ Note: EPOC alway has wrong year in date field ; fredag d. 4. november 1994 kl. 0
 
 
 
-
-# Fase 1: Fundament og Konfiguration
-Mål: Oprette de nye domæner og gøre konfigurationen klar.
-
-## Opdater Konfiguration:
-
-Fil: app/config.py
-
-Handling: Tilføj de nye API-endpoints til din Settings-klasse.
-
-```python
-class Settings(BaseSettings):
-    # ... (dine eksisterende settings)
-
-    # --- NYE INDSTILLINGER ---
-    JUSTIN_API_BASE_URL: str = Field(
-        default="http://localhost:8080",
-        description="Base URL for Just In Engine API'en"
-    )
-    TALLY_LIGHT_API_URL: str = Field(
-        default="http://localhost:8001/api/switch", # Antaget eksempel-URL
-        description="Base URL til IP Power Switch (Tally Light)"
-    )
-```
-## Opret Domæne-mapper:
-
-Opret app/domains/ingest_monitor/
-
-Opret app/domains/tally_light/
-
-## Definer Datamodeller:
-
-Fil: app/domains/ingest_monitor/models.py (Ny fil)
-
-Handling: Opret Pydantic-modeller, der matcher API-svarene fra Just In, så du arbejder med typer, ikke rå dictionaries.
-
-```python
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-
-class JustInOptions(BaseModel):
-    TOAJustInEngineVideoSignalAvailable: bool = True
-    TOAJustInEngineRecordingError: bool = False
-    # ... (tilføj andre felter efter behov) ...
-
-class JustInRecordingStatus(BaseModel):
-    rec: bool
-    channel: str
-    options: JustInOptions
-
-class JustInActiveChannels(BaseModel):
-    channel_names: List[str] = Field(..., alias="channel-names")
-
-class JustInError(BaseModel):
-    date: float
-    errorCode: int
-    errorUIDescription: str
-
-class JustInErrors(BaseModel):
-    channel: str
-    errors: List[JustInError]
-
-class ChannelState(BaseModel):
-    """Vores interne 'Single Source of Truth' for en kanal."""
-    name: str
-    is_recording: bool = False
-    has_signal: bool = True
-    has_errors: bool = False
-    last_errors: List[JustInError] = []
-```
-
-
-# Fase 2: Opret IngestMonitor Service (Data-indsamleren)
-Mål: Byg den kerne-service, der kører i baggrunden, henter data fra Just In API'en og holder en intern "cache" af live-status.
-
-## Definer Nye Events:
-
-Fil: app/domains/ingest_monitor/events.py (Ny fil)
-
-Handling: Definer de events, denne service vil publicere.
-
-```python
-from dataclasses import dataclass
-from app.core.events.domain_event import DomainEvent
-
-@dataclass(frozen=True)
-class ChannelRecordingStartedEvent(DomainEvent):
-    channel_name: str
-
-@dataclass(frozen=True)
-class ChannelRecordingStoppedEvent(DomainEvent):
-    channel_name: str
-
-@dataclass(frozen=True)
-class ChannelErrorDetectedEvent(DomainEvent):
-    channel_name: str
-    error_message: str
-
-@dataclass(frozen=True)
-class IngestStatusUpdatedEvent(DomainEvent):
-    """En samlet event til UI'et med status for alle kanaler."""
-    status_snapshot: Dict[str, dict] # f.eks. {"KAM_1": {"is_recording": true, ...}}
-```
-## Opret Servicen:
-
-Fil: app/domains/ingest_monitor/service.py (Ny fil)
-
-Handling: Denne service vil køre to parallelle loops: En hurtig (for rec status) og en langsom (for errors).
-
-```python
-import asyncio
-import logging
-import httpx
-from typing import Dict, List, Optional
-from app.config import Settings
-from app.core.events.event_bus import DomainEventBus
-from .models import ChannelState, JustInActiveChannels, JustInRecordingStatus, JustInErrors
-from .events import (
-    ChannelRecordingStartedEvent, ChannelRecordingStoppedEvent, 
-    ChannelErrorDetectedEvent, IngestStatusUpdatedEvent
-)
-
-class IngestMonitorService:
-    def __init__(self, settings: Settings, event_bus: DomainEventBus):
-        self._settings = settings
-        self._event_bus = event_bus
-        self._client = httpx.AsyncClient(base_url=settings.JUSTIN_API_BASE_URL, timeout=2.0)
-        self._status_cache: Dict[str, ChannelState] = {}
-        self._running = False
-
-        # Kør den hurtige "tally"-polling hvert 2. sekund
-        self._fast_poll_interval = 2.0 
-        # Kør den langsomme "error"-polling hvert 30. sekund
-        self._slow_poll_interval = 30.0
-
-    def get_status_cache(self) -> Dict[str, dict]:
-        """Returnerer et snapshot af den nuværende cache til UI'et."""
-        return {name: state.model_dump() for name, state in self._status_cache.items()}
-
-    async def start_monitoring(self):
-        if self._running: return
-        self._running = True
-        logging.info("IngestMonitorService starter...")
-
-        # Start de to loops parallelt
-        self._fast_loop_task = asyncio.create_task(self._fast_polling_loop())
-        self._slow_loop_task = asyncio.create_task(self._slow_polling_loop())
-
-    async def stop_monitoring(self):
-        self._running = False
-        if self._fast_loop_task: self._fast_loop_task.cancel()
-        if self._slow_loop_task: self._slow_loop_task.cancel()
-        await self._client.aclose()
-        logging.info("IngestMonitorService stoppet.")
-
-    async def _fast_polling_loop(self):
-        """Henter 'rec' status hvert 2. sekund."""
-        while self._running:
-            try:
-                await self._fetch_all_channel_statuses()
-            except Exception as e:
-                logging.error(f"Fejl i IngestMonitor fast_polling_loop: {e}")
-            await asyncio.sleep(self._fast_poll_interval)
-
-    async def _slow_polling_loop(self):
-        """Henter 'errors' hvert 30. sekund."""
-        while self._running:
-            try:
-                await self._fetch_all_channel_errors()
-            except Exception as e:
-                logging.error(f"Fejl i IngestMonitor slow_polling_loop: {e}")
-            await asyncio.sleep(self._slow_poll_interval)
-
-    async def _fetch_all_channel_statuses(self):
-        """Henter status for alle kanaler parallelt (Fan-out/Fan-in)."""
-        try:
-            # 1. Hent den samlede kanalliste
-            response = await self._client.get("/ingest/activeChannels")
-            response.raise_for_status()
-            channel_data = JustInActiveChannels.model_validate(response.json())
-            channel_names = channel_data.channel_names
-
-            # 2. Opret en task for hver kanal
-            async with asyncio.TaskGroup() as tg:
-                tasks = [
-                    tg.create_task(self._fetch_single_channel_status(name)) 
-                    for name in channel_names
-                ]
-
-            # 3. Saml resultater og opdater cache
-            new_statuses: List[ChannelState] = [task.result() for task in tasks if task.result()]
-            events_to_publish = self._update_cache_and_detect_changes(new_statuses)
-
-            # 4. Publicer events
-            for event in events_to_publish:
-                await self._event_bus.publish(event)
-
-            # Publicer den samlede snapshot-event til UI
-            await self._event_bus.publish(IngestStatusUpdatedEvent(
-                status_snapshot=self.get_status_cache()
-            ))
-
-        except httpx.RequestError as e:
-            logging.warning(f"Kunne ikke hente activeChannels: {e}")
-        except Exception as e:
-            logging.error(f"Fejl i _fetch_all_channel_statuses: {e}")
-
-    async def _fetch_single_channel_status(self, channel_name: str) -> Optional[ChannelState]:
-        """Henter status for én enkelt kanal."""
-        try:
-            response = await self._client.get(f"/ingest/requestRecordingStatus?channel={channel_name}")
-            status_data = JustInRecordingStatus.model_validate(response.json())
-
-            # Opdater eller opret den interne state
-            state = self._status_cache.get(channel_name, ChannelState(name=channel_name))
-            state.is_recording = status_data.rec
-            state.has_signal = status_data.options.TOAJustInEngineVideoSignalAvailable
-            # Note: Fejlstatus nulstilles kun af den langsomme error-loop
-
-            return state
-        except Exception as e:
-            logging.warning(f"Kunne ikke hente status for {channel_name}: {e}")
-            return None
-
-    def _update_cache_and_detect_changes(self, new_states: List[ChannelState]) -> List[DomainEvent]:
-        """Sammenligner ny state med cachen og genererer Tally-events."""
-        events = []
-        for new_state in new_states:
-            channel_name = new_state.name
-            old_state = self._status_cache.get(channel_name)
-
-            if old_state and old_state.is_recording != new_state.is_recording:
-                if new_state.is_recording:
-                    events.append(ChannelRecordingStartedEvent(channel_name=channel_name))
-                else:
-                    events.append(ChannelRecordingStoppedEvent(channel_name=channel_name))
-
-            # Opdater cachen
-            self._status_cache[channel_name] = new_state
-        return events
-
-    async def _fetch_all_channel_errors(self):
-        """Henter fejlstatus for alle kanaler parallelt (langsom loop)."""
-        channel_names = list(self._status_cache.keys())
-        if not channel_names:
-            return # Ingen kanaler at tjekke
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(self._fetch_single_channel_error(name)) 
-                for name in channel_names
-            ]
-
-        # Opdater cache med fejl-info
-        for task in tasks:
-            if task.result():
-                channel_name, errors, has_new_error = task.result()
-                if channel_name in self._status_cache:
-                    self._status_cache[channel_name].has_errors = bool(errors)
-                    self._status_cache[channel_name].last_errors = errors
-                    if has_new_error:
-                        await self._event_bus.publish(ChannelErrorDetectedEvent(
-                            channel_name=channel_name,
-                            error_message=errors[0].errorUIDescription
-                        ))
-
-    async def _fetch_single_channel_error(self, channel_name: str) -> Optional[tuple[str, List[JustInError], bool]]:
-        """Henter fejl for én kanal og tjekker om der er NYE fejl."""
-        try:
-            response = await self._client.get(f"/ingest/errors?channel={channel_name}")
-            error_data = JustInErrors.model_validate(response.json())
-
-            old_errors = self._status_cache.get(channel_name, ChannelState(name=channel_name)).last_errors
-            # Simpel tjek: er den nyeste fejl forskellig fra den gamle nyeste fejl?
-            has_new_error = False
-            if error_data.errors and (not old_errors or error_data.errors[0].date != old_errors[0].date):
-                has_new_error = True
-
-            return channel_name, error_data.errors, has_new_error
-        except Exception as e:
-            logging.warning(f"Kunne ikke hente fejl for {channel_name}: {e}")
-            return None
-```
-
-
-
-# Fase 3: Opret TallyLight Domænet (Modificeret)
-Fase 3: Opret TallyLight Domænet (KORRIGERET)
-Mål: Oprette en "stateful" lytter, der abonnerer på det samlede IngestStatusUpdatedEvent og administrerer en enkelt Tally-lampe (med /on og /off) for at vise tre tilstande: Solidt Lys (alle optager), Blink (nogle optager) eller Slukket (ingen optager).
-
-Opret Håndterings-filen:
-
-Fil: app/domains/tally_light/event_handlers.py (Ny fil)
-
-Implementer TallyLightEventHandler (Stateful Version):
-
-Handling: Erstat den simple handler med denne nye, stateful version, der administrerer en baggrunds-blinker-task.
-
-Python
-
-import asyncio
-import logging
-import httpx
-from enum import Enum
-from typing import Optional
-from app.config import Settings
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
-
-class TallyState(Enum):
-    """Definerer de 3 ønskede tilstande for den fælles Tally-lampe."""
-    OFF = "off"
-    SOLID_ON = "on"
-    BLINKING = "blink"
-
-class TallyLightEventHandler:
-    """
-    Administrerer den fælles Tally-lampe ved at starte/stoppe en
-    baggrunds-blinker-task baseret på den samlede optagestatus.
-    """
-    def __init__(self, settings: Settings):
-        self._client = httpx.AsyncClient(base_url=settings.TALLY_LIGHT_API_URL, timeout=1.0)
-        self._current_tally_state: TallyState = TallyState.OFF
-        self._blinker_task: Optional[asyncio.Task] = None
-        self._blink_interval_sec: float = 0.5  # 500ms tænd, 500ms sluk
-        self._lock = asyncio.Lock() # Beskytter adgang til _blinker_task
-        logging.info("TallyLightEventHandler initialiseret (med Software Blinker-logik)")
-
-    async def handle_ingest_status_update(self, event: IngestStatusUpdatedEvent):
-        """
-        Modtager det komplette status-snapshot hvert 2. sekund
-        og opdaterer Tally-lampens tilstand.
-        """
-        snapshot = event.status_snapshot
-
-        # 1. Bestem den ønskede nye tilstand
-        new_state: TallyState
-        if not snapshot:
-            new_state = TallyState.OFF
-        else:
-            total_channels = len(snapshot)
-            recording_channels = sum(
-                1 for state in snapshot.values() if state.get("is_recording", False)
-            )
-
-            if recording_channels == 0:
-                new_state = TallyState.OFF
-            elif recording_channels == total_channels:
-                new_state = TallyState.SOLID_ON # Alle optager
-            else:
-                new_state = TallyState.BLINKING # Mindst én, men ikke alle, optager
-
-        # 2. Anvend kun ændringen, hvis den er ny
-        if new_state != self._current_tally_state:
-            await self._update_tally_state(
-                new_state, 
-                f"{recording_channels}/{total_channels} optager"
-            )
-
-    async def _update_tally_state(self, new_state: TallyState, reason: str):
-        """
-        Håndterer overgangen mellem OFF, SOLID_ON, og BLINKING
-        ved at administrere blinker-tasken.
-        """
-        async with self._lock:
-            if new_state == self._current_tally_state:
-                return # En anden event nåede at ændre den i mellemtiden
-
-            current_state_str = self._current_tally_state.value
-            new_state_str = new_state.value
-            logging.info(f"Tally-status ændret: {current_state_str} -> {new_state_str} (Årsag: {reason})")
-
-            # 1. Stop altid den gamle blinker-task (hvis den kører)
-            if self._blinker_task and not self._blinker_task.done():
-                self._blinker_task.cancel()
-                try:
-                    await self._blinker_task # Vent på at den lukker ned og slukker lyset
-                except asyncio.CancelledError:
-                    pass # Forventet
-            self._blinker_task = None
-
-            # 2. Sæt den nye tilstand
-            try:
-                if new_state == TallyState.SOLID_ON:
-                    await self._client.post("/on")
-                elif new_state == TallyState.OFF:
-                    await self._client.post("/off")
-                elif new_state == TallyState.BLINKING:
-                    # Start den nye blinker-task i baggrunden
-                    self._blinker_task = asyncio.create_task(self._blinker_loop())
-
-                self._current_tally_state = new_state # Gem den nye tilstand
-
-            except httpx.RequestError as e:
-                logging.error(f"Kunne ikke opdatere Tally-lys til {new_state_str}: {e}")
-                # Vi opdaterer ikke _current_tally_state, så den prøver igen ved næste event
-
-    async def _blinker_loop(self):
-        """Evig løkke, der tænder/slukker lyset via /on og /off."""
-        try:
-            while True:
-                await self._client.post("/on")
-                await asyncio.sleep(self._blink_interval_sec)
-                await self._client.post("/off")
-                await asyncio.sleep(self._blink_interval_sec)
-        except asyncio.CancelledError:
-            # Vigtig oprydning: Sørg for at slukke lyset, når blink stoppes.
-            try:
-                await self._client.post("/off")
-                logging.info("Blinker-task stoppet, lyset er slukket.")
-            except httpx.RequestError as e:
-                logging.error(f"Kunne ikke slukke Tally-lys under blink-stop: {e}")
-            raise # Re-raise CancelledError
-        except Exception as e:
-            logging.error(f"Fejl i blinker-loop: {e}")
-            # Sæt tilstanden tilbage til OFF, så den kan genstartes
-            self._current_tally_state = TallyState.OFF
-
-    async def stop_worker(self):
-        """Kaldes fra main.py lifespan for at sikre ren nedlukning."""
-        logging.info("Stopper TallyLightEventHandler (slukker lys)...")
-        await self._update_tally_state(TallyState.OFF, "Applikation lukker ned")
-        logging.info("TallyLightEventHandler stoppet.")
-Opret Registrerings-fil:
-
-Fil: app/domains/tally_light/registration.py (Ny fil)
-
-Handling: Sørg for, at den nye handler abonnerer på IngestStatusUpdatedEvent.
-
-Python
-
-import logging
-from app.core.events.event_bus import DomainEventBus
-from app.core.cqrs.command_bus import CommandBus
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
-from .event_handlers import TallyLightEventHandler
-
-def register_tally_light_domain(
-    command_bus: CommandBus, 
-    event_bus: DomainEventBus, 
-    handler: TallyLightEventHandler # Modtag den instansierede handler
-):
-    """Registrerer alle event-abonnementer for TallyLight-domænet."""
-    logging.info("Registrerer 'TallyLight' domæne handlers...")
-
-    # Abonner på den samlede snapshot-event
-    event_bus.subscribe(
-        IngestStatusUpdatedEvent, 
-        handler.handle_ingest_status_update
-    )
-Opdater app/dependencies.py:
-
-Handling: Tilføj en getter for den nye TallyLightEventHandler.
-
-Python
-
-# ... (andre imports)
-from app.domains.tally_light.event_handlers import TallyLightEventHandler
-
-def get_tally_light_event_handler() -> TallyLightEventHandler:
-    if "tally_light_event_handler" not in _singletons:
-        _singletons["tally_light_event_handler"] = TallyLightEventHandler(
-            settings=get_settings()
-        )
-    return _singletons["tally_light_event_handler"]
-Opdater app/main.py:
-
-Handling: Sørg for at registrere domænet og vigtigst af alt, kald stop_worker() ved nedlukning.
-
-Python
-
-# ... (imports)
-from app.domains.tally_light.registration import register_tally_light_domain
-from app.dependencies import get_tally_light_event_handler
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # ... (al din eksisterende startup-kode) ...
-
-    tally_handler = get_tally_light_event_handler()
-    register_tally_light_domain(command_bus, event_bus, tally_handler)
-
-    yield # Applikationen kører
-
-    # --- NEDLUKNINGS-LOGIK ---
-    logging.info("Applikation lukker ned... Stopper Tally-lys...")
-    await tally_handler.stop_worker()
-    # ... (anden nedluknings-logik) ...
-
-# Fase 4: Opret Frontend API'et (CQRS)
-Mål: Gøre IngestMonitor's cachede data tilgængelige for UI'et via et Query.
-
-## Definer Query:
-
-Fil: app/domains/ingest_monitor/queries.py (Ny fil)
-
-```python
-@dataclass
-class GetIngestStatusQuery:
-    """Henter det cachede snapshot af alle kanalers status."""
-    pass
-```
-## Opret Query Handler:
-
-Fil: app/domains/ingest_monitor/handlers.py (Ny fil)
-
-```python
-from .queries import GetIngestStatusQuery
-from .service import IngestMonitorService
-from typing import Dict
-
-class GetIngestStatusQueryHandler:
-    def __init__(self, ingest_monitor_service: IngestMonitorService):
-        self._service = ingest_monitor_service
-
-    async def handle(self, query: GetIngestStatusQuery) -> Dict[str, dict]:
-        # Henter direkte fra servicens cache - lynhurtigt
-        return self._service.get_status_cache()
-```
-## Opret API Endpoint:
-
-Fil: app/domains/ingest_monitor/api.py (Ny fil)
-
-```python
-from fastapi import APIRouter, Depends
-from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_query_bus
-from .queries import GetIngestStatusQuery
-
-router = APIRouter(prefix="/api/ingest", tags=["Ingest Monitor"])
-
-@router.get("/status")
-async def get_ingest_status(query_bus: QueryBus = Depends(get_query_bus)):
-    """Henter live-status for alle ingest-kanaler."""
-    return await query_bus.execute(GetIngestStatusQuery())
-```
-
-
-# Fase 5: Registrering og Opstart
-Mål: Kable det hele sammen i DI-containeren og main.py.
-
-## Opret Registrerings-filer:
-
-app/domains/ingest_monitor/registration.py
-
-app/domains/tally_light/registration.py
-
-## Opdater app/dependencies.py:
-
-Tilføj get_ingest_monitor_service() (som singleton).
-
-Tilføj get_tally_light_event_handler() (som singleton).
-
-## Opdater app/main.py:
-
-lifespan:
-
-Kald register_ingest_monitor_domain(...) (registrerer Query Handler).
-
-Kald register_tally_light_domain(...) (registrerer Event Handlers til Tally-events).
-
-Hent IngestMonitorService og kald asyncio.create_task(ingest_monitor_service.start_monitoring()).
-
-app:
-
-app.include_router(ingest_api_router)
-
-## Opdater PresentationEventHandlers:
-
-Fil: app/domains/presentation/event_handlers.py
-
-Handling: Få denne handler til at abonnere på IngestStatusUpdatedEvent og ChannelErrorDetectedEvent.
-
-Når den modtager disse, skal den formatere en ny WebSocket-besked (f.eks. ingest_status_update eller new_event_log) og broadcaste den, så UI'et opdateres live.
-
-
-# Fase 6: Frontend UI (Manuelt Arbejde)
-## Opret ingestStore.js:
-
-I init(): Kald fetch('/api/ingest/status') for at få den indledende data.
-
-## Opdater messageHandler.js:
-
-Tilføj case "ingest_status_update": til at opdatere ingestStore.js.
-
-Tilføj case "new_event_log": til at tilføje fejlen til din GlobalEventLogger (eller en ny log-store).
-
-## Byg UI-panelet:
-
-Brug x-for til at iterere over kanalerne i ingestStore.js.
-
-Vis is_recording (som en rød/grøn prik).
-
-Vis has_errors (som et advarsels-ikon).
-
-Vis den nye event-log.
+{
+  "servers": [
+    {
+      "url": "http://10.65.79.29:8080",
+      "description": "Generated server url"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Ingest",
+      "description": "Use to control Just:In. Methods are documented below."
+    }
+  ],
+  "openapi": "3.0.1",
+  "info": {
+    "title": "ToolsOnAir REST API",
+    "version": "v1.0.0",
+    "description": "Use for controlling ToolsOnAir products. Methods are documented below."
+  },
+  "paths": {
+    "/ingest/requestCurrentFilename": {
+      "post": {
+        "operationId": "requestCurrentFilename",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetRequestFilename"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCurrentFilename"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/setMetadataWritingOption": {
+      "post": {
+        "operationId": "setMetadataWritingOption",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingStatus"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMetadataWritingOption"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/setMarkers": {
+      "post": {
+        "operationId": "setMarkers",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMarkers"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/setTimecodeOffset": {
+      "post": {
+        "operationId": "setTimecodeOffset",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTimecodeOffset"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestLoadMetadataSet": {
+      "post": {
+        "operationId": "requestLoadMetadataSet",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadedMetadataSet"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestLoadMetadataSet"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/setScheduleEvents": {
+      "post": {
+        "operationId": "setScheduleEvents",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleEvents"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/stopChannel": {
+      "post": {
+        "operationId": "stopChannel",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartStopChannel"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestAudioPreview": {
+      "post": {
+        "operationId": "requestAudioPreview",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAudioPreview"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestNamingConventions": {
+      "post": {
+        "operationId": "requestNamingConventions",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamingConventions"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestNamingConventions"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/activeChannels": {
+      "get": {
+        "operationId": "activeChannels",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetChannelNames"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "Ingest"
+        ]
+      }
+    },
+    "/ingest/requestMetadataSets": {
+      "post": {
+        "operationId": "requestMetadataSets",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataSets"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestMetadataSets"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/setEncoderCount": {
+      "post": {
+        "operationId": "setEncoderCount",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEncoderCount"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestCanRecord": {
+      "post": {
+        "operationId": "requestCanRecord",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanRecord"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCanRecord"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/updatedNamingConvention": {
+      "post": {
+        "operationId": "updatedNamingConvention",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadedNamingConvention"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNamingConvention"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestLoadCapturePreset": {
+      "post": {
+        "operationId": "requestLoadCapturePreset",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetLoadedSetting"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestLoadCapturePreset"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestScheduledRecording": {
+      "post": {
+        "operationId": "requestScheduledRecording",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestScheduledRecording"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestLoadDestinationPreset": {
+      "post": {
+        "operationId": "requestLoadDestinationPreset",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetLoadedDestinationPreset"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestLoadDestinationPreset"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/stopRecording": {
+      "post": {
+        "operationId": "stopRecording",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopRecordingWithMetadata"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/startChannel": {
+      "post": {
+        "operationId": "startChannel",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartStopChannel"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestFilename": {
+      "post": {
+        "operationId": "requestFilename",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetRequestFilename"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestFilename"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/startRecordingWithFilename": {
+      "post": {
+        "operationId": "startRecordingWithFilename",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestRecordingWithMetadata"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/errors": {
+      "post": {
+        "operationId": "errors",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorsRequest"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/allChannels": {
+      "get": {
+        "operationId": "allChannels",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetChannelNames"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "Ingest"
+        ]
+      }
+    },
+    "/ingest/requestEncoderCount": {
+      "post": {
+        "operationId": "requestEncoderCount",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetEncoderCount"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEncoderCount"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestDestinationPresets": {
+      "post": {
+        "operationId": "requestDestinationPresets",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationPresets"
+                }
+              }
+            },
+            "description": "List of preset names for a given channel"
+          },
+          "400": {
+            "description": "The requested channel was not found or is inactive"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestDestinationSettingFileNames"
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Get destination preset names for a given channel"
+      }
+    },
+    "/ingest/requestLoadNamingConvention": {
+      "post": {
+        "operationId": "requestLoadNamingConvention",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadedNamingConvention"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestNamingConvention"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/updatedMetadataSet": {
+      "post": {
+        "operationId": "updatedMetadataSet",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetRequestFilename"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMetadata"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/recordingConfiguration": {
+      "post": {
+        "operationId": "recordingConfiguration",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingConfigurationResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingConfigurationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Returns the current recording configuration with pairs of capture and destination presets"
+      }
+    },
+    "/ingest/requestTimecodeSource": {
+      "post": {
+        "operationId": "requestTimecodeSource",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingStatus"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestTimecodeSource"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/recordingPaths": {
+      "post": {
+        "operationId": "recordingPaths",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingPathsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingPathsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Returns the paths of all currently recording files with their respective capture IDs"
+      }
+    },
+    "/ingest/cancelAlternativeStopRecording": {
+      "post": {
+        "operationId": "cancelAlternativeStopRecording",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelAlternativeStopRecording"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/splitMovie": {
+      "post": {
+        "operationId": "splitMovie",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Split"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestCapturePresets": {
+      "post": {
+        "operationId": "requestCapturePresets",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetRequestSettingFileNames"
+                }
+              }
+            },
+            "description": "List of capture preset names for a given channel"
+          },
+          "400": {
+            "description": "The requested channel was not found or is inactive"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestSettingFileNames"
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Get capture preset names for a given channel"
+      }
+    },
+    "/ingest/setRecordingMode": {
+      "post": {
+        "operationId": "setRecordingMode",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingStatus"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingMode"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ingest/requestRecordingStatus": {
+      "post": {
+        "operationId": "requestRecordingStatus",
+        "tags": [
+          "Ingest"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingStatus"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestRecordingStatus"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RequestLoadMetadataSet": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestLoadMetadataSet"
+        }
+      },
+      "StopRecordingWithMetadata": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/StopRecordingMetadata"
+          }
+        },
+        "required": [
+          "metadata"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "stopRecordingWithMetadata"
+        }
+      },
+      "ErrorsRequest": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "clear": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "RecordingPathsRequest": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "CanRecord": {
+        "properties": {
+          "rec": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "canRecord"
+        }
+      },
+      "RecordingConfigurationRequest": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "RetLoadedDestinationPreset": {
+        "properties": {
+          "destination-preset-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "justin-destination-preset": {
+            "$ref": "#/components/schemas/JustinDestinationPreset"
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "required": [
+          "justin-destination-preset"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "retLoadedDestinationPreset"
+        }
+      },
+      "UpdateMetadata": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "metadata-set": {
+            "$ref": "#/components/schemas/MetadataSet"
+          }
+        },
+        "required": [
+          "metadata-set"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "updateMetadata"
+        }
+      },
+      "JustinDestinationPreset": {
+        "properties": {
+          "destination-path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DestinationPath"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "justinDestinationPreset"
+        }
+      },
+      "RequestNamingConventions": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestNamingConventions"
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errorDomain": {
+            "type": "string"
+          },
+          "errorUIDescription": {
+            "type": "string"
+          },
+          "errorUserInfo": {
+            "type": "object",
+            "properties": {
+              "NSLocalizedDescription": {
+                "type": "string"
+              }
+            }
+          },
+          "date": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "errorCode",
+          "errorDomain",
+          "errorUIDescription",
+          "date"
+        ]
+      },
+      "Control": {
+        "type": "object",
+        "properties": {
+          "reset-after-record": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Type"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "current-value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current-value",
+          "label",
+          "name",
+          "type"
+        ]
+      },
+      "RequestNamingConvention": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestNamingConvention"
+        }
+      },
+      "RecordingPath": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "id"
+        ]
+      },
+      "RequestLoadCapturePreset": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "capture-preset-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capture-preset-name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capture-preset-name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestLoadCapturePreset"
+        }
+      },
+      "RetRequestSettingFileNames": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "preset": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "xml": {
+          "name": "retRequestSettingFileNames"
+        }
+      },
+      "MetadataSet": {
+        "properties": {
+          "control": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Control"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "extension": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "extension"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "metadataSet"
+        }
+      },
+      "RequestTimecodeSource": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "requestTimecodeSource"
+        }
+      },
+      "Options": {
+        "type": "object",
+        "properties": {
+          "toa-just-in-engine-live-cut-enabled": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineLiveCutEnabled"
+            }
+          },
+          "toa-just-in-engine-alternative-stop-timecode-active": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStopTimecodeActive"
+            }
+          },
+          "toa-just-in-engine-alternative-start-timecode-active": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStartTimecodeActive"
+            }
+          },
+          "toa-just-in-engine-framerate": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineFramerate"
+            }
+          },
+          "toa-just-in-engine-alternative-start-timecode-frames": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStartTimecodeFrames"
+            }
+          },
+          "toa-just-in-engine-license-status": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineLicenseStatus"
+            }
+          },
+          "toa-just-in-engine-audio-preview-port": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAudioPreviewPort"
+            }
+          },
+          "toa-just-in-engine-alternative-stop-timecode-frames": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStopTimecodeFrames"
+            }
+          },
+          "toa-just-in-engine-recording-error": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineRecordingError"
+            }
+          },
+          "toa-just-in-engine-start-timecode-frames": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineStartTimecodeFrames"
+            }
+          },
+          "toa-just-in-engine-input-type": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineInputType"
+            }
+          },
+          "toa-just-in-engine-is-loop-recording": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineIsLoopRecording"
+            }
+          },
+          "toa-just-in-engine-metadata-writing-option": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineMetadataWritingOption"
+            }
+          },
+          "toa-just-in-engine-timecode-offset": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineTimecodeOffset"
+            }
+          },
+          "toa-just-in-engine-video-signal-available": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineVideoSignalAvailable"
+            }
+          },
+          "toa-just-in-engine-writing-proxy": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineWritingProxy"
+            }
+          },
+          "toa-just-in-engine-recording-mode": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineRecordingMode"
+            }
+          },
+          "toa-just-in-engine-timecode-source": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineTimecodeSource"
+            }
+          }
+        }
+      },
+      "RequestMetadataSets": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestMetadataSets"
+        }
+      },
+      "RecordingPathsResponse": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecordingPath"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "name",
+          "paths"
+        ]
+      },
+      "StartRecordingMetadata": {
+        "type": "object",
+        "properties": {
+          "toa-just-in-engine-alternative-start-timecode-frames": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStartTimecodeFrames"
+            }
+          },
+          "tal-ingest-engine-override-naming-preset": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TALIngestEngineOverrideNamingPreset"
+            }
+          },
+          "toa-just-in-engine-alternative-start-timecode-active": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStartTimecodeActive"
+            }
+          }
+        }
+      },
+      "RequestSettingFileNames": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestSettingFileNames"
+        }
+      },
+      "RequestRecordingStatus": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          }
+        }
+      },
+      "SetMarkers": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "marker": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Marker"
+            }
+          }
+        },
+        "xml": {
+          "name": "setMarkers"
+        }
+      },
+      "StartStopChannel": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "RequestDestinationSettingFileNames": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestDestinationSettingFileNames"
+        }
+      },
+      "CancelAlternativeStopRecording": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "cancelAlternativeStopRecording"
+        }
+      },
+      "SetEncoderCount": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "setEncoderCount"
+        }
+      },
+      "RetChannelNames": {
+        "type": "object",
+        "properties": {
+          "channel-names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "NamingConvention": {
+        "properties": {
+          "entry": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            }
+          },
+          "global-variable": {
+            "type": "string"
+          },
+          "counter-start": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "separator-string": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "split-chunk-naming-strategy": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "global-variable",
+          "name",
+          "separator-string"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "namingConvention"
+        }
+      },
+      "LoadedMetadataSet": {
+        "properties": {
+          "metadata-set-name": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "metadata-set": {
+            "$ref": "#/components/schemas/MetadataSet"
+          }
+        },
+        "required": [
+          "metadata-set",
+          "metadata-set-name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "loadedMetadataSet"
+        }
+      },
+      "Split": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "split"
+        }
+      },
+      "H264Settings": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "string"
+          },
+          "gop-size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "framerate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bitrate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entropy": {
+            "type": "string"
+          },
+          "allow-frame-reordering": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "JustinCapturePreset": {
+        "properties": {
+          "container": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overlay-path": {
+            "type": "string"
+          },
+          "audiochannels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tvnorm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "videoheight": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "no-hardware-encoding": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "do-not-write-captions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "burnt-in-timecode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overlay-top": {
+            "type": "number",
+            "format": "double"
+          },
+          "update-mxf-header-length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reference-movie-type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toa-compression-component": {
+            "$ref": "#/components/schemas/TOACompressionComponent"
+          },
+          "photo-jpeg-settings": {
+            "$ref": "#/components/schemas/PhotoJPEGSettings"
+          },
+          "audioalignment": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overlay-left": {
+            "type": "number",
+            "format": "double"
+          },
+          "mov-writing-mode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overlay-opacity": {
+            "type": "number",
+            "format": "double"
+          },
+          "videowidth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "loop": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "burnt-in-timecode-y-pad": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "timecodesource": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "audio-mapping": {
+            "type": "string"
+          },
+          "aspectratio": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "h264-settings": {
+            "$ref": "#/components/schemas/H264Settings"
+          },
+          "framerate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "burnt-in-timecode-size": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "codec",
+          "name",
+          "toa-compression-component"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "justinCapturePreset"
+        }
+      },
+      "RecordingConfiguration": {
+        "type": "object",
+        "properties": {
+          "destinationPreset": {
+            "type": "string"
+          },
+          "capturePreset": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capturePreset",
+          "destinationPreset"
+        ]
+      },
+      "UpdateNamingConvention": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "naming-convention": {
+            "$ref": "#/components/schemas/NamingConvention"
+          },
+          "reset-counter": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "resetCounter",
+              "attribute": true
+            }
+          }
+        },
+        "required": [
+          "naming-convention"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "updateNamingConvention"
+        }
+      },
+      "DestinationPresets": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "preset": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "xml": {
+          "name": "destinationPresets"
+        }
+      },
+      "SetMetadataWritingOption": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "writing-option": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "setMetadataWritingOption"
+        }
+      },
+      "Type": {
+        "type": "object",
+        "properties": {
+          "clazz": {
+            "type": "string",
+            "xml": {
+              "name": "class",
+              "attribute": true
+            }
+          },
+          "default": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "item": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "NamingConventions": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "naming-convention-name": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "xml": {
+          "name": "namingConventions"
+        }
+      },
+      "RequestCanRecord": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestCanRecord"
+        }
+      },
+      "RequestRecordingWithMetadata": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "proposed-filename": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/StartRecordingMetadata"
+          }
+        },
+        "required": [
+          "metadata",
+          "proposed-filename"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestRecordingWithMetadata"
+        }
+      },
+      "SetRecordingMode": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "mode": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "setRecordingMode"
+        }
+      },
+      "RecordingConfigurationResponse": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "configurations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecordingConfiguration"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "name",
+          "configurations"
+        ]
+      },
+      "RequestScheduledRecording": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "schedule": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "requestScheduledRecording"
+        }
+      },
+      "RecordingStatus": {
+        "properties": {
+          "frames": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "rec": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "options": {
+            "$ref": "#/components/schemas/Options"
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "recordingStatus"
+        }
+      },
+      "LoadedNamingConvention": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "naming-convention": {
+            "$ref": "#/components/schemas/NamingConvention"
+          }
+        },
+        "required": [
+          "naming-convention"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "loadedNamingConvention"
+        }
+      },
+      "SetTimecodeOffset": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "xml": {
+          "name": "setTimecodeOffset"
+        }
+      },
+      "StopRecordingMetadata": {
+        "type": "object",
+        "properties": {
+          "toa-just-in-engine-alternative-stop-timecode-active": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStopTimecodeActive"
+            }
+          },
+          "toa-just-in-engine-alternative-stop-timecode-frames": {
+            "type": "integer",
+            "format": "int32",
+            "xml": {
+              "name": "TOAJustInEngineAlternativeStopTimecodeFrames"
+            }
+          }
+        }
+      },
+      "RequestAudioPreview": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "audio-channel": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestAudioPreview"
+        }
+      },
+      "RequestEncoderCount": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestEncoderCount"
+        }
+      },
+      "ScheduleEvent": {
+        "properties": {
+          "islong": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "eventendtime": {
+            "type": "string"
+          },
+          "eventstarttime": {
+            "type": "string"
+          },
+          "istoday": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startdate": {
+            "type": "number",
+            "format": "double"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "enddate": {
+            "type": "number",
+            "format": "double"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "eventstatus": {
+            "type": "string"
+          },
+          "eventtitle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventendtime",
+          "eventstarttime",
+          "eventstatus",
+          "eventtitle",
+          "uuid"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "scheduleEvent"
+        }
+      },
+      "RetRequestFilename": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "did-change": {
+            "type": "string",
+            "xml": {
+              "name": "didChange",
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "retRequestFilename"
+        }
+      },
+      "ErrorsResponse": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "name",
+          "errors"
+        ]
+      },
+      "RequestCurrentFilename": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "requestCurrentFilename"
+        }
+      },
+      "RequestFilename": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "xml": {
+          "name": "requestFilename"
+        }
+      },
+      "RetEncoderCount": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "encoder-count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          }
+        },
+        "xml": {
+          "name": "retEncoderCount"
+        }
+      },
+      "RetLoadedSetting": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "filename": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "capture-preset-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "justin-capture-preset": {
+            "$ref": "#/components/schemas/JustinCapturePreset"
+          },
+          "cliplength": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cliplength",
+          "justin-capture-preset"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "retLoadedSetting"
+        }
+      },
+      "DestinationPath": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "redundancy-type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "container-type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "file-buffer-size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path-type": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "ScheduleEvents": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "schedule-event": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleEvent"
+            }
+          }
+        },
+        "xml": {
+          "name": "scheduleEvents"
+        }
+      },
+      "Marker": {
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "frames": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "name",
+          "uuid"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "marker"
+        }
+      },
+      "MetadataSets": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "name": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "metadata-set-name": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "xml": {
+          "name": "metadataSets"
+        }
+      },
+      "Entry": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "visible": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "object-name": {
+            "type": "string"
+          },
+          "format-string": {
+            "type": "string"
+          },
+          "label-name": {
+            "type": "string"
+          },
+          "current-value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current-value",
+          "label-name",
+          "object-name"
+        ]
+      },
+      "RequestLoadDestinationPreset": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "destination-preset-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "destination-preset-name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destination-preset-name"
+        ],
+        "type": "object",
+        "xml": {
+          "name": "requestLoadDestinationPreset"
+        }
+      },
+      "TOACompressionComponent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "component-string": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "PhotoJPEGSettings": {
+        "type": "object",
+        "properties": {
+          "framerate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quality-level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    }
+  }
+}
