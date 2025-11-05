@@ -80,6 +80,19 @@ class MacOSMounter(BaseMounter):
             if not parsed.hostname:
                 logging.error(f"Could not parse hostname from SMB URL: {share_url}")
                 return False
+            
+            # Create mount point directory first (diskutil requires it to exist)
+            try:
+                from pathlib import Path
+                mount_path = Path(expected_mount_point)
+                if not await asyncio.to_thread(mount_path.exists):
+                    logging.info(f"Creating mount point directory: {expected_mount_point}")
+                    await asyncio.to_thread(mount_path.mkdir, parents=True, exist_ok=True)
+                else:
+                    logging.info(f"Mount point directory already exists: {expected_mount_point}")
+            except Exception as e:
+                logging.error(f"Failed to create mount point directory: {e}")
+                return False
                 
             # Build the diskutil mount command
             # diskutil mount -mountPoint /path smb://server/share
