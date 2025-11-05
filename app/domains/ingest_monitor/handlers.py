@@ -8,7 +8,6 @@ following the CQRS pattern.
 from typing import Dict, Any
 from app.core.cqrs.query import QueryHandler
 from .queries import GetIngestStatusQuery
-from .service import IngestMonitorService
 
 
 class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, Any]]):
@@ -16,17 +15,17 @@ class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, A
     Handler for GetIngestStatusQuery that retrieves cached channel status data.
     
     This handler adheres to SRP by focusing solely on data retrieval
-    from the IngestMonitorService cache.
+    from the IngestMonitorWorker cache via delegation to StateService.
     """
 
-    def __init__(self, ingest_monitor_service: IngestMonitorService):
-        self._service = ingest_monitor_service
+    def __init__(self, ingest_monitor_worker):
+        self._worker = ingest_monitor_worker
 
     async def handle(self, query: GetIngestStatusQuery) -> Dict[str, Any]:
         """
         Handle the query by returning the current cached status.
         
-        Returns the complete status snapshot directly from the service cache.
+        Returns the complete status snapshot directly from the worker's cache.
         This is lightning-fast since it's just an in-memory dictionary access.
         
         Args:
@@ -48,4 +47,4 @@ class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, A
                 ...
             }
         """
-        return self._service.get_status_cache()
+        return self._worker.get_status_cache()

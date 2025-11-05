@@ -33,7 +33,7 @@ from .dependencies import (
     get_file_discovery_slice,  # Import the new slice getter
     get_file_scanner,
     get_lifecycle_service,  # Import lifecycle service
-    get_ingest_monitor_service,  # Import ingest monitor service
+    get_ingest_monitor_worker,  # Import refactored ingest monitor worker
     get_tally_light_event_handler  # Import tally light handler
 )
 
@@ -91,8 +91,8 @@ async def lifespan(app: FastAPI):
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
     # Register IngestMonitor domain (enables API queries)
-    ingest_monitor_service = get_ingest_monitor_service()
-    register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_service)
+    ingest_monitor_worker = get_ingest_monitor_worker()
+    register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_worker)
     
     # Register TallyLight domain (depends on IngestMonitor events)
     tally_handler = get_tally_light_event_handler()
@@ -163,11 +163,11 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(lifecycle_task)
     logging.info("LifecycleService startet som background task for periodic file cleanup")
 
-    # Start IngestMonitorService som background task for Just In Engine monitoring
-    ingest_monitor_service = get_ingest_monitor_service()
-    ingest_monitor_task = asyncio.create_task(ingest_monitor_service.start_monitoring())
+    # Start IngestMonitorWorker som background task for Just In Engine monitoring
+    ingest_monitor_worker = get_ingest_monitor_worker()
+    ingest_monitor_task = asyncio.create_task(ingest_monitor_worker.start_monitoring())
     _background_tasks.append(ingest_monitor_task)
-    logging.info("IngestMonitorService startet som background task for Just In Engine monitoring")
+    logging.info("IngestMonitorWorker startet som background task for Just In Engine monitoring")
 
     # Mount static files
     static_path = Path(__file__).parent / "domains" / "presentation" / "static"
@@ -197,9 +197,9 @@ async def lifespan(app: FastAPI):
     get_lifecycle_service().stop_pruning_loop()  # Stop lifecycle service
     
     # Stop Just In Engine monitoring and tally light services
-    if 'ingest_monitor_service' in locals():
-        await ingest_monitor_service.stop_monitoring()
-        logging.info("IngestMonitorService stopped")
+    ingest_monitor_worker = get_ingest_monitor_worker()
+    await ingest_monitor_worker.stop_monitoring()
+    logging.info("IngestMonitorWorker stopped")
     
     if 'tally_handler' in locals() and hasattr(tally_handler, 'shutdown'):
         await tally_handler.shutdown()

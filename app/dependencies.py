@@ -32,7 +32,8 @@ from app.domains.directory_browsing.service import DirectoryScannerService
 from app.domains.presentation.event_handlers import PresentationEventHandlers
 from app.domains.lifecycle.service import LifecycleService
 from app.domains.tally_light.event_handlers import TallyLightEventHandler
-from app.domains.ingest_monitor.service import IngestMonitorService
+from app.domains.ingest_monitor.api_client import IngestApiClient
+from app.domains.ingest_monitor.state_service import IngestStateService
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -324,19 +325,53 @@ def get_tally_light_event_handler() -> TallyLightEventHandler:
     return _singletons["tally_light_event_handler"]
 
 
-def get_ingest_monitor_service() -> IngestMonitorService:
+def get_ingest_state_service() -> IngestStateService:
     """
-    Get the IngestMonitorService singleton for Just In Engine monitoring.
+    Get the IngestStateService singleton for channel state management.
     
-    This service is responsible for polling Just In Engine APIs
-    and maintaining channel status cache.
+    This service is responsible for maintaining the channel status cache
+    and detecting changes to publish appropriate events.
     """
-    if "ingest_monitor_service" not in _singletons:
-        _singletons["ingest_monitor_service"] = IngestMonitorService(
-            settings=get_settings(),
+    if "ingest_state_service" not in _singletons:
+        _singletons["ingest_state_service"] = IngestStateService(
             event_bus=get_event_bus()
         )
-    return _singletons["ingest_monitor_service"]
+    return _singletons["ingest_state_service"]
+
+
+def get_ingest_api_client() -> IngestApiClient:
+    """
+    Get the IngestApiClient singleton for Just In Engine API communication.
+    
+    This client is responsible for making HTTP requests to Just In Engine
+    and validating API responses.
+    """
+    if "ingest_api_client" not in _singletons:
+        _singletons["ingest_api_client"] = IngestApiClient(
+            settings=get_settings()
+        )
+    return _singletons["ingest_api_client"]
+
+
+def get_ingest_monitor_worker() -> "IngestMonitorWorker":
+    """
+    Get the IngestMonitorWorker singleton - the refactored orchestration worker.
+    
+    This worker follows Single Responsibility Principle by only handling
+    polling orchestration, delegating API calls to ApiClient and state
+    management to StateService.
+    """
+    if "ingest_monitor_worker" not in _singletons:
+        from app.domains.ingest_monitor.worker import IngestMonitorWorker
+        
+        _singletons["ingest_monitor_worker"] = IngestMonitorWorker(
+            settings=get_settings(),
+            api_client=get_ingest_api_client(),
+            state_service=get_ingest_state_service()
+        )
+    return _singletons["ingest_monitor_worker"]
+
+
 
 
 def reset_singletons() -> None:
