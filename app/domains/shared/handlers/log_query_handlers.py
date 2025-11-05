@@ -5,7 +5,7 @@ Handles read-only operations for system log files.
 from pathlib import Path
 from typing import List, Dict, Any
 from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import aiofiles
 
 from app.dependencies import get_settings
@@ -161,6 +161,8 @@ class LogFileQueryHandler:
         """
         Prepare a log file for download.
         
+        For active log files, creates a snapshot to avoid file locking issues.
+        
         Args:
             query: DownloadLogFileQuery with filename
             
@@ -182,18 +184,36 @@ class LogFileQueryHandler:
                 detail=f"'{query.filename}' is not a file"
             )
         
-        # Always use .txt extension for download and force download behavior
-        download_filename = query.filename
-        if not download_filename.endswith('.txt'):
-            # Add .txt extension if not already present
-            download_filename = f"{query.filename}.txt"
-        
-        return FileResponse(
-            path=str(file_path),
-            media_type='application/octet-stream',  # Force download instead of browser preview
-            filename=download_filename,
-            headers={
-                "Content-Disposition": f'attachment; filename="{download_filename}"',
-                "Content-Type": "text/plain; charset=utf-8"
-            }
-        )
+        try:
+            # For growing/active log files, we read content into memory
+            # to avoid Chrome download issues with locked files
+            
+            # Read the current content into memory
+            async with aiofiles.open(file_path, mode='r', encoding='utf-8', errors='replace') as source_file:
+                content = await source_file.read()
+            
+            # Always use .txt extension for download and force download behavior
+            download_filename = query.filename
+            if not download_filename.endswith('.txt'):
+                # Add .txt extension if not already present
+                download_filename = f"{query.filename}.txt"
+            
+            # Create a memory-based response instead of file-based
+            return Response(
+                content=content.encode('utf-8'),
+                media_type='application/octet-stream',  # Force download instead of browser preview
+                headers={
+                    "Content-Disposition": f'attachment; filename="{download_filename}"',
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                    "Content-Length": str(len(content.encode('utf-8')))
+                }
+            )
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error preparing log file for download: {str(e)}"
+            )
