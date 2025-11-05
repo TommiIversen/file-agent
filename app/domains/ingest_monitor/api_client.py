@@ -5,6 +5,7 @@ Håndterer al direkte HTTP-kommunikation med Just In Engine API'en.
 Denne klasse er ansvarlig for at abstraktere httpx-kommunikation og
 validere API-svar med Pydantic-modeller.
 """
+import asyncio
 import logging
 import httpx
 from typing import List, Optional, Tuple
@@ -132,7 +133,6 @@ class IngestApiClient:
             return (name, status) if status else None
 
         # Fetch all statuses in parallel
-        import asyncio
         tasks = [fetch_single(name) for name in channel_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -167,7 +167,6 @@ class IngestApiClient:
             return (name, errors)
 
         # Fetch all errors in parallel
-        import asyncio
         tasks = [fetch_single(name) for name in channel_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -247,7 +246,6 @@ class IngestApiClient:
             return await self.start_channel(name)
 
         # Start all channels in parallel
-        import asyncio
         tasks = [start_single(name) for name in channel_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -281,7 +279,6 @@ class IngestApiClient:
             return await self.stop_channel(name)
 
         # Stop all channels in parallel
-        import asyncio
         tasks = [stop_single(name) for name in channel_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -320,7 +317,6 @@ class IngestApiClient:
                 return False
 
         # Clear all errors in parallel
-        import asyncio
         tasks = [clear_single(name) for name in channel_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
