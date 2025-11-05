@@ -69,9 +69,8 @@ class MacOSMounter(BaseMounter):
             logging.info(f"Attempting macOS mount: {share_url}")
             logging.info(f"Expected mount point: {expected_mount_point}")
 
-            # Use macOS 'open' command for SMB mounting - this is the most reliable way
-            # It handles mount point creation, credentials, and mount automatically
-            # This is what Finder uses internally and doesn't require sudo
+            # Use netfs mount approach - this is macOS native but non-interactive
+            # This approach tries to mount without UI prompts by using background mounting
             
             # Parse SMB URL to extract server and share info
             # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
@@ -82,16 +81,49 @@ class MacOSMounter(BaseMounter):
                 logging.error(f"Could not parse hostname from SMB URL: {share_url}")
                 return False
             
-            # Use the 'open' command which is the macOS way to mount network volumes
-            # This approach mimics what happens when you connect to a server via Finder
+            # Try mount using osascript but with 'do shell script' to avoid GUI
+            # This runs the mount command through AppleScript but without user interaction
+            
+            # Convert SMB URL for mount_smbfs
+            if share_url.startswith('smb://'):
+                mount_url = '//' + share_url[6:]  # Remove 'smb://' prefix  
+            else:
+                mount_url = share_url
+                
+            # Create mount point using mkdir through shell script
+            # This avoids sudo by using a different approach
+            create_script = '''
+            set mountPoint to "/Volumes/SK6402"
+            try
+                do shell script "mkdir -p " & quoted form of mountPoint & " 2>/dev/null || true"
+            end try
+            '''
+            
+            logging.info("Creating mount point via AppleScript...")
+            create_cmd = ["osascript", "-e", create_script]
+            
+            try:
+                create_process = await asyncio.create_subprocess_exec(
+                    *create_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await asyncio.wait_for(create_process.communicate(), timeout=5.0)
+                logging.info("Mount point creation attempted")
+            except Exception as e:
+                logging.warning(f"Mount point creation failed: {e}")
+            
+            # Now try mount_smbfs directly (it might work now with mount point existing)
             cmd = [
-                "/usr/bin/open", 
-                share_url
+                "/sbin/mount_smbfs",
+                "-o", "nobrowse",  # Don't show in Finder sidebar
+                mount_url,
+                expected_mount_point
             ]
             
             logging.info(f"Mount command: {' '.join(cmd)}")
-            logging.info(f"Share URL: {share_url}")
-            logging.info(f"Parsed hostname: {parsed.hostname}")
+            logging.info(f"Mount URL: {mount_url}")
+            logging.info(f"Expected mount point: {expected_mount_point}")
 
             process = await asyncio.create_subprocess_exec(
                 *cmd, 
@@ -100,10 +132,9 @@ class MacOSMounter(BaseMounter):
             )
 
             try:
-                # open command is usually quick and non-interactive when credentials are cached
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), 
-                    timeout=15.0
+                    timeout=10.0
                 )
                 
                 # Log detailed output
@@ -117,39 +148,37 @@ class MacOSMounter(BaseMounter):
                 if stderr_text:
                     logging.warning(f"Mount command stderr: {stderr_text}")
                     
-                # open returns 0 on success
+                # mount_smbfs returns 0 on success
                 if process.returncode == 0:
-                    logging.info("Open command succeeded - waiting for mount to appear...")
+                    logging.info("Mount command succeeded - verifying mount...")
                     
-                    # Wait a bit for the mount to actually appear
-                    for i in range(10):  # Wait up to 10 seconds
-                        await asyncio.sleep(1)
-                        
-                        # Check if mount point exists and is a mount
-                        import os
-                        if os.path.exists(expected_mount_point):
-                            if os.path.ismount(expected_mount_point):
-                                logging.info(f"Mount successful! Share mounted at: {expected_mount_point}")
-                                return True
-                            else:
-                                # Might be a directory that was created but not yet mounted
-                                logging.info(f"Mount point exists but not yet mounted (attempt {i+1}/10)")
-                        else:
-                            logging.info(f"Mount point not yet visible (attempt {i+1}/10)")
-                    
-                    # Final check
+                    # Quick verification
+                    import os
                     if os.path.exists(expected_mount_point) and os.path.ismount(expected_mount_point):
-                        logging.info(f"Mount verification successful: {expected_mount_point}")
+                        logging.info(f"Mount successful! Share mounted at: {expected_mount_point}")
                         return True
                     else:
-                        logging.warning(f"Open command succeeded but mount not accessible: {expected_mount_point}")
-                        return False
+                        # Wait a moment and try again
+                        await asyncio.sleep(2)
+                        if os.path.exists(expected_mount_point) and os.path.ismount(expected_mount_point):
+                            logging.info(f"Mount successful after wait: {expected_mount_point}")
+                            return True
+                        else:
+                            logging.warning(f"Mount command succeeded but verification failed: {expected_mount_point}")
+                            return False
                 else:
-                    logging.error(f"Open command failed with return code: {process.returncode}")
-                    if "authentication" in stderr_text.lower() or "password" in stderr_text.lower():
-                        logging.error("Mount failed due to authentication issues - check credentials or keychain")
-                    elif "not found" in stderr_text.lower() or "no such host" in stderr_text.lower():
+                    logging.error(f"Mount failed with return code: {process.returncode}")
+                    
+                    # Check for common error patterns
+                    if "authentication" in stderr_text.lower() or "permission denied" in stderr_text.lower():
+                        logging.error("Mount failed due to authentication issues")
+                        logging.info("To fix: Add credentials to keychain with:")
+                        logging.info("  security add-internet-password -a svcsk6402 -s net.dr.dk -P 445 -r 'smb ' -w")
+                    elif "no such file or directory" in stderr_text.lower():
+                        logging.error("Mount failed - mount point issue")
+                    elif "network" in stderr_text.lower() or "host" in stderr_text.lower():
                         logging.error("Mount failed due to network/host issues")
+                    
                     return False
                     
             except asyncio.TimeoutError:
