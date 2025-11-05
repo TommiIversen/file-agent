@@ -60,8 +60,6 @@ class DomainEventBus:
             logging.debug(f"No handlers for event {event_type.__name__}")
             return
 
-        logging.info(f"Publishing {event_type.__name__} to {len(handlers)} handler(s)")
-
         # Create a list of tasks to run all handlers concurrently
         tasks = [self._safe_execute(handler, event) for handler in handlers]
 
