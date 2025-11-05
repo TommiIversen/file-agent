@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends
 from typing import Dict, Any
 
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_query_bus
+from app.core.cqrs.command_bus import CommandBus
+from app.dependencies import get_query_bus, get_command_bus
 from .queries import GetIngestStatusQuery
+from .commands import ClearAllChannelErrorsCommand
 
 
 # Router for ingest monitor endpoints
@@ -47,3 +49,27 @@ async def get_ingest_status(
         }
     """
     return await query_bus.execute(GetIngestStatusQuery())
+
+
+@router.post("/clear-all-errors", response_model=Dict[str, Any])
+async def clear_all_channel_errors(
+    command_bus: CommandBus = Depends(get_command_bus)
+) -> Dict[str, Any]:
+    """
+    Clear errors for all Just In Engine ingest channels.
+    
+    This endpoint will:
+    1. Clear errors on Just In Engine for all active channels
+    2. Update local state cache to reflect cleared errors  
+    3. Publish events to update UI immediately
+    
+    Returns:
+        Dict containing operation result:
+        {
+            "success": bool,
+            "channels_cleared": int,
+            "total_channels": int,
+            "message": str
+        }
+    """
+    return await command_bus.execute(ClearAllChannelErrorsCommand())

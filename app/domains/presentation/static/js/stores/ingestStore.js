@@ -24,6 +24,7 @@ document.addEventListener('alpine:init', () => {
         // Error Log
         errors: [],                   // Array of recent channel errors
         MAX_ERRORS: 50,              // Maximum errors to keep in memory
+        isClearing: false,           // State for clear operation
 
         // Initialization
         init() {
@@ -186,6 +187,53 @@ document.addEventListener('alpine:init', () => {
             
             this.updateStatistics();
             console.log('🧹 All channel errors cleared');
+        },
+
+        // Clear all errors via API
+        async clearAllErrors() {
+            if (this.isClearing) {
+                console.log('🔄 Clear operation already in progress');
+                return;
+            }
+
+            this.isClearing = true;
+            
+            try {
+                console.log('🗑️ Clearing all channel errors via API...');
+                const response = await fetch('/api/ingest/clear-all-errors', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Clear local error state
+                    this.clearErrors();
+                    
+                    console.log(`✅ ${result.message}`);
+                    console.log(`📊 Cleared errors for ${result.channels_cleared}/${result.total_channels} channels`);
+                    
+                    // Show success message to user (you could add a toast notification here)
+                    // For now, just log it
+                    
+                } else {
+                    throw new Error(result.message || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to clear all errors:', error);
+                // You could show an error toast here
+                
+            } finally {
+                this.isClearing = false;
+            }
         },
 
         // Get channel by name

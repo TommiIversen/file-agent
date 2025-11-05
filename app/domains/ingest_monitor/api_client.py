@@ -81,22 +81,27 @@ class IngestApiClient:
             logging.error(f"Unexpected error fetching status for {channel_name}: {e}")
             return None
 
-    async def get_channel_errors(self, channel_name: str) -> List[JustInError]:
+    async def get_channel_errors(self, channel_name: str, clear: bool = False) -> List[JustInError]:
         """
-        Henter fejl for én enkelt kanal.
+        Henter fejl for én enkelt kanal med mulighed for at cleare dem.
         
         Args:
             channel_name (str): Navnet på kanalen at hente fejl for
+            clear (bool): Om fejlene skal cleares (default: False)
             
         Returns:
             List[JustInError]: Liste af fejl. Returnerer tom liste ved fejl.
         """
         try:
-            payload = {"channel": channel_name, "clear": 0}
+            payload = {"channel": channel_name, "clear": 1 if clear else 0}
             response = await self._client.post("/ingest/errors", json=payload)
             response.raise_for_status()
             data = JustInErrors.model_validate(response.json())
-            logging.debug(f"Retrieved {len(data.errors)} errors for {channel_name}")
+            
+            if clear:
+                logging.info(f"Cleared errors for {channel_name}")
+            else:
+                logging.debug(f"Retrieved {len(data.errors)} errors for {channel_name}")
             return data.errors
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch errors for {channel_name}: {e}")
@@ -174,3 +179,42 @@ class IngestApiClient:
         
         logging.debug(f"Successfully fetched errors for {len(successful_results)}/{len(channel_names)} channels")
         return successful_results
+
+    async def clear_all_channel_errors(self, channel_names: List[str]) -> int:
+        """
+        Clear errors for multiple channels in parallel.
+        
+        Used to bulk clear errors across all channels.
+        
+        Args:
+            channel_names: List of channel names to clear errors for
+            
+        Returns:
+            int: Number of channels successfully cleared
+        """
+        if not channel_names:
+            return 0
+
+        logging.info(f"Clearing errors for {len(channel_names)} channels: {channel_names}")
+
+        async def clear_single(name: str) -> bool:
+            try:
+                await self.get_channel_errors(name, clear=True)
+                return True
+            except Exception as e:
+                logging.error(f"Failed to clear errors for {name}: {e}")
+                return False
+
+        # Clear all errors in parallel
+        import asyncio
+        tasks = [clear_single(name) for name in channel_names]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Count successful clears
+        successful_clears = sum(
+            1 for result in results 
+            if result is True and not isinstance(result, Exception)
+        )
+        
+        logging.info(f"Successfully cleared errors for {successful_clears}/{len(channel_names)} channels")
+        return successful_clears

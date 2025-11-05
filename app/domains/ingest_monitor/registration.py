@@ -10,7 +10,8 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.core.events.event_bus import DomainEventBus
 from .queries import GetIngestStatusQuery
-from .handlers import GetIngestStatusQueryHandler
+from .commands import ClearAllChannelErrorsCommand
+from .handlers import GetIngestStatusQueryHandler, ClearAllChannelErrorsCommandHandler
 
 
 def register_ingest_monitor_domain(
@@ -33,5 +34,9 @@ def register_ingest_monitor_domain(
     # Register query handlers
     query_handler = GetIngestStatusQueryHandler(ingest_monitor_worker)
     query_bus.register(GetIngestStatusQuery, query_handler.handle)
+    
+    # Register command handlers
+    command_handler = ClearAllChannelErrorsCommandHandler(ingest_monitor_worker)
+    command_bus.register(ClearAllChannelErrorsCommand, command_handler.handle)
     
     logging.info("IngestMonitor domain registration completed")

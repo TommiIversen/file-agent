@@ -209,6 +209,44 @@ class IngestStateService:
         """
         return self._status_cache.get(channel_name)
 
+    async def clear_all_errors(self) -> int:
+        """
+        Clear error state for all channels in cache.
+        
+        This is called after bulk clearing errors via API to update local state.
+        
+        Returns:
+            int: Number of channels that had errors cleared
+        """
+        cleared_count = 0
+        
+        for channel_name, state in self._status_cache.items():
+            if state.has_errors:
+                # Update state to clear errors
+                cleared_state = ChannelState(
+                    name=state.name,
+                    is_recording=state.is_recording,
+                    has_signal=state.has_signal,
+                    has_errors=False,  # Clear the error flag
+                    last_errors=[],    # Clear the error list
+                    frames=state.frames,
+                    hours=state.hours,
+                    minutes=state.minutes,
+                    seconds=state.seconds
+                )
+                self._status_cache[channel_name] = cleared_state
+                cleared_count += 1
+                logging.info(f"Cleared error state for channel: {channel_name}")
+        
+        if cleared_count > 0:
+            # Publish updated status to UI
+            await self._event_bus.publish(IngestStatusUpdatedEvent(
+                status_snapshot=self.get_status_cache()
+            ))
+            logging.info(f"Cleared error state for {cleared_count} channels")
+        
+        return cleared_count
+
     def clear_cache(self) -> None:
         """Ryd hele cachen (nyttigt til testing)."""
         self._status_cache.clear()
