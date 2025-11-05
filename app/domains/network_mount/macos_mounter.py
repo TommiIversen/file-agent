@@ -69,30 +69,44 @@ class MacOSMounter(BaseMounter):
             logging.info(f"Attempting macOS mount: {share_url}")
             logging.info(f"Expected mount point: {expected_mount_point}")
 
-            # First try: Use Finder/AppleScript mount (non-blocking version)
-            # This avoids the hanging issue by using a different approach
+            # Try diskutil mount command which doesn't require sudo or user interaction
+            # This is the most reliable method for SMB mounts on macOS
             
-            applescript_cmd = f'''
-            tell application "Finder"
-                try
-                    mount volume "{share_url}"
-                    return "success"
-                on error errMsg
-                    return "error: " & errMsg
-                end try
-            end tell
-            '''
+            # Parse SMB URL to extract server and share info
+            # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
+            import urllib.parse
+            parsed = urllib.parse.urlparse(share_url)
             
-            cmd = ["osascript", "-e", applescript_cmd]
-            logging.info("Mount command: osascript with Finder mount")
-            logging.info(f"Share URL: {share_url}")
+            if not parsed.hostname:
+                logging.error(f"Could not parse hostname from SMB URL: {share_url}")
+                return False
+                
+            # Build the diskutil mount command
+            # diskutil mount -mountPoint /path smb://server/share
+            cmd = [
+                "/usr/sbin/diskutil", 
+                "mount", 
+                "-mountPoint", expected_mount_point,
+                share_url
+            ]
+            
+            logging.info(f"Mount command: {' '.join(cmd)}")
+            logging.info(f"Parsed hostname: {parsed.hostname}")
+            logging.info(f"Mount point: {expected_mount_point}")
 
             process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                *cmd, 
+                stdout=asyncio.subprocess.PIPE, 
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE  # Allow input for credentials if needed
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=8.0)
+                # Send empty input to handle any credential prompts non-interactively
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(input=b'\n'), 
+                    timeout=10.0
+                )
                 
                 # Log detailed output
                 stdout_text = stdout.decode() if stdout else ""
@@ -101,18 +115,19 @@ class MacOSMounter(BaseMounter):
                 logging.info(f"Mount command return code: {process.returncode}")
                 if stdout_text:
                     logging.info(f"Mount command stdout: {stdout_text}")
-                    # Check if AppleScript returned success
-                    if "success" in stdout_text.lower():
-                        logging.info("AppleScript reported mount success")
-                    elif "error:" in stdout_text.lower():
-                        logging.error(f"AppleScript reported error: {stdout_text}")
                         
                 if stderr_text:
                     logging.warning(f"Mount command stderr: {stderr_text}")
                     
+                # diskutil returns 0 on success
+                if process.returncode == 0:
+                    logging.info("diskutil mount reported success")
+                else:
+                    logging.error(f"diskutil mount failed with return code: {process.returncode}")
+                    
             except asyncio.TimeoutError:
                 logging.error(f"Mount operation timed out for {share_url}")
-                logging.error(f"Command was: {' '.join(['osascript', '-e', 'Finder mount script'])}")
+                logging.error(f"Command was: {' '.join(cmd)}")
                 process.kill()
                 await process.wait()
                 return False
