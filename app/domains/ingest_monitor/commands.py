@@ -20,3 +20,29 @@ class ClearAllChannelErrorsCommand(Command):
     3. Publish events to update UI
     """
     pass  # No parameters needed - operates on all channels
+
+
+@dataclass
+class StartAllChannelsCommand(Command):
+    """
+    Command to start all channels.
+    
+    This command will:
+    1. Start all active channels on Just In Engine
+    2. Update local state cache to reflect started channels
+    3. Publish events to update UI
+    """
+    pass  # No parameters needed - operates on all channels
+
+
+@dataclass
+class StopAllChannelsCommand(Command):
+    """
+    Command to stop all channels.
+    
+    This command will:
+    1. Stop all active channels on Just In Engine
+    2. Update local state cache to reflect stopped channels
+    3. Publish events to update UI
+    """
+    pass  # No parameters needed - operates on all channels

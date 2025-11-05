@@ -9,7 +9,7 @@ from typing import Dict, Any
 from app.core.cqrs.query import QueryHandler
 from app.core.cqrs.command import CommandHandler
 from .queries import GetIngestStatusQuery
-from .commands import ClearAllChannelErrorsCommand
+from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 
 
 class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, Any]]):
@@ -111,4 +111,122 @@ class ClearAllChannelErrorsCommandHandler(CommandHandler[ClearAllChannelErrorsCo
                 "channels_cleared": 0,
                 "total_channels": 0,
                 "message": f"Failed to clear errors: {str(e)}"
+            }
+
+
+class StartAllChannelsCommandHandler(CommandHandler[StartAllChannelsCommand, Dict[str, Any]]):
+    """
+    Handler for StartAllChannelsCommand that starts all channels.
+    
+    This handler orchestrates the start operation across API and state services.
+    """
+
+    def __init__(self, ingest_monitor_worker):
+        self._worker = ingest_monitor_worker
+
+    async def handle(self, command: StartAllChannelsCommand) -> Dict[str, Any]:
+        """
+        Handle the command by starting all channels.
+        
+        Args:
+            command: The StartAllChannelsCommand
+            
+        Returns:
+            Dict with operation result:
+            {
+                "success": true,
+                "channels_started": 5,
+                "total_channels": 5,
+                "message": "Successfully started 5 channels"
+            }
+        """
+        try:
+            # Get current channel names from state service
+            channel_names = self._worker._state_service.get_channel_names()
+            
+            if not channel_names:
+                return {
+                    "success": False,
+                    "channels_started": 0,
+                    "total_channels": 0,
+                    "message": "No channels found to start"
+                }
+
+            # Start channels via API client
+            started_count = await self._worker._api_client.start_all_channels(channel_names)
+            
+            return {
+                "success": True,
+                "channels_started": started_count,
+                "total_channels": len(channel_names),
+                "message": f"Successfully started {started_count}/{len(channel_names)} channels"
+            }
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Error starting all channels: {e}")
+            return {
+                "success": False,
+                "channels_started": 0,
+                "total_channels": 0,
+                "message": f"Failed to start channels: {str(e)}"
+            }
+
+
+class StopAllChannelsCommandHandler(CommandHandler[StopAllChannelsCommand, Dict[str, Any]]):
+    """
+    Handler for StopAllChannelsCommand that stops all channels.
+    
+    This handler orchestrates the stop operation across API and state services.
+    """
+
+    def __init__(self, ingest_monitor_worker):
+        self._worker = ingest_monitor_worker
+
+    async def handle(self, command: StopAllChannelsCommand) -> Dict[str, Any]:
+        """
+        Handle the command by stopping all channels.
+        
+        Args:
+            command: The StopAllChannelsCommand
+            
+        Returns:
+            Dict with operation result:
+            {
+                "success": true,
+                "channels_stopped": 5,
+                "total_channels": 5,
+                "message": "Successfully stopped 5 channels"
+            }
+        """
+        try:
+            # Get current channel names from state service
+            channel_names = self._worker._state_service.get_channel_names()
+            
+            if not channel_names:
+                return {
+                    "success": False,
+                    "channels_stopped": 0,
+                    "total_channels": 0,
+                    "message": "No channels found to stop"
+                }
+
+            # Stop channels via API client
+            stopped_count = await self._worker._api_client.stop_all_channels(channel_names)
+            
+            return {
+                "success": True,
+                "channels_stopped": stopped_count,
+                "total_channels": len(channel_names),
+                "message": f"Successfully stopped {stopped_count}/{len(channel_names)} channels"
+            }
+            
+        except Exception as e:
+            import logging
+            logging.error(f"Error stopping all channels: {e}")
+            return {
+                "success": False,
+                "channels_stopped": 0,
+                "total_channels": 0,
+                "message": f"Failed to stop channels: {str(e)}"
             }

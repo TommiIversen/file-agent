@@ -180,6 +180,120 @@ class IngestApiClient:
         logging.debug(f"Successfully fetched errors for {len(successful_results)}/{len(channel_names)} channels")
         return successful_results
 
+    async def start_channel(self, channel_name: str) -> bool:
+        """
+        Start a single channel.
+        
+        Args:
+            channel_name (str): Name of channel to start
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post("/ingest/startChannel", json=payload)
+            response.raise_for_status()
+            logging.info(f"Successfully started channel {channel_name}")
+            return True
+        except httpx.RequestError as e:
+            logging.warning(f"Could not start channel {channel_name}: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error starting channel {channel_name}: {e}")
+            return False
+
+    async def stop_channel(self, channel_name: str) -> bool:
+        """
+        Stop a single channel.
+        
+        Args:
+            channel_name (str): Name of channel to stop
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post("/ingest/stopChannel", json=payload)
+            response.raise_for_status()
+            logging.info(f"Successfully stopped channel {channel_name}")
+            return True
+        except httpx.RequestError as e:
+            logging.warning(f"Could not stop channel {channel_name}: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error stopping channel {channel_name}: {e}")
+            return False
+
+    async def start_all_channels(self, channel_names: List[str]) -> int:
+        """
+        Start multiple channels in parallel.
+        
+        Used to bulk start all channels.
+        
+        Args:
+            channel_names: List of channel names to start
+            
+        Returns:
+            int: Number of channels successfully started
+        """
+        if not channel_names:
+            return 0
+
+        logging.info(f"Starting {len(channel_names)} channels: {channel_names}")
+
+        async def start_single(name: str) -> bool:
+            return await self.start_channel(name)
+
+        # Start all channels in parallel
+        import asyncio
+        tasks = [start_single(name) for name in channel_names]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Count successful starts
+        successful_starts = sum(
+            1 for result in results 
+            if result is True and not isinstance(result, Exception)
+        )
+        
+        logging.info(f"Successfully started {successful_starts}/{len(channel_names)} channels")
+        return successful_starts
+
+    async def stop_all_channels(self, channel_names: List[str]) -> int:
+        """
+        Stop multiple channels in parallel.
+        
+        Used to bulk stop all channels.
+        
+        Args:
+            channel_names: List of channel names to stop
+            
+        Returns:
+            int: Number of channels successfully stopped
+        """
+        if not channel_names:
+            return 0
+
+        logging.info(f"Stopping {len(channel_names)} channels: {channel_names}")
+
+        async def stop_single(name: str) -> bool:
+            return await self.stop_channel(name)
+
+        # Stop all channels in parallel
+        import asyncio
+        tasks = [stop_single(name) for name in channel_names]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Count successful stops
+        successful_stops = sum(
+            1 for result in results 
+            if result is True and not isinstance(result, Exception)
+        )
+        
+        logging.info(f"Successfully stopped {successful_stops}/{len(channel_names)} channels")
+        return successful_stops
+
     async def clear_all_channel_errors(self, channel_names: List[str]) -> int:
         """
         Clear errors for multiple channels in parallel.

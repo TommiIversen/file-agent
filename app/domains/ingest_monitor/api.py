@@ -11,7 +11,7 @@ from app.core.cqrs.query_bus import QueryBus
 from app.core.cqrs.command_bus import CommandBus
 from app.dependencies import get_query_bus, get_command_bus
 from .queries import GetIngestStatusQuery
-from .commands import ClearAllChannelErrorsCommand
+from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 
 
 # Router for ingest monitor endpoints
@@ -73,3 +73,51 @@ async def clear_all_channel_errors(
         }
     """
     return await command_bus.execute(ClearAllChannelErrorsCommand())
+
+
+@router.post("/start-all-channels", response_model=Dict[str, Any])
+async def start_all_channels(
+    command_bus: CommandBus = Depends(get_command_bus)
+) -> Dict[str, Any]:
+    """
+    Start all Just In Engine ingest channels.
+    
+    This endpoint will:
+    1. Start all active channels on Just In Engine
+    2. Update local state cache to reflect started channels
+    3. Publish events to update UI immediately
+    
+    Returns:
+        Dict containing operation result:
+        {
+            "success": bool,
+            "channels_started": int,
+            "total_channels": int,
+            "message": str
+        }
+    """
+    return await command_bus.execute(StartAllChannelsCommand())
+
+
+@router.post("/stop-all-channels", response_model=Dict[str, Any])
+async def stop_all_channels(
+    command_bus: CommandBus = Depends(get_command_bus)
+) -> Dict[str, Any]:
+    """
+    Stop all Just In Engine ingest channels.
+    
+    This endpoint will:
+    1. Stop all active channels on Just In Engine
+    2. Update local state cache to reflect stopped channels
+    3. Publish events to update UI immediately
+    
+    Returns:
+        Dict containing operation result:
+        {
+            "success": bool,
+            "channels_stopped": int,
+            "total_channels": int,
+            "message": str
+        }
+    """
+    return await command_bus.execute(StopAllChannelsCommand())

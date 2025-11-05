@@ -206,12 +206,30 @@
                 Last updated: <span x-text="$store.ingest?.lastUpdate ? new Date($store.ingest.lastUpdate).toLocaleTimeString() : 'Never'"></span>
             </div>
             <div class="flex space-x-2">
+                <!-- Start All Channels Button -->
+                <button @click="$store.ingest?.startAllChannels()"
+                        :disabled="($store.ingest?.getChannelsSorted() || []).length === 0"
+                        :class="($store.ingest?.getChannelsSorted() || []).length > 0 ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 cursor-not-allowed'"
+                        class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
+                    <span x-show="!$store.ingest?.isStarting">▶️ Start All</span>
+                    <span x-show="$store.ingest?.isStarting">⏳ Starting...</span>
+                </button>
+                
+                <!-- Stop All Channels Button -->
+                <button @click="$store.ingest?.stopAllChannels()"
+                        :disabled="($store.ingest?.getChannelsSorted() || []).length === 0"
+                        :class="($store.ingest?.getChannelsSorted() || []).length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 cursor-not-allowed'"
+                        class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
+                    <span x-show="!$store.ingest?.isStopping">⏸️ Stop All</span>
+                    <span x-show="$store.ingest?.isStopping">⏳ Stopping...</span>
+                </button>
+                
                 <!-- Clear All Errors Button -->
                 <button @click="$store.ingest?.clearAllErrors()"
                         :disabled="($store.ingest?.statistics?.errorChannels || 0) === 0"
-                        :class="($store.ingest?.statistics?.errorChannels || 0) > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 cursor-not-allowed'"
+                        :class="($store.ingest?.statistics?.errorChannels || 0) > 0 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-600 cursor-not-allowed'"
                         class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
-                    <span x-show="!$store.ingest?.isClearing">🗑️ Clear All Errors</span>
+                    <span x-show="!$store.ingest?.isClearing">🗑️ Clear Errors</span>
                     <span x-show="$store.ingest?.isClearing">⏳ Clearing...</span>
                 </button>
                 

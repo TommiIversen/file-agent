@@ -25,6 +25,8 @@ document.addEventListener('alpine:init', () => {
         errors: [],                   // Array of recent channel errors
         MAX_ERRORS: 50,              // Maximum errors to keep in memory
         isClearing: false,           // State for clear operation
+        isStarting: false,           // State for start all operation
+        isStopping: false,           // State for stop all operation
 
         // Initialization
         init() {
@@ -233,6 +235,92 @@ document.addEventListener('alpine:init', () => {
                 
             } finally {
                 this.isClearing = false;
+            }
+        },
+
+        // Start all channels via API
+        async startAllChannels() {
+            if (this.isStarting) {
+                console.log('🔄 Start operation already in progress');
+                return;
+            }
+
+            this.isStarting = true;
+            
+            try {
+                console.log('▶️ Starting all channels via API...');
+                const response = await fetch('/api/ingest/start-all-channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(`✅ ${result.message}`);
+                    console.log(`📊 Started ${result.channels_started}/${result.total_channels} channels`);
+                    
+                    // Refresh data to get updated channel states
+                    setTimeout(() => this.loadInitialData(), 1000);
+                    
+                } else {
+                    throw new Error(result.message || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to start all channels:', error);
+                
+            } finally {
+                this.isStarting = false;
+            }
+        },
+
+        // Stop all channels via API
+        async stopAllChannels() {
+            if (this.isStopping) {
+                console.log('🔄 Stop operation already in progress');
+                return;
+            }
+
+            this.isStopping = true;
+            
+            try {
+                console.log('⏸️ Stopping all channels via API...');
+                const response = await fetch('/api/ingest/stop-all-channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(`✅ ${result.message}`);
+                    console.log(`📊 Stopped ${result.channels_stopped}/${result.total_channels} channels`);
+                    
+                    // Refresh data to get updated channel states
+                    setTimeout(() => this.loadInitialData(), 1000);
+                    
+                } else {
+                    throw new Error(result.message || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to stop all channels:', error);
+                
+            } finally {
+                this.isStopping = false;
             }
         },
 
