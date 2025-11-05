@@ -2,9 +2,7 @@
 
 import asyncio
 import logging
-from typing import Tuple
-
-import aiofiles.os
+import os
 
 from .base_mounter import BaseMounter
 from .macos_mount_utils import MacOSMountValidator, MacOSNetworkChecker, MacOSMountCleaner
@@ -22,287 +20,89 @@ class MacOSMounter(BaseMounter):
 
     async def attempt_mount(self, share_url: str) -> bool:
         """
-        Attempt to mount network share with robust validation and cleanup.
+        Simple mount attempt - just like the AppleScript that works.
         
-        Includes network connectivity check, cleanup of invalid states,
-        and verification that the resulting mount is actually a network mount.
+        try
+            mount volume "smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402"
+        end try
         """
         try:
             expected_mount_point = self.get_mount_point_from_url(share_url)
             
-            # Step 1: Check network connectivity first - test our specific share host
-            if not await self._network_checker.is_network_available(share_url):
-                logging.warning(f"Network not available for share {share_url} - skipping mount attempt")
-                return False
-            
-            # Step 2: Clean up any existing problematic state
-            logging.info(f"Cleaning up any invalid state at mount point: {expected_mount_point}")
-            logging.info(f"Checking for ghost mounts of pattern: {expected_mount_point}_*")
-            
-            # Clean up any ghost mounts first
-            cleaned_ghosts = await self._mount_cleaner.cleanup_ghost_mounts(expected_mount_point)
-            if cleaned_ghosts:
-                logging.info(f"Cleaned up ghost mounts: {cleaned_ghosts}")
-            else:
-                logging.info("No ghost mounts found to clean up")
-            
-            # Clean up invalid local folder at mount point
-            logging.info(f"Checking for invalid local folder at: {expected_mount_point}")
-            cleanup_success = await self._mount_cleaner.cleanup_invalid_mount_point(expected_mount_point)
-            if not cleanup_success:
-                logging.error(f"Failed to clean up invalid state at {expected_mount_point}")
-                return False
-            else:
-                logging.info("Mount point cleanup completed successfully")
-                
-            # Step 3: Check if already properly mounted
-            is_mounted, is_accessible = await self.verify_mount_accessible(expected_mount_point)
-
-            if is_mounted and is_accessible:
-                logging.info(f"Share already mounted and accessible: {share_url} -> {expected_mount_point}")
+            # Step 1: Quick check if already mounted
+            if await self.verify_mount_accessible(expected_mount_point):
+                logging.info(f"Share already mounted: {share_url} -> {expected_mount_point}")
                 return True
-            elif is_mounted and not is_accessible:
-                logging.warning(f"Share mounted but not accessible: {share_url} -> {expected_mount_point}")
-                # Continue with mount attempt - might fix accessibility issues
-
-            # Step 4: Attempt the actual mount
+            
+            # Step 2: Simple cleanup - remove any ghost mounts
+            ghost_mounts = await self._mount_validator.find_ghost_mounts(expected_mount_point)
+            if ghost_mounts:
+                logging.info(f"Cleaning up ghost mounts: {ghost_mounts}")
+                await self._mount_cleaner.cleanup_ghost_mounts(expected_mount_point)
+            
+            # Step 3: Clean up any problematic local folder
+            await self._mount_cleaner.cleanup_invalid_mount_point(expected_mount_point)
+            
+            # Step 4: Simple mount - exactly like your AppleScript
             logging.info(f"Attempting macOS mount: {share_url}")
-            logging.info(f"Expected mount point: {expected_mount_point}")
 
-            # Use netfs mount approach - this is macOS native but non-interactive
-            # This approach tries to mount without UI prompts by using background mounting
-            
-            # Parse SMB URL to extract server and share info
-            # From: smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402
-            import urllib.parse
-            parsed = urllib.parse.urlparse(share_url)
-            
-            if not parsed.hostname:
-                logging.error(f"Could not parse hostname from SMB URL: {share_url}")
-                return False
-            
-            # Try mount using osascript but with 'do shell script' to avoid GUI
-            # This runs the mount command through AppleScript but without user interaction
-            
-            # Convert SMB URL for mount_smbfs
-            if share_url.startswith('smb://'):
-                mount_url = '//' + share_url[6:]  # Remove 'smb://' prefix  
-            else:
-                mount_url = share_url
-                
-            # Create mount point using mkdir through shell script
-            # This avoids sudo by using a different approach
-            create_script = '''
-            set mountPoint to "/Volumes/SK6402"
-            try
-                do shell script "mkdir -p " & quoted form of mountPoint & " 2>/dev/null || true"
-            end try
-            '''
-            
-            logging.info("Creating mount point via AppleScript...")
-            create_cmd = ["osascript", "-e", create_script]
-            
-            try:
-                create_process = await asyncio.create_subprocess_exec(
-                    *create_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                await asyncio.wait_for(create_process.communicate(), timeout=5.0)
-                logging.info("Mount point creation attempted")
-            except Exception as e:
-                logging.warning(f"Mount point creation failed: {e}")
-            
-            # Now try mount_smbfs directly (it might work now with mount point existing)
-            cmd = [
-                "/sbin/mount_smbfs",
-                "-o", "nobrowse",  # Don't show in Finder sidebar
-                mount_url,
-                expected_mount_point
-            ]
-            
-            logging.info(f"Mount command: {' '.join(cmd)}")
-            logging.info(f"Mount URL: {mount_url}")
-            logging.info(f"Expected mount point: {expected_mount_point}")
+            cmd = ["osascript", "-e", f'mount volume "{share_url}"']
 
             process = await asyncio.create_subprocess_exec(
-                *cmd, 
-                stdout=asyncio.subprocess.PIPE, 
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), 
-                    timeout=10.0
-                )
-                
-                # Log detailed output
-                stdout_text = stdout.decode() if stdout else ""
-                stderr_text = stderr.decode() if stderr else ""
-                
-                logging.info(f"Mount command return code: {process.returncode}")
-                if stdout_text:
-                    logging.info(f"Mount command stdout: {stdout_text}")
-                        
-                if stderr_text:
-                    logging.warning(f"Mount command stderr: {stderr_text}")
-                    
-                # mount_smbfs returns 0 on success
-                if process.returncode == 0:
-                    logging.info("Mount command succeeded - verifying mount...")
-                    
-                    # Quick verification
-                    import os
-                    if os.path.exists(expected_mount_point) and os.path.ismount(expected_mount_point):
-                        logging.info(f"Mount successful! Share mounted at: {expected_mount_point}")
-                        return True
-                    else:
-                        # Wait a moment and try again
-                        await asyncio.sleep(2)
-                        if os.path.exists(expected_mount_point) and os.path.ismount(expected_mount_point):
-                            logging.info(f"Mount successful after wait: {expected_mount_point}")
-                            return True
-                        else:
-                            logging.warning(f"Mount command succeeded but verification failed: {expected_mount_point}")
-                            return False
-                else:
-                    logging.error(f"Mount failed with return code: {process.returncode}")
-                    
-                    # Check for common error patterns
-                    if "authentication" in stderr_text.lower() or "permission denied" in stderr_text.lower():
-                        logging.error("Mount failed due to authentication issues")
-                        logging.info("To fix: Add credentials to keychain with:")
-                        logging.info("  security add-internet-password -a svcsk6402 -s net.dr.dk -P 445 -r 'smb ' -w")
-                    elif "no such file or directory" in stderr_text.lower():
-                        logging.error("Mount failed - mount point issue")
-                    elif "network" in stderr_text.lower() or "host" in stderr_text.lower():
-                        logging.error("Mount failed due to network/host issues")
-                    
-                    return False
-                    
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
             except asyncio.TimeoutError:
                 logging.error(f"Mount operation timed out for {share_url}")
-                logging.error(f"Command was: {' '.join(cmd)}")
                 process.kill()
                 await process.wait()
                 return False
 
-            # Step 5: Check mount result
+            # Step 5: Check if mount succeeded
             if process.returncode == 0:
-                logging.info(f"Mount command completed successfully for {share_url}")
+                logging.info(f"Mount command completed for {share_url}")
                 
-                # Step 6: Verify the mount is actually a real network mount
-                await asyncio.sleep(2)  # Give macOS time to complete the mount
+                # Give macOS a moment to complete the mount
+                await asyncio.sleep(2)
                 
-                logging.info(f"Verifying mount at: {expected_mount_point}")
-                is_real_mount = await self._mount_validator.is_real_network_mount(expected_mount_point)
-                
-                if is_real_mount:
-                    logging.info(f"Successfully verified network mount: {share_url} -> {expected_mount_point}")
+                # Simple check - does the mount point exist and work?
+                if await self.verify_mount_accessible(expected_mount_point):
+                    logging.info(f"Successfully mounted and verified: {share_url} -> {expected_mount_point}")
                     return True
                 else:
-                    logging.warning(f"Mount command succeeded but path is not a real network mount: {expected_mount_point}")
-                    
-                    # Check if macOS created a ghost mount instead
-                    ghost_mounts = await self._mount_validator.find_ghost_mounts(expected_mount_point)
-                    if ghost_mounts:
-                        logging.error(f"Mount created ghost mount instead: {ghost_mounts}. Expected: {expected_mount_point}")
-                        # Clean up the ghost mounts
-                        await self._mount_cleaner.cleanup_ghost_mounts(expected_mount_point)
-                    else:
-                        logging.error(f"Mount command succeeded but no valid network mount found at {expected_mount_point}")
+                    logging.warning(f"Mount command succeeded but mount point not accessible: {expected_mount_point}")
                     return False
-                    
             else:
-                logging.error(f"Mount command failed for {share_url}")
-                logging.error(f"Return code: {process.returncode}")
-                if stderr_text:
-                    logging.error(f"Error details: {stderr_text}")
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                logging.error(f"Mount failed for {share_url}: {error_msg}")
                 return False
 
         except Exception as e:
             logging.error(f"Exception during macOS mount attempt: {e}")
             return False
 
-    async def verify_mount_accessible(self, local_path: str) -> Tuple[bool, bool]:
+    async def verify_mount_accessible(self, local_path: str) -> bool:
         """
-        Verify if mount point is a real network mount and accessible.
-        
-        Returns (is_mounted, is_accessible).
-        Uses robust validation to distinguish between real network mounts
-        and local folders that shouldn't exist at mount points.
+        Simple check if mount point is accessible.
+        Just like 'test -d /Volumes/SK6402 && test -w /Volumes/SK6402'
         """
         try:
-            # First check if path exists at all
-            try:
-                path_exists = await asyncio.wait_for(
-                    aiofiles.os.path.exists(local_path), timeout=5.0
-                )
-                if not path_exists:
-                    logging.debug(f"Mount point does not exist: {local_path}")
-                    return False, False
-
-                path_is_dir = await asyncio.wait_for(
-                    aiofiles.os.path.isdir(local_path), timeout=5.0
-                )
-                if not path_is_dir:
-                    logging.debug(f"Mount point is not a directory: {local_path}")
-                    return False, False
-
-            except asyncio.TimeoutError:
-                logging.warning(f"Path check timed out for: {local_path}")
-                return False, False
-
-            # Critical check: Is this a real network mount or just a local folder?
-            is_real_mount = await self._mount_validator.is_real_network_mount(local_path)
+            # Check if it exists and is a directory
+            if not os.path.exists(local_path) or not os.path.isdir(local_path):
+                return False
             
-            if not is_real_mount:
-                # Path exists but is not a real network mount
-                logging.warning(f"Path exists but is not a real network mount: {local_path}")
-                
-                # Check if it's a problematic local folder
-                is_local = await self._mount_validator.is_local_folder_at_mount_point(local_path)
-                if is_local:
-                    logging.error(f"DANGER: Found local folder at network mount point: {local_path}")
-                    return True, False  # Exists but not accessible as network mount
-                
-                return False, False
-
-            # It's a real network mount, now test accessibility
+            # Simple access test - try to list contents
             try:
-                process = await asyncio.create_subprocess_exec(
-                    "ls",
-                    local_path,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-
-                try:
-                    _, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=10.0
-                    )
-                except asyncio.TimeoutError:
-                    logging.warning(f"ls command timed out for network mount: {local_path}")
-                    process.kill()
-                    await process.wait()
-                    return True, False  # Mounted but not accessible
-
-                if process.returncode == 0:
-                    logging.debug(f"Network mount accessible: {local_path}")
-                    return True, True
-                else:
-                    error_msg = stderr.decode() if stderr else "Unknown error"
-                    logging.debug(f"Network mount not accessible: {local_path} - {error_msg}")
-                    return True, False
-
-            except Exception as e:
-                logging.debug(f"Error testing network mount accessibility: {e}")
-                return True, False
-
+                os.listdir(local_path)
+                return True
+            except (OSError, PermissionError):
+                return False
+                
         except Exception as e:
-            logging.error(f"Exception during mount verification: {e}")
-            return False, False
+            logging.debug(f"Mount accessibility check failed for {local_path}: {e}")
+            return False
 
     def get_platform_name(self) -> str:
         """Get platform name for logging."""
