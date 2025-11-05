@@ -28,10 +28,20 @@ document.addEventListener('alpine:init', () => {
         isStarting: false,           // State for start all operation
         isStopping: false,           // State for stop all operation
 
+        // Recording Timer
+        recordingTimer: {
+            isRunning: false,        // Whether any channel is recording
+            startTime: null,         // When recording started
+            currentTime: null,       // Current timer value
+            intervalId: null,        // Interval timer ID
+            displayTime: '00:00:00:00'  // Formatted display time with frames
+        },
+
         // Initialization
         init() {
             console.log('🎥 Ingest Store initialized');
             this.loadInitialData();
+            this.initRecordingTimer();
         },
 
         // Load initial data from API
@@ -143,6 +153,113 @@ document.addEventListener('alpine:init', () => {
                 errorChannels: channels.filter(c => c.has_errors).length,
                 signalLostChannels: channels.filter(c => !c.has_signal).length
             };
+
+            // Update recording timer state
+            this.updateRecordingTimer();
+        },
+
+        // Initialize recording timer
+        initRecordingTimer() {
+            console.log('⏱️ Recording timer initialized');
+            this.recordingTimer.displayTime = '00:00:00:00';
+        },
+
+        // Update recording timer based on channel states
+        updateRecordingTimer() {
+            const recordingChannels = Array.from(this.channels.values()).filter(c => c.is_recording);
+            const isRecording = recordingChannels.length > 0;
+
+            if (isRecording && !this.recordingTimer.isRunning) {
+                // Start timer - find channel with lowest time (newest recording)
+                const minTimeChannel = recordingChannels.reduce((min, channel) => {
+                    const channelTotalSeconds = (channel.hours || 0) * 3600 + (channel.minutes || 0) * 60 + (channel.seconds || 0);
+                    const minTotalSeconds = (min.hours || 0) * 3600 + (min.minutes || 0) * 60 + (min.seconds || 0);
+                    return channelTotalSeconds < minTotalSeconds ? channel : min;
+                });
+                
+                this.startRecordingTimer(minTimeChannel);
+            } else if (!isRecording && this.recordingTimer.isRunning) {
+                // Stop timer
+                this.stopRecordingTimer();
+            } else if (isRecording && this.recordingTimer.isRunning) {
+                // Sync timer with current channel time (find minimum time again)
+                const minTimeChannel = recordingChannels.reduce((min, channel) => {
+                    const channelTotalSeconds = (channel.hours || 0) * 3600 + (channel.minutes || 0) * 60 + (channel.seconds || 0);
+                    const minTotalSeconds = (min.hours || 0) * 3600 + (min.minutes || 0) * 60 + (min.seconds || 0);
+                    return channelTotalSeconds < minTotalSeconds ? channel : min;
+                });
+                
+                this.syncRecordingTimer(minTimeChannel);
+            }
+        },
+
+        // Start recording timer
+        startRecordingTimer(baseChannel) {
+            if (this.recordingTimer.intervalId) {
+                clearInterval(this.recordingTimer.intervalId);
+            }
+
+            // Calculate start time based on channel's current time
+            const channelTotalSeconds = (baseChannel.hours || 0) * 3600 + (baseChannel.minutes || 0) * 60 + (baseChannel.seconds || 0);
+            this.recordingTimer.startTime = Date.now() - (channelTotalSeconds * 1000);
+            this.recordingTimer.isRunning = true;
+
+            // Start live counter at 25fps (40ms intervals for frame accuracy)
+            this.recordingTimer.intervalId = setInterval(() => {
+                this.updateTimerDisplay();
+            }, 40);
+
+            console.log(`⏱️ Recording timer started, synced to channel: ${baseChannel.name} (${channelTotalSeconds}s)`);
+            this.updateTimerDisplay();
+        },
+
+        // Stop recording timer
+        stopRecordingTimer() {
+            if (this.recordingTimer.intervalId) {
+                clearInterval(this.recordingTimer.intervalId);
+                this.recordingTimer.intervalId = null;
+            }
+
+            this.recordingTimer.isRunning = false;
+            this.recordingTimer.startTime = null;
+            this.recordingTimer.currentTime = null;
+            this.recordingTimer.displayTime = '00:00:00:00';
+
+            console.log('⏱️ Recording timer stopped');
+        },
+
+        // Sync timer with channel time (update start time to match)
+        syncRecordingTimer(baseChannel) {
+            const channelTotalSeconds = (baseChannel.hours || 0) * 3600 + (baseChannel.minutes || 0) * 60 + (baseChannel.seconds || 0);
+            const newStartTime = Date.now() - (channelTotalSeconds * 1000);
+            
+            // Only update if there's a significant difference (more than 2 seconds)
+            if (!this.recordingTimer.startTime || Math.abs(newStartTime - this.recordingTimer.startTime) > 2000) {
+                this.recordingTimer.startTime = newStartTime;
+                console.log(`⏱️ Recording timer synced to channel: ${baseChannel.name} (${channelTotalSeconds}s)`);
+            }
+        },
+
+        // Update timer display with frame precision (25fps)
+        updateTimerDisplay() {
+            if (!this.recordingTimer.isRunning || !this.recordingTimer.startTime) {
+                this.recordingTimer.displayTime = '00:00:00:00';
+                return;
+            }
+
+            const elapsedMs = Date.now() - this.recordingTimer.startTime;
+            
+            // Calculate total frames elapsed (25fps)
+            const totalFrames = Math.floor((elapsedMs * 25) / 1000);
+            
+            // Break down into hours, minutes, seconds, frames
+            const hours = Math.floor(totalFrames / (25 * 60 * 60));
+            const minutes = Math.floor((totalFrames % (25 * 60 * 60)) / (25 * 60));
+            const seconds = Math.floor((totalFrames % (25 * 60)) / 25);
+            const frames = totalFrames % 25;
+
+            this.recordingTimer.displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(frames).padStart(2, '0')}`;
+            this.recordingTimer.currentTime = { hours, minutes, seconds, frames };
         },
 
         // Get channels as array for iteration
@@ -329,7 +446,7 @@ document.addEventListener('alpine:init', () => {
             return this.channels.get(channelName);
         },
 
-        // Format timecode for display
+        // Format timecode for display (with frames)
         formatTimecode(hours, minutes, seconds, frames) {
             const h = String(hours || 0).padStart(2, '0');
             const m = String(minutes || 0).padStart(2, '0');
@@ -338,14 +455,14 @@ document.addEventListener('alpine:init', () => {
             return `${h}:${m}:${s}:${f}`;
         },
 
-        // Format duration for display
-        formatDuration(hours, minutes, seconds) {
+        // Format duration for display (with frames)
+        formatDuration(hours, minutes, seconds, frames) {
             if (hours > 0) {
-                return `${hours}h ${minutes}m ${seconds}s`;
+                return `${hours}h ${minutes}m ${seconds}s ${frames}f`;
             } else if (minutes > 0) {
-                return `${minutes}m ${seconds}s`;
+                return `${minutes}m ${seconds}s ${frames}f`;
             } else {
-                return `${seconds}s`;
+                return `${seconds}s ${frames}f`;
             }
         },
 
@@ -357,6 +474,15 @@ document.addEventListener('alpine:init', () => {
             } else {
                 console.log('📡 Connected to Just In Engine');
             }
+        },
+
+        // Cleanup function (called when component is destroyed)
+        cleanup() {
+            if (this.recordingTimer.intervalId) {
+                clearInterval(this.recordingTimer.intervalId);
+                this.recordingTimer.intervalId = null;
+            }
+            console.log('🧹 Ingest store cleaned up');
         }
     });
 });

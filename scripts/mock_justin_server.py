@@ -42,6 +42,9 @@ GLOBAL_ERROR_CHANNELS: List[str] = []
 MANUAL_MODE = False
 AUTO_CYCLER_TASK = None
 
+# Recording start times - tracks when each channel started recording (for realistic time calculation)
+RECORDING_START_TIMES: Dict[str, float] = {}
+
 # --- Pydantic Modeller ---
 
 class ChannelRequest(BaseModel):
@@ -57,12 +60,22 @@ class ErrorRequest(BaseModel):
 
 def _create_mock_response(channel_name: str, rec_status: bool) -> Dict[str, Any]:
     """Genererer den store JSON-respons for en given kanal."""
+    
+    # Calculate realistic recording time if channel is recording
+    hours, minutes, seconds = 0, 0, 0
+    if rec_status and channel_name in RECORDING_START_TIMES:
+        elapsed_seconds = int(time.time() - RECORDING_START_TIMES[channel_name])
+        hours = elapsed_seconds // 3600
+        minutes = (elapsed_seconds % 3600) // 60
+        seconds = elapsed_seconds % 60
+    
     return {
         "rec": rec_status,
         "frames": 11,
         "channel": channel_name,
-        "hours": 0,
-        "seconds": int(time.time()) % 60, # Lidt variation
+        "hours": hours,
+        "minutes": minutes,
+        "seconds": seconds,
         "options": {
             "TOAJustInEngineTimecodeSource": 6,
             "TOAJustInEngineLicenseStatus": True,
@@ -79,8 +92,7 @@ def _create_mock_response(channel_name: str, rec_status: bool) -> Dict[str, Any]
             "TOAJustInEngineFramerate": 2500,
             "TOAJustInEngineAlternativeStopTimecodeActive": False
         },
-        "name": channel_name,
-        "minutes": 24
+        "name": channel_name
     }
 
 def _create_mock_error_response(channel_name: str) -> Dict[str, Any]:
@@ -190,25 +202,36 @@ async def _state_cycler_task():
             logging.info("--- STATE 1: ALLE KANALER 'rec: false' ---")
             for name in CHANNEL_NAMES:
                 GLOBAL_CHANNEL_STATE[name]["rec"] = False
+                # Remove start time when stopping
+                RECORDING_START_TIMES.pop(name, None)
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # --- Tilstand 2: ALLE TÆNDT ---
             if MANUAL_MODE:
                 break
             logging.info("--- STATE 2: ALLE KANALER 'rec: true' ---")
+            current_time = time.time()
             for name in CHANNEL_NAMES:
                 GLOBAL_CHANNEL_STATE[name]["rec"] = True
+                # Set start time when starting
+                RECORDING_START_TIMES[name] = current_time
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # --- Tilstand 3: ÉN SLUKKET (fejl-tilstand) ---
             if MANUAL_MODE:
                 break
             logging.info("--- STATE 3: KAM_8 'rec: false', RESTEN 'rec: true' ---")
+            current_time = time.time()
             for name in CHANNEL_NAMES:
                 if name == "KAM_8":
                     GLOBAL_CHANNEL_STATE[name]["rec"] = False
+                    # Remove start time when stopping
+                    RECORDING_START_TIMES.pop(name, None)
                 else:
                     GLOBAL_CHANNEL_STATE[name]["rec"] = True
+                    # Set start time if not already recording
+                    if name not in RECORDING_START_TIMES:
+                        RECORDING_START_TIMES[name] = current_time
             await asyncio.sleep(STATE_DURATION_SECONDS)
 
             # --- ERROR CYCLES ---
@@ -291,7 +314,7 @@ async def get_active_channels() -> Dict[str, List[str]]:
 async def get_recording_status(request: ChannelRequest):
     """
     Returnerer den *nuværende* mock-status for en specifik kanal
-    fra den globale tilstand.
+    fra den globale tilstand med opdateret tid.
     """
     channel_name = request.channel
     
@@ -299,12 +322,13 @@ async def get_recording_status(request: ChannelRequest):
         logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")
         return {"error": "Channel not found"}
 
-    # Hent den nuværende, opdaterede status fra den globale dict
-    current_status_data = GLOBAL_CHANNEL_STATE[channel_name]
+    # Hent den nuværende recording status og regenerer response med aktuel tid
+    current_rec_status = GLOBAL_CHANNEL_STATE[channel_name]["rec"]
+    current_status_data = _create_mock_response(channel_name, current_rec_status)
     
     logging.info(
         f"Modtog POST /ingest/requestRecordingStatus for '{channel_name}'. "
-        f"Returnerer 'rec: {current_status_data['rec']}'"
+        f"Returnerer 'rec: {current_status_data['rec']}', tid: {current_status_data['hours']:02d}:{current_status_data['minutes']:02d}:{current_status_data['seconds']:02d}"
     )
     return current_status_data
 
@@ -364,7 +388,9 @@ async def start_channel(request: ChannelRequest):
     
     # Start den angivne kanal
     GLOBAL_CHANNEL_STATE[channel_name]["rec"] = True
-    logging.info(f"✅ Kanal '{channel_name}' startet (rec: true)")
+    # Set recording start time
+    RECORDING_START_TIMES[channel_name] = time.time()
+    logging.info(f"✅ Kanal '{channel_name}' startet (rec: true) - starttid sat")
     
     return {"status": "ok", "channel": channel_name, "action": "started"}
 
@@ -397,7 +423,9 @@ async def stop_channel(request: ChannelRequest):
     
     # Stop den angivne kanal
     GLOBAL_CHANNEL_STATE[channel_name]["rec"] = False
-    logging.info(f"⏹️ Kanal '{channel_name}' stoppet (rec: false)")
+    # Remove recording start time
+    RECORDING_START_TIMES.pop(channel_name, None)
+    logging.info(f"⏹️ Kanal '{channel_name}' stoppet (rec: false) - starttid fjernet")
     
     return {"status": "ok", "channel": channel_name, "action": "stopped"}
 

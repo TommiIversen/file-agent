@@ -72,6 +72,22 @@
                   class="text-gray-400 text-sm">No channels detected</span>
         </div>
 
+        <!-- Center: Record Time Display -->
+        <div class="flex items-center justify-center">
+            <div class="flex items-center space-x-2 bg-gray-800 bg-opacity-80 rounded-lg px-3 py-1">
+                <span class="text-lg text-gray-400">REC:</span>
+                <div class="flex items-center space-x-1">
+                    <!-- Recording indicator dot -->
+                    <div class="w-2 h-2 rounded-full transition-all duration-200"
+                         :class="$store.ingest?.recordingTimer?.isRunning ? 'bg-red-500 animate-pulse shadow-lg shadow-red-500/50' : 'bg-gray-500'"></div>
+                    <!-- Timer display -->
+                    <span class="font-mono text-2xl font-medium"
+                          :class="$store.ingest?.recordingTimer?.isRunning ? 'text-red-400' : 'text-gray-400'"
+                          x-text="$store.ingest?.recordingTimer?.displayTime || '00:00:00:00'"></span>
+                </div>
+            </div>
+        </div>
+
         <!-- Right side: Tally Status & Details Toggle -->
         <div class="flex items-center space-x-3">
             <!-- Recording Summary -->
@@ -180,8 +196,8 @@
                         </div>
                         <div x-show="channel.is_recording" class="flex justify-between text-xs">
                             <span class="text-gray-400">Time:</span>
-                            <span class="text-blue-400" 
-                                  x-text="`${channel.hours || 0}:${String(channel.minutes || 0).padStart(2, '0')}:${String(channel.seconds || 0).padStart(2, '0')}`"></span>
+                            <span class="text-blue-400 font-mono" 
+                                  x-text="`${String(channel.hours || 0).padStart(2, '0')}:${String(channel.minutes || 0).padStart(2, '0')}:${String(channel.seconds || 0).padStart(2, '0')}:${String(channel.frames || 0).padStart(2, '0')}`"></span>
                         </div>
                         <div x-show="channel.has_errors" class="text-xs">
                             <div class="text-yellow-400 mb-1">
