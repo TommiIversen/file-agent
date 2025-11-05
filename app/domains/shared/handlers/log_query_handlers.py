@@ -2,7 +2,6 @@
 Query handlers for log file management operations.
 Handles read-only operations for system log files.
 """
-import mimetypes
 from pathlib import Path
 from typing import List, Dict, Any
 from fastapi import HTTPException, status
@@ -183,13 +182,18 @@ class LogFileQueryHandler:
                 detail=f"'{query.filename}' is not a file"
             )
         
-        # Determine MIME type
-        mime_type, _ = mimetypes.guess_type(str(file_path))
-        if mime_type is None:
-            mime_type = 'text/plain'
+        # Always use .txt extension for download and force download behavior
+        download_filename = query.filename
+        if not download_filename.endswith('.txt'):
+            # Add .txt extension if not already present
+            download_filename = f"{query.filename}.txt"
         
         return FileResponse(
             path=str(file_path),
-            media_type=mime_type,
-            filename=query.filename
+            media_type='application/octet-stream',  # Force download instead of browser preview
+            filename=download_filename,
+            headers={
+                "Content-Disposition": f'attachment; filename="{download_filename}"',
+                "Content-Type": "text/plain; charset=utf-8"
+            }
         )
