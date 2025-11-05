@@ -29,6 +29,11 @@ class NetworkMountService:
                 self._mounter = WindowsMounter(
                     drive_letter=self._config.get_windows_drive_letter()
                 )
+            elif platform_name == "macos":
+                from .macos_mounter import MacOSMounter
+                self._mounter = MacOSMounter(
+                    mount_point=self._config.get_macos_mount_point()
+                )
             else:
                 self._mounter = self._platform_factory.create_mounter()
 
