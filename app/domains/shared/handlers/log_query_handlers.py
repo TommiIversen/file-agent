@@ -64,6 +64,7 @@ class LogFileQueryHandler:
     async def handle_get_log_content(self, query: GetLogContentQuery) -> Dict[str, Any]:
         """
         Get the full content of a log file.
+        REVERSED: Shows newest lines first (bottom of file first).
         
         Args:
             query: GetLogContentQuery with filename
@@ -89,12 +90,17 @@ class LogFileQueryHandler:
         try:
             async with aiofiles.open(file_path, mode='r', encoding='utf-8', errors='replace') as f:
                 content = await f.read()
+            
+            # REVERSE the content so newest lines come first
+            lines = content.splitlines()
+            lines.reverse()
+            reversed_content = '\n'.join(lines)
                 
             return {
                 "filename": query.filename,
-                "content": content,
-                "size": len(content),
-                "lines": content.count('\n') + (1 if content and not content.endswith('\n') else 0)
+                "content": reversed_content,
+                "size": len(reversed_content),
+                "lines": len(lines)
             }
         except Exception as e:
             raise HTTPException(
@@ -105,6 +111,7 @@ class LogFileQueryHandler:
     async def handle_get_log_content_chunk(self, query: GetLogContentChunkQuery) -> Dict[str, Any]:
         """
         Get a chunk of log file content with pagination.
+        REVERSED: Shows newest lines first (bottom of file first).
         
         Args:
             query: GetLogContentChunkQuery with filename, start, and limit
@@ -128,7 +135,10 @@ class LogFileQueryHandler:
             lines = content.splitlines()
             total_lines = len(lines)
             
-            # Calculate pagination
+            # REVERSE the lines so newest (bottom of file) comes first
+            lines.reverse()
+            
+            # Calculate pagination (now on reversed lines)
             start = max(0, query.start)
             end = min(total_lines, start + query.limit)
             chunk_lines = lines[start:end]
