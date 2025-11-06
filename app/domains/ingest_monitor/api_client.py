@@ -190,8 +190,16 @@ class IngestApiClient:
             bool: True if successful, False otherwise
         """
         try:
-            payload = {"channel": channel_name}
-            response = await self._client.post("/ingest/startChannel", json=payload)
+            payload = {
+                "channel": channel_name,
+                "proposed-filename": "",
+                "metadata": {
+                    "toa-just-in-engine-alternative-start-timecode-frames": 0,
+                    "tal-ingest-engine-override-naming-preset": 0,
+                    "toa-just-in-engine-alternative-start-timecode-active": 0
+                }
+            }
+            response = await self._client.post("/ingest/startRecordingWithFilename", json=payload)
             response.raise_for_status()
             logging.info(f"Successfully started channel {channel_name}")
             return True
@@ -213,8 +221,14 @@ class IngestApiClient:
             bool: True if successful, False otherwise
         """
         try:
-            payload = {"channel": channel_name}
-            response = await self._client.post("/ingest/stopChannel", json=payload)
+            payload = {
+                "channel": channel_name,
+                "metadata": {
+                    "toa-just-in-engine-alternative-stop-timecode-active": 0,
+                    "toa-just-in-engine-alternative-stop-timecode-frames": 0
+                }
+            }
+            response = await self._client.post("/ingest/stopRecording", json=payload)
             response.raise_for_status()
             logging.info(f"Successfully stopped channel {channel_name}")
             return True
