@@ -65,8 +65,9 @@ class GrowingFileCopyStrategy():
             is_growing_file = self._is_file_currently_growing(tracked_file)
             min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
 
-            # Only wait for minimum size if this is actually a growing file
-            if is_growing_file and current_size < min_size_bytes:
+            # Only wait for minimum size if this is actually a growing file AND it's not already approved to start
+            # Files with READY_TO_START_GROWING have already been size-checked by the growing file detector
+            if is_growing_file and current_size < min_size_bytes and tracked_file.status != FileStatus.READY_TO_START_GROWING:
                 size_mb = current_size / (1024 * 1024)
                 logging.info(
                     f"⏳ WAITING FOR SIZE: {os.path.basename(source_path)} "
