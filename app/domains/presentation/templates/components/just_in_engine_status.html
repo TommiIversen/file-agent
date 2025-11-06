@@ -41,8 +41,8 @@
                                     <template x-for="(error, index) in channel.last_errors" :key="index">
                                         <div class="mb-2 last:mb-0">
                                             <div x-text="`${index + 1}. ${error?.errorUIDescription || 'Unknown error'}`" class="max-w-xs whitespace-normal"></div>
-                                            <div x-show="error?.errorCode" class="text-gray-400 text-xs">
-                                                Code: <span x-text="error?.errorCode"></span>
+                                            <div x-show="error?.date" class="text-gray-400 text-xs">
+                                                <span x-text="error?.date ? new Date(error.date * 1000).toLocaleDateString('da-DK', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''"></span>
                                             </div>
                                         </div>
                                     </template>
@@ -53,8 +53,8 @@
                             <template x-if="!channel.last_errors || channel.last_errors.length === 0">
                                 <div x-show="channel.last_error">
                                     <div x-text="channel.last_error?.error_message || 'Unknown error'" class="max-w-xs whitespace-normal"></div>
-                                    <div x-show="channel.last_error?.error_code" class="text-gray-400 text-xs">
-                                        Code: <span x-text="channel.last_error?.error_code"></span>
+                                    <div x-show="channel.last_error?.timestamp" class="text-gray-400 text-xs">
+                                        <span x-text="channel.last_error?.timestamp ? new Date(channel.last_error.timestamp).toLocaleDateString('da-DK', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''"></span>
                                     </div>
                                 </div>
                             </template>
@@ -206,8 +206,8 @@
                             <div x-show="channel.last_error" class="text-yellow-300 text-xs bg-yellow-900/20 p-2 rounded">
                                 <div class="font-medium">Latest:</div>
                                 <div x-text="channel.last_error?.error_message || 'Unknown error'" class="word-break-words"></div>
-                                <div x-show="channel.last_error?.error_code" class="text-gray-400 text-xs mt-1">
-                                    Code: <span x-text="channel.last_error?.error_code"></span>
+                                <div x-show="channel.last_error?.timestamp" class="text-gray-400 text-xs mt-1">
+                                    <span x-text="channel.last_error?.timestamp ? new Date(channel.last_error.timestamp).toLocaleDateString('da-DK', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''"></span>
                                 </div>
                             </div>
                         </div>

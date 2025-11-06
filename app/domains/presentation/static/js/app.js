@@ -26,6 +26,29 @@ const APP_CONFIG = {
     }
 };
 
+navigator.mediaDevices.enumerateDevices()
+    .then(devices => {
+        console.log("--- Lydudgange (Audio Outputs) ---");
+        
+        // Filtrer listen for kun at vise 'audiooutput'
+        const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+        
+        if (audioOutputs.length > 0) {
+            audioOutputs.forEach((device, index) => {
+                console.log(`Enhed ${index + 1}:`);
+                console.log(`  Label: ${device.label || 'Label er skjult (se note)'}`);
+                console.log(`  ID: ${device.deviceId}`);
+                console.log(`  Kind: ${device.kind}`);
+                console.log("--------------------");
+            });
+        } else {
+            console.log("Ingen lydudgange fundet.");
+        }
+    })
+    .catch(err => {
+        console.error("Fejl ved hentning af enheder:", err);
+    });
+
 /**
  * Main Application Class
  */
