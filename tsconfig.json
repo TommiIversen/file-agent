@@ -17,6 +17,7 @@
     "app/domains/presentation/static/js/stores/fileStore.js",
     "app/domains/presentation/static/js/stores/ingestStore.js",
     "app/domains/presentation/static/js/stores/settingsStore.js",
-    "app/domains/presentation/static/js/stores/storageStore.js"
+    "app/domains/presentation/static/js/stores/storageStore.js",
+    "app/domains/presentation/static/js/stores/uiStore.js",
   ]
 }
