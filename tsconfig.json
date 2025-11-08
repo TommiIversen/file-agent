@@ -8,6 +8,7 @@
     "strict": true
   },
   "files": [
-    "app/domains/presentation/static/js/stores/eventsViewerStore.js"
+    "app/domains/presentation/static/js/stores/eventsViewerStore.js",
+    "app/domains/presentation/static/js/stores/connectionStore.js"
   ]
 }
