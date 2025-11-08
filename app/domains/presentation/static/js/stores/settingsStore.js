@@ -1,11 +1,89 @@
+// @ts-check
+
+/**
+ * @typedef {object} SettingsData
+ * @property {string} source_directory
+ * @property {string} destination_directory
+ * @property {boolean} output_folder_template_enabled
+ * @property {string} output_folder_rules
+ * @property {string} output_folder_default_category
+ * @property {string} output_folder_date_format
+ * @property {number} file_stable_time_seconds
+ * @property {number} polling_interval_seconds
+ * @property {boolean} use_temporary_file
+ * @property {number} max_retry_attempts
+ * @property {number} retry_delay_seconds
+ * @property {number} global_retry_delay_seconds
+ * @property {number} copy_progress_update_interval
+ * @property {number} file_operation_timeout_seconds
+ * @property {number} chunk_size_kb
+ * @property {string} log_level
+ * @property {string} log_file_path
+ * @property {number} log_retention_days
+ * @property {number} storage_check_interval_seconds
+ * @property {number} source_warning_threshold_gb
+ * @property {number} source_critical_threshold_gb
+ * @property {number} destination_warning_threshold_gb
+ * @property {number} destination_critical_threshold_gb
+ * @property {string} storage_test_file_prefix
+ * @property {boolean} enable_pre_copy_space_check
+ * @property {number} copy_safety_margin_gb
+ * @property {number} space_retry_delay_seconds
+ * @property {number} max_space_retries
+ * @property {number} minimum_free_space_after_copy_gb
+ * @property {number} space_error_cooldown_minutes
+ * @property {number} keep_files_hours
+ * @property {number} growing_file_min_size_mb
+ * @property {number} growing_file_safety_margin_mb
+ * @property {number} growing_file_poll_interval_seconds
+ * @property {number} growing_file_growth_timeout_seconds
+ * @property {number} growing_file_chunk_size_kb
+ * @property {number} growing_copy_pause_ms
+ * @property {boolean} enable_secure_resume
+ * @property {number} max_concurrent_copies
+ * @property {boolean} enable_auto_mount
+ * @property {string} network_share_url
+ * @property {string} windows_drive_letter
+ * @property {string} macos_mount_point
+ * @property {string} justin_api_base_url
+ * @property {number} justin_fast_poll_interval_seconds
+ * @property {number} justin_slow_poll_interval_seconds
+ * @property {number} justin_api_timeout_seconds
+ * @property {string} tally_light_api_url
+ * @property {number} tally_light_blink_interval_seconds
+ * @property {number} tally_light_api_timeout_seconds
+ */
+
+/**
+ * @typedef {object} SettingsStore
+ * @property {boolean} showSettingsModal
+ * @property {SettingsData | null} settingsData
+ * @property {boolean} settingsLoading
+ * @property {string | null} settingsError
+ * @property {boolean} reloadingConfig
+ * @property {boolean} restartingApp
+ * @property {number | null} restartCountdown
+ * @property {boolean} scannerToggling
+ * @property {string | null} actionMessage
+ * @property {boolean} actionSuccess
+ * @property {() => void} init
+ * @property {() => Promise<void>} openSettingsModal
+ * @property {() => void} closeSettingsModal
+ * @property {() => Promise<void>} loadSettings
+ * @property {(message: string) => void} showErrorMessage
+ * @property {() => Promise<void>} reloadConfig
+ * @property {() => Promise<void>} restartApplication
+ * @property {() => Promise<void>} toggleScanner
+ */
+
 /**
  * Settings Modal Store for File Transfer Agent
  * Handles all state and actions related to the settings modal
  * Extracted for SRP and maintainability
  */
-
 document.addEventListener('alpine:init', () => {
-    Alpine.store('settings', {
+    /** @type {SettingsStore} */
+    const settingsStore = {
         // Modal state
         showSettingsModal: false,
 
@@ -43,18 +121,20 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
+                /** @type {SettingsData} */
                 const settingsData = await response.json();
                 this.settingsData = settingsData;
                 this.settingsError = null;
                 console.log('✅ Settings loaded successfully', settingsData);
             } catch (error) {
                 console.error('❌ Failed to load settings:', error);
-                this.settingsError = error.message;
+                this.settingsError = error instanceof Error ? error.message : String(error);
                 this.settingsData = null;
             } finally {
                 this.settingsLoading = false;
             }
         },
+        /** @param {string} message */
         showErrorMessage(message) {
             console.error('Settings Error:', message);
             alert('Error: ' + message);
@@ -85,7 +165,7 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('❌ Failed to reload configuration:', error);
                 this.actionSuccess = false;
-                this.actionMessage = 'Network error: ' + error.message;
+                this.actionMessage = 'Network error: ' + (error instanceof Error ? error.message : String(error));
             } finally {
                 this.reloadingConfig = false;
                 setTimeout(() => {
@@ -114,8 +194,10 @@ document.addEventListener('alpine:init', () => {
                     this.actionSuccess = true;
                     this.actionMessage = result.message;
                     const countdownInterval = setInterval(() => {
-                        this.restartCountdown--;
-                        if (this.restartCountdown <= 0) {
+                        if (this.restartCountdown) {
+                            this.restartCountdown--;
+                        }
+                        if (this.restartCountdown !== null && this.restartCountdown <= 0) {
                             clearInterval(countdownInterval);
                             this.actionMessage = 'Application restarting... Reconnecting...';
                             setTimeout(() => {
@@ -133,7 +215,7 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('❌ Failed to restart application:', error);
                 this.actionSuccess = false;
-                this.actionMessage = 'Network error: ' + error.message;
+                this.actionMessage = 'Network error: ' + (error instanceof Error ? error.message : String(error));
                 this.restartingApp = false;
                 setTimeout(() => {
                     this.actionMessage = null;
@@ -183,7 +265,7 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error(`❌ Failed to toggle scanner:`, error);
                 this.actionSuccess = false;
-                this.actionMessage = 'Network error: ' + error.message;
+                this.actionMessage = 'Network error: ' + (error instanceof Error ? error.message : String(error));
             } finally {
                 this.scannerToggling = false;
                 setTimeout(() => {
@@ -191,7 +273,8 @@ document.addEventListener('alpine:init', () => {
                 }, 5000);
             }
         }
-    });
+    };
+    Alpine.store('settings', settingsStore);
 });
 
 // Global functions for use in HTML (for settings modal only)

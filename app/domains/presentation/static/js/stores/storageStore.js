@@ -1,12 +1,100 @@
+// @ts-check
+
+/**
+ * @typedef {'OK'|'WARNING'|'ERROR'|'CRITICAL'} StorageStatus
+ */
+
+/**
+ * @typedef {'ATTEMPTING'|'SUCCESS'|'FAILED'|'NOT_CONFIGURED'} MountStatus
+ */
+
+/**
+ * @typedef {object} StorageInfo
+ * @property {string} path
+ * @property {boolean} is_accessible
+ * @property {boolean} has_write_access
+ * @property {number} free_space_gb
+ * @property {number} total_space_gb
+ * @property {number} used_space_gb
+ * @property {StorageStatus} status
+ * @property {number} warning_threshold_gb
+ * @property {number} critical_threshold_gb
+ * @property {string} last_checked
+ * @property {string|null} error_message
+ */
+
+/**
+ * @typedef {object} MountStatusInfo
+ * @property {MountStatus} status
+ * @property {string|null} shareUrl
+ * @property {string|null} mountPath
+ * @property {string} targetPath
+ * @property {string|null} errorMessage
+ * @property {Date} timestamp
+ */
+
+/**
+ * @typedef {object} StorageUpdateData
+ * @property {'source'|'destination'} storage_type
+ * @property {StorageInfo} storage_info
+ */
+
+/**
+ * @typedef {object} MountStatusUpdateData
+ * @property {'source'|'destination'} storage_type
+ * @property {MountStatus} mount_status
+ * @property {string|null} share_url
+ * @property {string|null} mount_path
+ * @property {string} target_path
+ * @property {string|null} error_message
+ * @property {string} timestamp
+ */
+
+/**
+ * @typedef {object} StorageStore
+ * @property {StorageInfo|null} source
+ * @property {StorageInfo|null} destination
+ * @property {StorageStatus|'Unknown'} overall_status
+ * @property {{source: MountStatusInfo|null, destination: MountStatusInfo|null}} mountStatus
+ * @property {boolean} isLoading
+ * @property {Date|null} lastUpdated
+ * @property {(data: StorageInfo) => void} updateSource
+ * @property {(data: StorageInfo) => void} updateDestination
+ * @property {() => void} updateOverallStatus
+ * @property {(data: StorageUpdateData) => void} handleStorageUpdate
+ * @property {(data: MountStatusUpdateData) => void} handleMountStatus
+ * @property {StorageStatus|'Unknown'} sourceStatus
+ * @property {string} sourceStatusColor
+ * @property {string} sourceStatusTextColor
+ * @property {number} sourceUsagePercentage
+ * @property {string} sourceFreeSpaceFormatted
+ * @property {string} sourceTotalSpaceFormatted
+ * @property {StorageStatus|'Unknown'} destinationStatus
+ * @property {string} destinationStatusColor
+ * @property {string} destinationStatusTextColor
+ * @property {number} destinationUsagePercentage
+ * @property {string} destinationFreeSpaceFormatted
+ * @property {string} destinationTotalSpaceFormatted
+ * @property {boolean} sourceAccessible
+ * @property {boolean} sourceWritable
+ * @property {boolean} destinationAccessible
+ * @property {boolean} destinationWritable
+ * @property {MountStatus|null} sourceMountStatus
+ * @property {MountStatus|null} destinationMountStatus
+ * @property {string} sourceMountStatusColor
+ * @property {string} destinationMountStatusColor
+ * @property {string|null} destinationMountMessage
+ */
+
 /**
  * Storage Store - Storage Information Management
  *
  * Centralized state for source and destination storage monitoring,
  * status tracking, and health calculation with Alpine.js store pattern.
  */
-
 document.addEventListener('alpine:init', () => {
-    Alpine.store('storage', {
+    /** @type {StorageStore} */
+    const storageStore = {
         // Storage State
         source: null,
         destination: null,
@@ -22,7 +110,9 @@ document.addEventListener('alpine:init', () => {
         isLoading: false,
         lastUpdated: null,
 
-        // Storage Management Actions
+        /**
+         * @param {StorageInfo} data
+         */
         updateSource(data) {
             this.source = data;
             this.updateOverallStatus();
@@ -30,6 +120,9 @@ document.addEventListener('alpine:init', () => {
             console.log('Source storage updated:', data);
         },
 
+        /**
+         * @param {StorageInfo} data
+         */
         updateDestination(data) {
             this.destination = data;
             this.updateOverallStatus();
@@ -38,10 +131,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         updateOverallStatus() {
-            const sourceStatus = this.source?.status;
-            const destStatus = this.destination?.status;
+            const sourceStatus = this.source?.status || 'Unknown';
+            const destStatus = this.destination?.status || 'Unknown';
 
-            // Priority: CRITICAL > ERROR > WARNING > OK
+            /** @type {Object.<string, number>} */
             const priorities = {
                 'CRITICAL': 4,
                 'ERROR': 3,
@@ -61,7 +154,9 @@ document.addEventListener('alpine:init', () => {
             console.log(`Overall storage status: ${this.overall_status}`);
         },
 
-        // Storage Update Handlers (for WebSocket messages)
+        /**
+         * @param {StorageUpdateData} data
+         */
         handleStorageUpdate(data) {
             console.log('Storage update received:', data);
 
@@ -72,7 +167,9 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Mount Status Update Handler
+        /**
+         * @param {MountStatusUpdateData} data
+         */
         handleMountStatus(data) {
             console.log('Mount status update received:', data);
 
@@ -127,10 +224,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         get sourceFreeSpaceFormatted() {
+            // @ts-ignore
             return UIHelpers.formatSizeFromGB(this.source?.free_space_gb);
         },
 
         get sourceTotalSpaceFormatted() {
+            // @ts-ignore
             return UIHelpers.formatSizeFromGB(this.source?.total_space_gb);
         },
 
@@ -173,10 +272,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         get destinationFreeSpaceFormatted() {
+            // @ts-ignore
             return UIHelpers.formatSizeFromGB(this.destination?.free_space_gb);
         },
 
         get destinationTotalSpaceFormatted() {
+            // @ts-ignore
             return UIHelpers.formatSizeFromGB(this.destination?.total_space_gb);
         },
 
@@ -186,6 +287,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         get sourceWritable() {
+            // This property does not exist on the StorageInfo type, so we check for it.
             return this.source?.has_write_access || false;
         },
 
@@ -253,5 +355,6 @@ document.addEventListener('alpine:init', () => {
                     return null;
             }
         }
-    });
+    };
+    Alpine.store('storage', storageStore);
 });

@@ -1,11 +1,56 @@
+// @ts-check
+
+/**
+ * @typedef {object} LogFile
+ * @property {string} filename - The name of the log file.
+ * @property {number} size_mb - The size of the log file in megabytes.
+ * @property {number} [size_bytes] - The size of the log file in bytes.
+ * @property {number} [lines] - The total number of lines in the log file.
+ */
+
+/**
+ * @typedef {object} ChunkInfo
+ * @property {boolean} has_more_forward - Whether there are more log chunks available forward (towards the end of the file).
+ * @property {boolean} has_more_backward - Whether there are more log chunks available backward (towards the start of the file).
+ * @property {number} next_forward_offset - The starting offset for the next forward chunk.
+ * @property {number} next_backward_offset - The starting offset for the next backward chunk.
+ * @property {number} total_lines - The total number of lines in the file.
+ */
+
 /**
  * Log Viewer Store for File Transfer Agent
  * Handles all state and actions related to the log viewer modal
  * Extracted for SRP and maintainability
  */
-
 document.addEventListener('alpine:init', () => {
-    Alpine.store('logViewer', {
+    /**
+     * @typedef {object} LogViewerStore
+     * @property {boolean} showLogViewerModal - Controls the visibility of the log viewer modal.
+     * @property {LogFile[]} logFiles - Array of available log files.
+     * @property {boolean} loadingLogFiles - True when fetching the list of log files.
+     * @property {string|null} logFilesError - Error message if fetching log files fails.
+     * @property {LogFile|null} selectedLogFile - The currently selected log file.
+     * @property {string|null} logContent - The full content of the selected log file (for small files).
+     * @property {boolean} loadingLogContent - True when loading the content of a log file.
+     * @property {string[]} logChunks - Array of log lines for chunked view.
+     * @property {ChunkInfo|null} currentChunkInfo - Information about the currently loaded chunks.
+     * @property {boolean} loadingChunk - True when a log chunk is being loaded.
+     * @property {string|null} chunkError - Error message if fetching a chunk fails.
+     * @property {'full'|'chunked'} viewMode - The current viewing mode for the log file.
+     * @property {() => void} init - Initializes the store.
+     * @property {() => Promise<void>} openLogViewerModal - Opens the modal and loads the list of log files.
+     * @property {() => void} closeLogViewerModal - Closes the modal and resets state.
+     * @property {() => Promise<void>} loadLogFiles - Fetches the list of available log files from the API.
+     * @property {(logFile: LogFile) => Promise<void>} loadLogFile - Loads the content of a specific log file.
+     * @property {(logFile: LogFile) => Promise<void>} loadFullLogContent - Loads the entire content of a smaller log file.
+     * @property {(filename: string, start?: number, direction?: 'forward'|'backward', limit?: number) => Promise<void>} loadLogChunk - Loads a specific chunk of a log file.
+     * @property {() => Promise<void>} loadMoreForward - Loads the next chunk of the log file towards the end.
+     * @property {() => Promise<void>} loadMoreBackward - Loads the previous chunk of the log file towards the beginning.
+     * @property {(filename: string) => Promise<void>} downloadLogFile - Triggers the download of a log file.
+     */
+
+    /** @type {LogViewerStore} */
+    const logViewerStore = {
         // Modal state (optional, can be controlled from UI store)
         showLogViewerModal: false,
 
@@ -54,26 +99,23 @@ document.addEventListener('alpine:init', () => {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
+                /** @type {LogFile[]} */
                 const logFiles = await response.json();
                 this.logFiles = logFiles || [];
                 console.log('✅ Log files loaded successfully', this.logFiles);
 
             } catch (error) {
                 console.error('❌ Failed to load log files:', error);
-                this.logFilesError = 'Network error: ' + error.message;
+                this.logFilesError = 'Network error: ' + (error instanceof Error ? error.message : String(error));
 
             } finally {
                 this.loadingLogFiles = false;
             }
         },
 
-
-
-
-
-
         /**
          * Load content of a specific log file
+         * @param {LogFile} logFile
          */
         async loadLogFile(logFile) {
             if (this.loadingLogContent) return;
@@ -102,7 +144,7 @@ document.addEventListener('alpine:init', () => {
 
             } catch (error) {
                 console.error('❌ Failed to load log file content:', error);
-                this.logContent = `Error loading log file: ${error.message}`;
+                this.logContent = `Error loading log file: ` + (error instanceof Error ? error.message : String(error));
 
             } finally {
                 this.loadingLogContent = false;
@@ -110,9 +152,9 @@ document.addEventListener('alpine:init', () => {
         },
 
 
-
         /**
          * Load full log content (for smaller files)
+         * @param {LogFile} logFile
          */
         async loadFullLogContent(logFile) {
             // Use the new API endpoint that handles active log files properly
@@ -131,13 +173,19 @@ document.addEventListener('alpine:init', () => {
             this.selectedLogFile = {
                 ...logFile,
                 size_bytes: data.size,
-                size_mb: (data.size / (1024 * 1024)).toFixed(2),
+                size_mb: parseFloat((data.size / (1024 * 1024)).toFixed(2)),
                 lines: data.lines
             };
 
             console.log('✅ Full log file content loaded successfully');
         },
 
+        /**
+         * @param {string} filename
+         * @param {number} [start=0]
+         * @param {'forward'|'backward'} [direction='forward']
+         * @param {number} [limit=1000]
+         */
         async loadLogChunk(filename, start = 0, direction = 'forward', limit = 1000) {
             if (this.loadingChunk) return;
 
@@ -171,10 +219,10 @@ document.addEventListener('alpine:init', () => {
                 };
 
                 // Update file info
-                this.selectedLogFile = {
-                    ...this.selectedLogFile,
-                    lines: data.total_lines
-                };
+                if (this.selectedLogFile) {
+                    this.selectedLogFile.lines = data.total_lines;
+                }
+
 
                 // Parse content into lines
                 const lines = data.content ? data.content.split('\n') : [];
@@ -194,7 +242,7 @@ document.addEventListener('alpine:init', () => {
 
             } catch (error) {
                 console.error('❌ Failed to load log chunk:', error);
-                this.chunkError = error.message;
+                this.chunkError = (error instanceof Error ? error.message : String(error));
 
             } finally {
                 this.loadingChunk = false;
@@ -204,7 +252,7 @@ document.addEventListener('alpine:init', () => {
          * Load more content forward (toward end of file)
          */
         async loadMoreForward() {
-            if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_forward) return;
+            if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_forward || !this.selectedLogFile) return;
 
             await this.loadLogChunk(
                 this.selectedLogFile.filename,
@@ -217,7 +265,7 @@ document.addEventListener('alpine:init', () => {
          * Load more content backward (toward beginning of file)
          */
         async loadMoreBackward() {
-            if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_backward) return;
+            if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_backward || !this.selectedLogFile) return;
 
             await this.loadLogChunk(
                 this.selectedLogFile.filename,
@@ -227,6 +275,7 @@ document.addEventListener('alpine:init', () => {
         },
         /**
          * Download log file
+         * @param {string} filename
          */
         async downloadLogFile(filename) {
             try {
@@ -245,10 +294,11 @@ document.addEventListener('alpine:init', () => {
 
             } catch (error) {
                 console.error('❌ Failed to download log file:', error);
-                alert(`Failed to download log file: ${error.message}`);
+                alert(`Failed to download log file: ` + (error instanceof Error ? error.message : String(error)));
             }
         }
-    });
+    };
+    Alpine.store('logViewer', logViewerStore);
 });
 
 // Global functions for use in HTML (for log viewer only)
@@ -258,6 +308,7 @@ window.openLogViewerModal = function () {
 window.closeLogViewerModal = function () {
     Alpine.store('logViewer').closeLogViewerModal();
 };
+/** @param {LogFile} logFile */
 window.loadLogFile = function (logFile) {
     Alpine.store('logViewer').loadLogFile(logFile);
 };
@@ -267,6 +318,7 @@ window.loadMoreForward = function () {
 window.loadMoreBackward = function () {
     Alpine.store('logViewer').loadMoreBackward();
 };
+/** @param {string} filename */
 window.downloadLogFile = function (filename) {
     Alpine.store('logViewer').downloadLogFile(filename);
 };
