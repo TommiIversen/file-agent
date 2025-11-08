@@ -214,3 +214,7 @@ ruff check . --select E,W
 ruff check . --fix
 
 ```
+
+Jsdoc type
+
+ npx tsc -p tsconfig.json

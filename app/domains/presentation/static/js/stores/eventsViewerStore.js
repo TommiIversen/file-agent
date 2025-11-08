@@ -1,30 +1,108 @@
+// @ts-check
+
+/** @type {any} */
+var Alpine;
+
 /**
- * Events Viewer Store
- * Manages system events viewing and filtering functionality
+ * @file Events Viewer Store
+ * Manages system events viewing and filtering functionality for the Alpine.js UI.
+ * @author Tommi Iversen 
+ */
+
+/**
+ * Represents a log event.
+ * @typedef {Object} LogEvent
+ * @property {string} timestamp - The ISO 8601 timestamp of when the event occurred.
+ * @property {string} level - The severity level of the event (e.g., 'info', 'warning', 'error').
+ * @property {string} event_type - The type of the event (e.g., 'FileDetected', 'NetworkDown').
+ * @property {Object.<string, any>|null} details - A key-value map of additional event details, or null.
+ */
+
+/**
+ * Represents statistics about the logged events.
+ * @typedef {Object} EventStats
+ * @property {number} total_events - The total number of events currently in the log.
+ * @property {number} max_capacity - The maximum number of events the log can hold.
+ * @property {Object.<string, number>} levels - A map of event levels to their counts.
+ * @property {Object.<string, number>} event_types - A map of event types to their counts.
+ * @property {string|null} oldest_event - The ISO 8601 timestamp of the oldest event.
+ * @property {string|null} newest_event - The ISO 8601 timestamp of the newest event.
  */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('eventsViewer', {
-        // Modal state
+        // === STATE PROPERTIES ===
+
+        /**
+         * Whether the events viewer modal is open.
+         * @type {boolean}
+         */
         isOpen: false,
+
+        /**
+         * True when events are being loaded from the API.
+         * @type {boolean}
+         */
         isLoading: false,
+
+        /**
+         * Holds any error message that occurred during an API call.
+         * @type {string|null}
+         */
         error: null,
         
-        // Events data
+        /**
+         * The master list of all events loaded from the API.
+         * @type {LogEvent[]}
+         */
         events: [],
+
+        /**
+         * The list of events after all filters have been applied.
+         * @type {LogEvent[]}
+         */
         filteredEvents: [],
         
-        // Filters
-        levelFilter: 'all', // 'all', 'info', 'warning', 'error'
-        eventTypeFilter: 'all', // 'all' or specific event type
+        /**
+         * The current filter for event severity level.
+         * @type {'all'|'info'|'warning'|'error'}
+         */
+        levelFilter: 'all',
+
+        /**
+         * The current filter for event type. 'all' means no filter.
+         * @type {string}
+         */
+        eventTypeFilter: 'all',
+
+        /**
+         * A sorted list of unique event types available for filtering.
+         * @type {string[]}
+         */
         availableEventTypes: [],
         
-        // Pagination
+        /**
+         * The current page number for pagination.
+         * @type {number}
+         */
         currentPage: 1,
+
+        /**
+         * The number of events to display per page.
+         * @type {number}
+         */
         eventsPerPage: 50,
+
+        /**
+         * The total number of events after filtering.
+         * @type {number}
+         */
         totalEvents: 0,
         
-        // Stats
+        /**
+         * Statistics about the events in the log.
+         * @type {EventStats}
+         */
         stats: {
             total_events: 0,
             max_capacity: 200,
@@ -34,12 +112,14 @@ document.addEventListener('alpine:init', () => {
             newest_event: null
         },
         
-        // Auto-refresh
+        // Auto-refresh functionality is not implemented yet.
         autoRefresh: false,
         refreshInterval: null,
         
+        // === METHODS ===
+
         /**
-         * Open the events viewer modal
+         * Opens the events viewer modal and loads initial data.
          */
         openModal() {
             this.isOpen = true;
@@ -48,14 +128,15 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Close the events viewer modal
+         * Closes the events viewer modal.
          */
         closeModal() {
             this.isOpen = false;
         },
         
         /**
-         * Load events from API
+         * Fetches the list of events from the API based on the current level filter.
+         * @async
          */
         async loadEvents() {
             this.isLoading = true;
@@ -78,14 +159,19 @@ document.addEventListener('alpine:init', () => {
                 
             } catch (error) {
                 console.error('Failed to load events:', error);
-                this.error = `Failed to load events: ${error.message}`;
+                if (error instanceof Error) {
+                    this.error = `Failed to load events: ${error.message}`;
+                } else {
+                    this.error = 'Failed to load events: An unknown error occurred';
+                }
             } finally {
                 this.isLoading = false;
             }
         },
         
         /**
-         * Load event statistics
+         * Fetches event statistics from the API.
+         * @async
          */
         async loadStats() {
             try {
@@ -98,19 +184,20 @@ document.addEventListener('alpine:init', () => {
                 
             } catch (error) {
                 console.error('Failed to load event stats:', error);
+                // Optionally set an error state for stats loading as well
             }
         },
         
         /**
-         * Update available event types for filtering
+         * Populates `availableEventTypes` from the master list of events.
          */
         updateAvailableEventTypes() {
-            const types = [...new Set(this.events.map(event => event.event_type))];
+            const types = [...new Set(this.events.map((/** @type {LogEvent} */ event) => event.event_type))];
             this.availableEventTypes = types.sort();
         },
         
         /**
-         * Apply current filters to events
+         * Applies the current filters to the master `events` list and updates `filteredEvents`.
          */
         applyFilters() {
             let filtered = [...this.events];
@@ -125,7 +212,8 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Set level filter
+         * Sets the level filter and reloads the events from the API.
+         * @param {'all'|'info'|'warning'|'error'} level - The level to filter by.
          */
         setLevelFilter(level) {
             this.levelFilter = level;
@@ -134,7 +222,8 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Set event type filter
+         * Sets the event type filter and reapplies filters to the existing event list.
+         * @param {string} eventType - The event type to filter by.
          */
         setEventTypeFilter(eventType) {
             this.eventTypeFilter = eventType;
@@ -142,8 +231,11 @@ document.addEventListener('alpine:init', () => {
             this.applyFilters();
         },
         
+        // === GETTERS ===
+
         /**
-         * Get events for current page
+         * Gets the slice of events for the current page.
+         * @returns {LogEvent[]} A subset of the filtered events for the current page.
          */
         get paginatedEvents() {
             const start = (this.currentPage - 1) * this.eventsPerPage;
@@ -152,14 +244,18 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Get total number of pages
+         * Calculates the total number of pages for pagination.
+         * @returns {number} The total number of pages.
          */
         get totalPages() {
             return Math.ceil(this.totalEvents / this.eventsPerPage);
         },
         
+        // === PAGINATION METHODS ===
+
         /**
-         * Navigate to specific page
+         * Navigates to a specific page number.
+         * @param {number} page - The page number to navigate to.
          */
         goToPage(page) {
             if (page >= 1 && page <= this.totalPages) {
@@ -168,21 +264,23 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Go to next page
+         * Navigates to the next page.
          */
         nextPage() {
             this.goToPage(this.currentPage + 1);
         },
         
         /**
-         * Go to previous page
+         * Navigates to the previous page.
          */
         previousPage() {
             this.goToPage(this.currentPage - 1);
         },
         
+        // === UI HELPERS ===
+
         /**
-         * Manually refresh events
+         * Manually triggers a refresh of both events and stats.
          */
         refresh() {
             this.loadEvents();
@@ -190,7 +288,9 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Get level badge color
+         * Gets the Tailwind CSS classes for a level's badge color.
+         * @param {string} level - The event level.
+         * @returns {string} The corresponding CSS classes.
          */
         getLevelBadgeColor(level) {
             switch (level.toLowerCase()) {
@@ -206,7 +306,9 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Get event type icon
+         * Gets an icon for a given event type.
+         * @param {string} eventType - The event type.
+         * @returns {string} An emoji icon.
          */
         getEventTypeIcon(eventType) {
             if (eventType.includes('Network')) return '🌐';
@@ -219,7 +321,9 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Format timestamp for display
+         * Formats a timestamp for display in the UI.
+         * @param {string} timestamp - The ISO 8601 timestamp.
+         * @returns {string} A localized, human-readable date and time string.
          */
         formatTimestamp(timestamp) {
             const date = new Date(timestamp);
@@ -234,12 +338,14 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Format relative time (e.g., "2 minutes ago")
+         * Formats a timestamp into a relative time string (e.g., "2 minutes ago").
+         * @param {string} timestamp - The ISO 8601 timestamp.
+         * @returns {string} A relative time string.
          */
         formatRelativeTime(timestamp) {
             const now = new Date();
             const eventTime = new Date(timestamp);
-            const diffInSeconds = Math.floor((now - eventTime) / 1000);
+            const diffInSeconds = Math.floor((now.getTime() - eventTime.getTime()) / 1000);
             
             if (diffInSeconds < 60) {
                 return `${diffInSeconds} sek siden`;
@@ -256,7 +362,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Download events as CSV
+         * Triggers a download of the currently loaded events as a CSV file.
          */
         downloadEvents() {
             try {
@@ -270,7 +376,7 @@ document.addEventListener('alpine:init', () => {
                 const headers = ['Timestamp', 'Level', 'Event Type', 'Details'];
                 const csvContent = [
                     headers.join(','),
-                    ...events.map(event => {
+                    ...events.map((/** @type {LogEvent} */ event) => {
                         const timestamp = this.formatTimestamp(event.timestamp);
                         const level = event.level;
                         const eventType = event.event_type;
@@ -305,7 +411,9 @@ document.addEventListener('alpine:init', () => {
         },
         
         /**
-         * Get formatted details for display
+         * Formats an event's details object into a single string for display.
+         * @param {Object.<string, any>|null} details - The details object.
+         * @returns {string|null} A formatted string or null if details are empty.
          */
         getFormattedDetails(details) {
             if (!details || Object.keys(details).length === 0) {

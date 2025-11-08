@@ -211,3 +211,5 @@ logs/
 
 # Tailwind CSS standalone executable
 tailwindcss-windows-x64.exe
+
+node_modules/
