@@ -224,13 +224,17 @@ document.addEventListener('alpine:init', () => {
         },
 
         get sourceFreeSpaceFormatted() {
-            // @ts-ignore
-            return UIHelpers.formatSizeFromGB(this.source?.free_space_gb);
+            if (this.source && typeof this.source.free_space_gb === 'number') {
+                return window.UIHelpers.formatSizeFromGB(this.source.free_space_gb);
+            }
+            return 'N/A';
         },
 
         get sourceTotalSpaceFormatted() {
-            // @ts-ignore
-            return UIHelpers.formatSizeFromGB(this.source?.total_space_gb);
+            if (this.source && typeof this.source.total_space_gb === 'number') {
+                return window.UIHelpers.formatSizeFromGB(this.source.total_space_gb);
+            }
+            return 'N/A';
         },
 
         // Computed Properties - Destination
@@ -272,13 +276,17 @@ document.addEventListener('alpine:init', () => {
         },
 
         get destinationFreeSpaceFormatted() {
-            // @ts-ignore
-            return UIHelpers.formatSizeFromGB(this.destination?.free_space_gb);
+            if (this.destination && typeof this.destination.free_space_gb === 'number') {
+                return window.UIHelpers.formatSizeFromGB(this.destination.free_space_gb);
+            }
+            return 'N/A';
         },
 
         get destinationTotalSpaceFormatted() {
-            // @ts-ignore
-            return UIHelpers.formatSizeFromGB(this.destination?.total_space_gb);
+            if (this.destination && typeof this.destination.total_space_gb === 'number') {
+                return window.UIHelpers.formatSizeFromGB(this.destination.total_space_gb);
+            }
+            return 'N/A';
         },
 
         // Access Status Helpers

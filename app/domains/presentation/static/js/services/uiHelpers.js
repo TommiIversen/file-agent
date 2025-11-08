@@ -1,14 +1,49 @@
+// @ts-check
+
+/**
+ * @typedef {'Discovered'|'Ready'|'InQueue'|'Copying'|'Completed'|'CompletedDeleteFailed'|'Failed'|'Removed'|'Growing'|'ReadyToStartGrowing'|'GrowingCopy'|'WaitingForSpace'|'SpaceError'|'WaitingForNetwork'|'PausedInQueue'|'PausedCopying'|'PausedGrowingCopy'} FileStatus
+ */
+
+/**
+ * @typedef {object} TrackedFile
+ * @property {string} id
+ * @property {string} file_path
+ * @property {FileStatus} status
+ * @property {number} file_size
+ * @property {string} [last_write_time]
+ * @property {number} copy_progress
+ * @property {string} [error_message]
+ * @property {number} retry_count
+ * @property {string} discovered_at
+ * @property {string} [creation_time]
+ * @property {string} [started_copying_at]
+ * @property {string} [completed_at]
+ * @property {string} [failed_at]
+ * @property {string} [space_error_at]
+ * @property {string} [destination_path]
+ * @property {number} growth_rate_mbps
+ * @property {number} bytes_copied
+ * @property {number} copy_speed_mbps
+ * @property {string} [last_growth_check]
+ * @property {number} previous_file_size
+ * @property {number} first_seen_size
+ * @property {string} [growth_stable_since]
+ * @property {object} [retry_info]
+ * @property {number} [buffer_percent]
+ */
+
 /**
  * UI Helpers Service - UI Utility Functions
  *
  * Collection of utility functions for UI formatting, calculations,
  * and common UI operations used across components.
  */
-
 class UIHelpers {
 
     /**
      * Format timestamp to Danish locale date and time string
+     * @param {string | number | Date | undefined} timestamp
+     * @returns {string}
      */
     static formatDateTime(timestamp) {
         if (!timestamp) return '-';
@@ -22,6 +57,8 @@ class UIHelpers {
 
     /**
      * Format timestamp to custom format: 20/3 20:33:18
+     * @param {string | number | Date | undefined} timestamp
+     * @returns {string}
      */
     static formatCustomDateTime(timestamp) {
         if (!timestamp) return '-';
@@ -42,6 +79,8 @@ class UIHelpers {
 
     /**
      * Get progress bar width style for file
+     * @param {TrackedFile | null | undefined} file
+     * @returns {string}
      */
     static getProgressWidth(file) {
         if (!file) return 'width: 0%';
@@ -76,6 +115,8 @@ class UIHelpers {
 
     /**
      * Get progress bar color class for file status
+     * @param {TrackedFile | null | undefined} file
+     * @returns {string}
      */
     static getProgressColor(file) {
         if (!file) return 'bg-gray-600';
@@ -112,6 +153,8 @@ class UIHelpers {
 
     /**
      * Get progress text for file
+     * @param {TrackedFile | null | undefined} file
+     * @returns {string}
      */
     static getProgressText(file) {
         if (!file) return '0%';
@@ -144,6 +187,8 @@ class UIHelpers {
 
     /**
      * Get status badge color class for file status
+     * @param {FileStatus | string | undefined} status
+     * @returns {string}
      */
     static getStatusBadgeColor(status) {
         switch (status) {
@@ -188,14 +233,18 @@ class UIHelpers {
 
     /**
      * Extract filename from full path
+     * @param {string | undefined} filePath
+     * @returns {string}
      */
     static getFileName(filePath) {
         if (!filePath) return '';
-        return filePath.split(/[/\\]/).pop();
+        return filePath.split(/[/\\]/).pop() || '';
     }
 
     /**
      * Format file size from MB value
+     * @param {number | undefined} sizeMB
+     * @returns {string}
      */
     static formatFileSizeMB(sizeMB) {
         if (!sizeMB || sizeMB === 0) return '0 MB';
@@ -211,6 +260,8 @@ class UIHelpers {
 
     /**
      * Get user-friendly status text
+     * @param {FileStatus | string | undefined} status
+     * @returns {string}
      */
     static getFriendlyStatus(status) {
         switch (status) {
@@ -247,22 +298,26 @@ class UIHelpers {
             case 'SpaceError':
                 return 'Space Error';
             default:
-                return status;
+                return status || '';
         }
     }
 
     /**
      * Check if file is a growing file
+     * @param {TrackedFile | null | undefined} file
+     * @returns {boolean}
      */
     static isGrowingFile(file) {
-        return file && ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status);
+        return !!(file && ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status));
     }
 
     /**
      * Get growing file indicator icon
+     * @param {TrackedFile | null | undefined} file
+     * @returns {string}
      */
     static getGrowingFileIcon(file) {
-        if (!this.isGrowingFile(file)) return '';
+        if (!file || !this.isGrowingFile(file)) return '';
 
         switch (file.status) {
             case 'Growing':
@@ -278,6 +333,9 @@ class UIHelpers {
 
     /**
      * Format bytes copied for growing files
+     * @param {number | undefined} bytesCopied
+     * @param {number | undefined} totalSize
+     * @returns {string}
      */
     static formatBytesCopied(bytesCopied, totalSize) {
         if (!bytesCopied || bytesCopied === 0) return '0 MB';
@@ -294,6 +352,8 @@ class UIHelpers {
 
     /**
      * Format size from GB to a human-readable string (GB, TB, PB).
+     * @param {number | null | undefined} sizeGB
+     * @returns {string}
      */
     static formatSizeFromGB(sizeGB) {
         if (sizeGB === null || typeof sizeGB === 'undefined' || isNaN(sizeGB)) {
@@ -315,6 +375,7 @@ class UIHelpers {
 }
 
 // Make UIHelpers available globally
+// @ts-ignore
 window.UIHelpers = UIHelpers;
 
 // Export for use in other modules

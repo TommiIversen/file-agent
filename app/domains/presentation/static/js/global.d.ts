@@ -7,6 +7,10 @@ type LogFile = {
     lines?: number;
 };
 
+interface UIHelpers {
+    formatSizeFromGB(gb: number | null | undefined): string;
+}
+
 // Extend the global Window interface
 declare global {
     interface Window {
@@ -23,6 +27,7 @@ declare global {
         reloadConfig: () => void;
         restartApplication: () => void;
         toggleScanner: () => void;
+        UIHelpers: UIHelpers;
     }
 }
 
