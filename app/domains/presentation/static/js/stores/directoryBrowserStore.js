@@ -1,43 +1,114 @@
+// @ts-check
+
 /**
- * Directory Browser Store - Alpine.js store for file/folder browsing modal
+ * @file Directory Browser Store - Alpine.js store for file/folder browsing modal
  *
  * Handles directory scanning, file listing, and modal state management.
  * Integrates with DirectoryScannerService backend endpoints.
  */
 
+/**
+ * @typedef {'name' | 'size' | 'created' | 'modified' | 'type'} SortField
+ */
+
+/**
+ * @typedef {'asc' | 'desc'} SortDirection
+ */
+
+/**
+ * @typedef {'tree' | 'flat'} ViewMode
+ */
+
+/**
+ * @typedef {'source' | 'destination'} ScanType
+ */
+
+/**
+ * Represents a file or directory with metadata.
+ * The structure is based on the `DirectoryItem` Pydantic model from the backend.
+ * @typedef {Object} DirectoryItem
+ * @property {string} name - File or directory name.
+ * @property {string} path - Full path to the item.
+ * @property {boolean} is_directory - True if the item is a directory.
+ * @property {boolean} is_hidden - True if the item is hidden.
+ * @property {number|null} size_bytes - File size in bytes (null for directories).
+ * @property {string|null} created_time - ISO 8601 string of creation time.
+ * @property {string|null} modified_time - ISO 8601 string of last modification time.
+ * @property {string|null} parent_path - Parent directory path.
+ * @property {number} depth_level - Depth level in the directory tree (0 = root).
+ * @property {string} relative_path - Relative path from the scan root.
+ * @property {DirectoryItem[]|null} children - Child items (for directories).
+ */
+
+/**
+ * Represents the result of a directory scan operation.
+ * The structure is based on the `DirectoryScanResult` Pydantic model from the backend.
+ * @typedef {Object} DirectoryScanResult
+ * @property {string} path - Scanned directory path.
+ * @property {boolean} is_accessible - Whether the directory was accessible.
+ * @property {DirectoryItem[]} items - Found files and directories (flat list).
+ * @property {DirectoryItem[]} tree - Found items as a nested tree structure.
+ * @property {number} total_items - Total number of items found.
+ * @property {number} total_files - Number of files found.
+ * @property {number} total_directories - Number of directories found.
+ * @property {number} scan_duration_seconds - Time taken to scan.
+ * @property {string|null} error_message - Error message if the scan failed.
+ */
+
 document.addEventListener('alpine:init', () => {
     Alpine.store('directoryBrowser', {
-        // Modal state
+        // === STATE ===
+
+        /** @type {boolean} */
         isOpen: false,
+        /** @type {string} */
         currentPath: '',
-        scanType: '', // 'source' or 'destination'
+        /** @type {ScanType|''} */
+        scanType: '',
+        /** @type {string} */
         modalTitle: '',
 
-        // Directory scan data
+        /** @type {boolean} */
         isLoading: false,
+        /** @type {boolean} */
         isAccessible: false,
+        /** @type {DirectoryItem[]} */
         items: [],
-        treeStructure: [],  // Nested tree structure from backend
+        /** @type {DirectoryItem[]} */
+        treeStructure: [],
+        /** @type {number} */
         totalItems: 0,
+        /** @type {number} */
         totalFiles: 0,
+        /** @type {number} */
         totalDirectories: 0,
+        /** @type {number} */
         scanDuration: 0,
+        /** @type {string|null} */
         errorMessage: null,
 
-        // UI state
-        sortBy: 'name', // 'name', 'size', 'created', 'modified', 'type'
-        sortDirection: 'asc', // 'asc' or 'desc'
+        /** @type {SortField} */
+        sortBy: 'name',
+        /** @type {SortDirection} */
+        sortDirection: 'asc',
+        /** @type {boolean} */
         showHidden: false,
-        recursive: true, // Enable recursive scanning by default
-        maxDepth: 3,     // Default recursion depth
-        viewMode: 'tree', // 'tree' or 'flat' view mode
+        /** @type {boolean} */
+        recursive: true,
+        /** @type {number} */
+        maxDepth: 3,
+        /** @type {ViewMode} */
+        viewMode: 'tree',
 
-        // Tree view state
-        expandedDirectories: new Set(), // Set of expanded directory paths
-        defaultExpanded: true,          // Whether directories should be expanded by default
+        /** @type {Set<string>} */
+        expandedDirectories: new Set(),
+        /** @type {boolean} */
+        defaultExpanded: true,
+
+        // === METHODS ===
 
         /**
-         * Open modal for source directory browsing
+         * Opens the modal for source directory browsing.
          */
         openSourceBrowser() {
             this.scanType = 'source';
@@ -47,7 +118,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Open modal for destination directory browsing
+         * Opens the modal for destination directory browsing.
          */
         openDestinationBrowser() {
             this.scanType = 'destination';
@@ -57,22 +128,15 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Close the modal and reset state
+         * Closes the modal and resets the store's state.
          */
         closeModal() {
             this.isOpen = false;
             this.resetState();
         },
 
-
-
-
-
-
-
-
         /**
-         * Reset internal state
+         * Resets the internal state of the store to its default values.
          */
         resetState() {
             this.currentPath = '';
@@ -90,7 +154,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Scan current directory using backend API
+         * Scans the current directory by calling the backend API.
+         * @returns {Promise<void>}
          */
         async scanDirectory() {
             if (!this.scanType) {
@@ -106,14 +171,12 @@ document.addEventListener('alpine:init', () => {
                     ? '/api/directory/scan/source'
                     : '/api/directory/scan/destination';
 
-                // Add query parameters for recursive scanning
                 const params = new URLSearchParams({
                     recursive: this.recursive.toString(),
                     max_depth: this.maxDepth.toString()
                 });
 
                 const url = `${endpoint}?${params}`;
-
                 console.log(`DirectoryBrowser: Scanning ${this.scanType} directory (recursive=${this.recursive}, depth=${this.maxDepth})...`);
 
                 const response = await fetch(url);
@@ -122,30 +185,31 @@ document.addEventListener('alpine:init', () => {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
+                /** @type {DirectoryScanResult} */
                 const data = await response.json();
 
-
-                // Update state with scan results
                 this.currentPath = data.path;
                 this.isAccessible = data.is_accessible;
                 this.items = data.items || [];
-                this.treeStructure = data.tree || [];  // New nested tree structure
+                this.treeStructure = data.tree || [];
                 this.totalItems = data.total_items || 0;
                 this.totalFiles = data.total_files || 0;
                 this.totalDirectories = data.total_directories || 0;
                 this.scanDuration = data.scan_duration_seconds || 0;
                 this.errorMessage = data.error_message;
 
-                // Initialize tree view state
                 if (this.defaultExpanded && this.viewMode === 'tree') {
                     this.expandAllDirectories();
                 }
-
                 console.log(`DirectoryBrowser: Scan completed - ${this.totalItems} items found (${this.totalFiles} files, ${this.totalDirectories} dirs)`);
 
             } catch (error) {
                 console.error('DirectoryBrowser: Scan failed:', error);
-                this.errorMessage = `Failed to scan directory: ${error.message}`;
+                if (error instanceof Error) {
+                    this.errorMessage = `Failed to scan directory: ${error.message}`;
+                } else {
+                    this.errorMessage = 'Failed to scan directory: An unknown error occurred.';
+                }
                 this.isAccessible = false;
                 this.items = [];
             } finally {
@@ -154,92 +218,77 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Get filtered and sorted items for display
+         * Gets the items to be displayed, processed for the current view mode (tree or flat).
+         * @returns {DirectoryItem[]} A flattened list of items ready for rendering.
          */
         get displayItems() {
             if (this.viewMode === 'tree') {
-                // Tree view: use nested structure from backend
                 return this._getFlattenedTreeItems(this.treeStructure);
             } else {
-                // Flat view: use flat items list
                 let filtered = this.items;
-
-                // Filter hidden files if not showing them
                 if (!this.showHidden) {
-                    filtered = filtered.filter(item => !item.is_hidden);
+                    filtered = filtered.filter((/** @type {DirectoryItem} */ item) => !item.is_hidden);
                 }
-
                 return this._getFlatViewItems(filtered);
             }
         },
 
         /**
-         * Flatten nested tree structure for display with expand/collapse logic
+         * Recursively flattens the nested tree structure for rendering, respecting expanded/collapsed states.
+         * @param {DirectoryItem[]} treeItems - The nested items to flatten.
+         * @param {number} [depth=0] - The current recursion depth.
+         * @returns {DirectoryItem[]} The flattened list.
+         * @private
          */
         _getFlattenedTreeItems(treeItems, depth = 0) {
+            /** @type {DirectoryItem[]} */
             const flatItems = [];
-
             if (!treeItems || !Array.isArray(treeItems)) {
                 return flatItems;
             }
 
             for (const item of treeItems) {
-                // Filter hidden files if not showing them
                 if (!this.showHidden && item.is_hidden) {
                     continue;
                 }
 
-                // Add current item with calculated depth
-                const flatItem = {
-                    ...item,
-                    depth_level: depth
-                };
+                const flatItem = { ...item, depth_level: depth };
                 flatItems.push(flatItem);
 
-                // Add children if directory is expanded and has children
-                if (item.is_directory &&
-                    item.children &&
-                    item.children.length > 0 &&
-                    this.isDirectoryExpanded(item.path)) {
-
+                if (item.is_directory && item.children && item.children.length > 0 && this.isDirectoryExpanded(item.path)) {
                     const childItems = this._getFlattenedTreeItems(item.children, depth + 1);
                     flatItems.push(...childItems);
                 }
             }
-
             return flatItems;
         },
 
         /**
-         * Get items for flat view with standard sorting
+         * Sorts a flat list of items based on the current sort settings.
+         * @param {DirectoryItem[]} items - The items to sort.
+         * @returns {DirectoryItem[]} The sorted list.
+         * @private
          */
         _getFlatViewItems(items) {
-            // Sort items normally for flat view
-            return items.sort((a, b) => {
+            return [...items].sort((/** @type {DirectoryItem} */ a, /** @type {DirectoryItem} */ b) => {
                 let comparison = 0;
-
                 switch (this.sortBy) {
                     case 'name':
-                        // Directories first, then by name
-                        if (a.is_directory !== b.is_directory) {
-                            return a.is_directory ? -1 : 1;
-                        }
+                        if (a.is_directory !== b.is_directory) return a.is_directory ? -1 : 1;
                         comparison = a.name.localeCompare(b.name);
                         break;
                     case 'size':
-                        // Directories first, then by size
                         if (a.is_directory && !b.is_directory) return -1;
                         if (!a.is_directory && b.is_directory) return 1;
                         comparison = (a.size_bytes || 0) - (b.size_bytes || 0);
                         break;
                     case 'created':
-                        comparison = new Date(a.created_time || 0) - new Date(b.created_time || 0);
+                        comparison = new Date(a.created_time || 0).getTime() - new Date(b.created_time || 0).getTime();
                         break;
                     case 'modified':
-                        comparison = new Date(a.modified_time || 0) - new Date(b.modified_time || 0);
+                        comparison = new Date(a.modified_time || 0).getTime() - new Date(b.modified_time || 0).getTime();
                         break;
                     case 'type':
-                        // Directories first, then by file extension
                         if (a.is_directory && !b.is_directory) return -1;
                         if (!a.is_directory && b.is_directory) return 1;
                         const extA = a.name.split('.').pop() || '';
@@ -247,126 +296,82 @@ document.addEventListener('alpine:init', () => {
                         comparison = extA.localeCompare(extB);
                         break;
                 }
-
                 return this.sortDirection === 'asc' ? comparison : -comparison;
             });
         },
 
         /**
-         * Check if an item should be visible in tree view based on parent expansion
-         */
-        _isItemVisibleInTree(item) {
-            // Root level items are always visible
-            if (item.depth_level === 0) {
-                return true;
-            }
-
-            // For deeper items, check if all parent directories are expanded
-            if (item.parent_path) {
-                // Use default expanded state if not explicitly set
-                const isParentExpanded = this.expandedDirectories.has(item.parent_path);
-                const shouldUseDefault = !this.expandedDirectories.has(item.parent_path) && this.defaultExpanded;
-
-                return isParentExpanded || shouldUseDefault;
-            }
-
-            return this.defaultExpanded;
-        },
-
-        /**
-         * Get indentation style for tree view item
+         * Gets the indentation style for a tree view item.
+         * @param {DirectoryItem} item - The directory item.
+         * @returns {{paddingLeft: string}} A style object.
          */
         getTreeIndentation(item) {
-            const paddingLeft = item.depth_level * 20; // 20px per level
-            return {
-                paddingLeft: `${paddingLeft}px`
-            };
+            const paddingLeft = item.depth_level * 20;
+            return { paddingLeft: `${paddingLeft}px` };
         },
 
         /**
-         * Get tree expand/collapse icon for directory
+         * Gets the expand/collapse icon for a directory in tree view.
+         * @param {DirectoryItem} item - The directory item.
+         * @returns {string|null} An emoji icon or null.
          */
         getTreeIcon(item) {
-            if (!item.is_directory) {
-                return null; // No icon for files
-            }
-
-            const isExpanded = this.isDirectoryExpanded(item.path) ||
-                (!this.expandedDirectories.has(item.path) && this.defaultExpanded);
-
-            return isExpanded ? '📂' : '📁';
+            if (!item.is_directory) return null;
+            return this.isDirectoryExpanded(item.path) ? '📂' : '📁';
         },
 
         /**
-         * Get tree line decorations (lines connecting tree items)
-         */
-        getTreeDecorations(item, index) {
-            // This could be enhanced to show connecting lines
-            // For now, just return basic indentation markers
-            const decorations = [];
-
-            for (let i = 0; i < item.depth_level; i++) {
-                decorations.push('│');
-            }
-
-            return decorations.join(' ');
-        },
-
-        /**
-         * Toggle sort direction or change sort field
+         * Sets the sort field and direction.
+         * @param {SortField} field - The field to sort by.
          */
         setSortBy(field) {
             if (this.sortBy === field) {
-                // Toggle direction if same field
                 this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
             } else {
-                // Change field and reset to ascending
                 this.sortBy = field;
                 this.sortDirection = 'asc';
             }
-            // Automatically switch to flat view when sorting is applied
             this.viewMode = 'flat';
-            console.log('View mode after sort:', this.viewMode);
         },
 
         /**
-         * Toggle hidden files visibility
+         * Toggles the visibility of hidden files.
          */
         toggleHidden() {
             this.showHidden = !this.showHidden;
         },
 
         /**
-         * Toggle recursive scanning
+         * Toggles recursive scanning on or off.
          */
         toggleRecursive() {
             this.recursive = !this.recursive;
         },
 
         /**
-         * Set maximum recursion depth
+         * Sets the maximum recursion depth for scanning.
+         * @param {string|number} depth - The desired depth.
          */
         setMaxDepth(depth) {
-            const newDepth = parseInt(depth, 10);
+            const newDepth = parseInt(String(depth), 10);
             if (newDepth >= 1 && newDepth <= 10) {
                 this.maxDepth = newDepth;
             }
         },
 
         /**
-         * Toggle view mode between tree and flat
+         * Toggles the view mode between 'tree' and 'flat'.
          */
         toggleViewMode() {
             this.viewMode = this.viewMode === 'tree' ? 'flat' : 'tree';
-
-            // If switching to tree mode and we have default expanded, expand all directories
             if (this.viewMode === 'tree' && this.defaultExpanded) {
                 this.expandAllDirectories();
             }
         },
 
         /**
-         * Toggle directory expansion
+         * Toggles the expanded/collapsed state of a directory.
+         * @param {string} directoryPath - The path of the directory to toggle.
          */
         toggleDirectory(directoryPath) {
             if (this.expandedDirectories.has(directoryPath)) {
@@ -374,30 +379,29 @@ document.addEventListener('alpine:init', () => {
             } else {
                 this.expandedDirectories.add(directoryPath);
             }
-            // Force reactivity by creating new Set
             this.expandedDirectories = new Set(this.expandedDirectories);
         },
 
         /**
-         * Check if directory is expanded
+         * Checks if a directory is currently expanded.
+         * @param {string} directoryPath - The path of the directory to check.
+         * @returns {boolean}
          */
         isDirectoryExpanded(directoryPath) {
             return this.expandedDirectories.has(directoryPath);
         },
 
         /**
-         * Expand all directories
+         * Expands all directories in the current view.
          */
         expandAllDirectories() {
-            const directories = this.items.filter(item => item.is_directory);
-            directories.forEach(dir => {
-                this.expandedDirectories.add(dir.path);
-            });
+            const directories = this.items.filter((/** @type {DirectoryItem} */ item) => item.is_directory);
+            directories.forEach((/** @type {DirectoryItem} */ dir) => this.expandedDirectories.add(dir.path));
             this.expandedDirectories = new Set(this.expandedDirectories);
         },
 
         /**
-         * Collapse all directories
+         * Collapses all directories.
          */
         collapseAllDirectories() {
             this.expandedDirectories.clear();
@@ -405,38 +409,34 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Format file size for display
+         * Formats a file size in bytes into a human-readable string.
+         * @param {number|null|undefined} bytes - The size in bytes.
+         * @returns {string} The formatted size string.
          */
         formatFileSize(bytes) {
             if (!bytes || bytes === 0) return '';
-
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
             let size = bytes;
             let unitIndex = 0;
-
             while (size >= 1024 && unitIndex < units.length - 1) {
                 size /= 1024;
                 unitIndex++;
             }
-
             return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
         },
 
         /**
-         * Format datetime for display
+         * Formats an ISO date string into a localized string.
+         * @param {string|null|undefined} dateString - The ISO date string.
+         * @returns {string} The formatted date string.
          */
         formatDateTime(dateString) {
             if (!dateString) return '';
-
             try {
                 const date = new Date(dateString);
                 return date.toLocaleString('da-DK', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
                 });
             } catch (error) {
                 return dateString;
@@ -444,68 +444,39 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Get file icon based on type
+         * Gets a file icon based on the item type and extension.
+         * @param {DirectoryItem} item - The directory item.
+         * @returns {string} An emoji icon.
          */
         getFileIcon(item) {
             if (item.is_directory) {
                 return item.is_hidden ? '📁' : '📂';
             }
-
             const extension = item.name.split('.').pop()?.toLowerCase() || '';
-
             switch (extension) {
-                case 'mxf':
-                case 'mov':
-                case 'mp4':
-                case 'avi':
-                    return '🎬';
-                case 'jpg':
-                case 'jpeg':
-                case 'png':
-                case 'gif':
-                    return '🖼️';
-                case 'txt':
-                case 'log':
-                    return '📄';
-                case 'pdf':
-                    return '📕';
-                case 'zip':
-                case 'rar':
-                case '7z':
-                    return '📦';
-                default:
-                    return item.is_hidden ? '📄' : '📄';
+                case 'mxf': case 'mov': case 'mp4': case 'avi': return '🎬';
+                case 'jpg': case 'jpeg': case 'png': case 'gif': return '🖼️';
+                case 'txt': case 'log': return '📄';
+                case 'pdf': return '📕';
+                case 'zip': case 'rar': case '7z': return '📦';
+                default: return item.is_hidden ? '📄' : '📄';
             }
         },
 
         /**
-         * Get status summary for display
+         * Gets a summary object for the current status.
+         * @returns {{text: string, color: string, icon: string}}
          */
         get statusSummary() {
             if (!this.isAccessible && this.errorMessage) {
-                return {
-                    text: 'Error',
-                    color: 'text-red-400',
-                    icon: '❌'
-                };
+                return { text: 'Error', color: 'text-red-400', icon: '❌' };
             }
-
             if (!this.isAccessible) {
-                return {
-                    text: 'Utilgængelig',
-                    color: 'text-red-400',
-                    icon: '🚫'
-                };
+                return { text: 'Utilgængelig', color: 'text-red-400', icon: '🚫' };
             }
-
             if (this.isLoading) {
-                return {
-                    text: 'Indlæser...',
-                    color: 'text-blue-400',
-                    icon: '⏳'
-                };
+                return { text: 'Indlæser...', color: 'text-blue-400', icon: '⏳' };
             }
-
             return {
                 text: `${this.totalItems} elementer (${this.totalFiles} filer, ${this.totalDirectories} mapper)`,
                 color: 'text-green-400',
