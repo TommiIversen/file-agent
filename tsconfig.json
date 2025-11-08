@@ -10,6 +10,8 @@
   "files": [
     "app/domains/presentation/static/js/stores/eventsViewerStore.js",
     "app/domains/presentation/static/js/stores/connectionStore.js",
-    "app/domains/presentation/static/js/stores/directoryBrowserStore.js"
+    "app/domains/presentation/static/js/stores/directoryBrowserStore.js",
+    "app/domains/presentation/static/js/stores/fileStore.js",
+    "app/domains/presentation/static/js/stores/ingestStore.js"
   ]
 }
