@@ -1,33 +1,6 @@
 // @ts-check
 
-/** @type {any} */
-var Alpine;
 
-/**
- * @file Events Viewer Store
- * Manages system events viewing and filtering functionality for the Alpine.js UI.
- * @author Tommi Iversen 
- */
-
-/**
- * Represents a log event.
- * @typedef {Object} LogEvent
- * @property {string} timestamp - The ISO 8601 timestamp of when the event occurred.
- * @property {string} level - The severity level of the event (e.g., 'info', 'warning', 'error').
- * @property {string} event_type - The type of the event (e.g., 'FileDetected', 'NetworkDown').
- * @property {Object.<string, any>|null} details - A key-value map of additional event details, or null.
- */
-
-/**
- * Represents statistics about the logged events.
- * @typedef {Object} EventStats
- * @property {number} total_events - The total number of events currently in the log.
- * @property {number} max_capacity - The maximum number of events the log can hold.
- * @property {Object.<string, number>} levels - A map of event levels to their counts.
- * @property {Object.<string, number>} event_types - A map of event types to their counts.
- * @property {string|null} oldest_event - The ISO 8601 timestamp of the oldest event.
- * @property {string|null} newest_event - The ISO 8601 timestamp of the newest event.
- */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('eventsViewer', {

@@ -1,50 +1,5 @@
 // @ts-check
 
-/**
- * @file Ingest Store - Just In Engine Channel State Management
- *
- * Centralized state for monitoring Just In Engine ingest channels,
- * recording status, signal availability, and error conditions.
- * Integrates with Alpine.js store pattern for reactive UI updates.
- */
-
-/**
- * @typedef {'info' | 'warning' | 'critical'} ErrorSeverity
- */
-
-/**
- * @typedef {Object} ChannelError
- * @property {number} id - A unique ID for the error entry.
- * @property {string} channel_name - The name of the channel where the error occurred.
- * @property {string} error_message - The descriptive error message.
- * @property {any} error_code - The original error code from the engine.
- * @property {string} timestamp - The ISO 8601 timestamp when the error was logged.
- * @property {ErrorSeverity} severity - The calculated severity of the error.
- */
-
-/**
- * Represents the status of a single ingest channel.
- * @typedef {Object} ChannelStatus
- * @property {string} name - The name of the channel.
- * @property {boolean} is_recording - True if the channel is currently recording.
- * @property {boolean} has_signal - True if the channel has a valid input signal.
- * @property {boolean} has_errors - True if the channel has logged errors.
- * @property {ChannelError[]} last_errors - A list of recent errors for the channel.
- * @property {number} frames - The frame count of the current recording.
- * @property {number} hours - The hour part of the current recording time.
- * @property {number} minutes - The minute part of the current recording time.
- * @property {number} seconds - The second part of the current recording time.
- * @property {string} last_update - The ISO 8601 timestamp of the last update.
- * @property {ChannelError} [last_error] - The most recent error object.
- */
-
-/**
- * @typedef {Object} RecordingTime
- * @property {number} hours
- * @property {number} minutes
- * @property {number} seconds
- * @property {number} frames
- */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('ingest', {

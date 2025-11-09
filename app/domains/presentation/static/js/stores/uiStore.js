@@ -1,19 +1,6 @@
 // @ts-check
 
-/**
- * @typedef {object} ScannerStatus
- * @property {boolean} scanning
- * @property {boolean} paused
- */
 
-/**
- * @typedef {object} UIStore
- * @property {boolean} showSettingsModal
- * @property {boolean} showLogViewerModal
- * @property {ScannerStatus} scanner
- * @property {() => void} init
- * @property {(scannerData: Partial<ScannerStatus>) => void} updateScannerStatus
- */
 
 /**
  * UI Store for File Transfer Agent

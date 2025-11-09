@@ -7,55 +7,7 @@
  * and file lifecycle management with Alpine.js store pattern.
  */
 
-/**
- * @typedef {'Discovered' | 'Ready' | 'InQueue' | 'Copying' | 'Completed' | 'CompletedDeleteFailed' | 'Failed' | 'Removed' | 'Growing' | 'ReadyToStartGrowing' | 'GrowingCopy' | 'WaitingForSpace' | 'SpaceError' | 'WaitingForNetwork'} FileStatus
- */
 
-/**
- * @typedef {Object} RetryInfo
- * @property {string} scheduled_at - ISO datetime string.
- * @property {string} retry_at - ISO datetime string.
- * @property {string} reason
- * @property {string} retry_type
- */
-
-/**
- * Represents a tracked file throughout its lifecycle.
- * Based on the `TrackedFile` Pydantic model from the backend.
- * @typedef {Object} TrackedFile
- * @property {string} id - Unique identifier for this file entry.
- * @property {string} file_path - Absolute path to the source file.
- * @property {FileStatus} status - The file's current status in the workflow.
- * @property {number} file_size - File size in bytes.
- * @property {string|null} last_write_time - ISO datetime of last modification.
- * @property {number} copy_progress - Copy progress percentage (0-100).
- * @property {string|null} error_message - Error message if status is 'Failed'.
- * @property {number} retry_count - Number of retry attempts for this file.
- * @property {string} discovered_at - ISO datetime when the file was discovered.
- * @property {string|null} creation_time - ISO datetime of file system creation.
- * @property {string|null} started_copying_at - ISO datetime when copying started.
- * @property {string|null} completed_at - ISO datetime when copying was completed.
- * @property {string|null} failed_at - ISO datetime when the file failed permanently.
- * @property {string|null} space_error_at - ISO datetime of permanent space error.
- * @property {string|null} destination_path - Destination path, including any conflict suffix.
- * @property {number} growth_rate_mbps - File's growth rate in MB/s.
- * @property {number} bytes_copied - Bytes copied so far (for growing copy).
- * @property {number} copy_speed_mbps - Current copy speed in MB/s.
- * @property {string|null} last_growth_check - ISO datetime of the last growth check.
- * @property {number} previous_file_size - Previous file size for growth detection.
- * @property {number} first_seen_size - File size when first discovered.
- * @property {string|null} growth_stable_since - ISO datetime when growth stabilized.
- * @property {RetryInfo|null} retry_info - Active retry information.
- * @property {boolean} [isDiscovered] - A temporary flag for newly discovered files without a real ID.
- */
-
-/**
- * @typedef {'activity' | 'discovered' | 'started' | 'completed' | 'filename' | 'size'} SortBy
- */
-
-/**
- * @typedef {'all' | 'active' | 'growing' | 'completed' | 'failed'} ActiveFilter
- */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('files', {

@@ -7,20 +7,25 @@
 
 class MessageHandler {
     constructor() {
+        /** @type {FileStore | null} */
         this.fileStore = null;
+        /** @type {StorageStore | null} */
         this.storageStore = null;
+        /** @type {ConnectionStore | null} */
         this.connectionStore = null;
+        /** @type {IngestStore | null} */
         this.ingestStore = null;
+        /** @type {any[]} */
         this.messageQueue = [];
 
         // Initialize after Alpine is ready
         document.addEventListener('alpine:init', () => {
             // Use $nextTick to ensure all stores are ready
             Alpine.nextTick(() => {
-                this.fileStore = Alpine.store('files');
-                this.storageStore = Alpine.store('storage');
-                this.connectionStore = Alpine.store('connection');
-                this.ingestStore = Alpine.store('ingest');
+                this.fileStore = /** @type {FileStore | null} */ (Alpine.store('files'));
+                this.storageStore = /** @type {StorageStore | null} */ (Alpine.store('storage'));
+                this.connectionStore = /** @type {ConnectionStore | null} */ (Alpine.store('connection'));
+                this.ingestStore = /** @type {IngestStore | null} */ (Alpine.store('ingest'));
                 console.log('MessageHandler initialized with stores');
                 
                 // Process any queued messages
@@ -43,6 +48,7 @@ class MessageHandler {
 
     /**
      * Main message handler - routes messages by type
+     * @param {any} message
      */
     handleMessage(message) {
         if (!message || !message.type) {
@@ -121,18 +127,19 @@ class MessageHandler {
 
     /**
      * Handle initial state when connection is established
+     * @param {{files: TrackedFile[], statistics: FileStore['statistics'], storage: { source: StorageInfo, destination: StorageInfo, overall_status: StorageStatus }, scanner: ScannerStatus}} data
      */
     handleInitialState(data) {
         console.log('Received initial state:', data);
 
         // Update files
         if (data.files && Array.isArray(data.files)) {
-            this.fileStore.setInitialFiles(data.files);
+            this.fileStore?.setInitialFiles(data.files);
         }
 
         // Update statistics
         if (data.statistics) {
-            this.fileStore.updateStatistics(data.statistics);
+            this.fileStore?.updateStatistics(data.statistics);
         }
 
         // Update storage info if available
@@ -144,7 +151,9 @@ class MessageHandler {
                 this.storageStore?.updateDestination(data.storage.destination);
             }
             if (data.storage.overall_status) {
-                this.storageStore.overall_status = data.storage.overall_status;
+                if (this.storageStore) {
+                    this.storageStore.overall_status = data.storage.overall_status;
+                }
             }
             console.log('Storage data loaded from initial state');
         }
@@ -163,9 +172,10 @@ class MessageHandler {
 
     /**
      * Handle individual file updates
+     * @param {{file: TrackedFile}} data
      */
     handleFileUpdate(data) {
-        console.log('File update received:', data.file_path);
+        console.log('File update received:', data.file.file_path);
 
         if (!data.file || !data.file.id) {
             console.warn('Invalid file update data - missing file ID:', data);
@@ -173,16 +183,17 @@ class MessageHandler {
         }
 
         // Update or add file using ID instead of file_path
-        this.fileStore.updateFile(data.file.id, data.file);
+        this.fileStore?.updateFile(data.file.id, data.file);
 
         // Log significant status changes
         if (data.file.status) {
-            console.log(`File ${data.file_path} (ID: ${data.file.id}) status: ${data.file.status}`);
+            console.log(`File ${data.file.file_path} (ID: ${data.file.id}) status: ${data.file.status}`);
         }
     }
 
     /**
      * Handle newly discovered files
+     * @param {{file_path: string, file_size: number, file_size_mb: number, status: FileStatus, last_write_time: string, timestamp: string}} data
      */
     handleFileDiscovered(data) {
         console.log('File discovered:', data.file_path);
@@ -202,19 +213,36 @@ class MessageHandler {
             last_write_time: data.last_write_time,
             discovered_at: data.timestamp,
             // These will be filled in when the file gets proper ID and full tracking
-            id: null, 
-            progress: 0,
-            bytes_copied: 0
+            id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Assign a temporary ID
+            copy_progress: 0,
+            bytes_copied: 0,
+            error_message: null,
+            retry_count: 0,
+            creation_time: null,
+            started_copying_at: null,
+            completed_at: null,
+            failed_at: null,
+            space_error_at: null,
+            destination_path: null,
+            growth_rate_mbps: 0,
+            copy_speed_mbps: 0,
+            last_growth_check: null,
+            previous_file_size: 0,
+            first_seen_size: 0,
+            growth_stable_since: null,
+            retry_info: null,
+            isDiscovered: true
         };
 
         // Add to file store as a discovered file
-        this.fileStore.addDiscoveredFile(discoveredFile);
+        this.fileStore?.addDiscoveredFile(discoveredFile);
 
         console.log(`File discovered: ${data.file_path} (${data.file_size_mb} MB)`);
     }
 
     /**
      * Handle file progress updates
+     * @param {{file_id: string, progress_percent: number, bytes_copied: number, total_bytes: number, copy_speed_mbps: number, is_final: boolean}} data
      */
     handleFileProgressUpdate(data) {
         if (!this.fileStore) {
@@ -236,6 +264,7 @@ class MessageHandler {
 
     /**
      * Handle file copy completion notifications
+     * @param {{file_path: string, file_id: string, bytes_copied: number, destination_path: string, is_growing_file: boolean, source_size: number, dest_size: number}} data
      */
     handleFileCopyCompleted(data) {
         console.log('File copy completed:', data.file_path);
@@ -274,35 +303,39 @@ class MessageHandler {
 
     /**
      * Handle statistics updates
+     * @param {{statistics: FileStore['statistics']}} data
      */
     handleStatisticsUpdate(data) {
         console.log('Statistics update received');
 
         if (data.statistics) {
-            this.fileStore.updateStatistics(data.statistics);
+            this.fileStore?.updateStatistics(data.statistics);
         }
     }
 
     /**
      * Handle storage updates
+     * @param {StorageUpdateData} data
      */
     handleStorageUpdate(data) {
         console.log('Storage update received:', data.storage_type);
 
-        this.storageStore.handleStorageUpdate(data);
+        this.storageStore?.handleStorageUpdate(data);
     }
 
     /**
      * Handle mount status updates
+     * @param {MountStatusUpdateData} data
      */
     handleMountStatus(data) {
         console.log('Mount status update received:', data.storage_type, data.mount_status);
 
-        this.storageStore.handleMountStatus(data);
+        this.storageStore?.handleMountStatus(data);
     }
 
     /**
      * Handle scanner status updates
+     * @param {ScannerStatus} data
      */
     handleScannerStatus(data) {
         console.log('Scanner status update received:', data);
@@ -318,6 +351,7 @@ class MessageHandler {
 
     /**
      * Handle system status updates
+     * @param {{overall_health: string, services: any}} data
      */
     handleSystemStatus(data) {
         console.log('System status update received:', data);
@@ -336,6 +370,7 @@ class MessageHandler {
 
     /**
      * Handle ingest status updates from Just In Engine
+     * @param {{channels: {[key: string]: ChannelStatus}}} data
      */
     handleIngestStatusUpdate(data) {
         if (!this.ingestStore) {
@@ -353,6 +388,7 @@ class MessageHandler {
 
     /**
      * Handle channel error events from Just In Engine
+     * @param {ChannelError} data
      */
     handleChannelError(data) {
         if (!this.ingestStore) {

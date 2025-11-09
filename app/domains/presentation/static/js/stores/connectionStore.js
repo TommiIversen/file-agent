@@ -7,18 +7,7 @@
  * and connection status tracking with Alpine.js store pattern.
  */
 
-/**
- * @typedef {'connecting' | 'connected' | 'disconnected'} ConnectionStatus
- */
 
-/**
- * @typedef {Object} MessageHandler
- * @property {function(Object): void} handleMessage - Handles incoming messages from the WebSocket.
- */
-
-/**
- * @typedef {Window & typeof globalThis & { messageHandler?: MessageHandler }} CustomWindow
- */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('connection', {

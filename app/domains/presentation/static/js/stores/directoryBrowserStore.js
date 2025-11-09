@@ -7,53 +7,7 @@
  * Integrates with DirectoryScannerService backend endpoints.
  */
 
-/**
- * @typedef {'name' | 'size' | 'created' | 'modified' | 'type'} SortField
- */
 
-/**
- * @typedef {'asc' | 'desc'} SortDirection
- */
-
-/**
- * @typedef {'tree' | 'flat'} ViewMode
- */
-
-/**
- * @typedef {'source' | 'destination'} ScanType
- */
-
-/**
- * Represents a file or directory with metadata.
- * The structure is based on the `DirectoryItem` Pydantic model from the backend.
- * @typedef {Object} DirectoryItem
- * @property {string} name - File or directory name.
- * @property {string} path - Full path to the item.
- * @property {boolean} is_directory - True if the item is a directory.
- * @property {boolean} is_hidden - True if the item is hidden.
- * @property {number|null} size_bytes - File size in bytes (null for directories).
- * @property {string|null} created_time - ISO 8601 string of creation time.
- * @property {string|null} modified_time - ISO 8601 string of last modification time.
- * @property {string|null} parent_path - Parent directory path.
- * @property {number} depth_level - Depth level in the directory tree (0 = root).
- * @property {string} relative_path - Relative path from the scan root.
- * @property {DirectoryItem[]|null} children - Child items (for directories).
- */
-
-/**
- * Represents the result of a directory scan operation.
- * The structure is based on the `DirectoryScanResult` Pydantic model from the backend.
- * @typedef {Object} DirectoryScanResult
- * @property {string} path - Scanned directory path.
- * @property {boolean} is_accessible - Whether the directory was accessible.
- * @property {DirectoryItem[]} items - Found files and directories (flat list).
- * @property {DirectoryItem[]} tree - Found items as a nested tree structure.
- * @property {number} total_items - Total number of items found.
- * @property {number} total_files - Number of files found.
- * @property {number} total_directories - Number of directories found.
- * @property {number} scan_duration_seconds - Time taken to scan.
- * @property {string|null} error_message - Error message if the scan failed.
- */
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('directoryBrowser', {

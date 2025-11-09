@@ -9,6 +9,7 @@ class UIHelpers {
 
     /**
      * Format timestamp to Danish locale date and time string
+     * @param {string} timestamp
      */
     static formatDateTime(timestamp) {
         if (!timestamp) return '-';
@@ -22,6 +23,7 @@ class UIHelpers {
 
     /**
      * Format timestamp to custom format: 20/3 20:33:18
+     * @param {string} timestamp
      */
     static formatCustomDateTime(timestamp) {
         if (!timestamp) return '-';
@@ -42,6 +44,7 @@ class UIHelpers {
 
     /**
      * Get progress bar width style for file
+     * @param {TrackedFile} file
      */
     static getProgressWidth(file) {
         if (!file) return 'width: 0%';
@@ -76,6 +79,7 @@ class UIHelpers {
 
     /**
      * Get progress bar color class for file status
+     * @param {TrackedFile} file
      */
     static getProgressColor(file) {
         if (!file) return 'bg-gray-600';
@@ -112,6 +116,7 @@ class UIHelpers {
 
     /**
      * Get progress text for file
+     * @param {TrackedFile} file
      */
     static getProgressText(file) {
         if (!file) return '0%';
@@ -144,6 +149,7 @@ class UIHelpers {
 
     /**
      * Get status badge color class for file status
+     * @param {FileStatus} status
      */
     static getStatusBadgeColor(status) {
         switch (status) {
@@ -188,6 +194,7 @@ class UIHelpers {
 
     /**
      * Extract filename from full path
+     * @param {string} filePath
      */
     static getFileName(filePath) {
         if (!filePath) return '';
@@ -196,6 +203,7 @@ class UIHelpers {
 
     /**
      * Format file size from MB value
+     * @param {number} sizeMB
      */
     static formatFileSizeMB(sizeMB) {
         if (!sizeMB || sizeMB === 0) return '0 MB';
@@ -211,6 +219,7 @@ class UIHelpers {
 
     /**
      * Get user-friendly status text
+     * @param {FileStatus} status
      */
     static getFriendlyStatus(status) {
         switch (status) {
@@ -253,6 +262,7 @@ class UIHelpers {
 
     /**
      * Check if file is a growing file
+     * @param {TrackedFile} file
      */
     static isGrowingFile(file) {
         return file && ['Growing', 'ReadyToStartGrowing', 'GrowingCopy', 'PausedGrowingCopy'].includes(file.status);
@@ -260,6 +270,7 @@ class UIHelpers {
 
     /**
      * Get growing file indicator icon
+     * @param {TrackedFile} file
      */
     static getGrowingFileIcon(file) {
         if (!this.isGrowingFile(file)) return '';
@@ -278,6 +289,8 @@ class UIHelpers {
 
     /**
      * Format bytes copied for growing files
+     * @param {number} bytesCopied
+     * @param {number} totalSize
      */
     static formatBytesCopied(bytesCopied, totalSize) {
         if (!bytesCopied || bytesCopied === 0) return '0 MB';
@@ -294,6 +307,7 @@ class UIHelpers {
 
     /**
      * Format size from GB to a human-readable string (GB, TB, PB).
+     * @param {number | null | undefined} sizeGB
      */
     static formatSizeFromGB(sizeGB) {
         if (sizeGB === null || typeof sizeGB === 'undefined' || isNaN(sizeGB)) {

@@ -9,14 +9,16 @@
   },
   "files": [
     "app/domains/presentation/static/js/global.d.ts",
-    "app/domains/presentation/static/js/stores/eventsViewerStore.js",
-    "app/domains/presentation/static/js/stores/logViewerStore.js",
     "app/domains/presentation/static/js/stores/connectionStore.js",
     "app/domains/presentation/static/js/stores/directoryBrowserStore.js",
+    "app/domains/presentation/static/js/stores/eventsViewerStore.js",
     "app/domains/presentation/static/js/stores/fileStore.js",
     "app/domains/presentation/static/js/stores/ingestStore.js",
+    "app/domains/presentation/static/js/stores/logViewerStore.js",
     "app/domains/presentation/static/js/stores/settingsStore.js",
     "app/domains/presentation/static/js/stores/storageStore.js",
     "app/domains/presentation/static/js/stores/uiStore.js",
+    "app/domains/presentation/static/js/services/messageHandler.js",
+    "app/domains/presentation/static/js/services/uiHelpers.js"
   ]
 }
