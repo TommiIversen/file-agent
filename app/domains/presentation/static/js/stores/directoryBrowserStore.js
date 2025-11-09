@@ -260,7 +260,7 @@ document.addEventListener('alpine:init', () => {
          * @returns {{paddingLeft: string}} A style object.
          */
         getTreeIndentation(item) {
-            const paddingLeft = item.depth_level * 20;
+            const paddingLeft = (item.depth_level || 0) * 20;
             return { paddingLeft: `${paddingLeft}px` };
         },
 

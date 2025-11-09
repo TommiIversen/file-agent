@@ -8,6 +8,7 @@
  */
 
 // Application Configuration
+/** @type {AppConfig} */
 const APP_CONFIG = {
     name: 'File Transfer Agent',
     version: '1.0.0',
@@ -49,6 +50,7 @@ class FileTransferApp {
 
     /**
      * Initialize the application
+     * @returns {Promise<void>}
      */
     async init() {
         if (this.initialized) {
@@ -77,6 +79,7 @@ class FileTransferApp {
 
     /**
      * Document ready handler
+     * @returns {Promise<void>}
      */
     async onDocumentReady() {
         console.log('📄 Document ready, setting up Alpine.js...');
@@ -87,6 +90,7 @@ class FileTransferApp {
 
     /**
      * Setup Alpine.js initialization
+     * @returns {void}
      */
     setupAlpine() {
         // Set up Alpine.js event listeners
@@ -101,6 +105,7 @@ class FileTransferApp {
 
     /**
      * Alpine.js initialization handler
+     * @returns {Promise<void>}
      */
     async onAlpineInit() {
         console.log('🔧 Alpine.js initializing...');
@@ -112,6 +117,7 @@ class FileTransferApp {
 
     /**
      * Initialize Alpine.js stores
+     * @returns {void}
      */
     initializeStores() {
         console.log('🏪 Initializing stores...');
@@ -139,6 +145,7 @@ class FileTransferApp {
 
     /**
      * Initialize services
+     * @returns {void}
      */
     initializeServices() {
         console.log('🔧 Initializing services...');
@@ -164,6 +171,7 @@ class FileTransferApp {
 
     /**
      * Start the main application
+     * @returns {Promise<void>}
      */
     async startApplication() {
         console.log('🚀 Starting application...');
@@ -196,6 +204,7 @@ class FileTransferApp {
 
     /**
      * Start WebSocket connection
+     * @returns {Promise<void>}
      */
     async startWebSocketConnection() {
         console.log('🔌 Henter initial data og starter WebSocket...');
@@ -215,6 +224,7 @@ class FileTransferApp {
 
     /**
      * Setup periodic tasks
+     * @returns {void}
      */
     setupPeriodicTasks() {
         // Setup heartbeat if configured
@@ -227,6 +237,7 @@ class FileTransferApp {
 
     /**
      * Application heartbeat
+     * @returns {void}
      */
     heartbeat() {
         if (APP_CONFIG.debug) {
@@ -246,6 +257,7 @@ class FileTransferApp {
 
     /**
      * Get store health status
+     * @returns {{connection: boolean, files: boolean, storage: boolean, filesCount: number, connectionStatus: ConnectionStatus | 'unknown'}}
      */
     getStoreHealth() {
         return {
@@ -259,6 +271,7 @@ class FileTransferApp {
 
     /**
      * Setup event listeners
+     * @returns {void}
      */
     setupEventListeners() {
         // Global error handler
@@ -296,6 +309,7 @@ class FileTransferApp {
     /**
      * Handle initialization errors
      * @param {Error} error
+     * @returns {void}
      */
     handleInitializationError(error) {
         console.error('❌ Application initialization failed:', error);
@@ -322,6 +336,7 @@ class FileTransferApp {
     /**
      * Handle global errors
      * @param {Error | any} error
+     * @returns {void}
      */
     handleGlobalError(error) {
         // Defensive handling of error object
@@ -352,6 +367,7 @@ class FileTransferApp {
      * Dispatch custom application events
      * @param {string} eventName
      * @param {object} detail
+     * @returns {void}
      */
     dispatchAppEvent(eventName, detail = {}) {
         const event = new CustomEvent(eventName, {
@@ -371,6 +387,7 @@ class FileTransferApp {
 
     /**
      * Get application status
+     * @returns {{initialized: boolean, config: AppConfig, stores: ReturnType<FileTransferApp['getStoreHealth']>, services: string[], timestamp: string}}
      */
     getStatus() {
         return {
@@ -384,6 +401,7 @@ class FileTransferApp {
 }
 
 // Create and initialize the application
+/** @type {FileTransferApp} */
 const app = new FileTransferApp();
 
 // Make app available globally for debugging

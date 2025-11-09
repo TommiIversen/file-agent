@@ -119,9 +119,8 @@ document.addEventListener('alpine:init', () => {
                 try {
                     const message = JSON.parse(event.data);
                     this.updateLastUpdate();
-                    const customWindow = /** @type {CustomWindow} */ (window);
-                    if (customWindow.messageHandler) {
-                        customWindow.messageHandler.handleMessage(message);
+                    if (window.messageHandler) {
+                        window.messageHandler.handleMessage(message);
                     }
                 } catch (error) {
                     console.error('Error parsing WebSocket message:', error);
@@ -227,9 +226,8 @@ document.addEventListener('alpine:init', () => {
                 }
                 const initialStateData = await response.json();
 
-                const customWindow = /** @type {CustomWindow} */ (window);
-                if (customWindow.messageHandler) {
-                    customWindow.messageHandler.handleMessage({
+                if (window.messageHandler) {
+                    window.messageHandler.handleMessage({
                         type: 'initial_state',
                         data: initialStateData
                     });
