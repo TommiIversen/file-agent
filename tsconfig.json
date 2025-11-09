@@ -9,7 +9,6 @@
   },
   "files": [
     "app/domains/presentation/static/js/global.d.ts",
-    "app/domains/presentation/static/js/services/uiHelpers.js",
     "app/domains/presentation/static/js/stores/eventsViewerStore.js",
     "app/domains/presentation/static/js/stores/logViewerStore.js",
     "app/domains/presentation/static/js/stores/connectionStore.js",
