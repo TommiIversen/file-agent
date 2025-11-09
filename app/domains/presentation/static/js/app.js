@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * File Transfer Agent - Main Application Initialization
  *
@@ -34,8 +36,10 @@ const APP_CONFIG = {
 class FileTransferApp {
     constructor() {
         this.initialized = false;
-        this.stores = {};
-        this.services = {};
+        /** @type {{connection: ConnectionStore | null, files: FileStore | null, storage: StorageStore | null, ui: UIStore | null} | null} */
+        this.stores = null;
+        /** @type {{messageHandler: MessageHandler | null, uiHelpers: typeof UIHelpers | null} | null} */
+        this.services = null;
 
         // Bind methods
         this.init = this.init.bind(this);
@@ -67,7 +71,7 @@ class FileTransferApp {
 
         } catch (error) {
             console.error('Failed to initialize application:', error);
-            this.handleInitializationError(error);
+            this.handleInitializationError(/** @type {Error} */(error));
         }
     }
 
@@ -114,15 +118,15 @@ class FileTransferApp {
 
         // Get store references
         this.stores = {
-            connection: Alpine.store('connection'),
-            files: Alpine.store('files'),
-            storage: Alpine.store('storage'),
-            ui: Alpine.store('ui')
+            connection: /** @type {ConnectionStore | null} */ (Alpine.store('connection')),
+            files: /** @type {FileStore | null} */ (Alpine.store('files')),
+            storage: /** @type {StorageStore | null} */ (Alpine.store('storage')),
+            ui: /** @type {UIStore | null} */ (Alpine.store('ui'))
         };
 
         // Validate stores
         const missingStores = Object.entries(this.stores)
-            .filter(([name, store]) => !store)
+            .filter(([, store]) => !store)
             .map(([name]) => name);
 
         if (missingStores.length > 0) {
@@ -141,13 +145,13 @@ class FileTransferApp {
 
         // Initialize services
         this.services = {
-            messageHandler: window.messageHandler,
-            uiHelpers: window.UIHelpers
+            messageHandler: /** @type {MessageHandler | null} */ (window.messageHandler),
+            uiHelpers: /** @type {typeof UIHelpers | null} */ (window.UIHelpers)
         };
 
         // Validate services
         const missingServices = Object.entries(this.services)
-            .filter(([name, service]) => !service)
+            .filter(([, service]) => !service)
             .map(([name]) => name);
 
         if (missingServices.length > 0) {
@@ -181,12 +185,12 @@ class FileTransferApp {
             // Dispatch application ready event
             this.dispatchAppEvent('app:ready', {
                 config: APP_CONFIG,
-                stores: Object.keys(this.stores),
-                services: Object.keys(this.services)
+                stores: this.stores ? Object.keys(this.stores) : [],
+                services: this.services ? Object.keys(this.services) : []
             });
         } catch (error) {
             console.error('Fejl under opstart af applikation:', error);
-            this.handleInitializationError(error);
+            this.handleInitializationError(/** @type {Error} */(error));
         }
     }
 
@@ -196,7 +200,7 @@ class FileTransferApp {
     async startWebSocketConnection() {
         console.log('🔌 Henter initial data og starter WebSocket...');
 
-        if (this.stores.connection) {
+        if (this.stores?.connection) {
             try {
                 await this.stores.connection.initDashboard();
             } catch (error) {
@@ -236,7 +240,7 @@ class FileTransferApp {
         this.dispatchAppEvent('app:heartbeat', {
             timestamp: new Date().toISOString(),
             storeHealth,
-            connectionStatus: this.stores.connection?.status
+            connectionStatus: this.stores?.connection?.status
         });
     }
 
@@ -245,11 +249,11 @@ class FileTransferApp {
      */
     getStoreHealth() {
         return {
-            connection: !!this.stores.connection,
-            files: !!this.stores.files,
-            storage: !!this.stores.storage,
-            filesCount: this.stores.files?.statistics?.totalFiles || 0,
-            connectionStatus: this.stores.connection?.status || 'unknown'
+            connection: !!this.stores?.connection,
+            files: !!this.stores?.files,
+            storage: !!this.stores?.storage,
+            filesCount: this.stores?.files?.statistics?.totalFiles || 0,
+            connectionStatus: /** @type {ConnectionStatus | 'unknown'} */ (this.stores?.connection?.status || 'unknown')
         };
     }
 
@@ -291,6 +295,7 @@ class FileTransferApp {
 
     /**
      * Handle initialization errors
+     * @param {Error} error
      */
     handleInitializationError(error) {
         console.error('❌ Application initialization failed:', error);
@@ -316,6 +321,7 @@ class FileTransferApp {
 
     /**
      * Handle global errors
+     * @param {Error | any} error
      */
     handleGlobalError(error) {
         // Defensive handling of error object
@@ -344,6 +350,8 @@ class FileTransferApp {
 
     /**
      * Dispatch custom application events
+     * @param {string} eventName
+     * @param {object} detail
      */
     dispatchAppEvent(eventName, detail = {}) {
         const event = new CustomEvent(eventName, {
@@ -369,7 +377,7 @@ class FileTransferApp {
             initialized: this.initialized,
             config: APP_CONFIG,
             stores: this.getStoreHealth(),
-            services: Object.keys(this.services),
+            services: this.services ? Object.keys(this.services) : [],
             timestamp: new Date().toISOString()
         };
     }

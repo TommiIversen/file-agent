@@ -41,10 +41,54 @@ declare global {
 
         messageHandler?: MessageHandler;
         UIHelpers?: typeof UIHelpers;
+        Alpine?: any;
+        fileTransferApp?: FileTransferApp;
     }
 
     // Declare Alpine as a global variable
     const Alpine: any;
+
+    type FileTransferApp = {
+        initialized: boolean;
+        stores: {
+            connection: ConnectionStore | null;
+            files: FileStore | null;
+            storage: StorageStore | null;
+            ui: UIStore | null;
+        } | null;
+        services: {
+            messageHandler: MessageHandler | null;
+            uiHelpers: typeof UIHelpers | null;
+        } | null;
+        init: () => Promise<void>;
+        onDocumentReady: () => Promise<void>;
+        onAlpineInit: () => Promise<void>;
+        setupAlpine: () => void;
+        initializeStores: () => void;
+        initializeServices: () => void;
+        startApplication: () => Promise<void>;
+        startWebSocketConnection: () => Promise<void>;
+        setupPeriodicTasks: () => void;
+        heartbeat: () => void;
+        getStoreHealth: () => {
+            connection: boolean;
+            files: boolean;
+            storage: boolean;
+            filesCount: number;
+            connectionStatus: ConnectionStatus | 'unknown';
+        };
+        setupEventListeners: () => void;
+        handleInitializationError: (error: Error) => void;
+        handleGlobalError: (error: Error | any) => void;
+        dispatchAppEvent: (eventName: string, detail?: object) => void;
+        getStatus: () => {
+            initialized: boolean;
+            config: object; // APP_CONFIG
+            stores: object; // StoreHealth
+            services: string[];
+            timestamp: string;
+        };
+    };
 
     type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
