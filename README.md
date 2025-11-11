@@ -18,6 +18,19 @@ This application is a robust file transfer agent for automated and reliable file
 - **Resumable Transfers:** Automatically resumes interrupted copies from the last verified byte, making it resilient to network failures.
 - **"Growing File" Mode:** Can start copying large files (like video recordings) *while* they are still being written, significantly reducing end-to-end transfer time.
 - **Destination Space Check:** Monitors available space on the destination to prevent failed transfers.
+- **Tally Light Integration:** Real-time recording status via IP Power 9255 switch (OFF/SOLID/BLINKING based on recording activity).
+
+### Tally Light Configuration
+
+```bash
+# settings.env
+TALLY_LIGHT_SWITCH_TYPE=ip_power_9255  # or "mock" for testing
+TALLY_LIGHT_SWITCH_IP=10.65.77.9       # Your IP Power 9255 address
+```
+
+**Hardware Commands:**
+- ON: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=1`  
+- OFF: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=0`
 
 ## Architectural Overview
 

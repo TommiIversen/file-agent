@@ -1,17 +1,18 @@
 """
 Tally Light Domain Event Handlers
 
-Handles IP Power Switch tally light control based on ingest status.
+Handles power switch tally light control based on ingest status.
 Manages three states: OFF, SOLID ON, and BLINKING.
 """
 import asyncio
 import logging
-import httpx
 from enum import Enum
 from typing import Optional
 
 from app.config import Settings
 from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+from .protocols import PowerSwitchError
+from .factory import create_power_switch
 
 
 class TallyState(Enum):
@@ -31,17 +32,15 @@ class TallyLightEventHandler:
     """
 
     def __init__(self, settings: Settings):
-        self._client = httpx.AsyncClient(
-            base_url=settings.tally_light_api_url, 
-            timeout=settings.tally_light_api_timeout_seconds
-        )
+        self._power_switch = create_power_switch(settings)
         self._current_tally_state: TallyState = TallyState.OFF
         self._blinker_task: Optional[asyncio.Task] = None
         self._blink_interval_sec: float = settings.tally_light_blink_interval_seconds
         self._lock = asyncio.Lock()  # Protects access to _blinker_task
         
         logging.info("TallyLightEventHandler initialized with software blinker logic")
-        logging.info(f"Tally API URL: {settings.tally_light_api_url}")
+        logging.info(f"Power switch type: {self._power_switch.switch_type.value}")
+        logging.info(f"Switch IP: {settings.tally_light_switch_ip}")
         logging.info(f"Blink interval: {self._blink_interval_sec}s")
 
     async def handle_ingest_status_update(self, event: IngestStatusUpdatedEvent) -> None:
@@ -105,10 +104,10 @@ class TallyLightEventHandler:
             # 2. Set the new state
             try:
                 if new_state == TallyState.SOLID_ON:
-                    await self._client.post("/on")
+                    await self._power_switch.turn_on()
                     logging.info("Tally light set to SOLID ON")
                 elif new_state == TallyState.OFF:
-                    await self._client.post("/off")
+                    await self._power_switch.turn_off()
                     logging.info("Tally light set to OFF")
                 elif new_state == TallyState.BLINKING:
                     # Start the new blinker task in background
@@ -117,28 +116,28 @@ class TallyLightEventHandler:
 
                 self._current_tally_state = new_state  # Store the new state
 
-            except httpx.RequestError as e:
+            except PowerSwitchError as e:
                 logging.error(f"Could not update tally light to {new_state_str}: {e}")
                 # We don't update _current_tally_state, so it will try again on next event
 
     async def _blinker_loop(self) -> None:
         """
-        Infinite loop that turns the light on/off via /on and /off endpoints.
+        Infinite loop that turns the light on/off via power switch protocol.
         
         This method runs as a background task and handles its own cancellation.
         """
         try:
             while True:
-                await self._client.post("/on")
+                await self._power_switch.turn_on()
                 await asyncio.sleep(self._blink_interval_sec)
-                await self._client.post("/off")
+                await self._power_switch.turn_off()
                 await asyncio.sleep(self._blink_interval_sec)
         except asyncio.CancelledError:
             # Important cleanup: Make sure to turn off the light when blink stops
             try:
-                await self._client.post("/off")
+                await self._power_switch.turn_off()
                 logging.info("Blinker task stopped, light turned off")
-            except httpx.RequestError as e:
+            except PowerSwitchError as e:
                 logging.error(f"Could not turn off tally light during blink stop: {e}")
             raise  # Re-raise CancelledError
         except Exception as e:
@@ -155,7 +154,7 @@ class TallyLightEventHandler:
         """
         logging.info("Stopping TallyLightEventHandler (turning off light)...")
         await self._update_tally_state(TallyState.OFF, "Application shutting down")
-        await self._client.aclose()
+        await self._power_switch.close()
         logging.info("TallyLightEventHandler stopped")
 
     def get_current_state(self) -> TallyState:

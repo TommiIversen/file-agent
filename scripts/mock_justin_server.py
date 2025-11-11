@@ -56,6 +56,17 @@ class ErrorRequest(BaseModel):
     channel: str
     clear: int = 0
 
+class StartRecordingRequest(BaseModel):
+    """Request model for /ingest/startRecordingWithFilename endpoint."""
+    channel: str
+    proposed_filename: str = ""
+    metadata: Dict[str, Any] = {}
+
+class StopRecordingRequest(BaseModel):
+    """Request model for /ingest/stopRecording endpoint."""
+    channel: str  
+    metadata: Dict[str, Any] = {}
+
 # --- Hjælpefunktioner ---
 
 def _create_mock_response(channel_name: str, rec_status: bool) -> Dict[str, Any]:
@@ -359,15 +370,18 @@ async def get_channel_errors(request: ErrorRequest):
             "errors": []
         }
 
-@app.post("/ingest/startChannel")
-async def start_channel(request: ChannelRequest):
+@app.post("/ingest/startRecordingWithFilename")
+async def start_recording_with_filename(request: StartRecordingRequest):
     """
-    Start en specifik kanal - skifter til manual mode ved første brug.
+    Start en specifik kanal - matcher Just In Engine API.
+    Skifter til manual mode ved første brug.
     """
     global MANUAL_MODE, AUTO_CYCLER_TASK
     channel_name = request.channel
     
-    logging.info(f"Modtog POST /ingest/startChannel for '{channel_name}'")
+    logging.info(f"Modtog POST /ingest/startRecordingWithFilename for '{channel_name}'")
+    logging.debug(f"Proposed filename: '{request.proposed_filename}'")
+    logging.debug(f"Metadata: {request.metadata}")
     
     if channel_name not in CHANNEL_NAMES:
         logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")
@@ -394,15 +408,17 @@ async def start_channel(request: ChannelRequest):
     
     return {"status": "ok", "channel": channel_name, "action": "started"}
 
-@app.post("/ingest/stopChannel")
-async def stop_channel(request: ChannelRequest):
+@app.post("/ingest/stopRecording")
+async def stop_recording(request: StopRecordingRequest):
     """
-    Stop en specifik kanal - skifter til manual mode ved første brug.
+    Stop en specifik kanal - matcher Just In Engine API.
+    Skifter til manual mode ved første brug.
     """
     global MANUAL_MODE, AUTO_CYCLER_TASK
     channel_name = request.channel
     
-    logging.info(f"Modtog POST /ingest/stopChannel for '{channel_name}'")
+    logging.info(f"Modtog POST /ingest/stopRecording for '{channel_name}'")
+    logging.debug(f"Metadata: {request.metadata}")
     
     if channel_name not in CHANNEL_NAMES:
         logging.warning(f"Modtog POST for ukendt kanal: {channel_name}")

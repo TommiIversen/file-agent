@@ -102,16 +102,20 @@ class Settings(BaseSettings):
     )
 
     # Tally Light integration
-    tally_light_api_url: str = Field(
-        default="http://localhost:8001/api/switch",
-        description="Base URL for IP Power Switch (Tally Light)"
+    tally_light_switch_type: str = Field(
+        default="ip_power_9255",
+        description="Type of power switch (ip_power_9255, mock)"
+    )
+    tally_light_switch_ip: str = Field(
+        default="10.65.77.9",
+        description="IP address of the power switch"
     )
     tally_light_blink_interval_seconds: float = Field(
         default=0.5,
         description="Blink interval for tally light (seconds)"
     )
     tally_light_api_timeout_seconds: float = Field(
-        default=1.0,
+        default=2.0,
         description="HTTP timeout for Tally Light API calls (seconds)"
     )
 
