@@ -75,10 +75,30 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
             "is_monitoring": False
         }
 
+    # Get ingest connection status from monitor worker
+    ingest_connection_status = None
+    try:
+        from app.dependencies import get_ingest_monitor_worker
+        ingest_worker = get_ingest_monitor_worker()
+        if ingest_worker:
+            ingest_connection_status = {
+                "is_connected": ingest_worker.get_connection_status()
+            }
+        else:
+            ingest_connection_status = {
+                "is_connected": False
+            }
+    except Exception as e:
+        # Service not available or error occurred
+        ingest_connection_status = {
+            "is_connected": False
+        }
+
     return {
         "files": [_serialize_tracked_file(f) for f in all_files],
         "statistics": statistics,
         "storage": storage_status,
         "scanner": scanner_status,
         "tally_switch": tally_status,
+        "ingest_connection": ingest_connection_status,
     }

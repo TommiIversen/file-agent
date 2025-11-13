@@ -38,12 +38,12 @@ class IngestApiClient:
         """Alias for aclose for convenience."""
         await self.aclose()
 
-    async def get_active_channels(self) -> List[str]:
+    async def get_active_channels(self) -> Optional[List[str]]:
         """
         Henter den aktive kanalliste fra Just In Engine.
         
         Returns:
-            List[str]: Liste af aktive kanalnavne. Returnerer tom liste ved fejl.
+            Optional[List[str]]: Liste af aktive kanalnavne eller None ved fejl.
         """
         try:
             response = await self._client.get("/ingest/activeChannels")
@@ -53,10 +53,10 @@ class IngestApiClient:
             return data.channel_names
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch activeChannels: {e}")
-            return []  # Return empty list on error
+            return None  # Return None on error to indicate API failure
         except Exception as e:
             logging.error(f"Unexpected error fetching activeChannels: {e}")
-            return []
+            return None
 
     async def get_channel_status(self, channel_name: str) -> Optional[JustInRecordingStatus]:
         """
@@ -111,7 +111,7 @@ class IngestApiClient:
             logging.error(f"Unexpected error fetching errors for {channel_name}: {e}")
             return []
 
-    async def get_all_channel_statuses(self, channel_names: List[str]) -> List[Tuple[str, JustInRecordingStatus]]:
+    async def get_all_channel_statuses(self, channel_names: List[str]) -> Optional[List[Tuple[str, JustInRecordingStatus]]]:
         """
         Fetch recording status for multiple channels in parallel.
         
@@ -121,10 +121,11 @@ class IngestApiClient:
             channel_names: List of channel names to fetch status for
             
         Returns:
-            List of (channel_name, status_data) tuples for successful fetches
+            Optional[List]: List of (channel_name, status_data) tuples for successful fetches,
+                          or None if API calls are failing (indicating connection issues)
         """
         if not channel_names:
-            return []
+            return []  # Empty input is valid, return empty list
 
         logging.debug(f"Fetching status for {len(channel_names)} channels: {channel_names}")
 
@@ -141,6 +142,11 @@ class IngestApiClient:
             result for result in results 
             if result is not None and not isinstance(result, Exception)
         ]
+        
+        # If we got no successful results and we had channels to check, API might be down
+        if len(channel_names) > 0 and len(successful_results) == 0:
+            logging.warning(f"Failed to fetch status for all {len(channel_names)} channels - API might be down")
+            return None  # Indicates API connection failure
         
         logging.debug(f"Successfully fetched status for {len(successful_results)}/{len(channel_names)} channels")
         return successful_results

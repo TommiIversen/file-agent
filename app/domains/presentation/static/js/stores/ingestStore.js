@@ -112,6 +112,49 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
+         * Set the connection status for the ingest monitor.
+         * @param {boolean} connected - True if connected to Just In Engine
+         */
+        setConnected(connected) {
+            if (this.isConnected !== connected) {
+                this.isConnected = connected;
+                console.log(`📡 Ingest connection status: ${connected ? 'CONNECTED' : 'DISCONNECTED'}`);
+            }
+        },
+
+        /**
+         * Handle initial state loading including connection status.
+         * @param {Object} initialData - Initial state data
+         */
+        loadInitialState(initialData) {
+            // Load connection status if provided
+            if (initialData.ingest_connection) {
+                this.setConnected(initialData.ingest_connection.is_connected);
+            }
+            
+            // Load channel data if available
+            if (initialData.channels) {
+                this.updateChannels(initialData.channels);
+            }
+        },
+
+        /**
+         * Get connection status color for UI indicators.
+         * @returns {string} Tailwind CSS color class
+         */
+        getConnectionStatusColor() {
+            return this.isConnected ? 'bg-green-500' : 'bg-red-500';
+        },
+
+        /**
+         * Get connection status text.
+         * @returns {string} Human-readable connection status
+         */
+        getConnectionStatusText() {
+            return this.isConnected ? 'Just In Engine: Online' : 'Just In Engine: Offline';
+        },
+
+        /**
          * Updates a single channel with new data.
          * @param {string} channelName - The name of the channel to update.
          * @param {Partial<ChannelStatus>} channelData - The new data for the channel.

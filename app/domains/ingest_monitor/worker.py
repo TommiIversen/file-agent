@@ -53,6 +53,15 @@ class IngestMonitorWorker:
             dict: Current channel status cache
         """
         return self._state_service.get_status_cache()
+    
+    def get_connection_status(self) -> bool:
+        """
+        Get the current connection status.
+        
+        Returns:
+            bool: True if connected to Just In Engine, False otherwise
+        """
+        return self._state_service.is_connected()
 
     async def start_monitoring(self) -> None:
         """Start the dual polling loops for ingest monitoring."""
@@ -120,8 +129,16 @@ class IngestMonitorWorker:
                 # Fetch all channel statuses via API client
                 all_statuses = await self._api_client.get_all_channel_statuses(channel_names)
                 
+                # Set connection status based on API success (not empty, but actual success)
+                # If we got a list (even if empty), API is working
+                if all_statuses is not None:
+                    await self._state_service.set_connection_status(True)
+                else:
+                    await self._state_service.set_connection_status(False)
+                
                 # Update state via StateService - it handles change detection and events
-                await self._state_service.update_channel_statuses(all_statuses)
+                if all_statuses is not None:
+                    await self._state_service.update_channel_statuses(all_statuses)
 
                 await asyncio.sleep(self._fast_poll_interval)
             except asyncio.CancelledError:
@@ -129,6 +146,8 @@ class IngestMonitorWorker:
                 break
             except Exception as e:
                 logging.error(f"Error in IngestMonitor fast_polling_loop: {e}")
+                # Mark as disconnected on API errors
+                await self._state_service.set_connection_status(False)
                 # Wait a bit before retrying on error
                 await asyncio.sleep(5)
 
@@ -140,7 +159,13 @@ class IngestMonitorWorker:
                 if self._running:  # Check if still running after sleep
                     # Update active channels via API client and StateService
                     active_channels = await self._api_client.get_active_channels()
-                    await self._state_service.update_active_channels(active_channels)
+                    
+                    # Set connection status based on API success
+                    if active_channels is not None:  # Empty list is valid, None indicates failure
+                        await self._state_service.set_connection_status(True)
+                        await self._state_service.update_active_channels(active_channels)
+                    else:
+                        await self._state_service.set_connection_status(False)
 
                     # Get current channel names for error checking
                     channel_names = list(self._state_service.get_status_cache().keys())
@@ -155,6 +180,8 @@ class IngestMonitorWorker:
                 break
             except Exception as e:
                 logging.error(f"Error in IngestMonitor slow_polling_loop: {e}")
+                # Mark as disconnected on API errors
+                await self._state_service.set_connection_status(False)
                 # Wait a bit before retrying on error
                 await asyncio.sleep(10)
 

@@ -15,7 +15,9 @@ from .events import (
     ChannelErrorDetectedEvent, 
     ChannelSignalLostEvent, 
     ChannelSignalRestoredEvent, 
-    IngestStatusUpdatedEvent
+    IngestStatusUpdatedEvent,
+    IngestOnlineEvent,
+    IngestOfflineEvent
 )
 
 
@@ -32,6 +34,7 @@ class IngestStateService:
         """Initialize state service with event bus for publishing changes."""
         self._event_bus = event_bus
         self._status_cache: Dict[str, ChannelState] = {}
+        self._is_connected: bool = False  # Track connection status
         logging.debug("IngestStateService initialized")
 
     def get_status_cache(self) -> Dict[str, dict]:
@@ -52,6 +55,31 @@ class IngestStateService:
         """
         return list(self._status_cache.keys())
 
+    def is_connected(self) -> bool:
+        """
+        Check if ingest monitor is currently connected to Just In Engine.
+        
+        Returns:
+            bool: True if connected, False if disconnected
+        """
+        return self._is_connected
+
+    async def set_connection_status(self, is_connected: bool) -> None:
+        """
+        Update the connection status and publish events on changes.
+        
+        Args:
+            is_connected (bool): True if connected, False if disconnected
+        """
+        if self._is_connected != is_connected:
+            self._is_connected = is_connected
+            if is_connected:
+                logging.info("🟢 Ingest monitor connected to Just In Engine")
+                await self._event_bus.publish(IngestOnlineEvent())
+            else:
+                logging.warning("🔴 Ingest monitor disconnected from Just In Engine")
+                await self._event_bus.publish(IngestOfflineEvent())
+
     def add_new_channels(self, channel_names: List[str]) -> None:
         """
         Tilføjer nye kanaler til cachen, hvis de ikke allerede findes.
@@ -64,25 +92,30 @@ class IngestStateService:
                 self._status_cache[channel_name] = ChannelState(name=channel_name)
                 logging.info(f"Added new channel to cache: {channel_name}")
 
-    async def update_active_channels(self, channel_names: List[str]) -> None:
+    async def update_active_channels(self, channel_names: Optional[List[str]]) -> None:
         """
         Opdaterer listen af aktive kanaler (async version af add_new_channels).
         
         Denne metode bruges af Worker til at opdatere aktive kanaler fra API.
         
         Args:
-            channel_names (List[str]): Liste af aktive kanalnavne
+            channel_names: Liste af kanalnavne eller None ved API fejl
         """
-        self.add_new_channels(channel_names)
-        logging.debug(f"Active channels updated: {len(channel_names)} channels: {channel_names}")
+        if channel_names is not None:
+            self.add_new_channels(channel_names)
+            logging.debug(f"Active channels updated: {len(channel_names)} channels: {channel_names}")
 
-    async def update_channel_statuses(self, status_updates: List[Tuple[str, JustInRecordingStatus]]) -> None:
+    async def update_channel_statuses(self, status_updates: Optional[List[Tuple[str, JustInRecordingStatus]]]) -> None:
         """
         Opdaterer cachen med nye statusser og publicerer ændrings-events.
         
         Args:
-            status_updates: Liste af (channel_name, status_data) tuples
+            status_updates: Liste af (channel_name, status_data) tuples eller None ved API fejl
         """
+        if status_updates is None:
+            logging.debug("Skipping status update due to API failure")
+            return
+            
         events_to_publish = []
 
         for channel_name, status_data in status_updates:

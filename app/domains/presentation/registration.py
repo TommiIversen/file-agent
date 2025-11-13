@@ -17,7 +17,12 @@ from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, G
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
+from app.domains.ingest_monitor.events import (
+    IngestStatusUpdatedEvent, 
+    ChannelErrorDetectedEvent,
+    IngestOnlineEvent,
+    IngestOfflineEvent
+)
 
 # 3. Gør funktionen async og tilføj event_bus
 async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEventBus):
@@ -51,6 +56,8 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     # Subscribe to ingest monitor events for real-time UI updates
     await event_bus.subscribe(IngestStatusUpdatedEvent, handlers.handle_ingest_status_updated_event)
     await event_bus.subscribe(ChannelErrorDetectedEvent, handlers.handle_channel_error_detected_event)
+    await event_bus.subscribe(IngestOnlineEvent, handlers.handle_ingest_online_event)
+    await event_bus.subscribe(IngestOfflineEvent, handlers.handle_ingest_offline_event)
     
     # Import and subscribe to tally switch events for real-time UI updates
     from app.domains.tally_light.monitor_service import (

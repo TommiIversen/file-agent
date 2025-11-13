@@ -51,3 +51,15 @@ class IngestStatusUpdatedEvent(DomainEvent):
     for determining the overall recording state.
     """
     status_snapshot: Dict[str, dict]  # {"KAM_1": {"is_recording": true, "has_signal": true, ...}}
+
+
+@dataclass(frozen=True)
+class IngestOnlineEvent(DomainEvent):
+    """Published when ingest monitor successfully connects to Just In Engine."""
+    pass
+
+
+@dataclass(frozen=True)
+class IngestOfflineEvent(DomainEvent):
+    """Published when ingest monitor loses connection to Just In Engine."""
+    pass

@@ -5,7 +5,12 @@ from typing import Dict, Any
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
+from app.domains.ingest_monitor.events import (
+    IngestStatusUpdatedEvent, 
+    ChannelErrorDetectedEvent,
+    IngestOnlineEvent,
+    IngestOfflineEvent
+)
 from app.domains.tally_light.monitor_service import (
     TallySwitchStatusUpdatedEvent, 
     TallySwitchOnlineEvent, 
@@ -200,6 +205,34 @@ class PresentationEventHandlers:
                 "channel_name": event.channel_name,
                 "error_message": event.error_message,
                 "error_code": event.error_code,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    # === INGEST CONNECTION EVENT HANDLERS ===
+
+    async def handle_ingest_online_event(self, event: IngestOnlineEvent) -> None:
+        """Handle ingest monitor connecting to Just In Engine."""
+        logging.info("🟢 Ingest monitor connected to Just In Engine")
+        
+        message_data = {
+            "type": "ingest_online",
+            "data": {
+                "is_connected": True,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_ingest_offline_event(self, event: IngestOfflineEvent) -> None:
+        """Handle ingest monitor disconnecting from Just In Engine."""
+        logging.warning("🔴 Ingest monitor disconnected from Just In Engine")
+        
+        message_data = {
+            "type": "ingest_offline",
+            "data": {
+                "is_connected": False,
                 "timestamp": self._get_timestamp(),
             },
         }

@@ -129,6 +129,14 @@ class MessageHandler {
                     this.handleTallySwitchStatusUpdate(message.data);
                     break;
 
+                case 'ingest_online':
+                    this.handleIngestConnectionChange(message.data);
+                    break;
+
+                case 'ingest_offline':
+                    this.handleIngestConnectionChange(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }
@@ -189,6 +197,14 @@ class MessageHandler {
                 tallySwitchStore.loadInitialData(anyData);
             }
             console.log('Tally switch status loaded from initial state:', anyData.tally_switch);
+        }
+
+        // Update ingest connection status if available
+        if (anyData.ingest_connection) {
+            if (this.ingestStore) {
+                this.ingestStore.loadInitialState(anyData);
+            }
+            console.log('Ingest connection status loaded from initial state:', anyData.ingest_connection);
         }
 
         console.log(`Initial state loaded: ${data.files?.length || 0} files`);
@@ -442,6 +458,20 @@ class MessageHandler {
             tallySwitchStore.updateStatus(data);
         } else {
             console.warn('TallySwitch store not found');
+        }
+    }
+
+    /**
+     * Handle ingest connection status changes
+     * @param {Object} data - Ingest connection status data
+     */
+    handleIngestConnectionChange(data) {
+        console.log('📡 Ingest connection status update received:', data);
+        
+        if (this.ingestStore) {
+            this.ingestStore.setConnected(data.is_connected);
+        } else {
+            console.warn('IngestStore not available for connection status update');
         }
     }
 
