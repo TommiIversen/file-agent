@@ -29,7 +29,7 @@ document.addEventListener('alpine:init', () => {
          * A user-friendly text description of the current status.
          * @type {string}
          */
-        text: 'Forbinder til server...',
+        text: 'Backend: Forbinder...',
 
         /**
          * Timestamp of the last received message.
@@ -79,7 +79,7 @@ document.addEventListener('alpine:init', () => {
 
             } catch (error) {
                 console.error('Failed to initialize dashboard:', error);
-                this.updateStatus('disconnected', 'Kunne ikke hente start-data');
+                this.updateStatus('disconnected', 'Backend: Fejl ved opstart');
             }
         },
 
@@ -109,7 +109,7 @@ document.addEventListener('alpine:init', () => {
 
             this.socket.onopen = () => {
                 console.log('WebSocket connected');
-                this.updateStatus('connected', 'Forbundet til server');
+                this.updateStatus('connected', 'Backend: Online');
                 this.reconnectAttempts = 0;
                 this.cancelReconnect();
                 this.onConnected();
@@ -142,7 +142,7 @@ document.addEventListener('alpine:init', () => {
          * Handles the logic for when a connection is closed or fails.
          */
         handleDisconnection() {
-            this.updateStatus('disconnected', 'Forbindelse afbrudt');
+            this.updateStatus('disconnected', 'Backend: Offline');
             if (this.socket) {
                 this.socket = null;
             }
@@ -166,7 +166,7 @@ document.addEventListener('alpine:init', () => {
 
             this.updateStatus(
                 'connecting',
-                `Prøver at forbinde igen om ${Math.round(delay / 1000)}s... (forsøg #${this.reconnectAttempts})`
+                `Retry: #${this.reconnectAttempts}`
             );
 
             this.reconnectTimeoutId = window.setTimeout(() => {
