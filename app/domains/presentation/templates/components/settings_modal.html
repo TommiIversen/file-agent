@@ -6,8 +6,8 @@
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
      class="fixed inset-0 bg-black/50 flex items-center backdrop-blur-sm justify-center z-50"
-    @click.self="closeSettingsModal()"
-    @keydown.escape.window="closeSettingsModal()">
+    @click.self="$store.settings.closeSettingsModal()"
+    @keydown.escape.window="$store.settings.closeSettingsModal()">
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
@@ -18,7 +18,7 @@
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
                     🔄 Refresh
                 </button>
-                <button @click="closeSettingsModal()"
+                <button @click="$store.settings.closeSettingsModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
                     ×
                 </button>
@@ -322,7 +322,7 @@
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
                         <h4 class="text-white font-semibold mb-2">⏸️ Scanner Control</h4>
                         <p class="text-gray-300 text-sm mb-3">Pause or resume file scanning for new jobs</p>
-                        <button @click="toggleScanner()"
+                        <button @click="$store.settings.toggleScanner()"
                                 :disabled="$store.settings?.scannerToggling"
                                 class="w-full disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200"
                                 :class="$store.ui?.scanner?.paused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
@@ -342,7 +342,7 @@
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
                         <h4 class="text-white font-semibold mb-2">🔄 Reload Configuration</h4>
                         <p class="text-gray-300 text-sm mb-3">Reload settings from config file without restarting the application</p>
-                        <button @click="reloadConfig()"
+                        <button @click="$store.settings.reloadConfig()"
                                 :disabled="$store.settings?.reloadingConfig"
                                 class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
                             <span x-show="!$store.settings?.reloadingConfig">🔄 Reload Config</span>
@@ -357,7 +357,7 @@
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
                         <h4 class="text-white font-semibold mb-2">🚀 Restart Application</h4>
                         <p class="text-gray-300 text-sm mb-3">Gracefully restart the entire application (2 second delay)</p>
-                        <button @click="restartApplication()"
+                        <button @click="$store.settings.restartApplication()"
                                 :disabled="$store.settings?.restartingApp"
                                 class="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
                             <span x-show="!$store.settings?.restartingApp">🚀 Restart App</span>

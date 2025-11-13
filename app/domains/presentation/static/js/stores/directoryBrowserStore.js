@@ -275,6 +275,21 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
+         * Gets the tree decoration lines for displaying hierarchical structure.
+         * @param {DirectoryItem} item - The item to get decorations for.
+         * @returns {string} Tree decoration characters (├──, └──, etc.).
+         */
+        getTreeDecorations(item) {
+            if (!item.depth_level || item.depth_level === 0) {
+                return '';
+            }
+            
+            // Simple tree decoration - can be enhanced with proper tree lines
+            const indent = '  '.repeat(Math.max(0, item.depth_level - 1));
+            return indent + '├─';
+        },
+
+        /**
          * Sets the sort field and direction.
          * @param {SortField} field - The field to sort by.
          */

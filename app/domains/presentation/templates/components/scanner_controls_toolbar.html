@@ -14,9 +14,9 @@
     <!-- Action Buttons (midten) -->
     <div class="flex items-center justify-center space-x-3 flex-1">
         <!-- Logs Button -->
-        <button @click="openLogViewerModal()"
+        <button @click="$store.logViewer.openLogViewerModal()"
                 class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-            📝 Logs
+            📋 Logs
         </button>
 
         <!-- Events Button -->
@@ -26,7 +26,7 @@
         </button>
 
         <!-- Settings Button -->
-        <button @click="openSettingsModal()"
+        <button @click="$store.settings.openSettingsModal()"
                 class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
             ⚙️ Settings
         </button>
