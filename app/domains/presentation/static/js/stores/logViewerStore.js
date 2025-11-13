@@ -33,6 +33,9 @@ document.addEventListener('alpine:init', () => {
         loadingChunk: false,
         chunkError: null,
         viewMode: 'full', // 'full' or 'chunked'
+        
+        // Infinite scroll control
+        initialLoadComplete: false,
 
         init() {
             console.log('📝 LogViewer Store initialized');
@@ -91,6 +94,7 @@ document.addEventListener('alpine:init', () => {
             this.logChunks = [];
             this.currentChunkInfo = null;
             this.chunkError = null;
+            this.initialLoadComplete = false; // Reset for new file
 
             // For large files (>1MB), use chunked loading by default
             const useLazyLoading = logFile.size_mb > 1;
@@ -102,9 +106,12 @@ document.addEventListener('alpine:init', () => {
                 if (this.viewMode === 'chunked') {
                     // Load just the first chunk for large files
                     await this.loadLogChunk(logFile.filename, 0, 'forward');
+                    // Mark initial load complete after first chunk
+                    this.initialLoadComplete = true;
                 } else {
                     // Load full content for smaller files
                     await this.loadFullLogContent(logFile);
+                    this.initialLoadComplete = true;
                 }
 
             } catch (error) {
@@ -216,28 +223,42 @@ document.addEventListener('alpine:init', () => {
         },
         /**
          * Load more content forward (toward end of file)
+         * Enhanced for infinite scroll - prevents multiple simultaneous loads
          */
         async loadMoreForward() {
+            // Enhanced guards for infinite scroll
+            if (this.loadingChunk) return;
             if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_forward || !this.selectedLogFile) return;
 
-            await this.loadLogChunk(
-                this.selectedLogFile.filename,
-                this.currentChunkInfo.next_forward_offset,
-                'forward'
-            );
+            try {
+                await this.loadLogChunk(
+                    this.selectedLogFile.filename,
+                    this.currentChunkInfo.next_forward_offset,
+                    'forward'
+                );
+            } catch (error) {
+                console.error('❌ Failed to load more content forward:', error);
+            }
         },
 
         /**
-         * Load more content backward (toward beginning of file)
+         * Load more content backward (toward beginning of file)  
+         * Enhanced for infinite scroll - prevents multiple simultaneous loads
          */
         async loadMoreBackward() {
+            // Enhanced guards for infinite scroll
+            if (this.loadingChunk) return;
             if (!this.currentChunkInfo || !this.currentChunkInfo.has_more_backward || !this.selectedLogFile) return;
 
-            await this.loadLogChunk(
-                this.selectedLogFile.filename,
-                this.currentChunkInfo.next_backward_offset,
-                'backward'
-            );
+            try {
+                await this.loadLogChunk(
+                    this.selectedLogFile.filename,
+                    this.currentChunkInfo.next_backward_offset,
+                    'backward'
+                );
+            } catch (error) {
+                console.error('❌ Failed to load more content backward:', error);
+            }
         },
         /**
          * Download log file

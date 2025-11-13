@@ -520,6 +520,7 @@ interface LogViewerStore {
     loadingChunk: boolean;
     chunkError: string | null;
     viewMode: 'full' | 'chunked';
+    initialLoadComplete: boolean;
     init(): void;
     openLogViewerModal(): Promise<void>;
     closeLogViewerModal(): void;
