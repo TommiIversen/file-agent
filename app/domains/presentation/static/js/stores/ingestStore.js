@@ -119,6 +119,12 @@ document.addEventListener('alpine:init', () => {
             if (this.isConnected !== connected) {
                 this.isConnected = connected;
                 console.log(`📡 Ingest connection status: ${connected ? 'CONNECTED' : 'DISCONNECTED'}`);
+                
+                // Stop recording timer when disconnected
+                if (!connected) {
+                    this.stopRecordingTimer();
+                    console.log('🛑 Recording timer stopped due to connection loss');
+                }
             }
         },
 

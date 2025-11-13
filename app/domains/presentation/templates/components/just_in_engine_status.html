@@ -1,5 +1,5 @@
 <!-- Just In Engine Status Bar Component (Compact Design) -->
-<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3 mb-4" x-data="{ showDetails: false }">
+<div class="bg-gray-700/60 rounded-lg p-3 mb-4" x-data="{ showDetails: false }">
     <!-- Compact Status Bar -->
     <div class="flex items-center justify-between">
         <!-- Left side: Channel LEDs -->
@@ -22,7 +22,7 @@
                         </div>
                     </div>
                     <!-- Simple Channel Name Label (shows on hover) -->
-                    <div class="absolute bottom-6 left-1/2  transform-translate-x-1/2 bg-black bg-opacity-90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                    <div class="absolute bottom-6 left-1/2  transform-translate-x-1/2 bg-black/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
                          :class="channel.has_errors && channel.last_error ? 'whitespace-normal' : 'whitespace-nowrap  min-w-xs max-w-sm'">
                         <div x-text="channel.name" class="font-medium"></div>
                         <div class="text-gray-300 text-xs">
@@ -69,21 +69,38 @@
             </template>
             <!-- No channels message -->
             <span x-show="($store.ingest?.getChannelsSorted() || []).length === 0" 
-                  class="text-gray-400 text-sm">No channels detected</span>
+                  class="text-gray-400 text-sm">
+                <template x-if="$store.ingest?.isConnected">
+                    <span>No channels detected</span>
+                </template>
+                <template x-if="!$store.ingest?.isConnected">
+                    <span class="text-red-400">🔴 Just In Engine offline</span>
+                </template>
+            </span>
         </div>
 
         <!-- Center: Record Time Display -->
         <div class="flex items-center justify-center">
-            <div class="flex items-center space-x-2 bg-gray-800 bg-opacity-80 rounded-lg px-3 py-1">
-                <span class="text-lg text-gray-400">REC:</span>
-                <div class="flex items-center space-x-1">
-                    <!-- Recording indicator dot -->
-                    <div class="w-2 h-2 rounded-full transition-all duration-200"
-                         :class="$store.ingest?.recordingTimer?.isRunning ? 'bg-red-500 animate-pulse shadow-lg shadow-red-500/50' : 'bg-gray-500'"></div>
-                    <!-- Timer display -->
-                    <span class="font-mono text-2xl font-medium"
-                          :class="$store.ingest?.recordingTimer?.isRunning ? 'text-red-400' : 'text-gray-400'"
-                          x-text="$store.ingest?.recordingTimer?.displayTime || '00:00:00:00'"></span>
+            <div class="relative">
+                <!-- Recording Timer Display -->
+                <div class="flex items-center space-x-2 bg-gray-800/80 rounded-lg px-3 py-1">
+                    <span class="text-lg text-gray-400">REC:</span>
+                    <div class="flex items-center space-x-1">
+                        <!-- Recording indicator dot -->
+                        <div class="w-2 h-2 rounded-full transition-all duration-200"
+                             :class="$store.ingest?.recordingTimer?.isRunning && $store.ingest?.isConnected ? 'bg-red-500 animate-pulse shadow-lg shadow-red-500/50' : 'bg-gray-500'"></div>
+                        <!-- Timer display -->
+                        <span class="font-mono text-2xl font-medium"
+                              :class="$store.ingest?.recordingTimer?.isRunning && $store.ingest?.isConnected ? 'text-red-400' : 'text-gray-400'"
+                              x-text="$store.ingest?.recordingTimer?.displayTime || '00:00:00:00'"></span>
+                    </div>
+                </div>
+                <!-- OFFLINE Overlay -->
+                <div x-show="!$store.ingest?.isConnected" 
+                     class="absolute inset-0 flex items-center justify-center rounded-lg backdrop-blur-sm">
+                    <span class="text-red-400 font-bold text-sm px-2 py-1 bg-red-900/50 rounded border border-red-400">
+                        OFFLINE
+                    </span>
                 </div>
             </div>
         </div>
@@ -116,15 +133,6 @@
                         <span class="text-xs text-red-300 ml-1">BLINK</span>
                     </div>
                 </template>
-            </div>
-
-            <!-- Connection Status -->
-            <div class="flex items-center space-x-1">
-                <div class="w-2 h-2 rounded-full"
-                     :class="$store.ingest?.isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-                <span class="text-xs"
-                      :class="$store.ingest?.isConnected ? 'text-green-400' : 'text-red-400'"
-                      x-text="$store.ingest?.isConnected ? 'Connected' : 'Offline'"></span>
             </div>
 
             <!-- Details Toggle Button -->
