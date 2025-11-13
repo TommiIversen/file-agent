@@ -6,6 +6,11 @@ from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgress
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
 from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, ChannelErrorDetectedEvent
+from app.domains.tally_light.monitor_service import (
+    TallySwitchStatusUpdatedEvent, 
+    TallySwitchOnlineEvent, 
+    TallySwitchOfflineEvent
+)
 from app.core.file_repository import FileRepository
 from app.domains.presentation.websocket_manager import WebSocketManager
 from app.models import FileStatus
@@ -195,6 +200,65 @@ class PresentationEventHandlers:
                 "channel_name": event.channel_name,
                 "error_message": event.error_message,
                 "error_code": event.error_code,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    # === TALLY SWITCH EVENT HANDLERS ===
+
+    async def handle_tally_switch_status_updated_event(self, event: TallySwitchStatusUpdatedEvent) -> None:
+        """Handle tally switch status updates (online/offline changes)."""
+        status = event.status
+        
+        logging.info(f"Broadcasting tally switch status: {status.ip_address} - {'ONLINE' if status.is_online else 'OFFLINE'}")
+        
+        message_data = {
+            "type": "tally_switch_status_update",
+            "data": {
+                "is_online": status.is_online,
+                "switch_type": status.switch_type,
+                "ip_address": status.ip_address,
+                "last_checked": status.last_checked.isoformat() if status.last_checked else None,
+                "error_message": status.error_message,
+                "status_changed": event.status_changed,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_tally_switch_online_event(self, event: TallySwitchOnlineEvent) -> None:
+        """Handle tally switch coming online."""
+        status = event.status
+        
+        logging.info(f"🟢 Tally switch {status.ip_address} came ONLINE")
+        
+        message_data = {
+            "type": "tally_switch_online",
+            "data": {
+                "is_online": True,
+                "switch_type": status.switch_type,
+                "ip_address": status.ip_address,
+                "last_checked": status.last_checked.isoformat() if status.last_checked else None,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_tally_switch_offline_event(self, event: TallySwitchOfflineEvent) -> None:
+        """Handle tally switch going offline."""
+        status = event.status
+        
+        logging.warning(f"🔴 Tally switch {status.ip_address} went OFFLINE")
+        
+        message_data = {
+            "type": "tally_switch_offline",
+            "data": {
+                "is_online": False,
+                "switch_type": status.switch_type,
+                "ip_address": status.ip_address,
+                "last_checked": status.last_checked.isoformat() if status.last_checked else None,
+                "error_message": status.error_message,
                 "timestamp": self._get_timestamp(),
             },
         }

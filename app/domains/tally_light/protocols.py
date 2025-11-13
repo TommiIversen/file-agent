@@ -57,6 +57,19 @@ class PowerSwitchProtocol(ABC):
         pass
 
     @abstractmethod
+    async def is_online(self) -> bool:
+        """
+        Check if the power switch device is reachable on the network.
+        
+        This is a lightweight connectivity check, not the actual power state.
+        Should use a short timeout (e.g., 1 second) for responsiveness.
+        
+        Returns:
+            bool: True if device is reachable, False otherwise
+        """
+        pass
+
+    @abstractmethod
     async def close(self) -> None:
         """
         Clean up resources (close HTTP clients, etc.).

@@ -40,9 +40,45 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
     # This should be moved to a query in a future step.
     scanner_status = {"scanning": True, "paused": False}
 
+    # Get tally switch status from monitor service
+    tally_status = None
+    try:
+        from app.dependencies import get_tally_switch_monitor
+        tally_service = get_tally_switch_monitor()
+        if tally_service and tally_service.current_status:
+            status = tally_service.current_status
+            tally_status = {
+                "is_online": status.is_online,
+                "switch_type": "IP Power 9255",
+                "ip_address": tally_service._ip_address,
+                "last_checked": status.last_checked.isoformat() if status.last_checked else None,
+                "error_message": status.error_message,
+                "is_monitoring": tally_service.is_monitoring
+            }
+        else:
+            tally_status = {
+                "is_online": False,
+                "switch_type": "IP Power 9255", 
+                "ip_address": "192.168.1.100",
+                "last_checked": None,
+                "error_message": "Not yet checked",
+                "is_monitoring": False
+            }
+    except Exception as e:
+        # Service not available or error occurred
+        tally_status = {
+            "is_online": None,
+            "switch_type": "unknown",
+            "ip_address": "unknown", 
+            "last_checked": None,
+            "error_message": f"Service error: {str(e)}",
+            "is_monitoring": False
+        }
+
     return {
         "files": [_serialize_tracked_file(f) for f in all_files],
         "statistics": statistics,
         "storage": storage_status,
         "scanner": scanner_status,
+        "tally_switch": tally_status,
     }

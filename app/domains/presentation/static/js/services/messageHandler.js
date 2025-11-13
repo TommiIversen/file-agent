@@ -117,6 +117,18 @@ class MessageHandler {
                     this.handleChannelError(message.data);
                     break;
 
+                case 'tally_switch_status_update':
+                    this.handleTallySwitchStatusUpdate(message.data);
+                    break;
+
+                case 'tally_switch_online':
+                    this.handleTallySwitchStatusUpdate(message.data);
+                    break;
+
+                case 'tally_switch_offline':
+                    this.handleTallySwitchStatusUpdate(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }
@@ -165,6 +177,18 @@ class MessageHandler {
                 uiStore.updateScannerStatus(data.scanner);
             }
             console.log('Scanner status loaded from initial state:', data.scanner);
+        }
+
+        // Update tally switch status if available
+        // Cast to any to avoid TypeScript errors
+        const anyData = /** @type {any} */ (data);
+        
+        if (anyData.tally_switch) {
+            const tallySwitchStore = Alpine.store('tallySwitch');
+            if (tallySwitchStore) {
+                tallySwitchStore.loadInitialData(anyData);
+            }
+            console.log('Tally switch status loaded from initial state:', anyData.tally_switch);
         }
 
         console.log(`Initial state loaded: ${data.files?.length || 0} files`);
@@ -403,6 +427,22 @@ class MessageHandler {
             data.error_message,
             data.error_code
         );
+    }
+
+    /**
+     * Handle tally switch status update
+     * @param {Object} data - Tally switch status data
+     */
+    handleTallySwitchStatusUpdate(data) {
+        console.log('🔄 Tally switch status update received:', data);
+        
+        // Get tally switch store and update status
+        const tallySwitchStore = window.Alpine?.store('tallySwitch');
+        if (tallySwitchStore) {
+            tallySwitchStore.updateStatus(data);
+        } else {
+            console.warn('TallySwitch store not found');
+        }
     }
 
 }

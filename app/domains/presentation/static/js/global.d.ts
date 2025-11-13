@@ -564,6 +564,47 @@ interface SettingsStore {
     toggleScanner(): Promise<void>;
 }
 
+interface TallySwitchStore {
+    isOnline: boolean | null;
+    switchType: string;
+    ipAddress: string;
+    lastChecked: string | null;
+    errorMessage: string | null;
+    isMonitoring: boolean;
+    init(): void;
+    updateStatus(statusData: {
+        is_online: boolean;
+        switch_type?: string;
+        ip_address?: string;
+        last_checked?: string;
+        error_message?: string;
+        is_monitoring?: boolean;
+    }): void;
+    loadInitialData(initialData: { tally_switch?: any }): void;
+    getStatusColor(): string;
+    getStatusTooltip(): string;
+    getIndicatorText(): string;
+}
+
+interface InitialStateData {
+    files: any[];
+    statistics: any;
+    storage: any;
+    scanner: any;
+    tally_switch?: {
+        is_online: boolean;
+        switch_type?: string;
+        ip_address?: string;
+        last_checked?: string;
+        error_message?: string;
+        is_monitoring?: boolean;
+    };
+}
+
+interface MessageHandler {
+    // MessageHandler interface - stores property is optional
+}
+
 // Augmentation for existing global types
 interface Window {
     Alpine: any; // Alpine.js global object

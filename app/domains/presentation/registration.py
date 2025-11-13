@@ -52,4 +52,14 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(IngestStatusUpdatedEvent, handlers.handle_ingest_status_updated_event)
     await event_bus.subscribe(ChannelErrorDetectedEvent, handlers.handle_channel_error_detected_event)
     
+    # Import and subscribe to tally switch events for real-time UI updates
+    from app.domains.tally_light.monitor_service import (
+        TallySwitchStatusUpdatedEvent,
+        TallySwitchOnlineEvent, 
+        TallySwitchOfflineEvent
+    )
+    await event_bus.subscribe(TallySwitchStatusUpdatedEvent, handlers.handle_tally_switch_status_updated_event)
+    await event_bus.subscribe(TallySwitchOnlineEvent, handlers.handle_tally_switch_online_event)
+    await event_bus.subscribe(TallySwitchOfflineEvent, handlers.handle_tally_switch_offline_event)
+    
     logging.info("Presentation domain-registrering (CQRS & Events) fuldført.")

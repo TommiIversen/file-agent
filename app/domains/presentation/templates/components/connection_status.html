@@ -1,12 +1,22 @@
 <!-- Connection Status Component -->
 <div class="flex justify-end items-center space-x-4">
-    <!-- Connection Status -->
+    <!-- Server Connection Status -->
     <div class="text-right">
         <div class="flex items-center justify-end">
             <div class="status-indicator rounded-full mr-2"
                  :class="$store.connection?.statusColor || 'bg-gray-500'"
                  :title="$store.connection?.lastUpdate || 'Indlæser...'"></div>
             <span x-text="$store.connection?.text || 'Indlæser...'" class="text-xs"></span>
+        </div>
+    </div>
+
+    <!-- Tally Switch Status -->
+    <div class="text-right">
+        <div class="flex items-center justify-end">
+            <div class="status-indicator rounded-full mr-2"
+                 :class="$store.tallySwitch ? $store.tallySwitch.getStatusColor() : 'bg-gray-500'"
+                 :title="$store.tallySwitch ? $store.tallySwitch.getStatusTooltip() : 'Loading...'"></div>
+            <span x-text="$store.tallySwitch ? $store.tallySwitch.getIndicatorText() : 'Tally Switch'" class="text-xs"></span>
         </div>
     </div>
 </div>

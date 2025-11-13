@@ -32,6 +32,7 @@ from app.domains.directory_browsing.service import DirectoryScannerService
 from app.domains.presentation.event_handlers import PresentationEventHandlers
 from app.domains.lifecycle.service import LifecycleService
 from app.domains.tally_light.event_handlers import TallyLightEventHandler
+from app.domains.tally_light.monitor_service import TallySwitchMonitorService
 from app.domains.ingest_monitor.api_client import IngestApiClient
 from app.domains.ingest_monitor.state_service import IngestStateService
 
@@ -323,6 +324,31 @@ def get_tally_light_event_handler() -> TallyLightEventHandler:
             settings=get_settings()
         )
     return _singletons["tally_light_event_handler"]
+
+
+def get_tally_switch_monitor() -> TallySwitchMonitorService:
+    """
+    Get the TallySwitchMonitorService singleton for IP Power Switch monitoring.
+    
+    This service monitors the connectivity status of the tally switch hardware
+    and publishes status updates via the event bus.
+    """
+    if "tally_switch_monitor" not in _singletons:
+        from app.domains.tally_light.switch_clients import IPPower9255Client
+        
+        settings = get_settings()
+        # Get IP address from settings - use correct field name
+        ip_address = settings.tally_light_switch_ip  # From config.py
+        
+        # Create switch client with IP address
+        switch_client = IPPower9255Client(ip_address=ip_address)
+        
+        _singletons["tally_switch_monitor"] = TallySwitchMonitorService(
+            switch_client=switch_client,
+            ip_address=ip_address,
+            event_bus=get_event_bus()
+        )
+    return _singletons["tally_switch_monitor"]
 
 
 def get_ingest_state_service() -> IngestStateService:

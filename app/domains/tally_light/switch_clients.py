@@ -145,6 +145,41 @@ class IPPower9255Client(PowerSwitchProtocol):
             logging.error(f"Unexpected error checking IP Power 9255 status: {e}")
             raise PowerSwitchError(f"Unexpected error: {e}")
 
+    async def is_online(self) -> bool:
+        """
+        Check if the IP Power 9255 switch is reachable on the network.
+        
+        Uses a simple TCP connectivity check to port 80 with 3-second timeout.
+        This is much more reliable than HTTP requests for basic connectivity.
+        """
+        import asyncio
+        
+        try:
+            # Simple TCP connectivity check to port 80
+            future = asyncio.open_connection(self._ip_address, 80)
+            
+            try:
+                # 3 second timeout for TCP connection
+                reader, writer = await asyncio.wait_for(future, timeout=3.0)
+                
+                # Successfully connected - close immediately
+                writer.close()
+                await writer.wait_closed()
+                
+                logging.debug(f"TCP connection successful to {self._ip_address}:80 (online)")
+                return True
+                
+            except asyncio.TimeoutError:
+                logging.debug(f"TCP connection to {self._ip_address}:80 timed out (offline)")
+                return False
+            except (ConnectionRefusedError, OSError) as e:
+                logging.debug(f"TCP connection to {self._ip_address}:80 failed: {e} (offline)")
+                return False
+                
+        except Exception as e:
+            logging.warning(f"Unexpected error checking TCP connectivity to {self._ip_address}: {e}")
+            return False
+
     async def close(self) -> None:
         """Clean up HTTP client resources."""
         if self._client:
@@ -194,6 +229,11 @@ class MockPowerSwitchClient(PowerSwitchProtocol):
         """Get simulated switch status."""
         logging.debug(f"Mock Switch status: {'ON' if self._current_state else 'OFF'}")
         return self._current_state
+
+    async def is_online(self) -> bool:
+        """Simulate online check - mock is always online in development."""
+        logging.debug(f"Mock Switch is always online (simulating {self._simulate_ip})")
+        return True
 
     async def close(self) -> None:
         """Mock cleanup - nothing to do."""

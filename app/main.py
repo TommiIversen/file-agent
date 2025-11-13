@@ -34,7 +34,8 @@ from .dependencies import (
     get_file_scanner,
     get_lifecycle_service,  # Import lifecycle service
     get_ingest_monitor_worker,  # Import refactored ingest monitor worker
-    get_tally_light_event_handler  # Import tally light handler
+    get_tally_light_event_handler,  # Import tally light handler
+    get_tally_switch_monitor  # Import tally switch monitor service
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -167,6 +168,13 @@ async def lifespan(app: FastAPI):
     ingest_monitor_worker = get_ingest_monitor_worker()
     ingest_monitor_task = asyncio.create_task(ingest_monitor_worker.start_monitoring())
     _background_tasks.append(ingest_monitor_task)
+    logging.info("IngestMonitorWorker startet som background task for Just In Engine monitoring")
+
+    # Start TallySwitchMonitorService som background task for IP switch status monitoring
+    tally_switch_monitor = get_tally_switch_monitor()
+    tally_switch_task = asyncio.create_task(tally_switch_monitor.start_monitoring())
+    _background_tasks.append(tally_switch_task)
+    logging.info("TallySwitchMonitorService startet som background task for IP switch connectivity monitoring")
     logging.info("IngestMonitorWorker startet som background task for Just In Engine monitoring")
 
     # Mount static files
