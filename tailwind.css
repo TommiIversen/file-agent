@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+[x-cloak] { display: none !important; }
 
 /* Custom utility classes for File Agent */
 .gradientHolder {

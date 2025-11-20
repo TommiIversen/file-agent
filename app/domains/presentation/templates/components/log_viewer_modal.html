@@ -8,7 +8,8 @@
      x-transition:leave-end="opacity-0"
      class="fixed inset-0 bg-black/50 flex backdrop-blur-sm items-center justify-center z-50"
     @click.self="$store.logViewer.closeLogViewerModal()"
-    @keydown.escape.window="$store.logViewer.closeLogViewerModal()">
+    @keydown.escape.window="$store.logViewer.closeLogViewerModal()"
+    x-cloak>
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-[95vw] w-full h-[89vh] overflow-hidden flex flex-col">
         <div class="flex justify-between items-center mb-6">

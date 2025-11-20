@@ -10,7 +10,8 @@
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     @click.self="$store.directoryBrowser.closeModal()">
+     @click.self="$store.directoryBrowser.closeModal()"
+     x-cloak>
 
     <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-360 h-[95vh] max-h-[95vh] mx-4 flex flex-col"
          x-transition:enter="transition ease-out duration-300"

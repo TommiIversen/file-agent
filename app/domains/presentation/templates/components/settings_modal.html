@@ -5,9 +5,10 @@
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     class="fixed inset-0 bg-black/50 flex items-center backdrop-blur-sm justify-center z-50"
+     class="fixed inset-0 bg-black/50 flex backdrop-blur-sm items-center justify-center z-50"
     @click.self="$store.settings.closeSettingsModal()"
-    @keydown.escape.window="$store.settings.closeSettingsModal()">
+    @keydown.escape.window="$store.settings.closeSettingsModal()"
+    x-cloak>
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
