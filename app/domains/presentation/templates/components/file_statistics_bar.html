@@ -1,35 +1,41 @@
 <!-- File Statistics Bar Component -->
 <div class="flex justify-center">
-    <div class="flex space-x-6 text-sm bg-gray-700 bg-opacity-40 rounded-lg px-4 py-2">
-        <button @click="$store.files.setFilter('all')" 
-                :class="{'bg-blue-700': $store.files.activeFilter === 'all'}" 
-                class="p-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200">
-            <div class="text-blue-300">Total</div>
-            <strong class="text-white" x-text="$store.files.statistics.totalFiles">0</strong>
-        </button>
-        <button @click="$store.files.setFilter('active')" 
-                :class="{'bg-yellow-700': $store.files.activeFilter === 'active'}" 
-                class="p-2 rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-colors duration-200">
-            <div class="text-yellow-300">Aktive</div>
-            <strong class="text-white" x-text="$store.files.statistics.activeFiles">0</strong>
-        </button>
-        <button @click="$store.files.setFilter('growing')" 
-                :class="{'bg-orange-700': $store.files.activeFilter === 'growing'}" 
-                class="p-2 rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition-colors duration-200">
-            <div class="text-orange-300">Growing</div>
-            <strong class="text-white" x-text="$store.files.statistics.growingFiles">0</strong>
-        </button>
-        <button @click="$store.files.setFilter('completed')" 
-                :class="{'bg-green-700': $store.files.activeFilter === 'completed'}" 
-                class="p-2 rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors duration-200">
-            <div class="text-green-300">Færdige</div>
-            <strong class="text-white" x-text="$store.files.statistics.completedFiles">0</strong>
-        </button>
-        <button @click="$store.files.setFilter('failed')" 
-                :class="{'bg-red-700': $store.files.activeFilter === 'failed'}" 
-                class="p-2 rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors duration-200">
-            <div class="text-red-300">Fejlede</div>
-            <strong class="text-white" x-text="$store.files.statistics.failedFiles">0</strong>
-        </button>
+    <div class="flex flex-wrap justify-center gap-1 text-xs bg-gray-700 bg-opacity-40 rounded-lg px-2 py-2 max-w-full">
+        <!-- Primære knapper (Total, Aktive, Growing) - holder sammen -->
+        <div class="flex gap-1 flex-wrap">
+            <button @click="$store.files.setFilter('all')" 
+                    :class="{'bg-blue-700': $store.files.activeFilter === 'all'}" 
+                    class="p-1.5 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors duration-200 flex-shrink-0">
+                <div class="text-blue-300 leading-tight">Total</div>
+                <strong class="text-white block text-center" x-text="$store.files.statistics.totalFiles" x-cloak>0</strong>
+            </button>
+            <button @click="$store.files.setFilter('active')" 
+                    :class="{'bg-yellow-700': $store.files.activeFilter === 'active'}" 
+                    class="p-1.5 rounded-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-colors duration-200 flex-shrink-0">
+                <div class="text-yellow-300 leading-tight">Aktive</div>
+                <strong class="text-white block text-center" x-text="$store.files.statistics.activeFiles" x-cloak>0</strong>
+            </button>
+            <button @click="$store.files.setFilter('growing')" 
+                    :class="{'bg-orange-700': $store.files.activeFilter === 'growing'}" 
+                    class="p-1.5 rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition-colors duration-200 flex-shrink-0">
+                <div class="text-orange-300 leading-tight">Growing</div>
+                <strong class="text-white block text-center" x-text="$store.files.statistics.growingFiles" x-cloak>0</strong>
+            </button>
+        </div>
+        <!-- Sekundære knapper (Færdige, Fejlede) - kan breake til ny linje sammen -->
+        <div class="flex gap-1">
+            <button @click="$store.files.setFilter('completed')" 
+                    :class="{'bg-green-700': $store.files.activeFilter === 'completed'}" 
+                    class="p-1.5 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors duration-200 flex-shrink-0">
+                <div class="text-green-300 leading-tight">Færdige</div>
+                <strong class="text-white block text-center" x-text="$store.files.statistics.completedFiles" x-cloak>0</strong>
+            </button>
+            <button @click="$store.files.setFilter('failed')" 
+                    :class="{'bg-red-700': $store.files.activeFilter === 'failed'}" 
+                    class="p-1.5 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors duration-200 flex-shrink-0">
+                <div class="text-red-300 leading-tight">Fejlede</div>
+                <strong class="text-white block text-center" x-text="$store.files.statistics.failedFiles" x-cloak>0</strong>
+            </button>
+        </div>
     </div>
 </div>
