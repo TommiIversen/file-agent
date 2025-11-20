@@ -205,8 +205,8 @@ class GrowingFileCopyStrategy():
             except NetworkError:
                 logging.error(f"Network error detected in growing copy strategy: {e}")
                 raise
-            logging.error(f"Error in growing copy strategy: {e}")
-            raise FileCopyError(f"Error in growing copy strategy: {e}") from e
+            logging.error(f"Error in growing copy strategy for {source_path}: {type(e).__name__}: {e}", exc_info=True)
+            raise FileCopyError(f"Error in growing copy strategy: {type(e).__name__}: {e}") from e
         finally:
             if temp_dest_path and await aiofiles.os.path.exists(temp_dest_path):
                 try:
@@ -275,10 +275,10 @@ class GrowingFileCopyStrategy():
             try:
                 network_detector.check_write_error(e, "growing file copy")
             except NetworkError:
-                logging.error(f"Network error detected in growing file copy: {e}")
+                logging.error(f"Network error detected in growing file copy for {source_path}: {e}", exc_info=True)
                 raise
-            logging.error(f"Error in growing file copy: {e}")
-            raise FileCopyError(f"Error in growing file copy: {e}") from e
+            logging.error(f"Error in growing file copy for {source_path}: {type(e).__name__}: {e}", exc_info=True)
+            raise FileCopyError(f"Error in growing file copy: {type(e).__name__}: {e}") from e
 
     async def _growing_copy_loop(
         self,
@@ -312,7 +312,7 @@ class GrowingFileCopyStrategy():
 
             try:
                 current_file_size = await aiofiles.os.path.getsize(source_path)
-                print(f"Current file size: {current_file_size}")
+                logging.debug(f"Current file size: {current_file_size}")
             except asyncio.TimeoutError as e:
                 logging.warning(f"File size check timed out for: {source_path}")
                 raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
