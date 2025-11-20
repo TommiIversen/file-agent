@@ -104,9 +104,10 @@ class FileDiscoverySlice:
                 FileStatus.WAITING_FOR_SPACE: 8,
                 FileStatus.WAITING_FOR_NETWORK: 9,
                 FileStatus.COMPLETED: 10,
-                FileStatus.FAILED: 11,
-                FileStatus.REMOVED: 12,
-                FileStatus.SPACE_ERROR: 13,
+                FileStatus.COMPLETED_DELETE_FAILED: 11,
+                FileStatus.FAILED: 12,
+                FileStatus.REMOVED: 13,
+                FileStatus.SPACE_ERROR: 14,
             }
             priority = status_priority.get(f.status, 99)
             time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
@@ -176,7 +177,7 @@ class FileDiscoverySlice:
         any_existing = await self.get_current_file_for_path(file_path)
 
         if any_existing and any_existing.status == FileStatus.COMPLETED_DELETE_FAILED:
-            logging.debug(f"Skipping file marked with deletion error: {file_path}")
+            logging.info(f"Skipping file with delete error - already processed: {file_path} (UUID: {any_existing.id[:8]}...)")
             return any_existing
 
         # Create new tracked file
@@ -285,9 +286,10 @@ class FileDiscoverySlice:
             FileStatus.WAITING_FOR_SPACE: 8,
             FileStatus.WAITING_FOR_NETWORK: 8,
             FileStatus.COMPLETED: 9,
-            FileStatus.FAILED: 10,
-            FileStatus.REMOVED: 11,
-            FileStatus.SPACE_ERROR: 12,
+            FileStatus.COMPLETED_DELETE_FAILED: 10,
+            FileStatus.FAILED: 11,
+            FileStatus.REMOVED: 12,
+            FileStatus.SPACE_ERROR: 13,
         }
         
         priority1 = active_statuses.get(file1.status, 99)
