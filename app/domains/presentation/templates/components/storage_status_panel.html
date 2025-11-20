@@ -1,23 +1,23 @@
 <!-- Storage Status Panel Component -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <!-- Source Storage -->
-    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold flex items-center">
-                📁 Source Storage
+    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-base lg:text-lg font-semibold flex items-center">
+                📁 <span class="hidden sm:inline">Source Storage</span><span class="sm:hidden">Source</span>
             </h3>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-1 lg:space-x-2">
                 <!-- Browse Button -->
                 <button @click="$store.directoryBrowser.openSourceBrowser()"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
-                    📂 Browse
+                    <span class="hidden sm:inline">📂 Browse</span><span class="sm:hidden">📂</span>
                 </button>
                 <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full mr-2"
-                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
-                    <span class="text-sm font-medium"
+                    <div class="w-3 h-3 rounded-full mr-1 lg:mr-2"
+                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'" x-cloak></div>
+                    <span class="text-xs lg:text-sm font-medium truncate max-w-20 lg:max-w-none"
                           :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
-                          x-text="$store.storage?.sourceStatus || 'Indlæser...'"></span>
+                          x-text="$store.storage?.sourceStatus || 'Indlæser...'" x-cloak></span>
                 </div>
             </div>
         </div>
@@ -25,34 +25,34 @@
         <template x-if="$store.storage?.source">
             <div class="space-y-2">
                 <!-- Storage Bar -->
-                <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                <div class="w-full bg-gray-600 rounded-lg h-3 lg:h-4 overflow-hidden">
                     <div class="h-full transition-all duration-500"
                          :style="`width: ${$store.storage?.sourceUsagePercentage || 0}%`"
-                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'"></div>
+                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'" x-cloak></div>
                 </div>
 
                 <!-- Storage Details -->
-                <div class="flex justify-between text-sm">
+                <div class="flex justify-between text-xs lg:text-sm">
                     <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'"></strong></span>
+                                                               x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
                     <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'"></strong></span>
+                                                               x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
                 </div>
 
                 <!-- Access Status -->
-                <div class="flex space-x-4 text-xs">
+                <div class="flex flex-wrap gap-2 lg:space-x-4 text-xs">
                     <div class="flex items-center">
                         <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                        <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
-                                <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                             :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                        <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                                <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
                             </span>
                     </div>
                     <div class="flex items-center">
                         <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                        <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'">
-                                <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                             :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                        <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                                <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
                             </span>
                     </div>
                 </div>
@@ -60,28 +60,28 @@
         </template>
 
         <template x-if="!$store.storage?.source">
-            <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+            <div class="text-gray-400 text-xs lg:text-sm">Indlæser storage information...</div>
         </template>
     </div>
 
     <!-- Destination Storage -->
-    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold flex items-center">
-                🎯 Destination Storage
+    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-base lg:text-lg font-semibold flex items-center">
+                🎯 <span class="hidden sm:inline">Destination Storage</span><span class="sm:hidden">Destination</span>
             </h3>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-1 lg:space-x-2">
                 <!-- Browse Button -->
                 <button @click="$store.directoryBrowser.openDestinationBrowser()"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
-                    📂 Browse
+                    <span class="hidden sm:inline">📂 Browse</span><span class="sm:hidden">📂</span>
                 </button>
                 <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full mr-2"
-                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
-                    <span class="text-sm font-medium"
+                    <div class="w-3 h-3 rounded-full mr-1 lg:mr-2"
+                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'" x-cloak></div>
+                    <span class="text-xs lg:text-sm font-medium truncate max-w-20 lg:max-w-none"
                           :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
-                          x-text="$store.storage?.destinationStatus || 'Indlæser...'"></span>
+                          x-text="$store.storage?.destinationStatus || 'Indlæser...'" x-cloak></span>
                 </div>
             </div>
         </div>
@@ -89,34 +89,34 @@
         <template x-if="$store.storage?.destination">
             <div class="space-y-2">
                 <!-- Storage Bar -->
-                <div class="w-full bg-gray-600 rounded-lg h-4 overflow-hidden">
+                <div class="w-full bg-gray-600 rounded-lg h-3 lg:h-4 overflow-hidden">
                     <div class="h-full transition-all duration-500"
                          :style="`width: ${$store.storage?.destinationUsagePercentage || 0}%`"
-                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'"></div>
+                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'" x-cloak></div>
                 </div>
 
                 <!-- Storage Details -->
-                <div class="flex justify-between text-sm">
+                <div class="flex justify-between text-xs lg:text-sm">
                     <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'"></strong></span>
+                                                               x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
                     <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'"></strong></span>
+                                                               x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
                 </div>
 
                 <!-- Access Status -->
-                <div class="flex space-x-4 text-xs">
+                <div class="flex flex-wrap gap-2 lg:space-x-4 text-xs">
                     <div class="flex items-center">
                         <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                        <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'">
-                                <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'"></span>
+                             :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                        <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                                <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
                             </span>
                     </div>
                     <div class="flex items-center">
                         <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'"></div>
-                        <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'">
-                                <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'"></span>
+                             :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                        <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                                <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
                             </span>
                     </div>
                 </div>
@@ -147,12 +147,12 @@
                                 </template>
 
                                 <span class="text-xs font-medium"
-                                      :class="$store.storage?.destinationMountStatusColor">
-                                        🔗 Network Mount
+                                      :class="$store.storage?.destinationMountStatusColor" x-cloak>
+                                        🔗 <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
                                     </span>
                             </div>
-                            <span class="text-gray-300 text-xs"
-                                  x-text="$store.storage?.destinationMountMessage"></span>
+                            <span class="text-gray-300 text-xs truncate"
+                                  x-text="$store.storage?.destinationMountMessage" x-cloak></span>
                         </div>
                     </div>
                 </template>
@@ -160,7 +160,7 @@
         </template>
 
         <template x-if="!$store.storage?.destination">
-            <div class="text-gray-400 text-sm">Indlæser storage information...</div>
+            <div class="text-gray-400 text-xs lg:text-sm">Indlæser storage information...</div>
         </template>
     </div>
 </div>
