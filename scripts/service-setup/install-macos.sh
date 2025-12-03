@@ -127,26 +127,50 @@ configure_system_permissions() {
 configure_keychain() {
     log_info "Konfigurerer keychain til SMB credentials..."
     
-    # Read SMB settings if available
-    if [[ -f "$PROJECT_DIR/mac-settings.env" ]]; then
-        source "$PROJECT_DIR/mac-settings.env"
+    # Host-specific settings fil oprettes automatisk af app'en ved første kørsel
+    HOSTNAME=$(hostname | cut -d'.' -f1)
+    HOST_SETTINGS_FILE="$PROJECT_DIR/${HOSTNAME}-settings.env"
+    
+    # Tjek for både den genererede host-fil OG base settings
+    SETTINGS_FILE=""
+    if [[ -f "$HOST_SETTINGS_FILE" ]]; then
+        SETTINGS_FILE="$HOST_SETTINGS_FILE"
+        log_info "Bruger host-specifik konfiguration: $HOST_SETTINGS_FILE"
+    elif [[ -f "$PROJECT_DIR/settings.env" ]]; then
+        SETTINGS_FILE="$PROJECT_DIR/settings.env"
+        log_info "Bruger base konfiguration: settings.env"
+    fi
+    
+    if [[ -n "$SETTINGS_FILE" ]]; then
+        # Source settings fil for at få adgang til NETWORK_SHARE_URL
+        source "$SETTINGS_FILE"
         
-        if [[ -n "$SMB_SHARE_URL" ]]; then
-            log_info "Fundet SMB konfiguration: $SMB_SHARE_URL"
+        # Check both possible variable names (NETWORK_SHARE_URL er det rigtige navn)
+        SMB_URL="${NETWORK_SHARE_URL:-${SMB_SHARE_URL:-}}"
+        
+        if [[ -n "$SMB_URL" ]]; then
+            log_info "Fundet SMB konfiguration: $SMB_URL"
             
             # Extract hostname for keychain entry
-            SMB_HOST=$(echo "$SMB_SHARE_URL" | sed -E 's|smb://[^@]*@([^/]*)/.*|\1|')
-            SMB_USER=$(echo "$SMB_SHARE_URL" | sed -E 's|smb://([^@]*)@.*|\1|')
+            SMB_HOST=$(echo "$SMB_URL" | sed -E 's|smb://[^@]*@([^/]*)/.*|\1|')
+            SMB_USER=$(echo "$SMB_URL" | sed -E 's|smb://([^@]*)@.*|\1|')
             
             if [[ -n "$SMB_HOST" && -n "$SMB_USER" ]]; then
                 log_info "SMB Host: $SMB_HOST, User: $SMB_USER"
                 log_info "Du kan tilføje SMB password til keychain med:"
                 log_info "  security add-internet-password -a \"$SMB_USER\" -s \"$SMB_HOST\" -P 445 -r \"smb \" -w"
                 log_info "Dette vil tillade automatisk mount uden password prompts"
+            else
+                log_info "Kunne ikke ekstraktere SMB credentials fra URL"
             fi
+        else
+            log_info "Ingen SMB konfiguration fundet i settings"
+            log_info "Konfigurer NETWORK_SHARE_URL i din settings fil for automatisk keychain setup"
         fi
     else
-        log_info "Ingen mac-settings.env fundet - springer keychain konfiguration over"
+        log_info "Ingen settings filer fundet endnu"
+        log_info "Host-specifik fil ($HOST_SETTINGS_FILE) oprettes automatisk ved første app-start"
+        log_info "Kør derefter dette script igen for keychain konfiguration"
     fi
 }
 
