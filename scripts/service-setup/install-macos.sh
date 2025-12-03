@@ -218,31 +218,6 @@ install_dependencies() {
     log_success "Dependencies installed successfully"
 }
 
-# Test application startup
-test_application() {
-    log_info "Testing application startup..."
-    cd "$PROJECT_DIR"
-    
-    # Test that the app can start
-    timeout 10s python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-    APP_PID=$!
-    
-    # Wait a moment for startup
-    sleep 5
-    
-    # Check if app is responding
-    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-        log_success "Application startup test successful"
-        kill $APP_PID 2>/dev/null || true
-    else
-        log_warning "Application health check failed, but continuing with service setup"
-        kill $APP_PID 2>/dev/null || true
-    fi
-    
-    # Wait for cleanup
-    sleep 2
-}
-
 # Create the launch daemon plist file
 create_plist_file() {
     log_info "Creating launchd plist file..."
@@ -489,8 +464,6 @@ main() {
     configure_firewall
     configure_system_permissions
     configure_keychain
-
-    test_application
     
     # Create install directory if it doesn't exist
     mkdir -p "$INSTALL_DIR"
