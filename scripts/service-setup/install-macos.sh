@@ -142,11 +142,14 @@ configure_keychain() {
     fi
     
     if [[ -n "$SETTINGS_FILE" ]]; then
-        # Source settings fil for at få adgang til NETWORK_SHARE_URL
-        source "$SETTINGS_FILE"
+        # Parse NETWORK_SHARE_URL fra settings fil uden at source hele filen
+        # (sourcing kan fejle hvis settings indeholder special characters som wildcards)
+        SMB_URL=$(grep -E "^NETWORK_SHARE_URL=" "$SETTINGS_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
         
-        # Check both possible variable names (NETWORK_SHARE_URL er det rigtige navn)
-        SMB_URL="${NETWORK_SHARE_URL:-${SMB_SHARE_URL:-}}"
+        # Fallback til SMB_SHARE_URL hvis NETWORK_SHARE_URL ikke findes
+        if [[ -z "$SMB_URL" ]]; then
+            SMB_URL=$(grep -E "^SMB_SHARE_URL=" "$SETTINGS_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+        fi
         
         if [[ -n "$SMB_URL" ]]; then
             log_info "Fundet SMB konfiguration: $SMB_URL"
