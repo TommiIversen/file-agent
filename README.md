@@ -32,6 +32,44 @@ TALLY_LIGHT_SWITCH_IP=10.65.77.9       # Your IP Power 9255 address
 - ON: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=1`  
 - OFF: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=0`
 
+### Output Folder Template System
+
+Organize transferred files into categorized subfolders automatically based on filename patterns.
+
+**Configuration (settings.env):**
+```bash
+OUTPUT_FOLDER_TEMPLATE_ENABLED=true
+OUTPUT_FOLDER_RULES=pattern:*Cam*;folder:KAMERA/{date},pattern:*PGM*;folder:PROGRAM_CLEAN/{date}
+OUTPUT_FOLDER_DEFAULT_CATEGORY=OTHER
+OUTPUT_FOLDER_DATE_FORMAT=filename[0:6]
+```
+
+**Example 1 - Categorized Organization:**
+```
+With rules: pattern:*Cam*;folder:KAMERA/{date},pattern:*PGM*;folder:PROGRAM_CLEAN/{date}
+
+251022_1400_Cam1.mxf  → \\NAS\KAMERA\251022\251022_1400_Cam1.mxf
+251022_1500_PGM.mxf   → \\NAS\PROGRAM_CLEAN\251022\251022_1500_PGM.mxf
+251022_1600_Other.mxf → \\NAS\OTHER\251022\251022_1600_Other.mxf (fallback)
+```
+
+**Example 2 - Date-Only Organization:**
+```
+With rules: pattern:*;folder:{date}
+
+251022_1400_Cam1.mxf  → \\NAS\251022\251022_1400_Cam1.mxf
+251022_1500_PGM.mxf   → \\NAS\251022\251022_1500_PGM.mxf
+251022_1600_Other.mxf → \\NAS\251022\251022_1600_Other.mxf
+```
+
+**Available Variables:**
+- `{date}` - Extracted from filename (e.g., first 6 chars for YYMMDD)
+- `{filename}` - Full filename
+- `{name_no_ext}` - Filename without extension
+
+**Disable Template System:**
+Set `OUTPUT_FOLDER_TEMPLATE_ENABLED=false` to copy all files directly to destination without subfolders.
+
 ## Architectural Overview
 
 This application is built on a clean, decoupled architecture inspired by SOLID principles, primarily using a **Producer-Consumer** pattern. This design ensures robustness and maintainability.
