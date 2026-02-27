@@ -5,8 +5,9 @@ REM Define paths and variables
 set TAILWIND_VERSION=v4.1.16
 set TAILWIND_EXE=tailwindcss-windows-x64.exe
 set TAILWIND_URL=https://github.com/tailwindlabs/tailwindcss/releases/download/%TAILWIND_VERSION%/%TAILWIND_EXE%
-set PROJECT_ROOT=%~dp0
-set INPUT_CSS=%PROJECT_ROOT%tailwind.css
+set TAILWIND_DIR=%~dp0
+set PROJECT_ROOT=%TAILWIND_DIR%..\ 
+set INPUT_CSS=%TAILWIND_DIR%tailwind.css
 set OUTPUT_CSS=%PROJECT_ROOT%app\domains\presentation\static\css\tailwind.css
 set CONTENT_PATH1=%PROJECT_ROOT%app\domains\presentation\templates\**\*.html
 set CONTENT_PATH2=%PROJECT_ROOT%app\domains\presentation\static\js\**\*.js
@@ -18,13 +19,12 @@ echo ========================================
 echo.
 
 REM Check if Tailwind CSS executable exists
-if not exist "%PROJECT_ROOT%%TAILWIND_EXE%" (
+if not exist "%TAILWIND_DIR%%TAILWIND_EXE%" (
     echo [INFO] Tailwind CSS executable not found. Downloading...
     echo [INFO] Downloading from: %TAILWIND_URL%
     echo.
     
-    REM Download using PowerShell (works on all Windows systems)
-    curl -L -o "%PROJECT_ROOT%%TAILWIND_EXE%" "%TAILWIND_URL%"
+    curl -L -o "%TAILWIND_DIR%%TAILWIND_EXE%" "%TAILWIND_URL%"
     
     if !errorlevel! equ 0 (
         echo [SUCCESS] Downloaded Tailwind CSS successfully!
@@ -46,7 +46,7 @@ if not exist "%PROJECT_ROOT%%TAILWIND_EXE%" (
 REM Check if input CSS file exists
 if not exist "%INPUT_CSS%" (
     echo [ERROR] Input CSS file not found: %INPUT_CSS%
-    echo [INFO] Please ensure tailwind.css exists in the project root.
+    echo [INFO] Please ensure tailwind.css exists in the tailwind folder.
     pause
     exit /b 1
 )
@@ -65,14 +65,14 @@ echo [INFO]          %CONTENT_PATH2%
 echo.
 
 REM Build Tailwind CSS once with JIT compilation
-"%PROJECT_ROOT%%TAILWIND_EXE%" -i "%INPUT_CSS%" -o "%OUTPUT_CSS%" --content="%CONTENT_PATH1%" --content="%CONTENT_PATH2%" --minify
+"%TAILWIND_DIR%%TAILWIND_EXE%" -i "%INPUT_CSS%" -o "%OUTPUT_CSS%" --content="%CONTENT_PATH1%" --content="%CONTENT_PATH2%" --minify
 
 if !errorlevel! equ 0 (
     echo.
     echo [SUCCESS] Tailwind CSS built successfully!
     echo [INFO] Output file: %OUTPUT_CSS%
     echo.
-    echo [INFO] To watch for changes during development, run: tailwind-watch.bat
+    echo [INFO] To watch for changes during development, run: tailwind\watch.bat
 ) else (
     echo.
     echo [ERROR] Tailwind CSS build failed.

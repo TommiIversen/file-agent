@@ -15,10 +15,10 @@ This directory contains platform-specific scripts to install File Transfer Agent
 ### **macOS:**
 ```bash
 # As user service (recommended for desktop):
-./scripts/service-setup/install-macos.sh
+./install-macos.sh
 
 # As system service (for servers):
-sudo ./scripts/service-setup/install-macos.sh
+sudo ./install-macos.sh
 ```
 
 
@@ -95,7 +95,7 @@ Each installation creates an uninstall script:
 
 ### **macOS:**
 ```bash
-./scripts/service-setup/uninstall-macos.sh
+./uninstall-macos.sh
 ```
 
 ### **Platform-Specific Paths:**

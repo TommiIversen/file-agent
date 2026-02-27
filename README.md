@@ -125,10 +125,13 @@ For automatic startup as a system service on macOS:
 
 ```bash
 # Make the script executable
-chmod +x scripts/service-setup/install-macos.sh
+chmod +x install-macos.sh
 
-# Run the installer
-./scripts/service-setup/install-macos.sh
+# Run the installer (user service, recommended for desktop)
+./install-macos.sh
+
+# Or as system service (for servers)
+sudo ./install-macos.sh
 ```
 
 The installer will:
@@ -165,7 +168,7 @@ tail -f logs/file-agent.log
 tail -f logs/file-agent-error.log
 
 # Uninstall the service
-./scripts/service-setup/uninstall-macos.sh
+./uninstall-macos.sh
 ```
 
 #### Manual Application Control
@@ -207,14 +210,14 @@ ls -la ~/Library/LaunchAgents/com.fileagent.service.plist
 
 # Tailwind CSS Setup for File Agent
 
-This project now uses the standalone Tailwind CSS executable instead of the CDN version for better performance and offline development.
+This project uses the standalone Tailwind CSS executable instead of the CDN version for better performance and offline development.
 
-## Files Created
+## Files
 
-- `tailwind.css` - Input CSS file with Tailwind directives and custom styles
-- `tailwind-build.bat` - One-time build script
-- `tailwind-watch.bat` - Development watch script
-- `app/static/css/tailwind.css` - Generated output CSS file (auto-generated)
+- `tailwind/tailwind.css` - Input CSS file with Tailwind directives and custom styles
+- `tailwind/build.bat` - One-time build script
+- `tailwind/watch.bat` - Development watch script
+- `app/domains/presentation/static/css/tailwind.css` - Generated output CSS file (auto-generated)
 
 ## Usage
 
@@ -223,12 +226,12 @@ This project now uses the standalone Tailwind CSS executable instead of the CDN 
 Run the build script to download Tailwind CSS and generate the CSS file:
 
 ```batch
-.\tailwind-build.bat
+.\tailwind\build.bat
 ```
 
 This will:
 1. Download `tailwindcss-windows-x64.exe` if not present
-2. Generate the optimized CSS file at `app/static/css/tailwind.css`
+2. Generate the optimized CSS file at `app/domains/presentation/static/css/tailwind.css`
 3. Include only the CSS classes actually used in your HTML templates
 
 ### Development with Watch Mode
@@ -236,7 +239,7 @@ This will:
 For development, use the watch script to automatically rebuild CSS when files change:
 
 ```batch
-.\tailwind-watch.bat
+.\tailwind\watch.bat
 ```
 
 This will:
