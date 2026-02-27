@@ -36,7 +36,7 @@ class TallyLightEventHandler:
         self._current_tally_state: TallyState = TallyState.OFF
         self._blinker_task: Optional[asyncio.Task] = None
         self._blink_interval_sec: float = settings.tally_light_blink_interval_seconds
-        self._lock = asyncio.Lock()  # Protects access to _blinker_task
+        self._lock = asyncio.Lock() # Protects access to _blinker_task
         
         logging.info("TallyLightEventHandler initialized with software blinker logic")
         logging.info(f"Power switch type: {self._power_switch.switch_type.value}")
@@ -68,9 +68,9 @@ class TallyLightEventHandler:
             if recording_channels == 0:
                 new_state = TallyState.OFF
             elif recording_channels == total_channels:
-                new_state = TallyState.SOLID_ON  # All channels recording
+                new_state = TallyState.SOLID_ON # All channels recording
             else:
-                new_state = TallyState.BLINKING  # At least one, but not all, recording
+                new_state = TallyState.BLINKING # At least one, but not all, recording
 
         # 2. Apply the change only if it's new
         if new_state != self._current_tally_state:
@@ -86,7 +86,7 @@ class TallyLightEventHandler:
         """
         async with self._lock:
             if new_state == self._current_tally_state:
-                return  # Another event managed to change it in the meantime
+                return # Another event managed to change it in the meantime
 
             current_state_str = self._current_tally_state.value
             new_state_str = new_state.value
@@ -96,9 +96,9 @@ class TallyLightEventHandler:
             if self._blinker_task and not self._blinker_task.done():
                 self._blinker_task.cancel()
                 try:
-                    await self._blinker_task  # Wait for it to shutdown and turn off light
+                    await self._blinker_task # Wait for it to shutdown and turn off light
                 except asyncio.CancelledError:
-                    pass  # Expected
+                    pass # Expected
             self._blinker_task = None
 
             # 2. Set the new state
@@ -114,7 +114,7 @@ class TallyLightEventHandler:
                     self._blinker_task = asyncio.create_task(self._blinker_loop())
                     logging.info("Tally light set to BLINKING")
 
-                self._current_tally_state = new_state  # Store the new state
+                self._current_tally_state = new_state # Store the new state
 
             except PowerSwitchError as e:
                 logging.error(f"Could not update tally light to {new_state_str}: {e}")
@@ -139,7 +139,7 @@ class TallyLightEventHandler:
                 logging.info("Blinker task stopped, light turned off")
             except PowerSwitchError as e:
                 logging.error(f"Could not turn off tally light during blink stop: {e}")
-            raise  # Re-raise CancelledError
+            raise # Re-raise CancelledError
         except Exception as e:
             logging.error(f"Error in blinker loop: {e}")
             # Reset state to OFF so it can be restarted

@@ -34,7 +34,7 @@ class StorageMonitorService:
 
         self._is_running = False
         self._monitor_task: Optional[asyncio.Task] = None
-        self._mount_in_progress = False  # Prevent parallel mount attempts
+        self._mount_in_progress = False # Prevent parallel mount attempts
 
         logging.info(
             "StorageMonitorService initialized with SRP-compliant architecture"
@@ -73,12 +73,12 @@ class StorageMonitorService:
 
     async def handle_network_failure_detected(self, event: NetworkFailureDetectedEvent) -> None:
         """
-        🔥 Immediately check destination when network failure is detected from copy operations.
+         Immediately check destination when network failure is detected from copy operations.
         
         This provides instant feedback to UI instead of waiting for next periodic check.
         """
         logging.warning(
-            f"🔥 IMMEDIATE network failure detected - checking destination accessibility: {event.error_message}"
+            f" IMMEDIATE network failure detected - checking destination accessibility: {event.error_message}"
         )
         
         # Immediately check destination storage with faster timeout
@@ -99,7 +99,7 @@ class StorageMonitorService:
             path=self._settings.destination_directory,
             warning_threshold=self._settings.destination_warning_threshold_gb,
             critical_threshold=self._settings.destination_critical_threshold_gb,
-            immediate_timeout=2.0  # Aggressive 2-second timeout for immediate checks
+            immediate_timeout=2.0 # Aggressive 2-second timeout for immediate checks
         )
 
     async def _monitoring_loop(self) -> None:
@@ -141,7 +141,7 @@ class StorageMonitorService:
         path: str,
         warning_threshold: float,
         critical_threshold: float,
-        immediate_timeout: float = 8.0,  # Default to 8 seconds, but allow override
+        immediate_timeout: float = 8.0, # Default to 8 seconds, but allow override
     ) -> None:
         try:
             # Add aggressive timeout wrapper for the entire storage check operation
@@ -157,7 +157,7 @@ class StorageMonitorService:
                 )
             except asyncio.TimeoutError:
                 logging.warning(
-                    f"⏱️ TIMEOUT: Storage check for {storage_type} at {path} timed out after {immediate_timeout} seconds - assuming network is down"
+                    f" TIMEOUT: Storage check for {storage_type} at {path} timed out after {immediate_timeout} seconds - assuming network is down"
                 )
                 # Create a synthetic StorageInfo for timeout case
                 from app.models import StorageInfo
@@ -382,7 +382,7 @@ class StorageMonitorService:
 
         if is_recovery:
             logging.info(
-                f"🔄 DESTINATION RECOVERY DETECTED: {old_info.status} → {new_info.status} "
+                f" DESTINATION RECOVERY DETECTED: {old_info.status} → {new_info.status} "
                 f"(path: {new_info.path})"
             )
 
@@ -405,7 +405,7 @@ class StorageMonitorService:
 
         if is_unavailable:
             logging.warning(
-                f"⏸️ DESTINATION UNAVAILABLE: {old_info.status} → {new_info.status} "
+                f" DESTINATION UNAVAILABLE: {old_info.status} → {new_info.status} "
                 f"(path: {new_info.path})"
             )
 
@@ -418,7 +418,7 @@ class StorageMonitorService:
             unavailable_reason = f"{old_info.status} → {new_info.status}"
 
             logging.warning(
-                f"⏸️ PAUSING OPERATIONS: {unavailable_reason} "
+                f" PAUSING OPERATIONS: {unavailable_reason} "
                 f"(Reason: {new_info.error_message or 'Unknown'})"
             )
 
@@ -428,7 +428,7 @@ class StorageMonitorService:
                 storage_info=new_info
             )
 
-            logging.info("⏸️ Destination unavailable event published - awaiting recovery")
+            logging.info(" Destination unavailable event published - awaiting recovery")
 
         except Exception as e:
             logging.error(f"ERROR: Error during destination pause handling: {e}")
@@ -440,7 +440,7 @@ class StorageMonitorService:
             recovery_reason = f"{old_info.status} → {new_info.status}"
 
             logging.info(
-                f"🚀 INITIATING UNIVERSAL RECOVERY: {recovery_reason} "
+                f" INITIATING UNIVERSAL RECOVERY: {recovery_reason} "
                 f"(Free space: {new_info.free_space_gb:.1f} GB)"
             )
 
@@ -460,7 +460,7 @@ class StorageMonitorService:
                 storage_info=new_info
             )
 
-            logging.info("✅ Destination recovery event published - intelligent resume initiated")
+            logging.info(" Destination recovery event published - intelligent resume initiated")
 
         except Exception as e:
             logging.error(f"ERROR: Error during universal recovery: {e}")

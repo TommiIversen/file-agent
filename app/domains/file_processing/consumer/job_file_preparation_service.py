@@ -77,15 +77,15 @@ class JobFilePreparationService:
         # If file is already in copy processing (COPYING or GROWING_COPY), keep current status
         # This prevents infinite loops where we re-evaluate files already being processed
         if tracked_file.status in [FileStatus.COPYING, FileStatus.GROWING_COPY]:
-            logging.debug(f"🔄 File already in copy processing with status {tracked_file.status}: {job.file_path}")
+            logging.debug(f" File already in copy processing with status {tracked_file.status}: {job.file_path}")
             return tracked_file.status
 
         if job.is_growing_at_queue_time:
-            logging.info(f"🌱 File marked for GROWING_COPY (from queue snapshot): {job.file_path}")
+            logging.info(f" File marked for GROWING_COPY (from queue snapshot): {job.file_path}")
             return FileStatus.GROWING_COPY
         else:
-            logging.info(f"⚡ File marked for STATIC COPY (from queue snapshot): {job.file_path}")
-            return FileStatus.COPYING  # Static files go straight to copying
+            logging.info(f" File marked for STATIC COPY (from queue snapshot): {job.file_path}")
+            return FileStatus.COPYING # Static files go straight to copying
 
     async def _calculate_destination_path(self, file_path: str) -> Path:
         """Calculate destination path using template engine if enabled."""

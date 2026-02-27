@@ -51,9 +51,9 @@ class LogFileQueryHandler:
                     "size": size_bytes,
                     "size_mb": size_mb,
                     "modified": stat.st_mtime,
-                    "modified_time": modified_time_ms,  # JavaScript expects milliseconds
+                    "modified_time": modified_time_ms, # JavaScript expects milliseconds
                     "path": str(file_path),
-                    "is_current": file_path.name == "file_agent.log"  # Current log has no date suffix
+                    "is_current": file_path.name == "file_agent.log" # Current log has no date suffix
                 })
         
         # Sort by modification time, newest first
@@ -201,7 +201,7 @@ class LogFileQueryHandler:
             # Create a memory-based response instead of file-based
             return Response(
                 content=content.encode('utf-8'),
-                media_type='application/octet-stream',  # Force download instead of browser preview
+                media_type='application/octet-stream', # Force download instead of browser preview
                 headers={
                     "Content-Disposition": f'attachment; filename="{download_filename}"',
                     "Content-Type": "text/plain; charset=utf-8",

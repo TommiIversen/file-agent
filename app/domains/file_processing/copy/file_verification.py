@@ -51,7 +51,7 @@ class FileVerificationService:
             Tuple af (success, error_message). error_message er None hvis succesfuld.
         """
         last_error = None
-        for i in range(3):  # 3 retry forsøg
+        for i in range(3): # 3 retry forsøg
             try:
                 await aiofiles.os.remove(source_path)
                 logging.debug(f"Source file deleted: {os.path.basename(source_path)}")

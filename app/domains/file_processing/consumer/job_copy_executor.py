@@ -28,14 +28,14 @@ class JobCopyExecutor:
         settings: Settings,
         file_repository: FileRepository,
         copy_strategy: GrowingFileCopyStrategy,
-        state_machine: FileStateMachine,  # <-- TILFØJ DENNE
+        state_machine: FileStateMachine, # <-- TILFØJ DENNE
         error_classifier: Optional[JobErrorClassifier] = None,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self.settings = settings
         self.file_repository = file_repository
         self.copy_strategy = copy_strategy
-        self._state_machine = state_machine  # <-- TILFØJ DENNE
+        self._state_machine = state_machine # <-- TILFØJ DENNE
         self.error_classifier = error_classifier
         self.event_bus = event_bus
 
@@ -120,8 +120,8 @@ class JobCopyExecutor:
 
         if status == FileStatus.REMOVED:
             await self._handle_remove_error(prepared_file, reason, error)
-            return False  # File is gone, don't retry
-        else:  # FileStatus.FAILED
+            return False # File is gone, don't retry
+        else: # FileStatus.FAILED
             await self._handle_fail_error(prepared_file, reason, error)
             return False
 
@@ -167,7 +167,7 @@ class JobCopyExecutor:
                 copy_progress=0.0,
                 bytes_copied=0,
                 error_message=f"Failed: {reason}",
-                failed_at=datetime.now()  # StateMachine sætter også dette, men eksplicit er ok
+                failed_at=datetime.now() # StateMachine sætter også dette, men eksplicit er ok
             )
 
             # Publicer den domæne-specifikke event

@@ -61,9 +61,9 @@ class JobFinalizationService:
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
             destination_path=getattr(tracked_file, "destination_path", None),
-            bytes_copied=file_size,  # Use the actual copied bytes from parameter
-            source_size=tracked_file.file_size,  # Original source size
-            dest_size=file_size  # Destination size (should be same for normal copies)
+            bytes_copied=file_size, # Use the actual copied bytes from parameter
+            source_size=tracked_file.file_size, # Original source size
+            dest_size=file_size # Destination size (should be same for normal copies)
         ))
         logging.info(f"Job completed successfully: {job.file_path}")
 
@@ -83,7 +83,7 @@ class JobFinalizationService:
         
         # Use state machine for status transition - this handles repository update and event publishing
         await self.state_machine.transition(
-            file_id=tracked_file.id,  # <-- Brug .id
+            file_id=tracked_file.id, # <-- Brug .id
             new_status=FileStatus.FAILED
         )
 
@@ -105,7 +105,7 @@ class JobFinalizationService:
         
         # Use state machine for status transition - this handles repository update and event publishing
         await self.state_machine.transition(
-            file_id=tracked_file.id,  # <-- Brug .id
+            file_id=tracked_file.id, # <-- Brug .id
             new_status=FileStatus.FAILED
         )
         

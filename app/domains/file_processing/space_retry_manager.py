@@ -62,7 +62,7 @@ class SpaceRetryManager:
             )
         except (InvalidTransitionError, ValueError) as e:
             logging.warning(f"Kunne ikke sætte fil {tracked_file.id} til WAITING_FOR_SPACE: {e}")
-            return  # Afbryd, hvis vi ikke kan sætte status
+            return # Afbryd, hvis vi ikke kan sætte status
 
         # Schedule retry using SpaceRetryManager
         success = await self.schedule_retry(
@@ -95,7 +95,7 @@ class SpaceRetryManager:
             )
         except (InvalidTransitionError, ValueError) as e:
             logging.warning(f"Kunne ikke sætte fil {tracked_file.id} til WAITING_FOR_SPACE: {e}")
-            return  # Afbryd, hvis vi ikke kan sætte status
+            return # Afbryd, hvis vi ikke kan sætte status
 
         # Schedule retry using SpaceRetryManager
         success = await self.schedule_retry(
@@ -238,7 +238,7 @@ class SpaceRetryManager:
                     await self._state_machine.transition(
                         file_id=file_id,
                         new_status=FileStatus.READY,
-                        retry_info=None  # Sørg for at rydde retry_info
+                        retry_info=None # Sørg for at rydde retry_info
                     )
                     logging.info(
                         f"Retry executed for {tracked_file.file_path} - reset to READY"

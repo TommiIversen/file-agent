@@ -53,7 +53,7 @@ class IngestApiClient:
             return data.channel_names
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch activeChannels: {e}")
-            return None  # Return None on error to indicate API failure
+            return None # Return None on error to indicate API failure
         except Exception as e:
             logging.error(f"Unexpected error fetching activeChannels: {e}")
             return None
@@ -125,7 +125,7 @@ class IngestApiClient:
                           or None if API calls are failing (indicating connection issues)
         """
         if not channel_names:
-            return []  # Empty input is valid, return empty list
+            return [] # Empty input is valid, return empty list
 
         logging.debug(f"Fetching status for {len(channel_names)} channels: {channel_names}")
 
@@ -146,7 +146,7 @@ class IngestApiClient:
         # If we got no successful results and we had channels to check, API might be down
         if len(channel_names) > 0 and len(successful_results) == 0:
             logging.warning(f"Failed to fetch status for all {len(channel_names)} channels - API might be down")
-            return None  # Indicates API connection failure
+            return None # Indicates API connection failure
         
         logging.debug(f"Successfully fetched status for {len(successful_results)}/{len(channel_names)} channels")
         return successful_results

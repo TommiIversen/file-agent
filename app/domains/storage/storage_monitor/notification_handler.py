@@ -15,7 +15,7 @@ from app.models import StorageInfo, StorageUpdate, MountStatusUpdate
 class NotificationHandler:
     def __init__(self, event_bus: DomainEventBus):
         self._event_bus = event_bus
-        self._last_mount_status = {}  # Track last known mount status per storage
+        self._last_mount_status = {} # Track last known mount status per storage
 
     async def handle_status_change(
         self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo

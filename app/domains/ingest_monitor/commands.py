@@ -19,7 +19,7 @@ class ClearAllChannelErrorsCommand(Command):
     2. Update local state cache to reflect cleared errors
     3. Publish events to update UI
     """
-    pass  # No parameters needed - operates on all channels
+    pass # No parameters needed - operates on all channels
 
 
 @dataclass
@@ -32,7 +32,7 @@ class StartAllChannelsCommand(Command):
     2. Update local state cache to reflect started channels
     3. Publish events to update UI
     """
-    pass  # No parameters needed - operates on all channels
+    pass # No parameters needed - operates on all channels
 
 
 @dataclass
@@ -45,4 +45,4 @@ class StopAllChannelsCommand(Command):
     2. Update local state cache to reflect stopped channels
     3. Publish events to update UI
     """
-    pass  # No parameters needed - operates on all channels
+    pass # No parameters needed - operates on all channels

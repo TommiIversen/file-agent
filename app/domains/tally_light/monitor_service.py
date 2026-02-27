@@ -212,11 +212,11 @@ class TallySwitchMonitorService:
                 if new_status.is_online:
                     online_event = TallySwitchOnlineEvent(new_status)
                     await self._event_bus.publish(online_event)
-                    logging.info(f"🟢 Tally switch {self._ip_address} came ONLINE")
+                    logging.info(f" Tally switch {self._ip_address} came ONLINE")
                 else:
                     offline_event = TallySwitchOfflineEvent(new_status)
                     await self._event_bus.publish(offline_event)
-                    logging.warning(f"🔴 Tally switch {self._ip_address} went OFFLINE")
+                    logging.warning(f" Tally switch {self._ip_address} went OFFLINE")
             
         except Exception as e:
             logging.error(f"Error publishing tally switch events: {e}")

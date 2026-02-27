@@ -31,7 +31,7 @@ class MacOSNetworkChecker:
                 hostname = share_url.split("://")[1].split("/")[0]
             else:
                 logging.warning(f"Cannot extract hostname from share URL: {share_url}")
-                return True  # Don't block if we can't parse
+                return True # Don't block if we can't parse
             
             logging.debug(f"Testing network connectivity to: {hostname}")
             
@@ -57,7 +57,7 @@ class MacOSNetworkChecker:
                 
         except Exception as e:
             logging.warning(f"Network connectivity test failed: {e}")
-            return True  # Don't block on errors, let mount attempt decide
+            return True # Don't block on errors, let mount attempt decide
     
     async def can_reach_share_host(self, share_url: str) -> bool:
         """
@@ -115,9 +115,9 @@ class MacOSMountValidator:
             # Try to list directory - if it fails, might be a mount issue
             try:
                 await asyncio.to_thread(list, path_obj.iterdir())
-                return False  # Can list it, so it's probably fine
+                return False # Can list it, so it's probably fine
             except PermissionError:
-                return True  # Can't list it, might be problematic local folder
+                return True # Can't list it, might be problematic local folder
                 
         except Exception:
             return False
@@ -182,7 +182,7 @@ class MacOSMountCleaner:
             
         except Exception as e:
             logging.debug(f"Error cleaning up mount point: {e}")
-            return True  # Don't fail the mount for cleanup issues
+            return True # Don't fail the mount for cleanup issues
     
     async def cleanup_ghost_mounts(self, base_mount_path: str) -> list:
         """Remove ghost mounts like /Volumes/SK6402_1."""

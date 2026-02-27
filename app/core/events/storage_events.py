@@ -36,4 +36,4 @@ class NetworkStatusChanged(DomainEvent):
     """Autoritativ event fra NetworkCoordinator om netværksstatus ændringer."""
     available: bool
     reason: str
-    source: str  # "periodic_check" | "copy_failure" | "recovery"
+    source: str # "periodic_check" | "copy_failure" | "recovery"

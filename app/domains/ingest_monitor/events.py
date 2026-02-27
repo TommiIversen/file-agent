@@ -50,7 +50,7 @@ class IngestStatusUpdatedEvent(DomainEvent):
     This is the main event that the Tally Light domain listens to
     for determining the overall recording state.
     """
-    status_snapshot: Dict[str, dict]  # {"KAM_1": {"is_recording": true, "has_signal": true, ...}}
+    status_snapshot: Dict[str, dict] # {"KAM_1": {"is_recording": true, "has_signal": true, ...}}
 
 
 @dataclass(frozen=True)

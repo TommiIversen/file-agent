@@ -18,7 +18,7 @@ class QueueJob:
     file_path: str
     file_size: int
     creation_time: Optional[datetime]
-    is_growing_at_queue_time: bool  # Snapshot of growing status when added to queue
+    is_growing_at_queue_time: bool # Snapshot of growing status when added to queue
     added_to_queue_at: datetime
     retry_count: int = 0
     last_retry_at: Optional[datetime] = None

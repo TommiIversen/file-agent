@@ -233,7 +233,7 @@ class FileScanner:
                 if metadata is None:
                     continue
 
-                if metadata["size"] == 0:  # Check if empty
+                if metadata["size"] == 0: # Check if empty
                     logging.debug(f"Skipping empty file: {path_obj.name}")
                     continue
 

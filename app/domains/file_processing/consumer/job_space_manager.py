@@ -19,7 +19,7 @@ class JobSpaceManager:
         self,
         settings: Settings,
         file_repository: FileRepository,
-        space_checker,  # This is the SpaceChecker for file size checks
+        space_checker, # This is the SpaceChecker for file size checks
         state_machine: FileStateMachine,
         retry_manager,    # This replaces space_retry_manager param
         event_bus: DomainEventBus,
@@ -96,7 +96,7 @@ class JobSpaceManager:
                 success=False,
                 file_path=file_path,
                 error_message=f"Network unavailable: {space_check.reason}",
-                should_retry=True,  # Should retry when network comes back
+                should_retry=True, # Should retry when network comes back
             )
         else:
             logging.warning(

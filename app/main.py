@@ -30,22 +30,22 @@ from .dependencies import (
     get_storage_checker,
     get_query_bus,
     get_command_bus,
-    get_file_discovery_slice,  # Import the new slice getter
+    get_file_discovery_slice, # Import the new slice getter
     get_file_scanner,
-    get_lifecycle_service,  # Import lifecycle service
-    get_ingest_monitor_worker,  # Import refactored ingest monitor worker
-    get_tally_light_event_handler,  # Import tally light handler
-    get_tally_switch_monitor  # Import tally switch monitor service
+    get_lifecycle_service, # Import lifecycle service
+    get_ingest_monitor_worker, # Import refactored ingest monitor worker
+    get_tally_light_event_handler, # Import tally light handler
+    get_tally_switch_monitor # Import tally switch monitor service
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
-from app.domains.file_discovery.registration import register_file_discovery_handlers  # Import the new registration function
-from app.domains.file_processing.registration import register_file_processing_domain  # Import file processing registration
-from app.domains.shared.registration import register_shared_domain  # Import shared domain registration
-from app.domains.network_mount.registration import register_network_mount_domain  # 🚀 NetworkCoordinator registration
-from app.domains.lifecycle.registration import register_lifecycle_domain  # Import lifecycle domain registration
-from app.domains.tally_light.registration import register_tally_light_domain  # Import tally light domain registration
-from app.domains.ingest_monitor.registration import register_ingest_monitor_domain  # Import ingest monitor domain registration
+from app.domains.file_discovery.registration import register_file_discovery_handlers # Import the new registration function
+from app.domains.file_processing.registration import register_file_processing_domain # Import file processing registration
+from app.domains.shared.registration import register_shared_domain # Import shared domain registration
+from app.domains.network_mount.registration import register_network_mount_domain # NetworkCoordinator registration
+from app.domains.lifecycle.registration import register_lifecycle_domain # Import lifecycle domain registration
+from app.domains.tally_light.registration import register_tally_light_domain # Import tally light domain registration
+from app.domains.ingest_monitor.registration import register_ingest_monitor_domain # Import ingest monitor domain registration
 
 from .logging_config import setup_logging
 from app.domains.presentation import views
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     command_bus = get_command_bus()
     event_bus = get_event_bus()
     
-    # 🔧 Register GlobalEventLogger to capture all domain events for UI visibility
+    # Register GlobalEventLogger to capture all domain events for UI visibility
     from app.dependencies import get_global_event_logger
     global_event_logger = get_global_event_logger()
     await global_event_logger.register_with_event_bus(event_bus)
@@ -76,19 +76,19 @@ async def lifespan(app: FastAPI):
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
-    register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())  # New registration call
-    register_shared_domain(command_bus, query_bus)  # Register shared domain handlers
-    register_lifecycle_domain(command_bus)  # Register lifecycle domain handlers
+    register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice()) # New registration call
+    register_shared_domain(command_bus, query_bus) # Register shared domain handlers
+    register_lifecycle_domain(command_bus) # Register lifecycle domain handlers
     
-    # 🚀 IMPORTANT: Register NetworkCoordinator FIRST before other domains that depend on it!
-    network_services = await register_network_mount_domain(event_bus)  # 🚀 NetworkCoordinator registration!
+    # IMPORTANT: Register NetworkCoordinator FIRST before other domains that depend on it!
+    network_services = await register_network_mount_domain(event_bus) # NetworkCoordinator registration!
     
     # Store NetworkCoordinator for dependency injection
     from app.dependencies import _singletons
     _singletons["network_coordinator"] = network_services["network_coordinator"]
     
     # Now register domains that depend on NetworkCoordinator
-    await register_file_processing_domain(command_bus, event_bus)  # File processing CQRS registration
+    await register_file_processing_domain(command_bus, event_bus) # File processing CQRS registration
     await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
     
     # Register IngestMonitor domain (enables API queries)
@@ -145,7 +145,7 @@ async def lifespan(app: FastAPI):
     logging.info("FileCopierService workers startet som background task")
 
     # Initialize WebSocketManager (subscription happens automatically)
-    ws_manager = get_websocket_manager()  # Initialize singleton
+    ws_manager = get_websocket_manager() # Initialize singleton
     ws_manager.start_sender_task()
     logging.info("WebSocketManager initialiseret")
 
@@ -202,7 +202,7 @@ async def lifespan(app: FastAPI):
     job_queue_service.stop_producer()
     await file_copier.stop_workers()
     await storage_monitor.stop_monitoring()
-    get_lifecycle_service().stop_pruning_loop()  # Stop lifecycle service
+    get_lifecycle_service().stop_pruning_loop() # Stop lifecycle service
     
     # Stop Just In Engine monitoring and tally light services
     ingest_monitor_worker = get_ingest_monitor_worker()
@@ -263,12 +263,12 @@ async def log_requests(request: Request, call_next):
 
 
 # Include routers
-app.include_router(config_api.router)  # New shared domain config API
-app.include_router(logs_api.router)  # New shared domain logs API
-app.include_router(storage_api.router)  # New shared domain storage API
-app.include_router(events_api.router)  # New shared domain events API
-app.include_router(scanner_api.router)  # New file discovery scanner API
-app.include_router(ingest_monitor_api)  # New ingest monitor API
+app.include_router(config_api.router) # New shared domain config API
+app.include_router(logs_api.router) # New shared domain logs API
+app.include_router(storage_api.router) # New shared domain storage API
+app.include_router(events_api.router) # New shared domain events API
+app.include_router(scanner_api.router) # New file discovery scanner API
+app.include_router(ingest_monitor_api) # New ingest monitor API
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)

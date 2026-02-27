@@ -16,29 +16,29 @@ class FileStatus(str, Enum):
     Space Management: -> WaitingForSpace -> (retry) eller SpaceError (permanent)
     """
 
-    DISCOVERED = "Discovered"  # Fil fundet, men ikke stabil endnu
-    READY = "Ready"  # Fil er stabil og klar til kopiering
-    IN_QUEUE = "InQueue"  # Fil er tilføjet til job queue
-    COPYING = "Copying"  # Fil er ved at blive kopieret
-    COMPLETED = "Completed"  # Fil er succesfuldt kopieret og slettet
-    COMPLETED_DELETE_FAILED = "CompletedDeleteFailed"  # Fil er kopieret, men kunne ikke slettes
-    FAILED = "Failed"  # Fil kunne ikke kopieres (permanent fejl)
-    REMOVED = "Removed"  # Fil er forsvundet fra source (bevares som history)
+    DISCOVERED = "Discovered" # Fil fundet, men ikke stabil endnu
+    READY = "Ready" # Fil er stabil og klar til kopiering
+    IN_QUEUE = "InQueue" # Fil er tilføjet til job queue
+    COPYING = "Copying" # Fil er ved at blive kopieret
+    COMPLETED = "Completed" # Fil er succesfuldt kopieret og slettet
+    COMPLETED_DELETE_FAILED = "CompletedDeleteFailed" # Fil er kopieret, men kunne ikke slettes
+    FAILED = "Failed" # Fil kunne ikke kopieres (permanent fejl)
+    REMOVED = "Removed" # Fil er forsvundet fra source (bevares som history)
 
     # Growing file states
-    GROWING = "Growing"  # Fil er aktiv growing, størrelse ændres
+    GROWING = "Growing" # Fil er aktiv growing, størrelse ændres
     READY_TO_START_GROWING = (
-        "ReadyToStartGrowing"  # Fil >= minimum size for growing copy
+        "ReadyToStartGrowing" # Fil >= minimum size for growing copy
     )
-    GROWING_COPY = "GrowingCopy"  # Aktiv growing copy i gang
+    GROWING_COPY = "GrowingCopy" # Aktiv growing copy i gang
 
     # Space management states
-    WAITING_FOR_SPACE = "WaitingForSpace"  # Midlertidig plads mangel, venter på retry
-    SPACE_ERROR = "SpaceError"  # Permanent plads problem, kræver indgriben
+    WAITING_FOR_SPACE = "WaitingForSpace" # Midlertidig plads mangel, venter på retry
+    SPACE_ERROR = "SpaceError" # Permanent plads problem, kræver indgriben
 
     # Network management states
     WAITING_FOR_NETWORK = (
-        "WaitingForNetwork"  # Destination er offline, venter på netværk
+        "WaitingForNetwork" # Destination er offline, venter på netværk
     )
 
     # NOTE: Removed PAUSED_* states as part of fail-and-rediscover strategy
@@ -48,19 +48,19 @@ class FileStatus(str, Enum):
 class StorageStatus(str, Enum):
     """Storage status levels for monitoring disk space and accessibility"""
 
-    OK = "OK"  # Normal operation
-    WARNING = "WARNING"  # Low space warning
-    ERROR = "ERROR"  # Unmounted/inaccessible
-    CRITICAL = "CRITICAL"  # Very low space / read-only
+    OK = "OK" # Normal operation
+    WARNING = "WARNING" # Low space warning
+    ERROR = "ERROR" # Unmounted/inaccessible
+    CRITICAL = "CRITICAL" # Very low space / read-only
 
 
 class MountStatus(str, Enum):
     """Network mount operation status for real-time UI feedback"""
 
-    ATTEMPTING = "ATTEMPTING"  # Mount operation in progress
-    SUCCESS = "SUCCESS"  # Mount completed successfully
-    FAILED = "FAILED"  # Mount operation failed
-    NOT_CONFIGURED = "NOT_CONFIGURED"  # Network mount not configured
+    ATTEMPTING = "ATTEMPTING" # Mount operation in progress
+    SUCCESS = "SUCCESS" # Mount completed successfully
+    FAILED = "FAILED" # Mount operation failed
+    NOT_CONFIGURED = "NOT_CONFIGURED" # Network mount not configured
 
 
 

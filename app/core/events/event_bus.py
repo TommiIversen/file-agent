@@ -76,5 +76,5 @@ class DomainEventBus:
             logging.error(
                 f"Unhandled exception in handler '{handler.__name__}' for event "
                 f"'{type(event).__name__}': {e}",
-                exc_info=True,  # Include stack trace in the log
+                exc_info=True, # Include stack trace in the log
             )

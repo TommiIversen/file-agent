@@ -93,7 +93,7 @@ class FileRepository:
                         file.completed_at or 
                         file.failed_at or 
                         file.space_error_at or 
-                        file.discovered_at  # Fallback
+                        file.discovered_at # Fallback
                     )
 
                     if last_activity_time and last_activity_time < cutoff_date:

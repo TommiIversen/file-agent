@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Type, Callable, Awaitable, Any
-from app.core.cqrs.command import Command  # Importerer baseklassen
+from app.core.cqrs.command import Command # Importerer baseklassen
 
 logger = logging.getLogger(__name__)
 

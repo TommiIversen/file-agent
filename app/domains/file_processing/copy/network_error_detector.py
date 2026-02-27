@@ -14,7 +14,7 @@ class NetworkError(Exception):
 class NetworkErrorDetector:
     """
     Detects network errors early during copy operations for fail-fast behavior.
-    Nu med event publishing for NetworkCoordinator integration! 🚀
+    Nu med event publishing for NetworkCoordinator integration! 
     """
 
     # Network error indicators to check for
@@ -57,12 +57,12 @@ class NetworkErrorDetector:
         errno.EACCES,
         errno.ENOTCONN,
         errno.ECONNRESET,
-        errno.EINVAL,  # Can be network-related on Windows when destination unavailable
-        errno.ENOENT,  # Network path not found
-        errno.EACCES,  # Access denied (can be network mount issues)
+        errno.EINVAL, # Can be network-related on Windows when destination unavailable
+        errno.ENOENT, # Network path not found
+        errno.EACCES, # Access denied (can be network mount issues)
         53,
         67,
-        1231,  # Windows-specific network error codes
+        1231, # Windows-specific network error codes
     }
 
     def __init__(self, event_bus: Optional[DomainEventBus] = None, current_file_id: Optional[str] = None):
@@ -93,7 +93,7 @@ class NetworkErrorDetector:
         error_str = str(error).lower()
 
         if self._is_network_error_string(error_str) or self._is_network_errno(error):
-            # 🚀 PUBLICER EVENT FØR EXCEPTION!
+            # PUBLICER EVENT FØR EXCEPTION!
             if self._event_bus and self._current_file_id:
                 event = NetworkFailureDetectedEvent(
                     error_message=str(error),

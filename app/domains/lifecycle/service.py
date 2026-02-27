@@ -46,7 +46,7 @@ class LifecycleService:
             try:
                 await asyncio.sleep(self._prune_interval_seconds)
 
-                if not self._running:  # Check if we were stopped during sleep
+                if not self._running: # Check if we were stopped during sleep
                     break
 
                 logging.info("LifecycleService: Triggering PruneOldFilesCommand...")

@@ -52,8 +52,8 @@ class FileCopyCompletedEvent(DomainEvent):
     file_id: str
     file_path: str
     destination_path: str
-    bytes_copied: int  # Faktiske bytes kopieret (destination størrelse)
-    source_size: int = 0  # Source fil størrelse ved completion
+    bytes_copied: int # Faktiske bytes kopieret (destination størrelse)
+    source_size: int = 0 # Source fil størrelse ved completion
     dest_size: int = 0    # Destination fil størrelse ved completion
 
 

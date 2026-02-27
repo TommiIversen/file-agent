@@ -34,7 +34,7 @@ class GrowingFileCopyStrategy():
     ):
         self.settings = settings
         self.file_repository = file_repository
-        self._event_bus = event_bus  # 🚀 Fix: Use _event_bus (with underscore) for consistency
+        self._event_bus = event_bus # Fix: Use _event_bus (with underscore) for consistency
         self._state_machine = state_machine
         self._verification_service = verification_service
         self._io_loop = io_loop
@@ -52,7 +52,7 @@ class GrowingFileCopyStrategy():
             try:
                 current_size = await asyncio.wait_for(
                     aiofiles.os.path.getsize(source_path),
-                    timeout=1.0,  # 1 second timeout
+                    timeout=1.0, # 1 second timeout
                 )
             except asyncio.TimeoutError as e:
                 logging.error(f"File size check timed out for {source_path}")
@@ -70,7 +70,7 @@ class GrowingFileCopyStrategy():
             if is_growing_file and current_size < min_size_bytes:
                 size_mb = current_size / (1024 * 1024)
                 logging.info(
-                    f"⏳ WAITING FOR SIZE: {os.path.basename(source_path)} "
+                    f" WAITING FOR SIZE: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB < {self.settings.growing_file_min_size_mb}MB) - "
                     f"waiting for growing file to reach minimum size..."
                 )
@@ -83,12 +83,12 @@ class GrowingFileCopyStrategy():
                     try:
                         current_size = await asyncio.wait_for(
                             aiofiles.os.path.getsize(source_path),
-                            timeout=1.0,  # 1 second timeout
+                            timeout=1.0, # 1 second timeout
                         )
                         size_mb = current_size / (1024 * 1024)
 
                         logging.debug(
-                            f"📏 SIZE CHECK: {os.path.basename(source_path)} "
+                            f" SIZE CHECK: {os.path.basename(source_path)} "
                             f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
                         )
                     except asyncio.TimeoutError as e:
@@ -99,13 +99,13 @@ class GrowingFileCopyStrategy():
                         raise FileCopyIOError(f"Failed to check file size {source_path}: {e}") from e
 
                 logging.info(
-                    f"✅ SIZE REACHED: {os.path.basename(source_path)} "
+                    f" SIZE REACHED: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB >= {self.settings.growing_file_min_size_mb}MB) - starting copy"
                 )
             elif not is_growing_file:
                 size_mb = current_size / (1024 * 1024)
                 logging.info(
-                    f"📁 STATIC FILE: {os.path.basename(source_path)} "
+                    f" STATIC FILE: {os.path.basename(source_path)} "
                     f"({size_mb:.1f}MB) - starting immediate copy at full speed"
                 )
 
@@ -148,12 +148,12 @@ class GrowingFileCopyStrategy():
                                 new_status=FileStatus.COMPLETED_DELETE_FAILED,
                                 copy_progress=100.0,
                                 destination_path=dest_path,
-                                bytes_copied=actual_bytes_copied,  # Opdater med faktiske bytes
+                                bytes_copied=actual_bytes_copied, # Opdater med faktiske bytes
                                 error_message=f"Could not delete source file: {delete_error}"
                             )
                         except (InvalidTransitionError, ValueError) as e:
                             logging.error(f"Kunne ikke sætte status til COMPLETED_DELETE_FAILED for {tracked_file.id}: {e}")
-                        return True  # Still a success from a copy perspective
+                        return True # Still a success from a copy perspective
 
                     # Use state machine for atomic transition
                     try:
@@ -162,7 +162,7 @@ class GrowingFileCopyStrategy():
                             new_status=FileStatus.COMPLETED,
                             copy_progress=100.0,
                             destination_path=dest_path,
-                            bytes_copied=actual_bytes_copied,  # Opdater med faktiske bytes
+                            bytes_copied=actual_bytes_copied, # Opdater med faktiske bytes
                             error_message=None # Ryd fejl
                         )
 
@@ -173,8 +173,8 @@ class GrowingFileCopyStrategy():
                                     file_id=tracked_file.id,
                                     file_path=tracked_file.file_path,
                                     destination_path=dest_path,
-                                    bytes_copied=actual_bytes_copied,  # Brug faktiske kopierede bytes
-                                    source_size=source_bytes,  # Tilføj source størrelse
+                                    bytes_copied=actual_bytes_copied, # Brug faktiske kopierede bytes
+                                    source_size=source_bytes, # Tilføj source størrelse
                                     dest_size=dest_bytes       # Tilføj destination størrelse
                                 )
                             )
@@ -239,18 +239,18 @@ class GrowingFileCopyStrategy():
 
             if is_growing_file:
                 logging.info(
-                    f"🌱 GROWING COPY START: {os.path.basename(source_path)} "
+                    f" GROWING COPY START: {os.path.basename(source_path)} "
                     f"starting growing file copy with safety margins"
                 )
             else:
                 logging.info(
-                    f"⚡ STATIC COPY START: {os.path.basename(source_path)} "
+                    f" STATIC COPY START: {os.path.basename(source_path)} "
                     f"starting full-speed static file copy"
                 )
                 # For static files, disable safety margins and delays for maximum speed
                 safety_margin_bytes = 0
                 pause_ms = 0
-                no_growth_cycles = max_no_growth_cycles  # Skip growth detection
+                no_growth_cycles = max_no_growth_cycles # Skip growth detection
 
             async with aiofiles.open(dest_path, "wb") as dst:
                 bytes_copied = await self._growing_copy_loop(
@@ -303,7 +303,7 @@ class GrowingFileCopyStrategy():
         """
         # Static files start as "finished growing" to skip safety margins
         file_finished_growing = no_growth_cycles >= max_no_growth_cycles
-        last_progress_percent = -1  # Initialize with a value that ensures the first update is sent
+        last_progress_percent = -1 # Initialize with a value that ensures the first update is sent
         last_progress_update_time = datetime.now() - timedelta(seconds=1) # Initialize for immediate first update
 
         while True:
@@ -332,7 +332,7 @@ class GrowingFileCopyStrategy():
 
                     if no_growth_cycles >= max_no_growth_cycles:
                         logging.info(
-                            f"🎯 GROWTH STOPPED: {os.path.basename(source_path)} - switching to full speed copy"
+                            f" GROWTH STOPPED: {os.path.basename(source_path)} - switching to full speed copy"
                         )
                         file_finished_growing = True
 
@@ -350,12 +350,12 @@ class GrowingFileCopyStrategy():
                 if distance_from_write_head > buffer_zone:
                     use_pause = False
                     logging.debug(
-                        f"🚀 FULL SPEED: {distance_from_write_head / 1024 / 1024:.1f}MB ahead of write head"
+                        f" FULL SPEED: {distance_from_write_head / 1024 / 1024:.1f}MB ahead of write head"
                     )
                 else:
                     use_pause = True
                     logging.debug(
-                        f"🐌 THROTTLED: Only {distance_from_write_head / 1024 / 1024:.1f}MB from write head"
+                        f" THROTTLED: Only {distance_from_write_head / 1024 / 1024:.1f}MB from write head"
                     )
 
             if safe_copy_to > bytes_copied:
@@ -392,7 +392,7 @@ class GrowingFileCopyStrategy():
 
             if file_finished_growing and bytes_copied >= current_file_size:
                 logging.info(
-                    f"✅ COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)"
+                    f" COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)"
                 )
                 break
 

@@ -32,7 +32,7 @@ class IPPower9255Client(PowerSwitchProtocol):
     # Hardcoded credentials as requested
     DEFAULT_USERNAME = "admin"
     DEFAULT_PASSWORD = "12345678"
-    DEFAULT_OUTLET = "p61"  # Port 1
+    DEFAULT_OUTLET = "p61" # Port 1
 
     def __init__(self, ip_address: str, timeout_seconds: float = 2.0):
         """
@@ -74,7 +74,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             response = await client.get(url)
             response.raise_for_status()
             
-            logging.info(f"✅ IP Power 9255 turned ON (outlet {self.DEFAULT_OUTLET})")
+            logging.info(f" IP Power 9255 turned ON (outlet {self.DEFAULT_OUTLET})")
             return True
             
         except httpx.RequestError as e:
@@ -101,7 +101,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             response = await client.get(url)
             response.raise_for_status()
             
-            logging.info(f"⚫ IP Power 9255 turned OFF (outlet {self.DEFAULT_OUTLET})")
+            logging.info(f" IP Power 9255 turned OFF (outlet {self.DEFAULT_OUTLET})")
             return True
             
         except httpx.RequestError as e:
@@ -133,7 +133,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             # We can't determine the actual outlet state without parsing HTML,
             # so we'll just return True if the device is reachable
             logging.debug(f"IP Power 9255 is reachable at {self._ip_address}")
-            return True  # Device is reachable
+            return True # Device is reachable
             
         except httpx.RequestError as e:
             logging.warning(f"Cannot reach IP Power 9255 at {self._ip_address}: {e}")
@@ -204,7 +204,7 @@ class MockPowerSwitchClient(PowerSwitchProtocol):
             simulate_ip: Simulated IP address for logging
         """
         self._simulate_ip = simulate_ip
-        self._current_state = False  # OFF by default
+        self._current_state = False # OFF by default
         
         logging.info(f"MockPowerSwitchClient initialized (simulating {simulate_ip})")
 
@@ -216,13 +216,13 @@ class MockPowerSwitchClient(PowerSwitchProtocol):
     async def turn_on(self) -> bool:
         """Simulate turning the switch ON."""
         self._current_state = True
-        logging.info(f"🔴 Mock Switch ON (simulating {self._simulate_ip})")
+        logging.info(f" Mock Switch ON (simulating {self._simulate_ip})")
         return True
 
     async def turn_off(self) -> bool:
         """Simulate turning the switch OFF."""
         self._current_state = False
-        logging.info(f"⚫ Mock Switch OFF (simulating {self._simulate_ip})")
+        logging.info(f" Mock Switch OFF (simulating {self._simulate_ip})")
         return True
 
     async def get_status(self) -> bool:

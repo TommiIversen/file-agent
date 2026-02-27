@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 # Importer fra de nye, domæne-specifikke placeringer
-from app.dependencies import get_query_bus  # Antager du har en get_query_bus
+from app.dependencies import get_query_bus # Antager du har en get_query_bus
 from app.core.cqrs.query_bus import QueryBus
 from app.domains.directory_browsing.models import DirectoryScanResult
 from app.domains.directory_browsing.queries import (
@@ -21,7 +21,7 @@ directory_router = APIRouter(
 async def scan_source_directory(
     recursive: bool = True,
     max_depth: int = 3,
-    query_bus: QueryBus = Depends(get_query_bus)  # <-- ÆNDRET
+    query_bus: QueryBus = Depends(get_query_bus) # <-- ÆNDRET
 ) -> DirectoryScanResult:
     try:
         # Opret en Query i stedet for at kalde en service

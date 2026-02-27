@@ -2,11 +2,11 @@
 
 import logging
 from app.core.cqrs.query_bus import QueryBus
-from app.core.events.event_bus import DomainEventBus  # <-- 1. Importer EventBus
+from app.core.events.event_bus import DomainEventBus # <-- 1. Importer EventBus
 from app.dependencies import (
     get_file_repository, 
     get_storage_monitor,
-    get_presentation_event_handlers  # <-- 2. Importer din handler-getter
+    get_presentation_event_handlers # <-- 2. Importer din handler-getter
 )
 
 # Importer de queries, den håndterer (som før)

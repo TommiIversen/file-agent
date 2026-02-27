@@ -31,7 +31,7 @@ class TallyLightStatus(BaseModel):
     Used for status reporting and monitoring.
     """
     current_state: TallyState
-    last_update: str  # ISO timestamp
+    last_update: str # ISO timestamp
     error_message: Optional[str] = None
     blink_active: bool = False
     
@@ -47,7 +47,7 @@ class TallyLightCommand(BaseModel):
     Used when manual control is needed.
     """
     target_state: TallyState
-    duration_seconds: Optional[int] = None  # For timed operations
+    duration_seconds: Optional[int] = None # For timed operations
     
     class Config:
         """Pydantic configuration for the model"""

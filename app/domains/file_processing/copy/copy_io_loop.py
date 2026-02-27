@@ -39,7 +39,7 @@ class CopyIoLoop:
     async def copy_chunk_range(
         self,
         source_path: str,
-        dst,  # Dette er den åbne fil-handler
+        dst, # Dette er den åbne fil-handler
         start_bytes: int,
         end_bytes: int,
         chunk_size: int,
@@ -162,7 +162,7 @@ class CopyIoLoop:
                         try:
                             await self._state_machine.transition(
                                 file_id=tracked_file.id,
-                                new_status=status,  # (COPYING or GROWING_COPY)
+                                new_status=status, # (COPYING or GROWING_COPY)
                                 copy_progress=copy_ratio,
                                 bytes_copied=bytes_copied,
                                 file_size=current_file_size,

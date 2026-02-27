@@ -12,7 +12,7 @@ class ScanConfiguration:
     source_directory: str
     polling_interval_seconds: int
     file_stable_time_seconds: int
-    keep_files_hours: int  # Applies to ALL file types, not just completed
+    keep_files_hours: int # Applies to ALL file types, not just completed
 
     # Growing file settings
     growing_file_poll_interval_seconds: int = 5

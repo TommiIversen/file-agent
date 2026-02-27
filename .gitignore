@@ -212,4 +212,8 @@ logs/
 # Tailwind CSS standalone executable
 tailwind/tailwindcss-windows-x64.exe
 
+# PyInstaller build artifacts
+build/
+dist/
+
 node_modules/

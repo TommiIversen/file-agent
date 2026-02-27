@@ -1,5 +1,5 @@
 """
-NetworkCoordinator - Central koordinator for netværksstatus! 🚀
+NetworkCoordinator - Central koordinator for netværksstatus! 
 
 Denne klasse er hjertet i vores nye event-baserede netværksarkitektur.
 Den lytter efter events fra flere kilder og publicerer autoritativ NetworkStatusChanged.
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class NetworkCoordinator:
     """
-    🎯 Central koordinator for alle netværksstatus-beslutninger.
+     Central koordinator for alle netværksstatus-beslutninger.
     
     Implementerer Smart Network Status Logic:
     - Øjeblikkelig fejl fra copy operations trigger omgående status change
@@ -44,7 +44,7 @@ class NetworkCoordinator:
         self._network_available: bool = True
         self._last_status_change: Optional[datetime] = None
         self._last_failure_reason: Optional[str] = None
-        logger.info("🚀 NetworkCoordinator initialized - network status: AVAILABLE")
+        logger.info(" NetworkCoordinator initialized - network status: AVAILABLE")
 
     @property 
     def is_network_available(self) -> bool:
@@ -63,12 +63,12 @@ class NetworkCoordinator:
 
     async def handle_network_failure_detected(self, event: NetworkFailureDetectedEvent):
         """
-        🔥 Håndter øjeblikkelig netværksfejl fra copy operationer.
+         Håndter øjeblikkelig netværksfejl fra copy operationer.
         
         Dette er ØJEBLIKKELIG feedback - reagér hurtigt!
         """
         logger.warning(
-            f"🔥 ØJEBLIKKELIG netværksfejl detekteret! "
+            f" ØJEBLIKKELIG netværksfejl detekteret! "
             f"File: {event.file_id}, Operation: {event.operation}, "
             f"Error: {event.error_message}"
         )
@@ -81,12 +81,12 @@ class NetworkCoordinator:
 
     async def handle_destination_unavailable(self, event: DestinationUnavailableEvent):
         """
-        📡 Håndter periodisk fejl fra StorageMonitor.
+         Håndter periodisk fejl fra StorageMonitor.
         
         Dette bekræfter langvarig utilgængelighed.
         """
         logger.warning(
-            f"📡 StorageMonitor bekræfter destination utilgængelig: {event.reason}"
+            f" StorageMonitor bekræfter destination utilgængelig: {event.reason}"
         )
         
         await self._update_network_status(
@@ -97,12 +97,12 @@ class NetworkCoordinator:
 
     async def handle_destination_recovered(self, event: DestinationRecoveredEvent):
         """
-        ✅ Håndter recovery fra StorageMonitor.
+         Håndter recovery fra StorageMonitor.
         
         Netværk er igen tilgængeligt!
         """
         logger.info(
-            f"✅ Netværk RECOVERED! StorageMonitor rapporterer: {event.reason}"
+            f" Netværk RECOVERED! StorageMonitor rapporterer: {event.reason}"
         )
         
         await self._update_network_status(
@@ -113,7 +113,7 @@ class NetworkCoordinator:
 
     async def _update_network_status(self, available: bool, reason: str, source: str):
         """
-        🎯 Opdater netværksstatus og publicer autoritativ NetworkStatusChanged.
+         Opdater netværksstatus og publicer autoritativ NetworkStatusChanged.
         
         Args:
             available: Er netværk tilgængeligt? 
@@ -140,11 +140,11 @@ class NetworkCoordinator:
         if previous_status != available:
             print("DEBUG: Status changed! Publishing event...")
             logger.info(
-                f"🎯 NETWORK STATUS CHANGED: {status_text} "
+                f" NETWORK STATUS CHANGED: {status_text} "
                 f"(reason: {reason}, source: {source})"
             )
             
-            # 🚀 PUBLICER AUTORITATIV EVENT!
+            # PUBLICER AUTORITATIV EVENT!
             event = NetworkStatusChanged(
                 available=available,
                 reason=reason,
@@ -166,7 +166,7 @@ class NetworkCoordinator:
 
     async def get_status_summary(self) -> dict:
         """
-        📊 Få komplet status sammenfatning for debugging/monitoring.
+         Få komplet status sammenfatning for debugging/monitoring.
         """
         return {
             "network_available": self._network_available,

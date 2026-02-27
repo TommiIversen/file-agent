@@ -11,7 +11,7 @@ from enum import Enum
 class PowerSwitchType(Enum):
     """Supported power switch types."""
     IP_POWER_9255 = "ip_power_9255"
-    MOCK = "mock"  # For development/testing
+    MOCK = "mock" # For development/testing
 
 
 class PowerSwitchProtocol(ABC):

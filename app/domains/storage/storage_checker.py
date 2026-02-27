@@ -19,7 +19,7 @@ class StorageAccessError(Exception):
 class StorageChecker:
     def __init__(self, test_file_prefix: str = ".storage_test_"):
         self._test_file_prefix = test_file_prefix
-        self._io_timeout = 3.0  # 3 sekunders timeout for skrive-operationer
+        self._io_timeout = 3.0 # 3 sekunders timeout for skrive-operationer
 
     async def check_path(
         self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
@@ -78,7 +78,7 @@ class StorageChecker:
 
             return await asyncio.wait_for(
                 _async_check(),
-                timeout=3.0,  # Reduced from 5 to 3 seconds for faster response
+                timeout=3.0, # Reduced from 5 to 3 seconds for faster response
             )
         except asyncio.TimeoutError:
             logging.warning(f"Accessibility check timed out for {path}")
@@ -101,7 +101,7 @@ class StorageChecker:
 
             free_gb, total_gb, used_gb = await asyncio.wait_for(
                 asyncio.to_thread(_sync_disk_usage),
-                timeout=5.0,  # Reduced from 10 to 5 seconds
+                timeout=5.0, # Reduced from 10 to 5 seconds
             )
 
             logging.debug(
@@ -142,7 +142,7 @@ class StorageChecker:
             try:
                 await asyncio.wait_for(f.write("storage_write_test"), timeout=self._io_timeout)
             finally:
-                await f.close()  # Luk filen manuelt
+                await f.close() # Luk filen manuelt
 
             logging.debug(f"Test file created: {test_file_path}")
             return test_file_path

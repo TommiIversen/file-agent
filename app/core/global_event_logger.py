@@ -1,5 +1,5 @@
 """
-GlobalEventLogger - In-memory event logging for UI visibility 📊
+GlobalEventLogger - In-memory event logging for UI visibility 
 
 En singleton service der abonnerer på kritiske domæne-events og gemmer dem
 i en in-memory deque for UI'et at forespørge.
@@ -20,8 +20,8 @@ class LoggedEvent:
     timestamp: datetime
     event_type: str
     message: str
-    level: str  # INFO, WARNING, ERROR
-    context: Optional[dict] = None  # Extra context data
+    level: str # INFO, WARNING, ERROR
+    context: Optional[dict] = None # Extra context data
 
     def to_dict(self):
         result = {
@@ -93,7 +93,7 @@ class GlobalEventLogger:
             context=context
         )
         async with self._lock:
-            self._events.appendleft(log_entry)  # Tilføj i starten (nyeste først)
+            self._events.appendleft(log_entry) # Tilføj i starten (nyeste først)
 
     async def get_all_logs(self, limit: Optional[int] = None) -> List[dict]:
         """Henter alle gemte logs (thread-safe) med optional limit."""
@@ -142,7 +142,7 @@ class GlobalEventLogger:
         if isinstance(event, DestinationUnavailableEvent):
             await self._add_log(
                 event, 
-                f"🔴 Destination utilgængelig: {event.reason}", 
+                f" Destination utilgængelig: {event.reason}", 
                 "ERROR",
                 {"reason": event.reason}
             )
@@ -153,7 +153,7 @@ class GlobalEventLogger:
         if isinstance(event, DestinationRecoveredEvent):
             await self._add_log(
                 event, 
-                f"✅ Destination recovered: {event.reason}", 
+                f" Destination recovered: {event.reason}", 
                 "INFO",
                 {"reason": event.reason}
             )
@@ -168,14 +168,14 @@ class GlobalEventLogger:
                 if not event.available:
                     await self._add_log(
                         event, 
-                        f"🔴 Netværk nede: {event.reason} (kilde: {event.source})", 
+                        f" Netværk nede: {event.reason} (kilde: {event.source})", 
                         "ERROR",
                         {"source": event.source, "reason": event.reason}
                     )
                 else:
                     await self._add_log(
                         event, 
-                        f"🌐 Netværk recovered: {event.reason} (kilde: {event.source})", 
+                        f" Netværk recovered: {event.reason} (kilde: {event.source})", 
                         "INFO",
                         {"source": event.source, "reason": event.reason}
                     )
@@ -186,7 +186,7 @@ class GlobalEventLogger:
                 level = "ERROR" if not event.available else "INFO"
                 await self._add_log(
                     event, 
-                    f"🌐 Netværk {status}", 
+                    f" Netværk {status}", 
                     level
                 )
 
@@ -196,7 +196,7 @@ class GlobalEventLogger:
         if isinstance(event, NetworkFailureDetectedEvent):
             await self._add_log(
                 event, 
-                f"🔥 Netværksfejl under kopiering: {event.error_message}", 
+                f" Netværksfejl under kopiering: {event.error_message}", 
                 "ERROR",
                 {
                     "file_id": event.file_id,
@@ -213,7 +213,7 @@ class GlobalEventLogger:
             if isinstance(event, FileCopyFailedEvent):
                 await self._add_log(
                     event, 
-                    f"⚠️ Filkopiering fejlede: {event.error_message}", 
+                    f" Filkopiering fejlede: {event.error_message}", 
                     "WARNING",
                     {"file_path": getattr(event, 'file_path', 'unknown')}
                 )
@@ -222,7 +222,7 @@ class GlobalEventLogger:
             if hasattr(event, 'error_message'):
                 await self._add_log(
                     event, 
-                    f"⚠️ Filkopiering fejlede: {event.error_message}", 
+                    f" Filkopiering fejlede: {event.error_message}", 
                     "WARNING"
                 )
 
@@ -236,7 +236,7 @@ class GlobalEventLogger:
                 # Only log transitions to error states for UI visibility
                 if hasattr(event, 'new_status'):
                     if event.new_status in [FileStatus.FAILED, FileStatus.SPACE_ERROR]:
-                        status_emoji = "❌" if event.new_status == FileStatus.FAILED else "💾"
+                        status_emoji = "" if event.new_status == FileStatus.FAILED else ""
                         await self._add_log(
                             event, 
                             f"{status_emoji} Fil status: {event.file_path} → {event.new_status.value}", 
@@ -248,7 +248,7 @@ class GlobalEventLogger:
                             }
                         )
         except (ImportError, AttributeError):
-            pass  # Skip if event structure doesn't match
+            pass # Skip if event structure doesn't match
 
     async def handle_storage_status_changed(self, event):
         """Handler for StorageStatusChangedEvent"""
@@ -259,7 +259,7 @@ class GlobalEventLogger:
             if isinstance(event, StorageStatusChangedEvent):
                 # Log storage status changes for UI visibility
                 update = event.update
-                status_emoji = "✅" if update.new_status == StorageStatus.OK else "⚠️"
+                status_emoji = "" if update.new_status == StorageStatus.OK else ""
                 level = "INFO" if update.new_status == StorageStatus.OK else "WARNING"
                 
                 await self._add_log(
@@ -276,7 +276,7 @@ class GlobalEventLogger:
                     }
                 )
         except (ImportError, AttributeError):
-            pass  # Skip if event structure doesn't match
+            pass # Skip if event structure doesn't match
 
     async def handle_mount_status_changed(self, event):
         """Handler for MountStatusChangedEvent"""
@@ -287,7 +287,7 @@ class GlobalEventLogger:
             if isinstance(event, MountStatusChangedEvent):
                 # Log mount status changes for UI visibility
                 update = event.update
-                status_emoji = "✅" if update.mount_status == MountStatus.SUCCESS else "❌"
+                status_emoji = "" if update.mount_status == MountStatus.SUCCESS else ""
                 level = "INFO" if update.mount_status == MountStatus.SUCCESS else "ERROR"
                 
                 await self._add_log(
@@ -302,7 +302,7 @@ class GlobalEventLogger:
                     }
                 )
         except (ImportError, AttributeError):
-            pass  # Skip if event structure doesn't match
+            pass # Skip if event structure doesn't match
 
     async def handle_scanner_status_changed(self, event):
         """Handler for ScannerStatusChangedEvent"""
@@ -311,7 +311,7 @@ class GlobalEventLogger:
             
             if isinstance(event, ScannerStatusChangedEvent):
                 # Log scanner status changes for UI visibility  
-                status_emoji = "🔍" if event.is_active else "⏹️"
+                status_emoji = "" if event.is_active else ""
                 level = "INFO"
                 
                 status_text = "started" if event.is_active else "stopped"
@@ -325,13 +325,13 @@ class GlobalEventLogger:
                     }
                 )
         except (ImportError, AttributeError):
-            pass  # Skip if event structure doesn't match
+            pass # Skip if event structure doesn't match
 
     # Generic handler for any unhandled events we might want to log
     async def handle_generic_event(self, event: DomainEvent):
         """Generic handler for events not specifically handled above"""
         await self._add_log(
             event,
-            f"📋 System event: {type(event).__name__}",
+            f" System event: {type(event).__name__}",
             "INFO"
         )

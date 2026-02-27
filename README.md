@@ -72,30 +72,65 @@ Set `OUTPUT_FOLDER_TEMPLATE_ENABLED=false` to copy all files directly to destina
 
 ## Architectural Overview
 
-This application is built on a clean, decoupled architecture inspired by SOLID principles, primarily using a **Producer-Consumer** pattern. This design ensures robustness and maintainability.
+This application uses a clean, domain-driven architecture with CQRS and an event bus, built on a **Producer-Consumer** pattern.
 
-The core components reside in the `app/services` directory:
+- **`app/core/`** — Generic infrastructure: `FileRepository`, `FileStateMachine`, `EventBus`, `CommandBus`, `QueryBus`
+- **`app/domains/file_discovery/`** — The Producer. Scans source directories, detects stable/growing files
+- **`app/domains/file_processing/`** — The Consumer. Job queue, copy workers, retry logic
+- **`app/domains/presentation/`** — Web UI, WebSocket real-time updates, Jinja2 templates
+- **`app/domains/network_mount/`** — Network share mounting and health monitoring
+- **`app/domains/lifecycle/`** — Periodic cleanup of completed/old files
+- **`app/domains/ingest_monitor/`** — Just In Engine status monitoring
+- **`app/domains/tally_light/`** — Recording indicator light control
 
-- **`StateManager` (The Brain):** This is the single source of truth. It's a singleton service that holds the state of every file (`TrackedFile`) in a thread-safe manner. It uses a pub/sub model to notify other services of state changes.
-
-- **`FileScannerService` (The Producer):** This service continuously scans the source directory. It discovers new files, determines if they are "stable" (no longer being written to) or "growing," and updates their status in the `StateManager`.
-
-- **`JobQueueService` (The Buffer):** This service listens for files that become `READY` in the `StateManager` and adds them to an `asyncio.Queue`. This decouples the file discovery process from the copying process.
-
-- **`FileCopyService` & `JobProcessor` (The Consumer):** These services work together to consume jobs from the queue. `JobProcessor` handles the logic for a single job (like checking for destination space), while `FileCopyService` manages the worker pool.
-
-
-- **`WebSocketManager` (The Notifier):** This service subscribes to the `StateManager` and broadcasts any state changes to the web UI in real-time, providing a live view of the operations.
-
-This decoupled nature means that each component has a single responsibility, making the system easier to understand, test, and scale.
+Domains communicate via the EventBus (async, loose coupling) and QueryBus (sync queries across domains). Direct imports between domains are forbidden.
 
 ## Installation
 
-### Prerequisites
-- **Python 3.13+** (required)
-- **pip** (usually included with Python)
+### One-Command Install (macOS — no Python required)
 
-### Quick Setup
+On a fresh Mac, run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash
+```
+
+This will:
+- Download the latest pre-built binary from GitHub Releases
+- Install to `/usr/local/share/file-agent/`
+- Set up a launchd service (auto-start on boot + restart on crash)
+- Create a default config at `~/.config/file-agent/settings.env`
+- Open the web UI at http://localhost:8000
+
+**Install a specific version:**
+```bash
+curl -fsSL .../install.sh | bash -s -- --version v1.2.0
+```
+
+**Upgrade:**
+```bash
+curl -fsSL .../install.sh | bash -s -- --upgrade
+```
+
+**Uninstall:**
+```bash
+curl -fsSL .../install.sh | bash -s -- --uninstall
+```
+
+### Releasing a New Version
+
+Push a git tag to trigger an automated build:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions will build a macOS binary and publish it as a GitHub Release. Tags containing `-` (e.g. `v1.1.0-beta`) are marked as pre-release.
+
+### Development Setup
+
+For local development (requires Python 3.13+):
 
 1. **Install dependencies:**
 ```bash
@@ -106,9 +141,6 @@ pip install -r requirements.txt
 ```bash
 # Development mode (with auto-reload)
 uvicorn app.main:app --reload
-
-# Or alternatively:
-python -m uvicorn app.main:app --reload
 
 # Production mode (external access)
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000

@@ -77,11 +77,11 @@ class JobQueueService:
             waiting_files = [f for f in all_files if f.status == FileStatus.WAITING_FOR_NETWORK]
 
             if not waiting_files:
-                logging.info("🌐 NETWORK RECOVERY: No files waiting for network")
+                logging.info(" NETWORK RECOVERY: No files waiting for network")
                 return
 
             logging.info(
-                f"🌐 NETWORK RECOVERY: Processing {len(waiting_files)} files waiting for network"
+                f" NETWORK RECOVERY: Processing {len(waiting_files)} files waiting for network"
             )
 
             for tracked_file in waiting_files:
@@ -94,13 +94,13 @@ class JobQueueService:
                         # For growing files, transition back to READY_TO_START_GROWING
                         new_status = FileStatus.READY_TO_START_GROWING
                         logging.info(
-                            f"🔄 NETWORK RECOVERY: Growing file {tracked_file.file_path} -> READY_TO_START_GROWING"
+                            f" NETWORK RECOVERY: Growing file {tracked_file.file_path} -> READY_TO_START_GROWING"
                         )
                     else:
                         # For regular files, transition back to DISCOVERED for re-evaluation
                         new_status = FileStatus.DISCOVERED
                         logging.info(
-                            f"🔄 NETWORK RECOVERY: Regular file {tracked_file.file_path} -> DISCOVERED"
+                            f" NETWORK RECOVERY: Regular file {tracked_file.file_path} -> DISCOVERED"
                         )
                     
                     await self._state_machine.transition(
@@ -113,20 +113,20 @@ class JobQueueService:
                     logging.warning(f"Kunne ikke re-aktivere fil {tracked_file.id}: {e}")
                 except Exception as e:
                     logging.error(
-                        f"❌ Error reactivating {tracked_file.file_path}: {e}"
+                        f" Error reactivating {tracked_file.file_path}: {e}"
                     )
 
             logging.info(
-                f"✅ NETWORK RECOVERY: Completed processing {len(waiting_files)} files"
+                f" NETWORK RECOVERY: Completed processing {len(waiting_files)} files"
             )
 
         except Exception as e:
-            logging.error(f"❌ Error processing waiting network files: {e}")
+            logging.error(f" Error processing waiting network files: {e}")
 
     async def handle_destination_unavailable(self) -> None:
         """Handle destination becoming unavailable - similar to previous StateManager version"""
         try:
-            logging.info("🔴 DESTINATION UNAVAILABLE: Network disruption detected")
+            logging.info(" DESTINATION UNAVAILABLE: Network disruption detected")
             
             # In the previous version, files would automatically be checked for network availability
             # before queueing in _handle_state_change. Here we don't need to do much since:
@@ -134,10 +134,10 @@ class JobQueueService:
             # 2. Files in queue will be handled by consumer with retry logic
             # 3. Recovery happens through process_waiting_network_files()
             
-            logging.info("⏸️ Destination unavailable handling completed - relying on existing network checks")
+            logging.info(" Destination unavailable handling completed - relying on existing network checks")
             
         except Exception as e:
-            logging.error(f"❌ Error handling destination unavailable: {e}")
+            logging.error(f" Error handling destination unavailable: {e}")
 
     def get_queue(self) -> Optional[asyncio.PriorityQueue[QueueJob]]:
         """

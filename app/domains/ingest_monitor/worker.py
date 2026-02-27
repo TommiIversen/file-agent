@@ -155,13 +155,13 @@ class IngestMonitorWorker:
         """Slow polling loop - orchestrates active channels and error checking."""
         while self._running:
             try:
-                await asyncio.sleep(self._slow_poll_interval)  # Wait first, then check
-                if self._running:  # Check if still running after sleep
+                await asyncio.sleep(self._slow_poll_interval) # Wait first, then check
+                if self._running: # Check if still running after sleep
                     # Update active channels via API client and StateService
                     active_channels = await self._api_client.get_active_channels()
                     
                     # Set connection status based on API success
-                    if active_channels is not None:  # Empty list is valid, None indicates failure
+                    if active_channels is not None: # Empty list is valid, None indicates failure
                         await self._state_service.set_connection_status(True)
                         await self._state_service.update_active_channels(active_channels)
                     else:

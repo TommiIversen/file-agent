@@ -98,7 +98,7 @@ class GrowingFileDetector:
                     file_id=tracked_file.id,
                     file_size=current_size,
                     previous_file_size=tracked_file.file_size,
-                    growth_stable_since=None,  # Reset stability timer
+                    growth_stable_since=None, # Reset stability timer
                     last_growth_check=current_time,
                 )
                 await self._command_bus.execute(command)

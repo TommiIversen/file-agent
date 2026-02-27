@@ -101,7 +101,7 @@ class FileStateMachine:
 
     async def transition(
         self,
-        *,  # Force all parameters to be keyword-only
+        *, # Force all parameters to be keyword-only
         file_id: str,
         new_status: FileStatus,
         **kwargs

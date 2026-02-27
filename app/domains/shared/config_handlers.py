@@ -82,7 +82,7 @@ class RestartApplicationCommandHandler:
 
             # Schedule restart after a short delay to allow response to be sent
             async def delayed_restart():
-                await asyncio.sleep(2)  # Give time for response to be sent
+                await asyncio.sleep(2) # Give time for response to be sent
                 logging.info("Restarting application via CQRS Command...")
 
                 # Get the current Python executable and original command

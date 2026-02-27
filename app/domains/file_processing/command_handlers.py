@@ -27,16 +27,16 @@ class QueueFileCommandHandler:
     
     def __init__(
         self,
-        job_queue_service,  # Pass the service instead of the queue directly
+        job_queue_service, # Pass the service instead of the queue directly
         file_repository: FileRepository,
         state_machine: FileStateMachine,
-        network_coordinator,  # 🚀 NetworkCoordinator instead of storage_monitor!
+        network_coordinator, # NetworkCoordinator instead of storage_monitor!
         copy_strategy: GrowingFileCopyStrategy,
     ):
         self._job_queue_service = job_queue_service
         self._file_repository = file_repository
         self._state_machine = state_machine
-        self._network_coordinator = network_coordinator  # 🎯 Single source of truth!
+        self._network_coordinator = network_coordinator # Single source of truth!
         self._copy_strategy = copy_strategy
 
     async def handle(self, command: QueueFileCommand):
@@ -153,7 +153,7 @@ class ProcessJobCommandHandler:
                 if not space_check.has_space:
                     # Handle space shortage and return early
                     await self._space_manager.handle_space_shortage(job, space_check)
-                    return  # Space shortage handled, job processing complete
+                    return # Space shortage handled, job processing complete
 
             # Step 2: File preparation
             prepared_file = await self._file_preparation_service.prepare_file_for_copy(job)

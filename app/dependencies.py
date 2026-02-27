@@ -164,7 +164,7 @@ def get_job_copy_executor() -> JobCopyExecutor:
             settings=get_settings(),
             file_repository=get_file_repository(),
             copy_strategy=get_copy_strategy(),
-            state_machine=get_file_state_machine(),  # <-- TILFØJ DENNE
+            state_machine=get_file_state_machine(), # <-- TILFØJ DENNE
             error_classifier=get_job_error_classifier(),
             event_bus=get_event_bus()
         )
@@ -211,7 +211,7 @@ def get_network_mount_service() -> NetworkMountService:
 
 def get_network_coordinator():
     """
-    🚀 Get NetworkCoordinator - Single Source of Truth for network status!
+     Get NetworkCoordinator - Single Source of Truth for network status!
     
     Returns the NetworkCoordinator instance that was created during
     network_mount domain registration.
@@ -338,7 +338,7 @@ def get_tally_switch_monitor() -> TallySwitchMonitorService:
         
         settings = get_settings()
         # Get IP address from settings - use correct field name
-        ip_address = settings.tally_light_switch_ip  # From config.py
+        ip_address = settings.tally_light_switch_ip # From config.py
         
         # Create switch client with IP address
         switch_client = IPPower9255Client(ip_address=ip_address)

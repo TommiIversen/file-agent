@@ -34,7 +34,7 @@ class IngestStateService:
         """Initialize state service with event bus for publishing changes."""
         self._event_bus = event_bus
         self._status_cache: Dict[str, ChannelState] = {}
-        self._is_connected: bool = False  # Track connection status
+        self._is_connected: bool = False # Track connection status
         logging.debug("IngestStateService initialized")
 
     def get_status_cache(self) -> Dict[str, dict]:
@@ -74,10 +74,10 @@ class IngestStateService:
         if self._is_connected != is_connected:
             self._is_connected = is_connected
             if is_connected:
-                logging.info("🟢 Ingest monitor connected to Just In Engine")
+                logging.info(" Ingest monitor connected to Just In Engine")
                 await self._event_bus.publish(IngestOnlineEvent())
             else:
-                logging.warning("🔴 Ingest monitor disconnected from Just In Engine")
+                logging.warning(" Ingest monitor disconnected from Just In Engine")
                 await self._event_bus.publish(IngestOfflineEvent())
 
     def add_new_channels(self, channel_names: List[str]) -> None:
@@ -130,8 +130,8 @@ class IngestStateService:
                 name=channel_name,
                 is_recording=status_data.rec,
                 has_signal=status_data.options.TOAJustInEngineVideoSignalAvailable,
-                has_errors=old_state.has_errors,  # Preserve from slow loop
-                last_errors=old_state.last_errors,  # Preserve from slow loop
+                has_errors=old_state.has_errors, # Preserve from slow loop
+                last_errors=old_state.last_errors, # Preserve from slow loop
                 frames=status_data.frames,
                 hours=status_data.hours,
                 minutes=status_data.minutes,
@@ -260,7 +260,7 @@ class IngestStateService:
                     name=state.name,
                     is_recording=state.is_recording,
                     has_signal=state.has_signal,
-                    has_errors=False,  # Clear the error flag
+                    has_errors=False, # Clear the error flag
                     last_errors=[],    # Clear the error list
                     frames=state.frames,
                     hours=state.hours,

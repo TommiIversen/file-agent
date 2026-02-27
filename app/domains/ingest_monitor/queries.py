@@ -17,4 +17,4 @@ class GetIngestStatusQuery(Query):
     This provides the current state of all Just In Engine channels
     including recording status, signal availability, and error conditions.
     """
-    pass  # No parameters needed - returns complete status snapshot
+    pass # No parameters needed - returns complete status snapshot

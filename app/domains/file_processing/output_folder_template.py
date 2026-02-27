@@ -166,7 +166,7 @@ class OutputFolderTemplateEngine:
         # Extract date based on format specification
         if self.date_format.startswith("filename[") and self.date_format.endswith("]"):
             # Extract slice notation: filename[0:6]
-            slice_part = self.date_format[9:-1]  # Remove 'filename[' and ']'
+            slice_part = self.date_format[9:-1] # Remove 'filename[' and ']'
 
             try:
                 if ":" in slice_part:
@@ -182,7 +182,7 @@ class OutputFolderTemplateEngine:
                 self.logger.warning(
                     f"Error extracting date from filename '{filename}': {e}"
                 )
-                variables["date"] = filename[:6]  # Fallback to first 6 chars
+                variables["date"] = filename[:6] # Fallback to first 6 chars
         else:
             # Default: first 6 characters
             variables["date"] = filename[:6]

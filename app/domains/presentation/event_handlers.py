@@ -115,11 +115,11 @@ class PresentationEventHandlers:
             "data": {
                 "file_id": event.file_id,
                 "bytes_copied": event.bytes_copied,
-                "total_bytes": event.bytes_copied,  # Use actual copied bytes for final update
-                "copy_speed_mbps": 0.0,  # Speed is 0 since copy is done
-                "progress_percent": 100.0,  # Explicitly set to 100%
+                "total_bytes": event.bytes_copied, # Use actual copied bytes for final update
+                "copy_speed_mbps": 0.0, # Speed is 0 since copy is done
+                "progress_percent": 100.0, # Explicitly set to 100%
                 "timestamp": event.timestamp.isoformat(),
-                "is_final": True,  # Flag to indicate this is the final progress update
+                "is_final": True, # Flag to indicate this is the final progress update
             },
         }
         self.websocket_manager.broadcast_message(message_data)
@@ -131,10 +131,10 @@ class PresentationEventHandlers:
                 "file_id": event.file_id,
                 "file_path": event.file_path,
                 "destination_path": event.destination_path,
-                "bytes_copied": event.bytes_copied,  # Faktiske kopierede bytes
+                "bytes_copied": event.bytes_copied, # Faktiske kopierede bytes
                 "source_size": event.source_size,    # Original source størrelse
                 "dest_size": event.dest_size,        # Destination størrelse
-                "is_growing_file": event.source_size != event.dest_size,  # Flag for growing files
+                "is_growing_file": event.source_size != event.dest_size, # Flag for growing files
                 "timestamp": event.timestamp.isoformat(),
             },
         }
@@ -214,7 +214,7 @@ class PresentationEventHandlers:
 
     async def handle_ingest_online_event(self, event: IngestOnlineEvent) -> None:
         """Handle ingest monitor connecting to Just In Engine."""
-        logging.info("🟢 Ingest monitor connected to Just In Engine")
+        logging.info(" Ingest monitor connected to Just In Engine")
         
         message_data = {
             "type": "ingest_online",
@@ -227,7 +227,7 @@ class PresentationEventHandlers:
 
     async def handle_ingest_offline_event(self, event: IngestOfflineEvent) -> None:
         """Handle ingest monitor disconnecting from Just In Engine."""
-        logging.warning("🔴 Ingest monitor disconnected from Just In Engine")
+        logging.warning(" Ingest monitor disconnected from Just In Engine")
         
         message_data = {
             "type": "ingest_offline",
@@ -264,7 +264,7 @@ class PresentationEventHandlers:
         """Handle tally switch coming online."""
         status = event.status
         
-        logging.info(f"🟢 Tally switch {status.ip_address} came ONLINE")
+        logging.info(f" Tally switch {status.ip_address} came ONLINE")
         
         message_data = {
             "type": "tally_switch_online",
@@ -282,7 +282,7 @@ class PresentationEventHandlers:
         """Handle tally switch going offline."""
         status = event.status
         
-        logging.warning(f"🔴 Tally switch {status.ip_address} went OFFLINE")
+        logging.warning(f" Tally switch {status.ip_address} went OFFLINE")
         
         message_data = {
             "type": "tally_switch_offline",

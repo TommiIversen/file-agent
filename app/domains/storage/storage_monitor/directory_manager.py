@@ -27,7 +27,7 @@ class DirectoryManager:
             try:
                 await asyncio.wait_for(
                     self._create_directory_async(path_obj),
-                    timeout=2.0,  # Reduce to 2 seconds for faster startup
+                    timeout=2.0, # Reduce to 2 seconds for faster startup
                 )
             except asyncio.TimeoutError:
                 logging.warning(

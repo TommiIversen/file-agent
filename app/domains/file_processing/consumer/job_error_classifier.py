@@ -66,14 +66,14 @@ class JobErrorClassifier:
         errno.EACCES,
         errno.ENOTCONN,
         errno.ECONNRESET,
-        errno.EINVAL,  # Can be network-related on Windows when destination unavailable
-        errno.ENOENT,  # Network path not found
-        errno.EACCES,  # Access denied (can be network mount issues)
+        errno.EINVAL, # Can be network-related on Windows when destination unavailable
+        errno.ENOENT, # Network path not found
+        errno.EACCES, # Access denied (can be network mount issues)
         22,
         53,
         67,
         1231,
-        13,  # Windows-specific network error codes including errno 22
+        13, # Windows-specific network error codes including errno 22
     }
 
     def __init__(self, storage_monitor: StorageMonitorService):
