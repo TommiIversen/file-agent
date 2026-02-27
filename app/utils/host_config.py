@@ -4,10 +4,23 @@ Host-specific configuration management utility.
 Handles automatic creation and selection of hostname-specific configuration files.
 """
 
+import sys
 import socket
 import shutil
 from pathlib import Path
 import logging
+
+
+def _get_base_dir() -> Path:
+    """Return the base directory for settings files.
+
+    When running inside a PyInstaller bundle, settings.env lives next to the
+    extracted modules (sys._MEIPASS).  Otherwise we use the current working
+    directory (normal development mode).
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(".")
 
 
 def get_hostname_settings_file() -> str:
@@ -27,9 +40,11 @@ def get_hostname_settings_file() -> str:
         # Get current hostname (without domain)
         hostname = socket.gethostname().split(".")[0]
 
+        base_dir = _get_base_dir()
+
         # Define file paths
-        base_settings = Path("settings.env")
-        host_settings = Path(f"{hostname}-settings.env")
+        base_settings = base_dir / "settings.env"
+        host_settings = base_dir / f"{hostname}-settings.env"
 
         # Check if host-specific settings file exists
         if not host_settings.exists():
@@ -77,13 +92,15 @@ def list_all_settings_files() -> list[str]:
         list[str]: List of settings file paths
     """
     settings_files = []
+    base_dir = _get_base_dir()
 
     # Check for base settings
-    if Path("settings.env").exists():
-        settings_files.append("settings.env")
+    base_settings = base_dir / "settings.env"
+    if base_settings.exists():
+        settings_files.append(str(base_settings))
 
     # Check for host-specific settings
-    for file_path in Path(".").glob("*-settings.env"):
+    for file_path in base_dir.glob("*-settings.env"):
         settings_files.append(str(file_path))
 
     return settings_files
