@@ -39,29 +39,45 @@ class GetConfigInfoQueryHandler:
 
 
 class ReloadConfigCommandHandler:
-    """Handler for reloading application configuration."""
+    """Handler for reloading application configuration.
+
+    Mutates the existing Settings singleton in-place so every service
+    that already holds a reference sees the updated values immediately.
+    """
 
     async def handle(self, command: ReloadConfigCommand) -> dict:
         """Handle ReloadConfigCommand and reload configuration from file."""
         try:
             logging.info("Config reload requested via CQRS Command", extra={"operation": "cqrs_reload_config"})
 
-            # Clear the settings cache first!
-            get_settings.cache_clear()
+            # Grab the existing singleton that all services reference
+            current = get_settings()
 
-            # Create new settings instance to reload from file
-            new_settings = Settings()
+            # Parse a fresh Settings from the config file on disk
+            fresh = Settings()
 
-            # Log the reload
-            config_info = new_settings.config_file_info
-            logging.info(f"Configuration reloaded from: {config_info['active_config_file']}")
+            # Overwrite every field on the existing instance in-place
+            # so all holders of the old reference see new values.
+            changed: list[str] = []
+            for field_name in fresh.model_fields:
+                old_val = getattr(current, field_name)
+                new_val = getattr(fresh, field_name)
+                if old_val != new_val:
+                    object.__setattr__(current, field_name, new_val)
+                    changed.append(field_name)
+
+            config_info = current.config_file_info
+            logging.info(
+                f"Configuration reloaded from: {config_info['active_config_file']} "
+                f"({len(changed)} field(s) changed: {', '.join(changed) or 'none'})"
+            )
 
             return {
                 "success": True,
                 "message": "Configuration reloaded successfully",
                 "config_file": config_info["active_config_file"],
                 "hostname": config_info["hostname"],
-                "timestamp": config_info.get("load_timestamp", "unknown"),
+                "changed_fields": changed,
             }
 
         except Exception as e:
