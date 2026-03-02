@@ -277,3 +277,7 @@ echo "  Upgrade:    curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/ma
 echo "              (auto-detects existing installation)"
 echo "  Uninstall:  curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash -s -- --uninstall"
 echo
+echo -e "${YELLOW}  NOTE: On first launch macOS will ask to allow local network access.${NC}"
+echo -e "${YELLOW}        Click 'Allow' — File Agent needs this to talk to tally lights,${NC}"
+echo -e "${YELLOW}        Just In Engine, and serve the web UI.${NC}"
+echo

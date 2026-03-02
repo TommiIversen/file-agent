@@ -6,12 +6,20 @@ and application management operations.
 """
 import logging
 import os
-import sys
 import asyncio
 from app.config import Settings
 from app.dependencies import get_settings
 from .commands import ReloadConfigCommand, RestartApplicationCommand
 from .queries import GetSettingsQuery, GetConfigInfoQuery
+
+# Fields that are bound at startup and cannot take effect until restart.
+REQUIRES_RESTART_FIELDS: set[str] = {
+    "source_directory",
+    "destination_directory",
+    "log_file_path",
+    "log_level",
+    "max_concurrent_copies",
+}
 
 
 class GetSettingsQueryHandler:
@@ -66,11 +74,15 @@ class ReloadConfigCommandHandler:
                     object.__setattr__(current, field_name, new_val)
                     changed.append(field_name)
 
+            needs_restart = [f for f in changed if f in REQUIRES_RESTART_FIELDS]
+
             config_info = current.config_file_info
             logging.info(
                 f"Configuration reloaded from: {config_info['active_config_file']} "
                 f"({len(changed)} field(s) changed: {', '.join(changed) or 'none'})"
             )
+            if needs_restart:
+                logging.info(f"Restart required for: {', '.join(needs_restart)}")
 
             return {
                 "success": True,
@@ -78,6 +90,7 @@ class ReloadConfigCommandHandler:
                 "config_file": config_info["active_config_file"],
                 "hostname": config_info["hostname"],
                 "changed_fields": changed,
+                "requires_restart": needs_restart,
             }
 
         except Exception as e:
@@ -89,31 +102,28 @@ class ReloadConfigCommandHandler:
 
 
 class RestartApplicationCommandHandler:
-    """Handler for restarting the application."""
+    """Handler for restarting the application.
+
+    Exits the process with code 0.  The external process manager
+    (launchd on macOS, systemd on Linux, or uvicorn --reload in dev)
+    is responsible for bringing it back up.
+    """
 
     async def handle(self, command: RestartApplicationCommand) -> dict:
         """Handle RestartApplicationCommand and initiate application restart."""
         try:
             logging.info("Application restart requested via CQRS Command", extra={"operation": "cqrs_restart_app"})
 
-            # Schedule restart after a short delay to allow response to be sent
-            async def delayed_restart():
-                await asyncio.sleep(2) # Give time for response to be sent
-                logging.info("Restarting application via CQRS Command...")
+            async def delayed_exit():
+                await asyncio.sleep(1)  # Give time for HTTP response to be sent
+                logging.info("Shutting down for restart...")
+                os._exit(0)
 
-                # Get the current Python executable and original command
-                python_executable = sys.executable
-
-                # Restart the application using the same module path
-                os.execv(python_executable, [python_executable, "-m", "app.main"])
-
-            # Schedule the restart
-            asyncio.create_task(delayed_restart())
+            asyncio.create_task(delayed_exit())
 
             return {
                 "success": True,
-                "message": "Application restart initiated - restarting in 2 seconds...",
-                "restart_delay_seconds": 2,
+                "message": "Application shutting down — process manager will restart it.",
             }
 
         except Exception as e:
