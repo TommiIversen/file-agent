@@ -7,7 +7,7 @@
 #   # Install specific version:
 #   curl -fsSL ... | bash -s -- --version v1.2.0
 #
-#   # Upgrade existing installation:
+#   # Upgrade (auto-detected if already installed, or explicit):
 #   curl -fsSL ... | bash -s -- --upgrade
 #
 #   # Uninstall:
@@ -54,7 +54,9 @@ do_uninstall() {
 
     # Stop service
     if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
-        launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null || true
+        launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null \
+            || launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null \
+            || true
         log_success "Service stopped"
     fi
 
@@ -79,6 +81,12 @@ do_uninstall() {
 }
 
 [[ "$UNINSTALL" == true ]] && do_uninstall
+
+# ── Auto-detect upgrade ─────────────────────────────────────────────
+if [[ -d "$INSTALL_DIR" ]] && [[ "$UPGRADE" == false ]]; then
+    log_info "Existing installation detected — running as upgrade."
+    UPGRADE=true
+fi
 
 # ── Resolve version ─────────────────────────────────────────────────
 if [[ -z "$VERSION" ]]; then
@@ -106,7 +114,11 @@ DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$ASSET_
 if [[ "$UPGRADE" == true ]] || [[ -d "$INSTALL_DIR" ]]; then
     if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
         log_info "Stopping existing service..."
-        launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null || true
+        # Try modern API first, fall back to legacy
+        launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null \
+            || launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null \
+            || true
+        sleep 1
     fi
 fi
 
@@ -164,13 +176,13 @@ cat > "$PLIST_DIR/$PLIST_NAME" << EOF
     </array>
 
     <key>WorkingDirectory</key>
-    <string>$INSTALL_DIR</string>
+    <string>$HOME</string>
 
     <key>StandardOutPath</key>
-    <string>$LOG_DIR/file-agent.log</string>
+    <string>$LOG_DIR/file-agent-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>$LOG_DIR/file-agent-error.log</string>
+    <string>$LOG_DIR/file-agent-stderr.log</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -183,8 +195,8 @@ cat > "$PLIST_DIR/$PLIST_NAME" << EOF
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>FILE_AGENT_CONFIG_DIR</key>
-        <string>$CONFIG_DIR</string>
+        <key>HOME</key>
+        <string>$HOME</string>
     </dict>
 
     <key>ThrottleInterval</key>
@@ -217,7 +229,16 @@ log_success "Browser launch agent created"
 
 # ── Start service ────────────────────────────────────────────────────
 log_info "Starting service..."
-launchctl load "$PLIST_DIR/$PLIST_NAME"
+# Try modern API first, fall back to legacy
+if launchctl bootstrap "gui/$(id -u)" "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
+    true  # success
+elif launchctl load "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
+    true  # legacy success
+else
+    log_warn "Could not start service automatically."
+    log_warn "Try: launchctl load $PLIST_DIR/$PLIST_NAME"
+    log_warn "Or run manually: file-agent"
+fi
 
 sleep 3
 
@@ -252,6 +273,7 @@ echo "    file-agent              # Run manually"
 echo "    launchctl list | grep fileagent"
 echo "    tail -f $LOG_DIR/file-agent.log"
 echo
-echo "  Upgrade:    curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash -s -- --upgrade"
+echo "  Upgrade:    curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash"
+echo "              (auto-detects existing installation)"
 echo "  Uninstall:  curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash -s -- --uninstall"
 echo
