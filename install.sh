@@ -188,10 +188,7 @@ cat > "$PLIST_DIR/$PLIST_NAME" << EOF
     <true/>
 
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -200,7 +197,7 @@ cat > "$PLIST_DIR/$PLIST_NAME" << EOF
     </dict>
 
     <key>ThrottleInterval</key>
-    <integer>30</integer>
+    <integer>5</integer>
 </dict>
 </plist>
 EOF
