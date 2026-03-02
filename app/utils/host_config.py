@@ -10,53 +10,112 @@ in ``~/.config/file-agent/`` instead.
 
 import sys
 import socket
-import shutil
 import platform
+import getpass
 from pathlib import Path
 import logging
 
 
-# ── Platform-specific default paths ──────────────────────────────────
-# When a new host-config is created from the bundled template, Windows
-# paths are replaced with sensible macOS defaults (and vice-versa).
+def _generate_default_config(hostname: str) -> str:
+    """Generate a clean settings.env with platform-appropriate defaults."""
+    user = getpass.getuser()
+    is_mac = platform.system() == "Darwin"
 
-_MACOS_REPLACEMENTS = {
-    # source / destination  (placeholders the user should edit)
-    "SOURCE_DIRECTORY=c:\\temp_input":            "SOURCE_DIRECTORY=/Users/{user}/file-agent-input",
-    "DESTINATION_DIRECTORY=\\\\SKumhesten\\testfeta": "DESTINATION_DIRECTORY=/Volumes/share",
-    # log path (already handled by run.py env-var, but keep the file consistent)
-    "LOG_FILE_PATH=logs/file_agent.log":          "LOG_FILE_PATH=~/Library/Logs/file-agent/file_agent.log",
-    # network mount
-    "WINDOWS_DRIVE_LETTER=":                      "WINDOWS_DRIVE_LETTER=",
-    "MACOS_MOUNT_POINT=/Volumes/sk6505_video":    "MACOS_MOUNT_POINT=/Volumes/sk6505_video",
-}
+    if is_mac:
+        source = f"/Users/{user}/file-agent-input"
+        destination = "/Volumes/share"
+        log_path = f"/Users/{user}/Library/Logs/file-agent/file_agent.log"
+        mount_point = "/Volumes/share"
+    else:
+        source = r"c:\temp_input"
+        destination = r"c:\temp_output"
+        log_path = "logs/file_agent.log"
+        mount_point = ""
 
-_WINDOWS_REPLACEMENTS = {
-    # If someone copies a macOS config to Windows (unlikely, but safe)
-    "LOG_FILE_PATH=~/Library/Logs/file-agent/file_agent.log": "LOG_FILE_PATH=logs/file_agent.log",
-}
+    return f"""# Host-specific configuration for: {hostname}
+# Platform: {platform.system()} ({platform.machine()})
+# Auto-generated — edit the values below for this machine
+# ==========================================================
 
+# ── Required: Source and destination directories ─────────────────────
+SOURCE_DIRECTORY={source}
+DESTINATION_DIRECTORY={destination}
 
-def _apply_platform_defaults(content: str) -> str:
-    """Replace platform-specific paths in a newly created config file."""
-    import getpass
+# ── Output folder template system ────────────────────────────────────
+# ENABLED=true  : Organize files into subfolders based on rules
+# ENABLED=false : All files go directly to destination
+OUTPUT_FOLDER_TEMPLATE_ENABLED=false
+OUTPUT_FOLDER_RULES=
+OUTPUT_FOLDER_DEFAULT_CATEGORY=OTHER
+OUTPUT_FOLDER_DATE_FORMAT=filename[0:6]
 
-    replacements = _MACOS_REPLACEMENTS if platform.system() == "Darwin" else _WINDOWS_REPLACEMENTS
-    for old, new in replacements.items():
-        new = new.replace("{user}", getpass.getuser())
-        content = content.replace(old, new)
-    return content
+# ── Timing ───────────────────────────────────────────────────────────
+FILE_STABLE_TIME_SECONDS=10
+POLLING_INTERVAL_SECONDS=10
 
+# ── Growing file support ─────────────────────────────────────────────
+GROWING_FILE_MIN_SIZE_MB=5
+GROWING_FILE_SAFETY_MARGIN_MB=1
+GROWING_FILE_POLL_INTERVAL_SECONDS=5
+GROWING_FILE_GROWTH_TIMEOUT_SECONDS=20
+GROWING_FILE_CHUNK_SIZE_KB=2048
+GROWING_COPY_PAUSE_MS=100
 
-def _get_bundled_dir() -> Path:
-    """Return the directory that contains the *bundled* (read-only) settings.env.
+# ── Parallel processing ──────────────────────────────────────────────
+MAX_CONCURRENT_COPIES=8
 
-    For a frozen binary this is ``sys._MEIPASS``; for normal dev mode it is the
-    current working directory.
-    """
-    if getattr(sys, "frozen", False):
-        return Path(sys._MEIPASS)
-    return Path(".")
+# ── File copying ─────────────────────────────────────────────────────
+USE_TEMPORARY_FILE=false
+MAX_RETRY_ATTEMPTS=3
+RETRY_DELAY_SECONDS=10
+GLOBAL_RETRY_DELAY_SECONDS=60
+COPY_PROGRESS_UPDATE_INTERVAL=1
+CHUNK_SIZE_KB=2048
+
+# ── Logging ──────────────────────────────────────────────────────────
+LOG_LEVEL=INFO
+LOG_FILE_PATH={log_path}
+LOG_RETENTION_DAYS=30
+
+# ── Storage monitoring ───────────────────────────────────────────────
+STORAGE_CHECK_INTERVAL_SECONDS=30
+SOURCE_WARNING_THRESHOLD_GB=10.0
+SOURCE_CRITICAL_THRESHOLD_GB=5.0
+DESTINATION_WARNING_THRESHOLD_GB=50.0
+DESTINATION_CRITICAL_THRESHOLD_GB=20.0
+
+# ── Space management ─────────────────────────────────────────────────
+ENABLE_PRE_COPY_SPACE_CHECK=true
+COPY_SAFETY_MARGIN_GB=1.0
+SPACE_RETRY_DELAY_SECONDS=300
+MAX_SPACE_RETRIES=6
+MINIMUM_FREE_SPACE_AFTER_COPY_GB=2.0
+SPACE_ERROR_COOLDOWN_MINUTES=1
+
+# ── Completed file management ────────────────────────────────────────
+KEEP_FILES_HOURS=336
+
+# ── Resume ───────────────────────────────────────────────────────────
+ENABLE_SECURE_RESUME=true
+
+# ── Network mount (optional) ─────────────────────────────────────────
+ENABLE_AUTO_MOUNT=false
+NETWORK_SHARE_URL=
+WINDOWS_DRIVE_LETTER=
+MACOS_MOUNT_POINT={mount_point}
+
+# ── Just In Engine (optional) ────────────────────────────────────────
+JUSTIN_API_BASE_URL=http://localhost:8080
+JUSTIN_FAST_POLL_INTERVAL_SECONDS=2.0
+JUSTIN_SLOW_POLL_INTERVAL_SECONDS=30.0
+JUSTIN_API_TIMEOUT_SECONDS=2.0
+
+# ── Tally Light (optional) ───────────────────────────────────────────
+TALLY_LIGHT_SWITCH_TYPE=ip_power_9255
+TALLY_LIGHT_SWITCH_IP=10.65.77.9
+TALLY_LIGHT_BLINK_INTERVAL_SECONDS=0.5
+TALLY_LIGHT_API_TIMEOUT_SECONDS=2.0
+"""
 
 
 def _get_config_dir() -> Path:
@@ -79,10 +138,7 @@ def get_hostname_settings_file() -> str:
     Resolution order (first match wins):
       1. ``<config_dir>/<hostname>-settings.env``   (user-customised)
       2. ``<config_dir>/settings.env``              (user-placed override)
-      3. ``<bundled_dir>/settings.env``             (bundled default – read-only)
-
-    If none of the above exist the host-specific file is created by copying the
-    bundled default into the writable config directory.
+      3. Generate a fresh config with platform-appropriate defaults.
 
     Returns:
         str: Absolute path to the settings file to use.
@@ -90,12 +146,10 @@ def get_hostname_settings_file() -> str:
     try:
         hostname = socket.gethostname().split(".")[0]
 
-        bundled_dir = _get_bundled_dir()
         config_dir = _get_config_dir()
 
         host_settings = config_dir / f"{hostname}-settings.env"
         user_base     = config_dir / "settings.env"
-        bundled_base  = bundled_dir / "settings.env"
 
         # 1. Already have a host-specific file → use it
         if host_settings.exists():
@@ -107,30 +161,14 @@ def get_hostname_settings_file() -> str:
             logging.debug(f"Using user settings override: {user_base}")
             return str(user_base)
 
-        # 3. Bundled default exists → copy to config dir as host-specific
-        if bundled_base.exists():
-            with open(bundled_base, "r", encoding="utf-8") as f:
-                content = f.read()
+        # 3. Generate a fresh config with platform-appropriate defaults
+        content = _generate_default_config(hostname)
+        with open(host_settings, "w", encoding="utf-8") as f:
+            f.write(content)
 
-            # Replace paths with platform-appropriate defaults
-            content = _apply_platform_defaults(content)
-
-            host_header = f"""# Host-specific configuration for: {hostname}
-# Platform: {platform.system()} ({platform.machine()})
-# Auto-generated — edit the values below for this machine
-# Location: {host_settings}
-# ==========================================================
-
-"""
-            with open(host_settings, "w", encoding="utf-8") as f:
-                f.write(host_header + content)
-
-            logging.info(f"Created host-specific configuration: {host_settings}")
-            return str(host_settings)
-
-        # 4. Nothing found at all
-        logging.warning("No settings.env found (bundled or user). Using CWD fallback.")
-        return "settings.env"
+        logging.info(f"Created host-specific configuration: {host_settings}")
+        logging.info("Edit this file to set your source and destination directories.")
+        return str(host_settings)
 
     except Exception as e:
         logging.error(f"Error handling host-specific settings: {e}")
@@ -140,20 +178,14 @@ def get_hostname_settings_file() -> str:
 
 def list_all_settings_files() -> list[str]:
     """
-    List all available settings files (bundled + user config dir).
+    List all available settings files in the config directory.
 
     Returns:
         list[str]: List of settings file paths
     """
     settings_files = []
-
-    # Check bundled base settings
-    bundled_base = _get_bundled_dir() / "settings.env"
-    if bundled_base.exists():
-        settings_files.append(str(bundled_base))
-
-    # Check user config directory
     config_dir = _get_config_dir()
+
     if (config_dir / "settings.env").exists():
         settings_files.append(str(config_dir / "settings.env"))
     for file_path in config_dir.glob("*-settings.env"):
