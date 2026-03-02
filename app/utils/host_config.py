@@ -2,6 +2,10 @@
 Host-specific configuration management utility.
 
 Handles automatic creation and selection of hostname-specific configuration files.
+
+When running as a PyInstaller frozen binary the bundled ``settings.env`` inside
+``sys._MEIPASS`` is read-only, so user-editable host-specific files are stored
+in ``~/.config/file-agent/`` instead.
 """
 
 import sys
@@ -11,15 +15,27 @@ from pathlib import Path
 import logging
 
 
-def _get_base_dir() -> Path:
-    """Return the base directory for settings files.
+def _get_bundled_dir() -> Path:
+    """Return the directory that contains the *bundled* (read-only) settings.env.
 
-    When running inside a PyInstaller bundle, settings.env lives next to the
-    extracted modules (sys._MEIPASS).  Otherwise we use the current working
-    directory (normal development mode).
+    For a frozen binary this is ``sys._MEIPASS``; for normal dev mode it is the
+    current working directory.
     """
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS)
+    return Path(".")
+
+
+def _get_config_dir() -> Path:
+    """Return the *writable* directory for host-specific configuration.
+
+    Frozen binary  → ``~/.config/file-agent/``  (created if missing)
+    Dev mode       → current working directory (same as project root)
+    """
+    if getattr(sys, "frozen", False):
+        config_dir = Path.home() / ".config" / "file-agent"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir
     return Path(".")
 
 
@@ -27,56 +43,61 @@ def get_hostname_settings_file() -> str:
     """
     Get the appropriate settings file for this host.
 
-    Logic:
-    1. Get current hostname
-    2. Check if {hostname}-settings.env exists
-    3. If not, create it by copying settings.env
-    4. Return the hostname-specific file path
+    Resolution order (first match wins):
+      1. ``<config_dir>/<hostname>-settings.env``   (user-customised)
+      2. ``<config_dir>/settings.env``              (user-placed override)
+      3. ``<bundled_dir>/settings.env``             (bundled default – read-only)
+
+    If none of the above exist the host-specific file is created by copying the
+    bundled default into the writable config directory.
 
     Returns:
-        str: Path to the hostname-specific settings file
+        str: Absolute path to the settings file to use.
     """
     try:
-        # Get current hostname (without domain)
         hostname = socket.gethostname().split(".")[0]
 
-        base_dir = _get_base_dir()
+        bundled_dir = _get_bundled_dir()
+        config_dir = _get_config_dir()
 
-        # Define file paths
-        base_settings = base_dir / "settings.env"
-        host_settings = base_dir / f"{hostname}-settings.env"
+        host_settings = config_dir / f"{hostname}-settings.env"
+        user_base     = config_dir / "settings.env"
+        bundled_base  = bundled_dir / "settings.env"
 
-        # Check if host-specific settings file exists
-        if not host_settings.exists():
-            if base_settings.exists():
-                # Copy base settings to create host-specific file
-                shutil.copy2(base_settings, host_settings)
-                logging.info(f"Created host-specific configuration: {host_settings}")
+        # 1. Already have a host-specific file → use it
+        if host_settings.exists():
+            logging.debug(f"Using existing host-specific configuration: {host_settings}")
+            return str(host_settings)
 
-                # Add a comment to the top to indicate it's host-specific
-                with open(host_settings, "r", encoding="utf-8") as f:
-                    content = f.read()
+        # 2. User placed a settings.env in config dir → use it as-is
+        if user_base.exists():
+            logging.debug(f"Using user settings override: {user_base}")
+            return str(user_base)
 
-                host_header = f"""# Host-specific configuration for: {hostname}
-# This file was auto-generated from settings.env
-# You can now customize settings specifically for this machine
+        # 3. Bundled default exists → copy to config dir as host-specific
+        if bundled_base.exists():
+            shutil.copy2(bundled_base, host_settings)
+            logging.info(f"Created host-specific configuration: {host_settings}")
+
+            with open(host_settings, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            host_header = f"""# Host-specific configuration for: {hostname}
+# This file was auto-generated from the bundled settings.env
+# Edit this file to customize settings for this machine
+# Location: {host_settings}
 # ==========================================================
 
 """
+            with open(host_settings, "w", encoding="utf-8") as f:
+                f.write(host_header + content)
 
-                with open(host_settings, "w", encoding="utf-8") as f:
-                    f.write(host_header + content)
+            logging.info(f"Configuration ready at {host_settings}")
+            return str(host_settings)
 
-                logging.info(f"Added hostname header to {host_settings}")
-            else:
-                logging.warning("Base settings.env not found, falling back to default")
-                return "settings.env"
-        else:
-            logging.debug(
-                f"Using existing host-specific configuration: {host_settings}"
-            )
-
-        return str(host_settings)
+        # 4. Nothing found at all
+        logging.warning("No settings.env found (bundled or user). Using CWD fallback.")
+        return "settings.env"
 
     except Exception as e:
         logging.error(f"Error handling host-specific settings: {e}")
@@ -86,21 +107,23 @@ def get_hostname_settings_file() -> str:
 
 def list_all_settings_files() -> list[str]:
     """
-    List all available settings files (base + host-specific).
+    List all available settings files (bundled + user config dir).
 
     Returns:
         list[str]: List of settings file paths
     """
     settings_files = []
-    base_dir = _get_base_dir()
 
-    # Check for base settings
-    base_settings = base_dir / "settings.env"
-    if base_settings.exists():
-        settings_files.append(str(base_settings))
+    # Check bundled base settings
+    bundled_base = _get_bundled_dir() / "settings.env"
+    if bundled_base.exists():
+        settings_files.append(str(bundled_base))
 
-    # Check for host-specific settings
-    for file_path in base_dir.glob("*-settings.env"):
+    # Check user config directory
+    config_dir = _get_config_dir()
+    if (config_dir / "settings.env").exists():
+        settings_files.append(str(config_dir / "settings.env"))
+    for file_path in config_dir.glob("*-settings.env"):
         settings_files.append(str(file_path))
 
     return settings_files
