@@ -42,13 +42,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Clean PyInstaller cache
+        run: |
+          rm -rf build/ dist/ __pycache__/
+          pyinstaller --clean --noconfirm file-agent.spec 2>/dev/null || true
+
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller file-agent.spec
+          pyinstaller --noconfirm file-agent.spec
           echo "Build complete. Contents of dist/file-agent/:"
           ls -la dist/file-agent/
 
