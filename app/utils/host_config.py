@@ -49,54 +49,9 @@ OUTPUT_FOLDER_RULES=
 OUTPUT_FOLDER_DEFAULT_CATEGORY=OTHER
 OUTPUT_FOLDER_DATE_FORMAT=filename[0:6]
 
-# ── Timing ───────────────────────────────────────────────────────────
-FILE_STABLE_TIME_SECONDS=10
-POLLING_INTERVAL_SECONDS=10
-
-# ── Growing file support ─────────────────────────────────────────────
-GROWING_FILE_MIN_SIZE_MB=5
-GROWING_FILE_SAFETY_MARGIN_MB=1
-GROWING_FILE_POLL_INTERVAL_SECONDS=5
-GROWING_FILE_GROWTH_TIMEOUT_SECONDS=20
-GROWING_FILE_CHUNK_SIZE_KB=2048
-GROWING_COPY_PAUSE_MS=100
-
-# ── Parallel processing ──────────────────────────────────────────────
-MAX_CONCURRENT_COPIES=8
-
-# ── File copying ─────────────────────────────────────────────────────
-USE_TEMPORARY_FILE=false
-MAX_RETRY_ATTEMPTS=3
-RETRY_DELAY_SECONDS=10
-GLOBAL_RETRY_DELAY_SECONDS=60
-COPY_PROGRESS_UPDATE_INTERVAL=1
-CHUNK_SIZE_KB=2048
-
 # ── Logging ──────────────────────────────────────────────────────────
 LOG_LEVEL=INFO
 LOG_FILE_PATH={log_path}
-LOG_RETENTION_DAYS=30
-
-# ── Storage monitoring ───────────────────────────────────────────────
-STORAGE_CHECK_INTERVAL_SECONDS=30
-SOURCE_WARNING_THRESHOLD_GB=10.0
-SOURCE_CRITICAL_THRESHOLD_GB=5.0
-DESTINATION_WARNING_THRESHOLD_GB=50.0
-DESTINATION_CRITICAL_THRESHOLD_GB=20.0
-
-# ── Space management ─────────────────────────────────────────────────
-ENABLE_PRE_COPY_SPACE_CHECK=true
-COPY_SAFETY_MARGIN_GB=1.0
-SPACE_RETRY_DELAY_SECONDS=300
-MAX_SPACE_RETRIES=6
-MINIMUM_FREE_SPACE_AFTER_COPY_GB=2.0
-SPACE_ERROR_COOLDOWN_MINUTES=1
-
-# ── Completed file management ────────────────────────────────────────
-KEEP_FILES_HOURS=336
-
-# ── Resume ───────────────────────────────────────────────────────────
-ENABLE_SECURE_RESUME=true
 
 # ── Network mount (optional) ─────────────────────────────────────────
 ENABLE_AUTO_MOUNT=false

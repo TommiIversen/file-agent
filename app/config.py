@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     polling_interval_seconds: int = 10
 
     # Filkopiering
-    use_temporary_file: bool = True
+    use_temporary_file: bool = False
     max_retry_attempts: int = 3
     retry_delay_seconds: int = 10
     global_retry_delay_seconds: int = 60
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     log_retention_days: int = 30
 
     # Storage monitoring
-    storage_check_interval_seconds: int = 60
+    storage_check_interval_seconds: int = 30
     source_warning_threshold_gb: float = 10.0
     source_critical_threshold_gb: float = 5.0
     destination_warning_threshold_gb: float = 50.0
@@ -53,18 +53,18 @@ class Settings(BaseSettings):
     max_space_retries: int = 6 # Max 30 minutes waiting for space
     minimum_free_space_after_copy_gb: float = 2.0 # Minimum space to leave after copy
     space_error_cooldown_minutes: int = (
-        60 # Cooldown period for SPACE_ERROR files (1 hour)
+        1 # Cooldown period for SPACE_ERROR files (minutes)
     )
 
     # File history management
     keep_files_hours: int = 336 # Keep ALL files in memory for 14 days (14*24=336 hours) - provides complete UI log
 
     # Growing file support (now default)
-    growing_file_min_size_mb: int = 100 # Minimum size in MB to start growing copy
+    growing_file_min_size_mb: int = 50 # Minimum size in MB to start growing copy
     growing_file_safety_margin_mb: int = 50 # Stay this many MB behind write head
     growing_file_poll_interval_seconds: int = 5 # Check file growth every N seconds
     growing_file_growth_timeout_seconds: int = (
-        30 # Consider stable after N seconds no growth
+        20 # Consider stable after N seconds no growth
     )
     growing_file_chunk_size_kb: int = 2048 # Chunk size for growing copy (2MB)
     growing_copy_pause_ms: int = 100 # Pause between growing copy cycles (throttling)
@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     )
 
     # Parallel processing
-    max_concurrent_copies: int = 8 # Maximum number of concurrent copy operations
+    max_concurrent_copies: int = 7 # Maximum number of concurrent copy operations
 
     # Network mount configuration
     enable_auto_mount: bool = False # Enable automatic network mount attempts

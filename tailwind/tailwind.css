@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+@source "../app/domains/presentation/templates/**/*.html";
+@source "../app/domains/presentation/static/js/**/*.js";
+
 [x-cloak] { display: none !important; }
 
 /* Custom utility classes for File Agent */
