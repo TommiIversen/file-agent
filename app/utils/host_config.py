@@ -11,8 +11,41 @@ in ``~/.config/file-agent/`` instead.
 import sys
 import socket
 import shutil
+import platform
 from pathlib import Path
 import logging
+
+
+# ── Platform-specific default paths ──────────────────────────────────
+# When a new host-config is created from the bundled template, Windows
+# paths are replaced with sensible macOS defaults (and vice-versa).
+
+_MACOS_REPLACEMENTS = {
+    # source / destination  (placeholders the user should edit)
+    "SOURCE_DIRECTORY=c:\\temp_input":            "SOURCE_DIRECTORY=/Users/{user}/file-agent-input",
+    "DESTINATION_DIRECTORY=\\\\SKumhesten\\testfeta": "DESTINATION_DIRECTORY=/Volumes/share",
+    # log path (already handled by run.py env-var, but keep the file consistent)
+    "LOG_FILE_PATH=logs/file_agent.log":          "LOG_FILE_PATH=~/Library/Logs/file-agent/file_agent.log",
+    # network mount
+    "WINDOWS_DRIVE_LETTER=":                      "WINDOWS_DRIVE_LETTER=",
+    "MACOS_MOUNT_POINT=/Volumes/sk6505_video":    "MACOS_MOUNT_POINT=/Volumes/sk6505_video",
+}
+
+_WINDOWS_REPLACEMENTS = {
+    # If someone copies a macOS config to Windows (unlikely, but safe)
+    "LOG_FILE_PATH=~/Library/Logs/file-agent/file_agent.log": "LOG_FILE_PATH=logs/file_agent.log",
+}
+
+
+def _apply_platform_defaults(content: str) -> str:
+    """Replace platform-specific paths in a newly created config file."""
+    import getpass
+
+    replacements = _MACOS_REPLACEMENTS if platform.system() == "Darwin" else _WINDOWS_REPLACEMENTS
+    for old, new in replacements.items():
+        new = new.replace("{user}", getpass.getuser())
+        content = content.replace(old, new)
+    return content
 
 
 def _get_bundled_dir() -> Path:
@@ -76,15 +109,15 @@ def get_hostname_settings_file() -> str:
 
         # 3. Bundled default exists → copy to config dir as host-specific
         if bundled_base.exists():
-            shutil.copy2(bundled_base, host_settings)
-            logging.info(f"Created host-specific configuration: {host_settings}")
-
-            with open(host_settings, "r", encoding="utf-8") as f:
+            with open(bundled_base, "r", encoding="utf-8") as f:
                 content = f.read()
 
+            # Replace paths with platform-appropriate defaults
+            content = _apply_platform_defaults(content)
+
             host_header = f"""# Host-specific configuration for: {hostname}
-# This file was auto-generated from the bundled settings.env
-# Edit this file to customize settings for this machine
+# Platform: {platform.system()} ({platform.machine()})
+# Auto-generated — edit the values below for this machine
 # Location: {host_settings}
 # ==========================================================
 
@@ -92,7 +125,7 @@ def get_hostname_settings_file() -> str:
             with open(host_settings, "w", encoding="utf-8") as f:
                 f.write(host_header + content)
 
-            logging.info(f"Configuration ready at {host_settings}")
+            logging.info(f"Created host-specific configuration: {host_settings}")
             return str(host_settings)
 
         # 4. Nothing found at all
