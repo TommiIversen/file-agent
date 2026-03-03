@@ -85,6 +85,18 @@ This application uses a clean, domain-driven architecture with CQRS and an event
 
 Domains communicate via the EventBus (async, loose coupling) and QueryBus (sync queries across domains). Direct imports between domains are forbidden.
 
+### Just In Engine API
+
+File Agent communicates with Just In Engine via these endpoints (base URL configured in `JUSTIN_API_BASE_URL`, default `http://localhost:8080`):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/ingest/activeChannels` | List active channel names |
+| POST | `/ingest/requestRecordingStatus` | Recording status for a channel |
+| POST | `/ingest/errors` | Fetch/clear errors for a channel |
+
+Just In Engine Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
 ## Installation
 
 ### One-Command Install (macOS — no Python required)

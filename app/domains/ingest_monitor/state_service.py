@@ -97,12 +97,29 @@ class IngestStateService:
         Opdaterer listen af aktive kanaler (async version af add_new_channels).
         
         Denne metode bruges af Worker til at opdatere aktive kanaler fra API.
+        Tilfojer nye kanaler og fjerner kanaler der ikke laengere er aktive.
         
         Args:
             channel_names: Liste af kanalnavne eller None ved API fejl
         """
-        if channel_names is not None:
-            self.add_new_channels(channel_names)
+        if channel_names is None:
+            return
+
+        active_set = set(channel_names)
+        current_set = set(self._status_cache.keys())
+
+        # Remove channels that are no longer active
+        removed = current_set - active_set
+        for name in removed:
+            del self._status_cache[name]
+            logging.info(f"Removed inactive channel from cache: {name}")
+
+        # Add new channels
+        self.add_new_channels(channel_names)
+
+        if removed:
+            logging.info(f"Active channels updated: added {len(active_set - current_set)}, removed {len(removed)}, total {len(self._status_cache)}")
+        else:
             logging.debug(f"Active channels updated: {len(channel_names)} channels: {channel_names}")
 
     async def update_channel_statuses(self, status_updates: Optional[List[Tuple[str, JustInRecordingStatus]]]) -> None:
