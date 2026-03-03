@@ -195,7 +195,7 @@ async def test_network_recovery_logs_reactivation_messages(
 
     # Check for reactivation log message
     assert (
-        "🔄 NETWORK RECOVERY: Reactivated c:/temp/test.mxf for re-evaluation"
+        "NETWORK RECOVERY: Regular file c:/temp/test.mxf -> DISCOVERED"
         in caplog.text
     )
-    assert "✅ NETWORK RECOVERY: Completed processing 1 files" in caplog.text
+    assert "NETWORK RECOVERY: Completed processing 1 files" in caplog.text

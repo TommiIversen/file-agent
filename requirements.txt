@@ -6,3 +6,8 @@ pydantic-settings>=2.0.0
 aiofiles>=23.0.0
 rich==14.2.0
 httpx
+
+# Dev / Test
+pytest>=8.0
+pytest-asyncio>=1.0
+pytest-cov>=7.0

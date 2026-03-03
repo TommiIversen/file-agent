@@ -26,6 +26,7 @@ class TestMountStatusWebSocketIntegration:
         settings = Mock(spec=Settings)
         settings.SOURCE_PATH = r"C:\temp\source"
         settings.DESTINATION_PATH = r"\\nas\shared\dest"
+        settings.destination_directory = r"\\nas\shared\dest"
         settings.enable_auto_mount = True
         return settings
 

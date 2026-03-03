@@ -6,6 +6,8 @@ Verify that events are properly published when channel states change.
 import asyncio
 from typing import List
 
+import pytest
+
 from app.core.events.event_bus import DomainEventBus
 from app.domains.ingest_monitor.events import (
     ChannelRecordingStartedEvent,
@@ -30,6 +32,7 @@ class EventCollector:
         self.events.append(("status_updated", len(event.status_snapshot)))
 
 
+@pytest.mark.asyncio
 async def test_event_publishing():
     """Test that the event bus correctly publishes and delivers events."""
     

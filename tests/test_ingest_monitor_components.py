@@ -6,6 +6,8 @@ and IngestMonitorWorker without requiring actual network connectivity.
 """
 import asyncio
 
+import pytest
+
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
 from app.domains.ingest_monitor.api_client import IngestApiClient
@@ -14,6 +16,7 @@ from app.domains.ingest_monitor.worker import IngestMonitorWorker
 from app.domains.ingest_monitor.models import ChannelState
 
 
+@pytest.mark.asyncio
 async def test_ingest_monitor_components():
     """Test the refactored ingest monitor components."""
     
