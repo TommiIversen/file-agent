@@ -1,5 +1,5 @@
 <!-- Just In Engine Status Bar Component (Compact Design) -->
-<div class="bg-gray-700/60 rounded-lg p-3 mb-4" x-data="{ showDetails: false }" x-cloak>
+<div class="bg-gray-700/60 rounded-lg p-3 mb-4" x-data="{ showDetails: false, showPaths: false }" x-cloak>
     <!-- Compact Status Bar -->
     <div class="flex items-center">
         <!-- Left side: Channel LEDs -->
@@ -227,8 +227,19 @@
         <!-- Recording Destination Paths -->
         <template x-if="$store.ingest?.hasRecordingPaths()">
             <div class="mb-4">
-                <div class="text-xs font-medium text-gray-400 mb-2">Recording Destinations</div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <button @click="showPaths = !showPaths"
+                        class="flex items-center text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors mb-2">
+                    <span x-text="showPaths ? '▾' : '▸'" class="mr-1 w-3" x-cloak></span>
+                    Recording Destinations
+                </button>
+                <div x-show="showPaths"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <template x-for="channel in $store.ingest?.getChannelsSorted() || []" :key="'paths-' + channel.name">
                         <template x-if="$store.ingest?.getRecordingPathsForChannel(channel.name)">
                             <div class="bg-gray-800/60 rounded-lg px-3 py-2 border-l-2 border-blue-500/50">
