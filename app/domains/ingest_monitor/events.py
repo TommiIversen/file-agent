@@ -4,8 +4,8 @@ Ingest Monitor Domain Events
 Events published by the ingest monitor service to communicate
 channel status changes to other domains (like tally lights).
 """
-from dataclasses import dataclass
-from typing import Dict
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 from app.core.events.domain_event import DomainEvent
 
@@ -63,3 +63,11 @@ class IngestOnlineEvent(DomainEvent):
 class IngestOfflineEvent(DomainEvent):
     """Published when ingest monitor loses connection to Just In Engine."""
     pass
+
+
+@dataclass(frozen=True)
+class RecordingPathsDiscoveredEvent(DomainEvent):
+    """Published when recording destination paths are discovered from Just In Engine."""
+    paths: tuple  # Use tuple for frozen dataclass compatibility
+    preset_name: str = ""
+    channel_name: str = ""

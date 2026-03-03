@@ -49,15 +49,19 @@ document.addEventListener('alpine:init', () => {
             displayTime: '00:00:00:00'
         },
 
+        /** @type {Object.<string, {preset_name: string, paths: string[]}>} */
+        recordingPaths: {},
+
         // === METHODS ===
 
         /**
          * Initializes the store by loading initial data and setting up timers.
          */
         init() {
-            console.log('🎥 Ingest Store initialized');
+            console.log('Ingest Store initialized');
             this.loadInitialData();
             this.initRecordingTimer();
+            this.loadRecordingPaths();
         },
 
         /**
@@ -529,6 +533,59 @@ document.addEventListener('alpine:init', () => {
         setConnected(connected) {
             this.isConnected = connected;
             console.log(`📡 Connection to Just In Engine ${connected ? 'established' : 'lost'}`);
+        },
+
+        /**
+         * Updates the recording destination paths for a channel.
+         * @param {string} channelName - The channel name.
+         * @param {string} presetName - The destination preset name.
+         * @param {string[]} paths - The list of recording paths.
+         */
+        updateRecordingPaths(channelName, presetName, paths) {
+            this.recordingPaths[channelName] = {
+                preset_name: presetName,
+                paths: paths
+            };
+            console.log(`Recording paths updated for ${channelName} (preset=${presetName}):`, paths);
+        },
+
+        /**
+         * Fetches the initial recording paths from the API.
+         * @returns {Promise<void>}
+         */
+        async loadRecordingPaths() {
+            try {
+                const response = await fetch('/api/ingest/recording-paths');
+                if (!response.ok) return;
+                const data = await response.json();
+                // data is { "KAM_1": { "preset_name": "Default", "paths": ["/Volumes/NLE"] } }
+                Object.entries(data).forEach(([channelName, info]) => {
+                    this.recordingPaths[channelName] = info;
+                });
+                if (Object.keys(data).length > 0) {
+                    console.log('Recording paths loaded:', Object.keys(data).length, 'channels');
+                }
+            } catch (error) {
+                // Not critical - paths may not be available yet
+                console.debug('Recording paths not available yet:', error.message);
+            }
+        },
+
+        /**
+         * Gets the recording paths for a specific channel.
+         * @param {string} channelName
+         * @returns {{preset_name: string, paths: string[]}|null}
+         */
+        getRecordingPathsForChannel(channelName) {
+            return this.recordingPaths[channelName] || null;
+        },
+
+        /**
+         * Check if any recording paths have been discovered.
+         * @returns {boolean}
+         */
+        hasRecordingPaths() {
+            return Object.keys(this.recordingPaths).length > 0;
         },
 
         /**

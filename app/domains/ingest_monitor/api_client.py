@@ -10,7 +10,15 @@ import logging
 import httpx
 from typing import List, Optional, Tuple
 from app.config import Settings
-from .models import JustInActiveChannels, JustInRecordingStatus, JustInErrors, JustInError
+from .models import (
+    JustInActiveChannels,
+    JustInRecordingStatus,
+    JustInErrors,
+    JustInError,
+    JustInRecordingConfiguration,
+    JustInDestinationPresets,
+    JustInLoadDestinationPresetResponse,
+)
 
 
 class IngestApiClient:
@@ -348,3 +356,127 @@ class IngestApiClient:
         
         logging.info(f"Successfully cleared errors for {successful_clears}/{len(channel_names)} channels")
         return successful_clears
+
+    # ── Destination / Recording Path Discovery ───────────────────────────────
+
+    async def get_recording_configuration(self, channel_name: str) -> Optional[JustInRecordingConfiguration]:
+        """
+        Henter recording configuration for en kanal.
+        Returnerer bl.a. destinationPreset-navnet.
+
+        POST /ingest/recordingConfiguration  {"channel": "Channel1"}
+        """
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post("/ingest/recordingConfiguration", json=payload)
+            response.raise_for_status()
+            data = JustInRecordingConfiguration.model_validate(response.json())
+            logging.debug(f"Recording config for {channel_name}: {data.configurations}")
+            return data
+        except httpx.RequestError as e:
+            logging.warning(f"Could not fetch recordingConfiguration for {channel_name}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error fetching recordingConfiguration for {channel_name}: {e}")
+            return None
+
+    async def get_destination_presets(self, channel_name: str) -> Optional[JustInDestinationPresets]:
+        """
+        Henter listen af destination-presets for en kanal.
+
+        POST /ingest/requestDestinationPresets  {"channel": "Channel1"}
+        """
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post("/ingest/requestDestinationPresets", json=payload)
+            response.raise_for_status()
+            data = JustInDestinationPresets.model_validate(response.json())
+            logging.debug(f"Destination presets for {channel_name}: {data.preset}")
+            return data
+        except httpx.RequestError as e:
+            logging.warning(f"Could not fetch destination presets for {channel_name}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error fetching destination presets for {channel_name}: {e}")
+            return None
+
+    async def load_destination_preset(
+        self, channel_name: str, preset_id: int, preset_name: str
+    ) -> Optional[JustInLoadDestinationPresetResponse]:
+        """
+        Loader et specifikt destination-preset for at hente stier.
+
+        POST /ingest/requestLoadDestinationPreset
+        {"channel": "Channel1", "destination-preset-id": 1, "destination-preset-name": "Default"}
+        """
+        try:
+            payload = {
+                "channel": channel_name,
+                "destination-preset-id": preset_id,
+                "destination-preset-name": preset_name,
+            }
+            response = await self._client.post("/ingest/requestLoadDestinationPreset", json=payload)
+            response.raise_for_status()
+            data = JustInLoadDestinationPresetResponse.model_validate(response.json())
+            logging.debug(f"Loaded destination preset for {channel_name}: {data.justin_destination_preset.name}")
+            return data
+        except httpx.RequestError as e:
+            logging.warning(f"Could not load destination preset for {channel_name}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error loading destination preset for {channel_name}: {e}")
+            return None
+
+    async def discover_recording_paths(
+        self, channel_name: str
+    ) -> Optional[tuple[List[str], str]]:
+        """
+        3-step discovery flow: henter de faktiske recording-stier fra Just In Engine.
+
+        1. recordingConfiguration -> finder preset-navn (f.eks. "Default")
+        2. requestDestinationPresets -> finder listen + index
+        3. requestLoadDestinationPreset -> henter de faktiske stier
+
+        Returns:
+            Tuple af (paths, preset_name) eller None hvis discovery fejlede.
+        """
+        # Step 1: Get the active destination preset name
+        config = await self.get_recording_configuration(channel_name)
+        if not config or not config.configurations:
+            logging.warning(f"No recording configuration found for {channel_name}")
+            return None
+
+        preset_name = config.configurations[0].destinationPreset
+        if not preset_name or preset_name == "-":
+            logging.warning(f"No destination preset configured for {channel_name}")
+            return None
+
+        # Step 2: Get the preset list and find the index
+        presets = await self.get_destination_presets(channel_name)
+        if not presets or not presets.preset:
+            logging.warning(f"No destination presets available for {channel_name}")
+            return None
+
+        try:
+            preset_id = presets.preset.index(preset_name)
+        except ValueError:
+            logging.warning(f"Preset '{preset_name}' not found in preset list: {presets.preset}")
+            return None
+
+        # Step 3: Load the preset to get the actual paths
+        loaded = await self.load_destination_preset(channel_name, preset_id, preset_name)
+        if not loaded or not loaded.justin_destination_preset.destination_path:
+            logging.warning(f"No destination paths in preset '{preset_name}' for {channel_name}")
+            return None
+
+        paths = [
+            dp.path
+            for dp in loaded.justin_destination_preset.destination_path
+            if dp.path
+        ]
+
+        logging.info(
+            f"Discovered recording paths for {channel_name} "
+            f"(preset='{preset_name}'): {paths}"
+        )
+        return paths, preset_name

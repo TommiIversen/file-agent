@@ -21,7 +21,8 @@ from app.domains.ingest_monitor.events import (
     IngestStatusUpdatedEvent, 
     ChannelErrorDetectedEvent,
     IngestOnlineEvent,
-    IngestOfflineEvent
+    IngestOfflineEvent,
+    RecordingPathsDiscoveredEvent,
 )
 
 # 3. Gør funktionen async og tilføj event_bus
@@ -58,6 +59,7 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(ChannelErrorDetectedEvent, handlers.handle_channel_error_detected_event)
     await event_bus.subscribe(IngestOnlineEvent, handlers.handle_ingest_online_event)
     await event_bus.subscribe(IngestOfflineEvent, handlers.handle_ingest_offline_event)
+    await event_bus.subscribe(RecordingPathsDiscoveredEvent, handlers.handle_recording_paths_discovered_event)
     
     # Import and subscribe to tally switch events for real-time UI updates
     from app.domains.tally_light.monitor_service import (

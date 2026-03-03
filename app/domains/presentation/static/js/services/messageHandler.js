@@ -137,6 +137,10 @@ class MessageHandler {
                     this.handleIngestConnectionChange(message.data);
                     break;
 
+                case 'recording_paths_update':
+                    this.handleRecordingPathsUpdate(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }
@@ -466,13 +470,31 @@ class MessageHandler {
      * @param {Object} data - Ingest connection status data
      */
     handleIngestConnectionChange(data) {
-        console.log('📡 Ingest connection status update received:', data);
+        console.log('Ingest connection status update received:', data);
         
         if (this.ingestStore) {
             this.ingestStore.setConnected(data.is_connected);
         } else {
             console.warn('IngestStore not available for connection status update');
         }
+    }
+
+    /**
+     * Handle recording paths discovered from Just In Engine
+     * @param {{channel_name: string, preset_name: string, paths: string[]}} data
+     */
+    handleRecordingPathsUpdate(data) {
+        if (!this.ingestStore) {
+            console.warn('IngestStore not available for recording paths update');
+            return;
+        }
+
+        console.log(`Recording paths update for ${data.channel_name}:`, data.paths);
+        this.ingestStore.updateRecordingPaths(
+            data.channel_name,
+            data.preset_name,
+            data.paths
+        );
     }
 
 }

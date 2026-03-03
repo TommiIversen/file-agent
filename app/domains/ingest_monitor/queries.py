@@ -18,3 +18,15 @@ class GetIngestStatusQuery(Query):
     including recording status, signal availability, and error conditions.
     """
     pass # No parameters needed - returns complete status snapshot
+
+
+@dataclass
+class GetRecordingPathsQuery(Query):
+    """
+    Query to retrieve the discovered recording destination paths.
+
+    Returns the cached result of the 3-step Just In Engine discovery
+    flow (recordingConfiguration -> requestDestinationPresets ->
+    requestLoadDestinationPreset) per channel.
+    """
+    pass

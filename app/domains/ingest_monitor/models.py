@@ -69,6 +69,60 @@ class JustInErrors(BaseModel):
     errors: List[JustInError]
 
 
+# ── Recording Configuration & Destination Preset models ─────────────────────
+
+class JustInConfigurationEntry(BaseModel):
+    """A single recording configuration entry."""
+    destinationPreset: str = ""
+    capturePreset: str = ""
+
+
+class JustInRecordingConfiguration(BaseModel):
+    """Response from /ingest/recordingConfiguration."""
+    channel: str
+    name: str
+    configurations: List[JustInConfigurationEntry] = []
+
+
+class JustInDestinationPresets(BaseModel):
+    """Response from /ingest/requestDestinationPresets."""
+    channel: str
+    name: str
+    preset: List[str] = []
+
+
+class JustInDestinationPath(BaseModel):
+    """A single destination path entry within a preset."""
+    path: str = ""
+    redundancy_type: int = Field(0, alias="redundancy-type")
+    container_type: int = Field(0, alias="container-type")
+    file_buffer_size: int = Field(0, alias="file-buffer-size")
+    path_type: int = Field(0, alias="path-type")
+
+    model_config = {"populate_by_name": True}
+
+
+class JustInDestinationPresetDetail(BaseModel):
+    """The inner preset detail from /ingest/requestLoadDestinationPreset."""
+    name: str = ""
+    destination_path: List[JustInDestinationPath] = Field(default_factory=list, alias="destination-path")
+
+    model_config = {"populate_by_name": True}
+
+
+class JustInLoadDestinationPresetResponse(BaseModel):
+    """Response from /ingest/requestLoadDestinationPreset."""
+    destination_preset_id: int = Field(0, alias="destination-preset-id")
+    channel: str
+    name: str
+    justin_destination_preset: JustInDestinationPresetDetail = Field(
+        default_factory=JustInDestinationPresetDetail,
+        alias="justin-destination-preset"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class ChannelState(BaseModel):
     """
     Internal 'Single Source of Truth' for a channel.

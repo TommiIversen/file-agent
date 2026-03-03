@@ -9,9 +9,9 @@ import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.core.events.event_bus import DomainEventBus
-from .queries import GetIngestStatusQuery
+from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
-from .handlers import GetIngestStatusQueryHandler, ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
+from .handlers import GetIngestStatusQueryHandler, GetRecordingPathsQueryHandler, ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
 
 
 def register_ingest_monitor_domain(
@@ -34,6 +34,9 @@ def register_ingest_monitor_domain(
     # Register query handlers
     query_handler = GetIngestStatusQueryHandler(ingest_monitor_worker)
     query_bus.register(GetIngestStatusQuery, query_handler.handle)
+
+    recording_paths_handler = GetRecordingPathsQueryHandler(ingest_monitor_worker)
+    query_bus.register(GetRecordingPathsQuery, recording_paths_handler.handle)
     
     # Register command handlers
     clear_command_handler = ClearAllChannelErrorsCommandHandler(ingest_monitor_worker)

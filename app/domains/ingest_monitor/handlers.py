@@ -8,7 +8,7 @@ following the CQRS pattern.
 from typing import Dict, Any
 from app.core.cqrs.query import QueryHandler
 from app.core.cqrs.command import CommandHandler
-from .queries import GetIngestStatusQuery
+from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 
 
@@ -50,6 +50,17 @@ class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, A
             }
         """
         return self._worker.get_status_cache()
+
+
+class GetRecordingPathsQueryHandler(QueryHandler[GetRecordingPathsQuery, Dict[str, Any]]):
+    """Handler for GetRecordingPathsQuery - returns cached recording paths."""
+
+    def __init__(self, ingest_monitor_worker):
+        self._worker = ingest_monitor_worker
+
+    async def handle(self, query: GetRecordingPathsQuery) -> Dict[str, Any]:
+        """Return the cached recording paths snapshot from the worker."""
+        return self._worker.get_recording_paths()
 
 
 class ClearAllChannelErrorsCommandHandler(CommandHandler[ClearAllChannelErrorsCommand, Dict[str, Any]]):

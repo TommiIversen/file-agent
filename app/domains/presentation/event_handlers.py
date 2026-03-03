@@ -9,7 +9,8 @@ from app.domains.ingest_monitor.events import (
     IngestStatusUpdatedEvent, 
     ChannelErrorDetectedEvent,
     IngestOnlineEvent,
-    IngestOfflineEvent
+    IngestOfflineEvent,
+    RecordingPathsDiscoveredEvent,
 )
 from app.domains.tally_light.monitor_service import (
     TallySwitchStatusUpdatedEvent, 
@@ -233,6 +234,30 @@ class PresentationEventHandlers:
             "type": "ingest_offline",
             "data": {
                 "is_connected": False,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    # === RECORDING PATHS EVENT HANDLERS ===
+
+    async def handle_recording_paths_discovered_event(
+        self, event: RecordingPathsDiscoveredEvent
+    ) -> None:
+        """Handle recording paths discovered from Just In Engine."""
+        logging.info(
+            "Broadcasting recording paths for %s (preset=%s): %s",
+            event.channel_name,
+            event.preset_name,
+            event.paths,
+        )
+
+        message_data = {
+            "type": "recording_paths_update",
+            "data": {
+                "channel_name": event.channel_name,
+                "preset_name": event.preset_name,
+                "paths": list(event.paths),
                 "timestamp": self._get_timestamp(),
             },
         }

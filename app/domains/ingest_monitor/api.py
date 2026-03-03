@@ -10,7 +10,7 @@ from typing import Dict, Any
 from app.core.cqrs.query_bus import QueryBus
 from app.core.cqrs.command_bus import CommandBus
 from app.dependencies import get_query_bus, get_command_bus
-from .queries import GetIngestStatusQuery
+from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 
 
@@ -49,6 +49,27 @@ async def get_ingest_status(
         }
     """
     return await query_bus.execute(GetIngestStatusQuery())
+
+
+@router.get("/recording-paths", response_model=Dict[str, Any])
+async def get_recording_paths(
+    query_bus: QueryBus = Depends(get_query_bus)
+) -> Dict[str, Any]:
+    """
+    Get the discovered recording destination paths from Just In Engine.
+
+    Returns the cached result of the 3-step discovery flow per channel.
+
+    Returns:
+        Dict with channel_name as key:
+        {
+            "KAM_1": {
+                "preset_name": "Default",
+                "paths": ["/Volumes/NLE-External"]
+            }
+        }
+    """
+    return await query_bus.execute(GetRecordingPathsQuery())
 
 
 @router.post("/clear-all-errors", response_model=Dict[str, Any])
