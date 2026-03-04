@@ -399,12 +399,15 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Gets a summary of the recording status for tally light logic.
-         * @returns {'none' | 'some' | 'all'}
+         * Returns 'blink' when auto-stop warning is active (overrides normal state).
+         * @returns {'none' | 'some' | 'all' | 'blink'}
          */
         getRecordingStatus() {
             const total = this.statistics.totalChannels;
             const recording = this.statistics.recordingChannels;
             if (recording === 0) return 'none';
+            // Auto-stop warning forces blink regardless of channel count
+            if (this.autoStop.warningSent && !this.autoStop.triggered) return 'blink';
             if (recording === total && total > 0) return 'all';
             return 'some';
         },

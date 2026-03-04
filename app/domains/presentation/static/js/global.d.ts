@@ -240,7 +240,7 @@ interface IngestStore {
     updateTimerDisplay(): void;
     getChannelsArray(): ChannelStatus[];
     getChannelsSorted(): ChannelStatus[];
-    getRecordingStatus(): 'none' | 'some' | 'all';
+    getRecordingStatus(): 'none' | 'some' | 'all' | 'blink';
     getRecentErrors(): ChannelError[];
     clearErrors(): void;
     clearAllErrors(): Promise<void>;

@@ -150,6 +150,12 @@
                         <span class="text-xs text-red-300 ml-1">BLINK</span>
                     </div>
                 </template>
+                <template x-if="$store.ingest?.getRecordingStatus() === 'blink'">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse shadow-lg shadow-yellow-400/50"></div>
+                        <span class="text-xs text-yellow-300 ml-1">BLINK ⏱️</span>
+                    </div>
+                </template>
             </div>
 
             <!-- Details Toggle Button -->
