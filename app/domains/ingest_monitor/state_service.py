@@ -252,8 +252,8 @@ class IngestStateService:
         Justin reports the current *wall-clock* timecode, not the duration.
         Duration = (current_timecode_frames - start_timecode_frames) / fps.
 
-        Returns 0 when data is missing (effectively disables auto-stop
-        until the next poll delivers valid timecodes).
+        Returns 0 when data is missing or start_timecode_frames is 0
+        (Justin reports 0 for idle channels — treat as "not yet available").
         """
         if not state.is_recording:
             return 0
@@ -261,7 +261,18 @@ class IngestStateService:
         framerate_raw = state.framerate  # e.g. 2500 = 25.00 fps
         start_frames = state.start_timecode_frames
 
-        if not framerate_raw or framerate_raw <= 0 or start_frames is None:
+        if not framerate_raw or framerate_raw <= 0:
+            return 0
+
+        # Justin reports StartTimecodeFrames=0 for idle/stopped channels.
+        # If we see 0 while rec=true, the data is stale or transitioning.
+        if start_frames is None or start_frames <= 0:
+            logging.debug(
+                "Channel %s: start_timecode_frames=%s (idle marker) — "
+                "duration unknown, returning 0",
+                state.name,
+                start_frames,
+            )
             return 0
 
         fps = framerate_raw / 100

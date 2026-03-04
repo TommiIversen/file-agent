@@ -135,6 +135,34 @@ Download
   "minutes": 50
 }
 
+Sådan er det ved stopped:
+
+{
+  "rec": false,
+  "frames": 11,
+  "channel": "Channel1",
+  "hours": 15,
+  "seconds": 41,
+  "options": {
+    "TOAJustInEngineTimecodeSource": 0,
+    "TOAJustInEngineLicenseStatus": false,
+    "TOAJustInEngineRecordingMode": 1,
+    "TOAJustInEngineAlternativeStartTimecodeFrames": 0,
+    "TOAJustInEngineTimecodeOffset": 0,
+    "TOAJustInEngineVideoSignalAvailable": true,
+    "TOAJustInEngineAlternativeStopTimecodeFrames": 0,
+    "TOAJustInEngineRecordingError": false,
+    "TOAJustInEngineLiveCutEnabled": true,
+    "TOAJustInEngineMetadataWritingOption": 1,
+    "TOAJustInEngineStartTimecodeFrames": 0,
+    "TOAJustInEngineAlternativeStartTimecodeActive": false,
+    "TOAJustInEngineFramerate": 2500,
+    "TOAJustInEngineAlternativeStopTimecodeActive": false
+  },
+  "name": "Channel1",
+  "minutes": 20
+}
+
 
 
 http://10.65.79.29:8080/ingest/activeChannels
