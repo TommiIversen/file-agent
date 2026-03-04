@@ -148,15 +148,16 @@ log_success "Binary installed"
 # ── Create directories ───────────────────────────────────────────────
 mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$PLIST_DIR"
 
-# ── Copy default config if none exists ───────────────────────────────
-if [[ ! -f "$CONFIG_DIR/settings.env" ]]; then
-    if [[ -f "$INSTALL_DIR/settings.env" ]]; then
-        cp "$INSTALL_DIR/settings.env" "$CONFIG_DIR/settings.env"
-        log_success "Default config copied to $CONFIG_DIR/settings.env"
-        log_warn "Edit this file to configure your source/destination directories!"
-    fi
+# ── Config note ──────────────────────────────────────────────────────
+# The app auto-generates a host-specific <hostname>-settings.env on
+# first start.  No need to seed a generic settings.env here.
+HOSTNAME_SHORT=$(hostname -s 2>/dev/null || hostname | cut -d. -f1)
+HOST_CONFIG="$CONFIG_DIR/${HOSTNAME_SHORT}-settings.env"
+if [[ -f "$HOST_CONFIG" ]]; then
+    log_info "Existing host config preserved at $HOST_CONFIG"
 else
-    log_info "Existing config preserved at $CONFIG_DIR/settings.env"
+    log_info "Host config will be auto-generated on first start at:"
+    log_info "  $HOST_CONFIG"
 fi
 
 # ── Create launchd plist ─────────────────────────────────────────────
