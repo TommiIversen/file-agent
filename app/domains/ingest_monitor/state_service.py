@@ -186,7 +186,9 @@ class IngestStateService:
                 frames=status_data.frames,
                 hours=status_data.hours,
                 minutes=status_data.minutes,
-                seconds=status_data.seconds
+                seconds=status_data.seconds,
+                start_timecode_frames=status_data.options.TOAJustInEngineStartTimecodeFrames,
+                framerate=status_data.options.TOAJustInEngineFramerate,
             )
 
             # Detect changes and generate events
@@ -245,8 +247,38 @@ class IngestStateService:
 
     @staticmethod
     def _channel_recording_seconds(state: ChannelState) -> int:
-        """Calculate total recording seconds from Justin's timecodes."""
-        return (state.hours or 0) * 3600 + (state.minutes or 0) * 60 + (state.seconds or 0)
+        """Calculate recording duration in seconds from Justin's timecodes.
+
+        Justin reports the current *wall-clock* timecode, not the duration.
+        Duration = (current_timecode_frames - start_timecode_frames) / fps.
+
+        Returns 0 when data is missing (effectively disables auto-stop
+        until the next poll delivers valid timecodes).
+        """
+        if not state.is_recording:
+            return 0
+
+        framerate_raw = state.framerate  # e.g. 2500 = 25.00 fps
+        start_frames = state.start_timecode_frames
+
+        if not framerate_raw or framerate_raw <= 0 or start_frames is None:
+            return 0
+
+        fps = framerate_raw / 100
+
+        current_total_frames = (
+            ((state.hours or 0) * 3600 + (state.minutes or 0) * 60 + (state.seconds or 0))
+            * fps
+            + (state.frames or 0)
+        )
+
+        duration_frames = current_total_frames - start_frames
+
+        # Handle midnight wraparound (start ~23:59, now ~00:01)
+        if duration_frames < 0:
+            duration_frames += 24 * 3600 * fps
+
+        return int(duration_frames / fps)
 
     async def _check_auto_stop(self) -> None:
         """
@@ -375,7 +407,9 @@ class IngestStateService:
                 frames=current_state.frames,
                 hours=current_state.hours,
                 minutes=current_state.minutes,
-                seconds=current_state.seconds
+                seconds=current_state.seconds,
+                start_timecode_frames=current_state.start_timecode_frames,
+                framerate=current_state.framerate,
             )
             
             self._status_cache[channel_name] = updated_state
@@ -424,7 +458,9 @@ class IngestStateService:
                     frames=state.frames,
                     hours=state.hours,
                     minutes=state.minutes,
-                    seconds=state.seconds
+                    seconds=state.seconds,
+                    start_timecode_frames=state.start_timecode_frames,
+                    framerate=state.framerate,
                 )
                 self._status_cache[channel_name] = cleared_state
                 cleared_count += 1

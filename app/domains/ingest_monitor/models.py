@@ -136,8 +136,12 @@ class ChannelState(BaseModel):
     has_errors: bool = False
     last_errors: List[JustInError] = []
     
-    # Additional metadata
+    # Additional metadata (current timecode)
     frames: Optional[int] = None
     hours: Optional[int] = None
     minutes: Optional[int] = None
     seconds: Optional[int] = None
+
+    # Timecode origin (needed for duration calculation)
+    start_timecode_frames: Optional[int] = None
+    framerate: Optional[int] = None  # Justin reports e.g. 2500 = 25.00 fps

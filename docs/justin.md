@@ -45,6 +45,98 @@ Download
 ```
 
 
+	
+Response body
+Download
+{
+  "rec": true,
+  "frames": 9,
+  "channel": "Channel1",
+  "hours": 12,
+  "seconds": 30,
+  "options": {
+    "TOAJustInEngineTimecodeSource": 0,
+    "TOAJustInEngineLicenseStatus": false,
+    "TOAJustInEngineRecordingMode": 1,
+    "TOAJustInEngineAlternativeStartTimecodeFrames": 0,
+    "TOAJustInEngineTimecodeOffset": 0,
+    "TOAJustInEngineVideoSignalAvailable": true,
+    "TOAJustInEngineAlternativeStopTimecodeFrames": 0,
+    "TOAJustInEngineRecordingError": false,
+    "TOAJustInEngineLiveCutEnabled": true,
+    "TOAJustInEngineMetadataWritingOption": 1,
+    "TOAJustInEngineStartTimecodeFrames": 1145179,
+    "TOAJustInEngineAlternativeStartTimecodeActive": false,
+    "TOAJustInEngineFramerate": 2500,
+    "TOAJustInEngineAlternativeStopTimecodeActive": false
+  },
+  "name": "Channel1",
+  "minutes": 46
+}
+
+
+# under recorder  - timecode == timenow everytime you hit the endpoint
+Response body
+Download
+{
+  "rec": true,
+  "frames": 9,
+  "channel": "Channel1",
+  "hours": 12,
+  "seconds": 30,
+  "options": {
+    "TOAJustInEngineTimecodeSource": 0,
+    "TOAJustInEngineLicenseStatus": false,
+    "TOAJustInEngineRecordingMode": 1,
+    "TOAJustInEngineAlternativeStartTimecodeFrames": 0,
+    "TOAJustInEngineTimecodeOffset": 0,
+    "TOAJustInEngineVideoSignalAvailable": true,
+    "TOAJustInEngineAlternativeStopTimecodeFrames": 0,
+    "TOAJustInEngineRecordingError": false,
+    "TOAJustInEngineLiveCutEnabled": true,
+    "TOAJustInEngineMetadataWritingOption": 1,
+    "TOAJustInEngineStartTimecodeFrames": 1145179,
+    "TOAJustInEngineAlternativeStartTimecodeActive": false,
+    "TOAJustInEngineFramerate": 2500,
+    "TOAJustInEngineAlternativeStopTimecodeActive": false
+  },
+  "name": "Channel1",
+  "minutes": 46
+}
+
+
+
+	same endpoint triggered later (same recording)
+Response body
+Download
+{
+  "rec": true,
+  "frames": 23,
+  "channel": "Channel1",
+  "hours": 12,
+  "seconds": 21,
+  "options": {
+    "TOAJustInEngineTimecodeSource": 0,
+    "TOAJustInEngineLicenseStatus": false,
+    "TOAJustInEngineRecordingMode": 1,
+    "TOAJustInEngineAlternativeStartTimecodeFrames": 0,
+    "TOAJustInEngineTimecodeOffset": 0,
+    "TOAJustInEngineVideoSignalAvailable": true,
+    "TOAJustInEngineAlternativeStopTimecodeFrames": 0,
+    "TOAJustInEngineRecordingError": false,
+    "TOAJustInEngineLiveCutEnabled": true,
+    "TOAJustInEngineMetadataWritingOption": 1,
+    "TOAJustInEngineStartTimecodeFrames": 1145179,
+    "TOAJustInEngineAlternativeStartTimecodeActive": false,
+    "TOAJustInEngineFramerate": 2500,
+    "TOAJustInEngineAlternativeStopTimecodeActive": false
+  },
+  "name": "Channel1",
+  "minutes": 50
+}
+
+
+
 http://10.65.79.29:8080/ingest/activeChannels
 
 curl -X 'GET' \

@@ -28,8 +28,22 @@ from app.domains.ingest_monitor.models import JustInRecordingStatus, JustInOptio
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
-def _make_status(channel: str, *, rec: bool, hours: int = 0, minutes: int = 0, seconds: int = 0):
-    """Create a JustInRecordingStatus with given timecodes."""
+def _make_status(
+    channel: str,
+    *,
+    rec: bool,
+    hours: int = 0,
+    minutes: int = 0,
+    seconds: int = 0,
+    frames: int = 0,
+    start_frames: int = 0,
+    framerate: int = 2500,
+):
+    """Create a JustInRecordingStatus with given timecodes.
+
+    With ``start_frames=0`` (default) the timecode fields directly represent
+    the recording *duration*, which keeps existing test values unchanged.
+    """
     return (
         channel,
         JustInRecordingStatus(
@@ -39,7 +53,12 @@ def _make_status(channel: str, *, rec: bool, hours: int = 0, minutes: int = 0, s
             hours=hours,
             minutes=minutes,
             seconds=seconds,
-            options=JustInOptions(TOAJustInEngineVideoSignalAvailable=True),
+            frames=frames,
+            options=JustInOptions(
+                TOAJustInEngineVideoSignalAvailable=True,
+                TOAJustInEngineStartTimecodeFrames=start_frames,
+                TOAJustInEngineFramerate=framerate,
+            ),
         ),
     )
 
@@ -377,3 +396,98 @@ async def test_warning_skip_when_warning_minutes_exceeds_limit():
     assert len(collector.triggers) == 1
     # Warning was skipped but trigger set warning_sent=True as well
     assert svc._auto_stop_warning_sent is True
+
+
+# ── Tests: Real-world timecode scenarios ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_wall_clock_timecode_not_treated_as_duration():
+    """Realistic scenario: timecode is 12:46:30 but recording only 3 min.
+
+    This is the bug the user reported — old code treated wall-clock TC as
+    duration, causing immediate auto-stop.
+    """
+    svc, _, collector = await _setup(auto_stop_minutes=4, auto_stop_warning_minutes=1)
+
+    # start_timecode_frames = 12:43:27 * 25fps = 1145175
+    start_frames = (12 * 3600 + 43 * 60 + 27) * 25  # 1145175
+
+    # Current timecode 12:46:30 → ~3 min of recording → under 4 min limit
+    await svc.update_channel_statuses([
+        _make_status(
+            "KAM_1",
+            rec=True,
+            hours=12,
+            minutes=46,
+            seconds=30,
+            start_frames=start_frames,
+            framerate=2500,
+        ),
+    ])
+    # Should NOT trigger (only ~3 min of actual recording)
+    assert len(collector.triggers) == 0
+    assert len(collector.warnings) == 1  # 3 min ≥ warning threshold (4-1=3)
+
+    # 12:47:27 → 4 minutes of recording → trigger
+    await svc.update_channel_statuses([
+        _make_status(
+            "KAM_1",
+            rec=True,
+            hours=12,
+            minutes=47,
+            seconds=27,
+            start_frames=start_frames,
+            framerate=2500,
+        ),
+    ])
+    assert len(collector.triggers) == 1
+
+
+@pytest.mark.asyncio
+async def test_midnight_wraparound():
+    """Recording starts at 23:58:00, current timecode is 00:02:00 → 4 min duration."""
+    svc, _, collector = await _setup(auto_stop_minutes=5, auto_stop_warning_minutes=1)
+
+    start_frames = (23 * 3600 + 58 * 60 + 0) * 25  # 23:58:00 in frames
+
+    # 00:02:00 next day → 4 minutes of recording
+    await svc.update_channel_statuses([
+        _make_status(
+            "KAM_1",
+            rec=True,
+            hours=0,
+            minutes=2,
+            seconds=0,
+            start_frames=start_frames,
+            framerate=2500,
+        ),
+    ])
+    assert len(collector.triggers) == 0  # 4 min < 5 min limit
+    assert len(collector.warnings) == 1  # 4 min ≥ warning threshold (5-1=4)
+
+
+@pytest.mark.asyncio
+async def test_missing_start_frames_returns_zero_duration():
+    """If start_timecode_frames is None, duration is 0 (auto-stop won't fire)."""
+    svc, _, collector = await _setup(auto_stop_minutes=1, auto_stop_warning_minutes=0)
+
+    await svc.update_channel_statuses([
+        (
+            "KAM_1",
+            JustInRecordingStatus(
+                rec=True,
+                channel="KAM_1",
+                name="KAM_1",
+                hours=12,
+                minutes=40,
+                seconds=0,
+                options=JustInOptions(
+                    TOAJustInEngineVideoSignalAvailable=True,
+                    TOAJustInEngineStartTimecodeFrames=None,
+                    TOAJustInEngineFramerate=2500,
+                ),
+            ),
+        ),
+    ])
+    # Should not trigger — we can't calculate duration
+    assert len(collector.triggers) == 0
