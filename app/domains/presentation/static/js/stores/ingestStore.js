@@ -70,6 +70,13 @@ document.addEventListener('alpine:init', () => {
             remainingSeconds: 0,
         },
 
+        /** Client-side interpolated countdown that ticks every second. */
+        _countdownDisplaySeconds: 0,
+        /** @type {number|null} Timestamp (ms) when remainingSeconds was last received from server. */
+        _countdownLastUpdate: null,
+        /** @type {number|null} Interval ID for the 1-second countdown tick. */
+        _countdownIntervalId: null,
+
         // === METHODS ===
 
         /**
@@ -296,6 +303,8 @@ document.addEventListener('alpine:init', () => {
                 this.startRecordingTimer(minTimeChannel);
             } else if (!isRecording && this.recordingTimer.isRunning) {
                 this.stopRecordingTimer();
+                this._stopCountdownTimer();
+                this._countdownDisplaySeconds = 0;
             } else if (isRecording && this.recordingTimer.isRunning) {
                 const minTimeChannel = recordingChannels.reduce((/** @type {ChannelStatus} */ min, /** @type {ChannelStatus} */ channel) => {
                     const channelTotalSeconds = (channel.hours || 0) * 3600 + (channel.minutes || 0) * 60 + (channel.seconds || 0);
@@ -622,6 +631,48 @@ document.addEventListener('alpine:init', () => {
             this.autoStop.triggered = info.triggered || false;
             this.autoStop.maxRecordingSeconds = info.max_recording_seconds || 0;
             this.autoStop.remainingSeconds = info.remaining_seconds || 0;
+
+            // Sync the client-side countdown with latest server value
+            this._countdownDisplaySeconds = Math.max(0, Math.round(info.remaining_seconds || 0));
+            this._countdownLastUpdate = Date.now();
+
+            // Start/stop the client-side tick as needed
+            if (this.autoStop.enabled && this.autoStop.remainingSeconds > 0 && this.recordingTimer.isRunning) {
+                this._startCountdownTimer();
+            } else {
+                this._stopCountdownTimer();
+            }
+        },
+
+        /**
+         * Starts the client-side 1-second countdown interval.
+         * Interpolates between server updates for a smooth display.
+         */
+        _startCountdownTimer() {
+            if (this._countdownIntervalId) return; // already running
+            this._countdownIntervalId = window.setInterval(() => {
+                if (this._countdownLastUpdate && this._countdownDisplaySeconds > 0) {
+                    this._countdownDisplaySeconds = Math.max(0, this._countdownDisplaySeconds - 1);
+                }
+            }, 1000);
+        },
+
+        /**
+         * Stops the client-side countdown interval.
+         */
+        _stopCountdownTimer() {
+            if (this._countdownIntervalId) {
+                clearInterval(this._countdownIntervalId);
+                this._countdownIntervalId = null;
+            }
+        },
+
+        /**
+         * Gets the interpolated countdown seconds for display.
+         * @returns {number}
+         */
+        getCountdownDisplaySeconds() {
+            return this._countdownDisplaySeconds;
         },
 
         /**
@@ -658,6 +709,7 @@ document.addEventListener('alpine:init', () => {
                 clearInterval(this.recordingTimer.intervalId);
                 this.recordingTimer.intervalId = null;
             }
+            this._stopCountdownTimer();
             console.log('🧹 Ingest store cleaned up');
         }
     });
