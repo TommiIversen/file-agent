@@ -87,10 +87,11 @@ def get_hostname_settings_file() -> str:
     """
     Get the appropriate settings file for this host.
 
-    Resolution order (first match wins):
-      1. ``<config_dir>/<hostname>-settings.env``   (user-customised)
-      2. ``<config_dir>/settings.env``              (user-placed override)
-      3. Generate a fresh config with platform-appropriate defaults.
+    Resolution order:
+      1. ``<config_dir>/<hostname>-settings.env`` exists → use it
+      2. Generate a fresh ``<hostname>-settings.env`` with platform defaults
+
+    Every machine always gets its own host-specific file.
 
     Returns:
         str: Absolute path to the settings file to use.
@@ -101,19 +102,13 @@ def get_hostname_settings_file() -> str:
         config_dir = _get_config_dir()
 
         host_settings = config_dir / f"{hostname}-settings.env"
-        user_base     = config_dir / "settings.env"
 
         # 1. Already have a host-specific file → use it
         if host_settings.exists():
             logging.debug(f"Using existing host-specific configuration: {host_settings}")
             return str(host_settings)
 
-        # 2. User placed a settings.env in config dir → use it as-is
-        if user_base.exists():
-            logging.debug(f"Using user settings override: {user_base}")
-            return str(user_base)
-
-        # 3. Generate a fresh config with platform-appropriate defaults
+        # 2. Generate a fresh config with platform-appropriate defaults
         content = _generate_default_config(hostname)
         with open(host_settings, "w", encoding="utf-8") as f:
             f.write(content)
