@@ -102,7 +102,7 @@
                                       'text-yellow-400 animate-pulse': $store.ingest?.autoStop?.warningSent && !$store.ingest?.autoStop?.triggered,
                                       'text-red-400': !$store.ingest?.autoStop?.warningSent && !$store.ingest?.autoStop?.triggered,
                                   }"
-                                  x-text="$store.ingest?.formatCountdown($store.ingest?.getCountdownDisplaySeconds() ?? 0)" x-cloak></span>
+                                  x-text="$store.ingest?.countdownDisplayTime || '00:00:00:00'" x-cloak></span>
                         </template>
 
                         <!-- NORMAL MODE: Wall-clock timecode (when auto-stop not enabled or not recording) -->

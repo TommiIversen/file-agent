@@ -70,12 +70,12 @@ document.addEventListener('alpine:init', () => {
             remainingSeconds: 0,
         },
 
-        /** Client-side interpolated countdown that ticks every second. */
-        _countdownDisplaySeconds: 0,
+        /** @type {string} Client-side interpolated countdown display (HH:MM:SS:FF). */
+        countdownDisplayTime: '00:00:00:00',
+        /** @type {number} Server-provided remaining seconds at last sync. */
+        _countdownServerRemaining: 0,
         /** @type {number|null} Timestamp (ms) when remainingSeconds was last received from server. */
         _countdownLastUpdate: null,
-        /** @type {number|null} Interval ID for the 1-second countdown tick. */
-        _countdownIntervalId: null,
 
         // === METHODS ===
 
@@ -303,8 +303,9 @@ document.addEventListener('alpine:init', () => {
                 this.startRecordingTimer(minTimeChannel);
             } else if (!isRecording && this.recordingTimer.isRunning) {
                 this.stopRecordingTimer();
-                this._stopCountdownTimer();
-                this._countdownDisplaySeconds = 0;
+                this._countdownServerRemaining = 0;
+                this._countdownLastUpdate = null;
+                this.countdownDisplayTime = '00:00:00:00';
             } else if (isRecording && this.recordingTimer.isRunning) {
                 const minTimeChannel = recordingChannels.reduce((/** @type {ChannelStatus} */ min, /** @type {ChannelStatus} */ channel) => {
                     const channelTotalSeconds = (channel.hours || 0) * 3600 + (channel.minutes || 0) * 60 + (channel.seconds || 0);
@@ -367,14 +368,17 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Updates the timer's display string based on elapsed time.
+         * Also updates the auto-stop countdown display if active.
          */
         updateTimerDisplay() {
             if (!this.recordingTimer.isRunning || !this.recordingTimer.startTime) {
                 this.recordingTimer.displayTime = '00:00:00:00';
+                this.countdownDisplayTime = '00:00:00:00';
                 return;
             }
 
-            const elapsedMs = Date.now() - this.recordingTimer.startTime;
+            const now = Date.now();
+            const elapsedMs = now - this.recordingTimer.startTime;
             const totalFrames = Math.floor((elapsedMs * 25) / 1000);
             
             const hours = Math.floor(totalFrames / (25 * 60 * 60));
@@ -384,6 +388,20 @@ document.addEventListener('alpine:init', () => {
 
             this.recordingTimer.displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(frames).padStart(2, '0')}`;
             this.recordingTimer.currentTime = { hours, minutes, seconds, frames };
+
+            // Interpolate auto-stop countdown with frame accuracy
+            if (this.autoStop.enabled && this._countdownLastUpdate && this._countdownServerRemaining > 0) {
+                const elapsedSinceSync = (now - this._countdownLastUpdate) / 1000;
+                const remaining = Math.max(0, this._countdownServerRemaining - elapsedSinceSync);
+                const cFrames = Math.floor(remaining * 25);
+                const cH = Math.floor(cFrames / (25 * 60 * 60));
+                const cM = Math.floor((cFrames % (25 * 60 * 60)) / (25 * 60));
+                const cS = Math.floor((cFrames % (25 * 60)) / 25);
+                const cF = cFrames % 25;
+                this.countdownDisplayTime = `${String(cH).padStart(2, '0')}:${String(cM).padStart(2, '0')}:${String(cS).padStart(2, '0')}:${String(cF).padStart(2, '0')}`;
+            } else if (this.autoStop.enabled) {
+                this.countdownDisplayTime = '00:00:00:00';
+            }
         },
 
         /**
@@ -632,61 +650,12 @@ document.addEventListener('alpine:init', () => {
             this.autoStop.maxRecordingSeconds = info.max_recording_seconds || 0;
             this.autoStop.remainingSeconds = info.remaining_seconds || 0;
 
-            // Sync the client-side countdown with latest server value
-            this._countdownDisplaySeconds = Math.max(0, Math.round(info.remaining_seconds || 0));
+            // Sync the client-side countdown reference point
+            this._countdownServerRemaining = Math.max(0, info.remaining_seconds || 0);
             this._countdownLastUpdate = Date.now();
-
-            // Start/stop the client-side tick as needed
-            if (this.autoStop.enabled && this.autoStop.remainingSeconds > 0 && this.recordingTimer.isRunning) {
-                this._startCountdownTimer();
-            } else {
-                this._stopCountdownTimer();
-            }
         },
 
-        /**
-         * Starts the client-side 1-second countdown interval.
-         * Interpolates between server updates for a smooth display.
-         */
-        _startCountdownTimer() {
-            if (this._countdownIntervalId) return; // already running
-            this._countdownIntervalId = window.setInterval(() => {
-                if (this._countdownLastUpdate && this._countdownDisplaySeconds > 0) {
-                    this._countdownDisplaySeconds = Math.max(0, this._countdownDisplaySeconds - 1);
-                }
-            }, 1000);
-        },
 
-        /**
-         * Stops the client-side countdown interval.
-         */
-        _stopCountdownTimer() {
-            if (this._countdownIntervalId) {
-                clearInterval(this._countdownIntervalId);
-                this._countdownIntervalId = null;
-            }
-        },
-
-        /**
-         * Gets the interpolated countdown seconds for display.
-         * @returns {number}
-         */
-        getCountdownDisplaySeconds() {
-            return this._countdownDisplaySeconds;
-        },
-
-        /**
-         * Formats seconds into a human-readable countdown string (e.g. "02:30:15").
-         * @param {number} totalSeconds
-         * @returns {string}
-         */
-        formatCountdown(totalSeconds) {
-            if (totalSeconds <= 0) return '00:00:00';
-            const h = Math.floor(totalSeconds / 3600);
-            const m = Math.floor((totalSeconds % 3600) / 60);
-            const s = totalSeconds % 60;
-            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-        },
 
         /**
          * Formats a total-seconds value into a short label like "3h 00m".
@@ -709,7 +678,6 @@ document.addEventListener('alpine:init', () => {
                 clearInterval(this.recordingTimer.intervalId);
                 this.recordingTimer.intervalId = null;
             }
-            this._stopCountdownTimer();
             console.log('🧹 Ingest store cleaned up');
         }
     });
