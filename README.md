@@ -19,6 +19,19 @@ This application is a robust file transfer agent for automated and reliable file
 - **"Growing File" Mode:** Can start copying large files (like video recordings) *while* they are still being written, significantly reducing end-to-end transfer time.
 - **Destination Space Check:** Monitors available space on the destination to prevent failed transfers.
 - **Tally Light Integration:** Real-time recording status via IP Power 9255 switch (OFF/SOLID/BLINKING based on recording activity).
+- **Auto-Stop Recording:** Automatically stops all Just In Engine channels when any channel exceeds a configurable time limit — uses Justin's own timecodes (no local timers). Tally light blinks as a warning before the limit is reached, and a live countdown is shown in the UI.
+
+### Auto-Stop Recording
+
+Prevents runaway recordings by stopping all channels after a configurable time limit. Set to `0` to disable.
+
+```bash
+# settings.env
+JUSTIN_AUTO_STOP_MINUTES=180          # Stop all channels after 180 min (0 = disabled)
+JUSTIN_AUTO_STOP_WARNING_MINUTES=5    # Tally blinks + UI warning 5 min before limit
+```
+
+The feature uses Justin's authoritative timecodes — no local timers, survives restarts, no clock drift. Guard flags reset automatically when all channels stop recording.
 
 ### Tally Light Configuration
 
