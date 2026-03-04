@@ -359,8 +359,11 @@ def get_ingest_state_service() -> IngestStateService:
     and detecting changes to publish appropriate events.
     """
     if "ingest_state_service" not in _singletons:
+        settings = get_settings()
         _singletons["ingest_state_service"] = IngestStateService(
-            event_bus=get_event_bus()
+            event_bus=get_event_bus(),
+            auto_stop_minutes=settings.justin_auto_stop_minutes,
+            auto_stop_warning_minutes=settings.justin_auto_stop_warning_minutes,
         )
     return _singletons["ingest_state_service"]
 

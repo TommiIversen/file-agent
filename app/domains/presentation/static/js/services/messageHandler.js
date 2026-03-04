@@ -141,6 +141,14 @@ class MessageHandler {
                     this.handleRecordingPathsUpdate(message.data);
                     break;
 
+                case 'auto_stop_warning':
+                    this.handleAutoStopWarning(message.data);
+                    break;
+
+                case 'auto_stop_triggered':
+                    this.handleAutoStopTriggered(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }
@@ -414,7 +422,7 @@ class MessageHandler {
 
     /**
      * Handle ingest status updates from Just In Engine
-     * @param {{channels: {[key: string]: ChannelStatus}}} data
+     * @param {{channels: {[key: string]: ChannelStatus}, auto_stop?: Object}} data
      */
     handleIngestStatusUpdate(data) {
         if (!this.ingestStore) {
@@ -427,6 +435,11 @@ class MessageHandler {
         if (data.channels) {
             this.ingestStore.updateChannels(data.channels);
             this.ingestStore.setConnected(true);
+        }
+
+        // Update auto-stop state (included in every status broadcast)
+        if (data.auto_stop) {
+            this.ingestStore.updateAutoStop(data.auto_stop);
         }
     }
 
@@ -495,6 +508,27 @@ class MessageHandler {
             data.preset_name,
             data.paths
         );
+    }
+
+    /**
+     * Handle auto-stop warning from server
+     * @param {{channel_name: string, recording_seconds: number, limit_seconds: number, remaining_seconds: number}} data
+     */
+    handleAutoStopWarning(data) {
+        if (!this.ingestStore) return;
+        const remainMin = Math.floor(data.remaining_seconds / 60);
+        console.warn(`⏱️ AUTO-STOP WARNING: ${remainMin}m remaining (channel ${data.channel_name})`);
+        this.ingestStore.autoStop.warningSent = true;
+    }
+
+    /**
+     * Handle auto-stop triggered from server
+     * @param {{channel_name: string, recording_seconds: number, limit_seconds: number}} data
+     */
+    handleAutoStopTriggered(data) {
+        if (!this.ingestStore) return;
+        console.warn(`🛑 AUTO-STOP TRIGGERED: Stopping all channels (channel ${data.channel_name} at ${data.recording_seconds}s)`);
+        this.ingestStore.autoStop.triggered = true;
     }
 
 }

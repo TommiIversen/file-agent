@@ -23,6 +23,8 @@ from app.domains.ingest_monitor.events import (
     IngestOnlineEvent,
     IngestOfflineEvent,
     RecordingPathsDiscoveredEvent,
+    AutoStopWarningEvent,
+    AutoStopTriggeredEvent,
 )
 
 # 3. Gør funktionen async og tilføj event_bus
@@ -60,6 +62,10 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(IngestOnlineEvent, handlers.handle_ingest_online_event)
     await event_bus.subscribe(IngestOfflineEvent, handlers.handle_ingest_offline_event)
     await event_bus.subscribe(RecordingPathsDiscoveredEvent, handlers.handle_recording_paths_discovered_event)
+    
+    # Subscribe to auto-stop events for real-time UI notifications
+    await event_bus.subscribe(AutoStopWarningEvent, handlers.handle_auto_stop_warning_event)
+    await event_bus.subscribe(AutoStopTriggeredEvent, handlers.handle_auto_stop_triggered_event)
     
     # Import and subscribe to tally switch events for real-time UI updates
     from app.domains.tally_light.monitor_service import (

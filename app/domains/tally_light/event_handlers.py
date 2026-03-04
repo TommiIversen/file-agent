@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Optional
 
 from app.config import Settings
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, AutoStopWarningEvent
 from .protocols import PowerSwitchError
 from .factory import create_power_switch
 
@@ -37,6 +37,7 @@ class TallyLightEventHandler:
         self._blinker_task: Optional[asyncio.Task] = None
         self._blink_interval_sec: float = settings.tally_light_blink_interval_seconds
         self._lock = asyncio.Lock() # Protects access to _blinker_task
+        self._auto_stop_warning_active: bool = False  # Set by AutoStopWarningEvent
         
         logging.info("TallyLightEventHandler initialized with software blinker logic")
         logging.info(f"Power switch type: {self._power_switch.switch_type.value}")
@@ -52,7 +53,24 @@ class TallyLightEventHandler:
         - No channels recording → OFF
         - All channels recording → SOLID ON  
         - Some channels recording → BLINKING
+        
+        Note: When an auto-stop warning is active the tally is forced
+        to BLINKING via the separate handle_auto_stop_warning handler,
+        which takes precedence until the warning phase ends.
         """
+        # If auto-stop warning is active, the warning handler owns the state
+        # (unless nobody is recording anymore — then reset the flag)
+        if self._auto_stop_warning_active:
+            recording_count = sum(
+                1 for state in (event.status_snapshot or {}).values()
+                if state.get("is_recording", False)
+            )
+            if recording_count == 0:
+                self._auto_stop_warning_active = False
+                logging.info("Auto-stop warning flag cleared (no channels recording)")
+            else:
+                return
+
         snapshot = event.status_snapshot
 
         # 1. Determine the desired new state
@@ -78,6 +96,20 @@ class TallyLightEventHandler:
                 new_state, 
                 f"{recording_channels}/{total_channels} channels recording"
             )
+
+    async def handle_auto_stop_warning(self, event: AutoStopWarningEvent) -> None:
+        """
+        Force the tally light to BLINKING when an auto-stop warning fires.
+        
+        This overrides the normal recording-based logic until all recording
+        stops (which resets the warning flag in StateService).
+        """
+        self._auto_stop_warning_active = True
+        remaining_min = event.remaining_seconds // 60
+        await self._update_tally_state(
+            TallyState.BLINKING,
+            f"Auto-stop warning: {remaining_min}m remaining (channel {event.channel_name})"
+        )
 
     async def _update_tally_state(self, new_state: TallyState, reason: str) -> None:
         """

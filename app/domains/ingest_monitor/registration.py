@@ -12,9 +12,11 @@ from app.core.events.event_bus import DomainEventBus
 from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 from .handlers import GetIngestStatusQueryHandler, GetRecordingPathsQueryHandler, ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
+from .events import AutoStopTriggeredEvent
+from .auto_stop_handler import AutoStopHandler
 
 
-def register_ingest_monitor_domain(
+async def register_ingest_monitor_domain(
     command_bus: CommandBus, 
     query_bus: QueryBus, 
     event_bus: DomainEventBus,
@@ -47,5 +49,11 @@ def register_ingest_monitor_domain(
     
     stop_command_handler = StopAllChannelsCommandHandler(ingest_monitor_worker)
     command_bus.register(StopAllChannelsCommand, stop_command_handler.handle)
+
+    # Register auto-stop event handler
+    auto_stop = AutoStopHandler(api_client=ingest_monitor_worker._api_client)
+    await event_bus.subscribe(
+        AutoStopTriggeredEvent, auto_stop.handle_auto_stop_triggered
+    )
     
     logging.info("IngestMonitor domain registration completed")

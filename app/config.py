@@ -100,6 +100,14 @@ class Settings(BaseSettings):
         default=2.0,
         description="HTTP timeout for Just In API calls (seconds)"
     )
+    justin_auto_stop_minutes: int = Field(
+        default=0,
+        description="Auto-stop all channels after N minutes of recording (0 = disabled)"
+    )
+    justin_auto_stop_warning_minutes: int = Field(
+        default=5,
+        description="Tally blinks N minutes before auto-stop limit is reached"
+    )
 
     # Tally Light integration
     tally_light_switch_type: str = Field(

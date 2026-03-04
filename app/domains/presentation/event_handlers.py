@@ -11,6 +11,8 @@ from app.domains.ingest_monitor.events import (
     IngestOnlineEvent,
     IngestOfflineEvent,
     RecordingPathsDiscoveredEvent,
+    AutoStopWarningEvent,
+    AutoStopTriggeredEvent,
 )
 from app.domains.tally_light.monitor_service import (
     TallySwitchStatusUpdatedEvent, 
@@ -191,6 +193,7 @@ class PresentationEventHandlers:
             "type": "ingest_status_update",
             "data": {
                 "channels": event.status_snapshot,
+                "auto_stop": event.auto_stop_info,
                 "timestamp": self._get_timestamp(),
             },
         }
@@ -258,6 +261,49 @@ class PresentationEventHandlers:
                 "channel_name": event.channel_name,
                 "preset_name": event.preset_name,
                 "paths": list(event.paths),
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    # === AUTO-STOP EVENT HANDLERS ===
+
+    async def handle_auto_stop_warning_event(self, event: AutoStopWarningEvent) -> None:
+        """Broadcast auto-stop warning to all connected clients."""
+        logging.warning(
+            "Broadcasting auto-stop warning: %s at %ds, %ds remaining",
+            event.channel_name,
+            event.recording_seconds,
+            event.remaining_seconds,
+        )
+
+        message_data = {
+            "type": "auto_stop_warning",
+            "data": {
+                "channel_name": event.channel_name,
+                "recording_seconds": event.recording_seconds,
+                "limit_seconds": event.limit_seconds,
+                "remaining_seconds": event.remaining_seconds,
+                "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_auto_stop_triggered_event(self, event: AutoStopTriggeredEvent) -> None:
+        """Broadcast auto-stop triggered notification to all connected clients."""
+        logging.warning(
+            "Broadcasting auto-stop triggered: %s at %ds (limit=%ds)",
+            event.channel_name,
+            event.recording_seconds,
+            event.limit_seconds,
+        )
+
+        message_data = {
+            "type": "auto_stop_triggered",
+            "data": {
+                "channel_name": event.channel_name,
+                "recording_seconds": event.recording_seconds,
+                "limit_seconds": event.limit_seconds,
                 "timestamp": self._get_timestamp(),
             },
         }

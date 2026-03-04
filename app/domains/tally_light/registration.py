@@ -7,7 +7,7 @@ import logging
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.cqrs.command_bus import CommandBus
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent
+from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, AutoStopWarningEvent
 from .event_handlers import TallyLightEventHandler
 
 
@@ -28,6 +28,12 @@ async def register_tally_light_domain(
     await event_bus.subscribe(
         IngestStatusUpdatedEvent, 
         handler.handle_ingest_status_update
+    )
+
+    # Subscribe to auto-stop warning — forces blink before time limit
+    await event_bus.subscribe(
+        AutoStopWarningEvent,
+        handler.handle_auto_stop_warning
     )
 
     logging.info("TallyLight domain handlers registered successfully")

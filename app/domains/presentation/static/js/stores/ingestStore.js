@@ -52,6 +52,24 @@ document.addEventListener('alpine:init', () => {
         /** @type {Object.<string, {preset_name: string, paths: string[]}>} */
         recordingPaths: {},
 
+        /** Auto-stop state - populated from server every 2s. */
+        autoStop: {
+            /** @type {boolean} */
+            enabled: false,
+            /** @type {number} */
+            limitSeconds: 0,
+            /** @type {number} */
+            warningSeconds: 0,
+            /** @type {boolean} */
+            warningSent: false,
+            /** @type {boolean} */
+            triggered: false,
+            /** @type {number} */
+            maxRecordingSeconds: 0,
+            /** @type {number} */
+            remainingSeconds: 0,
+        },
+
         // === METHODS ===
 
         /**
@@ -586,6 +604,47 @@ document.addEventListener('alpine:init', () => {
          */
         hasRecordingPaths() {
             return Object.keys(this.recordingPaths).length > 0;
+        },
+
+        /**
+         * Updates auto-stop state from the server payload.
+         * @param {Object} info - Auto-stop info from ingest_status_update
+         */
+        updateAutoStop(info) {
+            if (!info) return;
+            this.autoStop.enabled = info.enabled || false;
+            this.autoStop.limitSeconds = info.limit_seconds || 0;
+            this.autoStop.warningSeconds = info.warning_seconds || 0;
+            this.autoStop.warningSent = info.warning_sent || false;
+            this.autoStop.triggered = info.triggered || false;
+            this.autoStop.maxRecordingSeconds = info.max_recording_seconds || 0;
+            this.autoStop.remainingSeconds = info.remaining_seconds || 0;
+        },
+
+        /**
+         * Formats seconds into a human-readable countdown string (e.g. "02:30:15").
+         * @param {number} totalSeconds
+         * @returns {string}
+         */
+        formatCountdown(totalSeconds) {
+            if (totalSeconds <= 0) return '00:00:00';
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        },
+
+        /**
+         * Formats a total-seconds value into a short label like "3h 00m".
+         * @param {number} totalSeconds
+         * @returns {string}
+         */
+        formatLimit(totalSeconds) {
+            if (totalSeconds <= 0) return '-';
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+            return `${m}m`;
         },
 
         /**

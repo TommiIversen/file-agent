@@ -19,6 +19,8 @@ from .events import (
     IngestOnlineEvent,
     IngestOfflineEvent,
     RecordingPathsDiscoveredEvent,
+    AutoStopWarningEvent,
+    AutoStopTriggeredEvent,
 )
 
 
@@ -31,13 +33,42 @@ class IngestStateService:
     at fokusere på state management og change detection.
     """
 
-    def __init__(self, event_bus: DomainEventBus):
-        """Initialize state service with event bus for publishing changes."""
+    def __init__(
+        self,
+        event_bus: DomainEventBus,
+        auto_stop_minutes: int = 0,
+        auto_stop_warning_minutes: int = 5,
+    ):
+        """Initialize state service with event bus for publishing changes.
+
+        Args:
+            event_bus: Event bus for publishing domain events.
+            auto_stop_minutes: Stop all channels after N minutes (0 = disabled).
+            auto_stop_warning_minutes: Warn N minutes before auto-stop limit.
+        """
         self._event_bus = event_bus
         self._status_cache: Dict[str, ChannelState] = {}
         self._is_connected: bool = False # Track connection status
         self._recording_paths: Dict[str, List[str]] = {}  # channel -> [paths]
         self._recording_preset_names: Dict[str, str] = {}  # channel -> preset_name
+
+        # Auto-stop configuration
+        self._auto_stop_limit_seconds: int = auto_stop_minutes * 60
+        self._auto_stop_warning_seconds: int = (
+            (auto_stop_minutes - auto_stop_warning_minutes) * 60
+            if auto_stop_minutes > auto_stop_warning_minutes
+            else 0
+        )
+        # Guard flags - reset when all recording stops
+        self._auto_stop_warning_sent: bool = False
+        self._auto_stop_triggered: bool = False
+
+        if self._auto_stop_limit_seconds > 0:
+            logging.info(
+                "Auto-stop enabled: limit=%dm, warning at=%dm before",
+                auto_stop_minutes,
+                auto_stop_warning_minutes,
+            )
         logging.debug("IngestStateService initialized")
 
     def get_status_cache(self) -> Dict[str, dict]:
@@ -170,8 +201,12 @@ class IngestStateService:
 
         # Always publish the complete snapshot for UI/Tally consumption
         await self._event_bus.publish(IngestStatusUpdatedEvent(
-            status_snapshot=self.get_status_cache()
+            status_snapshot=self.get_status_cache(),
+            auto_stop_info=self.get_auto_stop_info(),
         ))
+
+        # Auto-stop detection (after all statuses updated)
+        await self._check_auto_stop()
 
     def _detect_changes(self, old_state: ChannelState, new_state: ChannelState) -> List:
         """
@@ -205,6 +240,110 @@ class IngestStateService:
                 logging.warning(f"Channel {new_state.name} signal lost")
 
         return events
+
+    # ── Auto-stop detection ──────────────────────────────────────────────
+
+    @staticmethod
+    def _channel_recording_seconds(state: ChannelState) -> int:
+        """Calculate total recording seconds from Justin's timecodes."""
+        return (state.hours or 0) * 3600 + (state.minutes or 0) * 60 + (state.seconds or 0)
+
+    async def _check_auto_stop(self) -> None:
+        """
+        Check if any recording channel has exceeded the auto-stop limit.
+
+        Uses Justin's own timecodes (authoritative) - no local timers.
+        Guard flags prevent repeated events; they reset when all recording stops.
+        """
+        if self._auto_stop_limit_seconds <= 0:
+            return  # Feature disabled
+
+        recording_channels = [
+            s for s in self._status_cache.values() if s.is_recording
+        ]
+
+        # Reset guards when nobody is recording
+        if not recording_channels:
+            if self._auto_stop_warning_sent or self._auto_stop_triggered:
+                self._auto_stop_warning_sent = False
+                self._auto_stop_triggered = False
+                logging.debug("Auto-stop guards reset (no channels recording)")
+            return
+
+        # Find channel with the longest recording time
+        longest = max(recording_channels, key=self._channel_recording_seconds)
+        longest_seconds = self._channel_recording_seconds(longest)
+
+        # Check trigger (limit reached)
+        if not self._auto_stop_triggered and longest_seconds >= self._auto_stop_limit_seconds:
+            self._auto_stop_triggered = True
+            self._auto_stop_warning_sent = True  # No need for warning anymore
+            logging.warning(
+                "AUTO-STOP triggered by %s at %ds (limit=%ds)",
+                longest.name,
+                longest_seconds,
+                self._auto_stop_limit_seconds,
+            )
+            await self._event_bus.publish(
+                AutoStopTriggeredEvent(
+                    channel_name=longest.name,
+                    recording_seconds=longest_seconds,
+                    limit_seconds=self._auto_stop_limit_seconds,
+                )
+            )
+            return
+
+        # Check warning (approaching limit)
+        if (
+            not self._auto_stop_warning_sent
+            and self._auto_stop_warning_seconds > 0
+            and longest_seconds >= self._auto_stop_warning_seconds
+        ):
+            self._auto_stop_warning_sent = True
+            remaining = self._auto_stop_limit_seconds - longest_seconds
+            logging.info(
+                "AUTO-STOP warning: %s at %ds, %ds remaining (limit=%ds)",
+                longest.name,
+                longest_seconds,
+                remaining,
+                self._auto_stop_limit_seconds,
+            )
+            await self._event_bus.publish(
+                AutoStopWarningEvent(
+                    channel_name=longest.name,
+                    recording_seconds=longest_seconds,
+                    limit_seconds=self._auto_stop_limit_seconds,
+                    remaining_seconds=remaining,
+                )
+            )
+
+    def get_auto_stop_info(self) -> dict:
+        """
+        Return auto-stop status for UI consumption.
+
+        Returns:
+            Dict with enabled, limit_seconds, warning_sent, triggered,
+            and max_recording_seconds across all recording channels.
+        """
+        recording_channels = [
+            s for s in self._status_cache.values() if s.is_recording
+        ]
+        max_rec = (
+            max(self._channel_recording_seconds(c) for c in recording_channels)
+            if recording_channels
+            else 0
+        )
+        return {
+            "enabled": self._auto_stop_limit_seconds > 0,
+            "limit_seconds": self._auto_stop_limit_seconds,
+            "warning_seconds": self._auto_stop_warning_seconds,
+            "warning_sent": self._auto_stop_warning_sent,
+            "triggered": self._auto_stop_triggered,
+            "max_recording_seconds": max_rec,
+            "remaining_seconds": max(self._auto_stop_limit_seconds - max_rec, 0)
+            if self._auto_stop_limit_seconds > 0
+            else 0,
+        }
 
     async def update_channel_errors(self, error_updates: List[Tuple[str, List[JustInError]]]) -> None:
         """
@@ -294,7 +433,8 @@ class IngestStateService:
         if cleared_count > 0:
             # Publish updated status to UI
             await self._event_bus.publish(IngestStatusUpdatedEvent(
-                status_snapshot=self.get_status_cache()
+                status_snapshot=self.get_status_cache(),
+                auto_stop_info=self.get_auto_stop_info(),
             ))
             logging.info(f"Cleared error state for {cleared_count} channels")
         
