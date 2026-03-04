@@ -22,7 +22,7 @@ def _generate_default_config(hostname: str) -> str:
     is_mac = platform.system() == "Darwin"
 
     if is_mac:
-        source = f"/Users/{user}/file-agent-input"
+        source = "/Volumes/NLE-External"
         destination = "/Volumes/share"
         log_path = f"/Users/{user}/Library/Logs/file-agent/file_agent.log"
         mount_point = "/Volumes/share"
@@ -61,15 +61,10 @@ MACOS_MOUNT_POINT={mount_point}
 
 # ── Just In Engine (optional) ────────────────────────────────────────
 JUSTIN_API_BASE_URL=http://localhost:8080
-JUSTIN_FAST_POLL_INTERVAL_SECONDS=2.0
-JUSTIN_SLOW_POLL_INTERVAL_SECONDS=30.0
-JUSTIN_API_TIMEOUT_SECONDS=2.0
 
 # ── Tally Light (optional) ───────────────────────────────────────────
 TALLY_LIGHT_SWITCH_TYPE=ip_power_9255
 TALLY_LIGHT_SWITCH_IP=10.65.77.9
-TALLY_LIGHT_BLINK_INTERVAL_SECONDS=0.5
-TALLY_LIGHT_API_TIMEOUT_SECONDS=2.0
 """
 
 

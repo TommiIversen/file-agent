@@ -89,7 +89,7 @@ class Settings(BaseSettings):
         description="Base URL for Just In Engine API"
     )
     justin_fast_poll_interval_seconds: float = Field(
-        default=2.0,
+        default=3.0,
         description="Fast polling interval for recording status (seconds)"
     )
     justin_slow_poll_interval_seconds: float = Field(
