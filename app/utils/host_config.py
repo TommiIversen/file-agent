@@ -61,6 +61,8 @@ MACOS_MOUNT_POINT={mount_point}
 
 # ── Just In Engine (optional) ────────────────────────────────────────
 JUSTIN_API_BASE_URL=http://localhost:8080
+# JUSTIN_AUTO_STOP_MINUTES=0
+# JUSTIN_AUTO_STOP_WARNING_MINUTES=5
 
 # ── Tally Light (optional) ───────────────────────────────────────────
 TALLY_LIGHT_SWITCH_TYPE=ip_power_9255
