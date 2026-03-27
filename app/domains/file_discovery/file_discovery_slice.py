@@ -259,7 +259,7 @@ class FileDiscoverySlice:
         Matches original StateManager.get_files_by_status logic exactly.
         Returns only the most current file for each path.
         """
-        current_files = {}
+        current_files: dict[str, TrackedFile] = {}
         all_files = await self._file_repository.get_all()
         
         for tracked_file in all_files:

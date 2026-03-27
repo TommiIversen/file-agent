@@ -11,7 +11,7 @@ class MacOSNetworkChecker:
     def __init__(self):
         pass
     
-    async def is_network_available(self, share_url: str = None) -> bool:
+    async def is_network_available(self, share_url: str | None = None) -> bool:
         """
         Check if network is available by testing the specific share host.
         

@@ -4,14 +4,16 @@ These queries handle read-only operations for system settings and configuration.
 """
 from dataclasses import dataclass
 
+from app.core.cqrs.query import Query
+
 
 @dataclass
-class GetSettingsQuery:
+class GetSettingsQuery(Query):
     """Query to get the current application settings."""
     pass
 
 
 @dataclass
-class GetConfigInfoQuery:
+class GetConfigInfoQuery(Query):
     """Query to get information about the loaded configuration file."""
     pass

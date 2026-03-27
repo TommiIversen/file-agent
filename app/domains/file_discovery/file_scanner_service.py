@@ -28,7 +28,7 @@ class FileScannerService:
         settings: Settings,
         command_bus: CommandBus,
         query_bus: QueryBus,
-        storage_monitor: "StorageMonitorService" = None,
+        storage_monitor: "StorageMonitorService | None" = None,
         event_bus: Optional[DomainEventBus] = None,
     ):
         self._command_bus = command_bus

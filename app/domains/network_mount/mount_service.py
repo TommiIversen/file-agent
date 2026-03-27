@@ -53,7 +53,7 @@ class NetworkMountService:
             return False
 
         try:
-            is_accessible = await self._mounter.verify_mount_accessible(
+            is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
                 local_path
             )
 
@@ -61,7 +61,7 @@ class NetworkMountService:
                 return True
 
             if await self._mounter.attempt_mount(share_url):
-                is_accessible = await self._mounter.verify_mount_accessible(
+                is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
                     local_path
                 )
                 return is_accessible
@@ -76,7 +76,7 @@ class NetworkMountService:
         if not self._mounter:
             return False
         try:
-            is_accessible = await self._mounter.verify_mount_accessible(
+            _is_mounted, is_accessible = await self._mounter.verify_mount_accessible(
                 local_path
             )
             return is_accessible

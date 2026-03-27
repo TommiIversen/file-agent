@@ -146,9 +146,9 @@ class IngestApiClient:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Filter out None results and exceptions
-        successful_results = [
+        successful_results: list[tuple[str, JustInRecordingStatus]] = [
             result for result in results 
-            if result is not None and not isinstance(result, Exception)
+            if result is not None and not isinstance(result, BaseException)
         ]
         
         # If we got no successful results and we had channels to check, API might be down
@@ -185,9 +185,9 @@ class IngestApiClient:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Filter out exceptions, keep empty error lists
-        successful_results = [
+        successful_results: list[tuple[str, list[JustInError]]] = [
             result for result in results 
-            if not isinstance(result, Exception)
+            if not isinstance(result, BaseException)
         ]
         
         logging.debug(f"Successfully fetched errors for {len(successful_results)}/{len(channel_names)} channels")

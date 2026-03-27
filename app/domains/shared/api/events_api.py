@@ -63,13 +63,13 @@ async def get_event_stats(
     all_events = event_logger.get_events()
     
     # Count by level
-    level_counts = {}
+    level_counts: dict[str, int] = {}
     for event in all_events:
         level = event.level
         level_counts[level] = level_counts.get(level, 0) + 1
     
     # Count by event type
-    type_counts = {}
+    type_counts: dict[str, int] = {}
     for event in all_events:
         event_type = event.event_type
         type_counts[event_type] = type_counts.get(event_type, 0) + 1

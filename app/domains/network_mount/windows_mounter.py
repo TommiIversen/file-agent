@@ -73,12 +73,10 @@ class WindowsMounter(BaseMounter):
             # Test accessibility by trying to list directory
             try:
                 # Use dir command for Windows
-                process = await asyncio.create_subprocess_exec(
-                    "dir",
-                    local_path,
+                process = await asyncio.create_subprocess_shell(
+                    f"dir {local_path}",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    shell=True,
                 )
 
                 _, stderr = await process.communicate()

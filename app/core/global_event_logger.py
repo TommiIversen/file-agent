@@ -220,13 +220,13 @@ class GlobalEventLogger:
         
         await self._add_log(
             event, 
-            f"Storage status: {update.storage_info.location} → {update.new_status.value}", 
+            f"Storage status: {update.storage_info.path} → {update.new_status.value}", 
             level,
             {
                 "storage_type": update.storage_type,
                 "old_status": update.old_status.value if update.old_status else None,
                 "new_status": update.new_status.value,
-                "location": update.storage_info.location,
+                "location": update.storage_info.path,
                 "free_space": f"{update.storage_info.free_space_gb:.1f} GB" if update.storage_info.free_space_gb else "unknown",
                 "total_space": f"{update.storage_info.total_space_gb:.1f} GB" if update.storage_info.total_space_gb else "unknown"
             }
@@ -254,13 +254,13 @@ class GlobalEventLogger:
         )
 
     async def handle_scanner_status_changed(self, event: ScannerStatusChangedEvent):
-        status_text = "started" if event.is_active else "stopped"
+        status_text = "started" if event.is_scanning else "stopped"
         await self._add_log(
             event, 
             f"File scanner {status_text}", 
             "INFO",
             {
-                "is_active": event.is_active,
+                "is_active": event.is_scanning,
                 "service_name": getattr(event, 'service_name', 'unknown')
             }
         )

@@ -24,7 +24,7 @@ from app.domains.presentation.websocket_manager import WebSocketManager
 from app.models import FileStatus
 
 
-def _serialize_storage_info(storage_info) -> dict:
+def _serialize_storage_info(storage_info) -> dict | None:
     if not storage_info:
         return None
     return {

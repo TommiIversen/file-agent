@@ -4,21 +4,23 @@ These queries handle read-only operations for system log files.
 """
 from dataclasses import dataclass
 
+from app.core.cqrs.query import Query
+
 
 @dataclass
-class ListLogFilesQuery:
+class ListLogFilesQuery(Query):
     """Query to list available log files."""
     pass
 
 
 @dataclass  
-class GetLogContentQuery:
+class GetLogContentQuery(Query):
     """Query to get the full content of a log file."""
     filename: str
 
 
 @dataclass
-class GetLogContentChunkQuery:
+class GetLogContentChunkQuery(Query):
     """Query to get a chunk of log file content with pagination."""
     filename: str
     start: int = 0
@@ -26,6 +28,6 @@ class GetLogContentChunkQuery:
 
 
 @dataclass
-class DownloadLogFileQuery:
+class DownloadLogFileQuery(Query):
     """Query to prepare a log file for download."""
     filename: str

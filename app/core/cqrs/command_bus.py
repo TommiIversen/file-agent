@@ -10,9 +10,9 @@ class CommandBus:
     Sikrer, at hver command-type kun håndteres af præcis én handler (1-til-1).
     """
     def __init__(self):
-        self._handlers: Dict[Type[Command], Callable[[Command], Awaitable[Any]]] = {}
+        self._handlers: Dict[Type[Command], Callable[..., Awaitable[Any]]] = {}
 
-    def register(self, command_type: Type[Command], handler: Callable[[Command], Awaitable[Any]]):
+    def register(self, command_type: Type[Command], handler: Callable[..., Awaitable[Any]]):
         """
         Registrerer en handler til en specifik command-type.
         Kaster en ValueError, hvis en handler allerede er registreret.

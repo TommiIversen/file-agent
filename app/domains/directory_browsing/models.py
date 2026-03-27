@@ -73,7 +73,7 @@ class DirectoryScanResult(BaseModel):
             return []
 
         # Group items by parent path
-        items_by_parent = {}
+        items_by_parent: dict[str, list["DirectoryItem"]] = {}
         root_items = []
 
         for item in self.items:

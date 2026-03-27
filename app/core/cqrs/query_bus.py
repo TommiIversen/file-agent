@@ -15,9 +15,9 @@ class QueryBus:
 
     def __init__(self):
         # Holder styr på: {QueryType -> handler_funktion}
-        self._handlers: Dict[Type[Query], Callable[[Query], Awaitable[Any]]] = {}
+        self._handlers: Dict[Type[Query], Callable[..., Awaitable[Any]]] = {}
 
-    def register(self, query_type: Type[Query], handler: Callable[[Query], Awaitable[Any]]):
+    def register(self, query_type: Type[Query], handler: Callable[..., Awaitable[Any]]):
         """
         Registrerer én unik handler til én specifik query-type.
         

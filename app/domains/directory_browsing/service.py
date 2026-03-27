@@ -252,7 +252,7 @@ class DirectoryScannerService:
                     logging.debug(f"Error getting metadata for {entry_name}: {result}")
                     # Skip items we can't read
                     continue
-                elif result:
+                elif isinstance(result, DirectoryItem):
                     items.append(result)
 
             # Recursive scanning if enabled and depth allows
@@ -289,7 +289,7 @@ class DirectoryScannerService:
                             f"Recursive scan timed out for subdirectory: {subdir.path}"
                         )
                         continue
-                    elif isinstance(subdir_result, Exception):
+                    elif isinstance(subdir_result, BaseException):
                         logging.debug(
                             f"Error during recursive scan of {subdir.path}: {subdir_result}"
                         )
@@ -318,7 +318,7 @@ class DirectoryScannerService:
         self,
         parent_path: str,
         item_name: str,
-        scan_root: str = None,
+        scan_root: str | None = None,
         current_depth: int = 0,
     ) -> Optional[DirectoryItem]:
         """

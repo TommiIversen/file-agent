@@ -5,13 +5,13 @@ Central domain event bus (Mediator Pattern).
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Callable, List, Type, Dict
+from typing import Awaitable, Callable, List, Type, Dict
 
 from app.core.events.domain_event import DomainEvent
 
 # Define a type hint for an event handler
 # An event handler is an async function that takes a DomainEvent and returns None
-EventHandler = Callable[[DomainEvent], asyncio.Future[None]]
+EventHandler = Callable[..., Awaitable[None]]
 
 
 class DomainEventBus:

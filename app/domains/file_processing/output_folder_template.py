@@ -100,7 +100,7 @@ class OutputFolderTemplateEngine:
         return self._substitute_template(folder_template, variables)
 
     def _parse_template_rules(self) -> List[TemplateRule]:
-        rules = []
+        rules: list[TemplateRule] = []
 
         if not self.settings.output_folder_rules:
             return rules
@@ -170,10 +170,10 @@ class OutputFolderTemplateEngine:
 
             try:
                 if ":" in slice_part:
-                    start, end = slice_part.split(":")
-                    start = int(start) if start else 0
-                    end = int(end) if end else len(filename)
-                    variables["date"] = filename[start:end]
+                    start_s, end_s = slice_part.split(":")
+                    start_idx = int(start_s) if start_s else 0
+                    end_idx = int(end_s) if end_s else len(filename)
+                    variables["date"] = filename[start_idx:end_idx]
                 else:
                     # Single index
                     index = int(slice_part)

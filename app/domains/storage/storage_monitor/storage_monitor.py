@@ -412,10 +412,10 @@ class StorageMonitorService:
         return is_unavailable
 
     async def _handle_destination_unavailable(
-        self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
+        self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> None:
         try:
-            unavailable_reason = f"{old_info.status} → {new_info.status}"
+            unavailable_reason = f"{old_info.status if old_info else 'N/A'} → {new_info.status}"
 
             logging.warning(
                 f" PAUSING OPERATIONS: {unavailable_reason} "
@@ -434,10 +434,10 @@ class StorageMonitorService:
             logging.error(f"ERROR: Error during destination pause handling: {e}")
 
     async def _handle_destination_recovery(
-        self, storage_type: str, old_info: StorageInfo, new_info: StorageInfo
+        self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
     ) -> None:
         try:
-            recovery_reason = f"{old_info.status} → {new_info.status}"
+            recovery_reason = f"{old_info.status if old_info else 'N/A'} → {new_info.status}"
 
             logging.info(
                 f" INITIATING UNIVERSAL RECOVERY: {recovery_reason} "

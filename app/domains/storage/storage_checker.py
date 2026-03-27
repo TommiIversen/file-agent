@@ -210,7 +210,7 @@ class StorageChecker:
         return cleaned_count
 
     async def cleanup_all_test_files(
-        self, source_dir: str, dest_dir: str = None
+        self, source_dir: str, dest_dir: str | None = None
     ) -> int:
         """
         Ryd op i gamle test-filer i både source og destination directories.

@@ -13,7 +13,7 @@ from .commands import UpdateFileGrowthInfoCommand
 class GrowingFileDetector:
     def __init__(
         self, 
-        settings: Settings, 
+        settings: Settings | None, 
         command_bus: CommandBus,
         query_bus: QueryBus
     ):
@@ -23,12 +23,12 @@ class GrowingFileDetector:
 
         # Removed _growth_tracking - using CQRS as single source of truth
         self._monitoring_active = False
-        self.min_size_bytes = settings.growing_file_min_size_mb * 1024 * 1024
-        self.poll_interval = settings.growing_file_poll_interval_seconds
-        self.growth_timeout = settings.growing_file_growth_timeout_seconds
+        self.min_size_bytes = (settings.growing_file_min_size_mb * 1024 * 1024) if settings else 0
+        self.poll_interval = settings.growing_file_poll_interval_seconds if settings else 5
+        self.growth_timeout = settings.growing_file_growth_timeout_seconds if settings else 30
 
         logging.info(
-            f"GrowingFileDetector initialized with CQRS - min_size: {settings.growing_file_min_size_mb}MB, "
+            f"GrowingFileDetector initialized with CQRS - min_size: {self.min_size_bytes // (1024*1024)}MB, "
             f"poll_interval: {self.poll_interval}s, timeout: {self.growth_timeout}s"
         )
 
@@ -112,6 +112,7 @@ class GrowingFileDetector:
                     # Just stopped growing, start stability timer
                     command = UpdateFileGrowthInfoCommand(
                         file_id=tracked_file.id,
+                        file_size=current_size,
                         growth_stable_since=current_time,
                         last_growth_check=current_time,
                     )

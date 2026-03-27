@@ -11,7 +11,7 @@ from .macos_mount_utils import MacOSMountValidator, MacOSNetworkChecker, MacOSMo
 class MacOSMounter(BaseMounter):
     """macOS-specific network mount implementation with robust validation."""
 
-    def __init__(self, mount_point: str = None):
+    def __init__(self, mount_point: str | None = None):
         super().__init__()
         self._configured_mount_point = mount_point
         self._mount_validator = MacOSMountValidator()
@@ -88,7 +88,7 @@ class MacOSMounter(BaseMounter):
             logging.error(f"Exception during macOS mount attempt: {e}")
             return False
 
-    async def verify_mount_accessible(self, local_path: str) -> bool:
+    async def verify_mount_accessible(self, local_path: str) -> tuple[bool, bool]:
         """
         Simple check if mount point is accessible.
         Just like 'test -d /Volumes/SK6402 && test -w /Volumes/SK6402'
@@ -96,18 +96,18 @@ class MacOSMounter(BaseMounter):
         try:
             # Check if it exists and is a directory
             if not os.path.exists(local_path) or not os.path.isdir(local_path):
-                return False
+                return False, False
             
             # Simple access test - try to list contents
             try:
                 os.listdir(local_path)
-                return True
+                return True, True
             except (OSError, PermissionError):
-                return False
+                return True, False
                 
         except Exception as e:
             logging.debug(f"Mount accessibility check failed for {local_path}: {e}")
-            return False
+            return False, False
 
     def get_platform_name(self) -> str:
         """Get platform name for logging."""

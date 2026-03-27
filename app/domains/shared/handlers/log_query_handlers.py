@@ -35,7 +35,7 @@ class LogFileQueryHandler:
         if not logs_dir.exists():
             return []
         
-        log_files = []
+        log_files: list[dict[str, Any]] = []
         for file_path in logs_dir.iterdir():
             # Match files that start with log file prefix and are actual log files
             if file_path.is_file() and (file_path.name.startswith('file_agent.log')):
@@ -57,7 +57,7 @@ class LogFileQueryHandler:
                 })
         
         # Sort by modification time, newest first
-        log_files.sort(key=lambda x: x["modified"], reverse=True)
+        log_files.sort(key=lambda x: float(x.get("modified", 0)), reverse=True)
         return log_files
     
     async def handle_get_log_content(self, query: GetLogContentQuery) -> Dict[str, Any]:
@@ -157,7 +157,7 @@ class LogFileQueryHandler:
                 detail=f"Error reading log file chunk: {str(e)}"
             )
     
-    async def handle_download_log_file(self, query: DownloadLogFileQuery) -> FileResponse:
+    async def handle_download_log_file(self, query: DownloadLogFileQuery) -> Response:
         """
         Prepare a log file for download.
         

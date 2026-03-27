@@ -33,7 +33,7 @@ class ScanCustomDirectoryHandler:
 
     async def handle(self, query: ScanCustomDirectoryQuery) -> DirectoryScanResult:
         return await self._scanner.scan_custom_directory(
-            path=query.path, recursive=query.recursive, max_depth=query.max_depth
+            directory_path=query.path, recursive=query.recursive, max_depth=query.max_depth
         )
 
 class GetScannerInfoHandler:

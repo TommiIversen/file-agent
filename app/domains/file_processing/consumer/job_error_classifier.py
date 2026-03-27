@@ -142,10 +142,10 @@ class JobErrorClassifier:
     def _is_destination_unavailable(self) -> bool:
         """Check if destination is currently unavailable."""
         destination_info = self.storage_monitor.get_destination_info()
-        return destination_info and destination_info.status in [
+        return bool(destination_info and destination_info.status in [
             StorageStatus.ERROR,
             StorageStatus.CRITICAL,
-        ]
+        ])
 
     def _get_destination_status(self) -> str:
         """Get current destination status."""

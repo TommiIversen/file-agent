@@ -39,7 +39,7 @@ class GetStatisticsQueryHandler(QueryHandler[GetStatisticsQuery, Dict[str, Any]]
 
     async def handle(self, query: GetStatisticsQuery) -> Dict[str, Any]:
         async with self._lock:
-            current_files = {}
+            current_files: dict[str, TrackedFile] = {}
             all_files = await self.file_repository.get_all()
             for tracked_file in all_files:
                 current = current_files.get(tracked_file.file_path)
@@ -47,7 +47,7 @@ class GetStatisticsQueryHandler(QueryHandler[GetStatisticsQuery, Dict[str, Any]]
                     current_files[tracked_file.file_path] = tracked_file
             current_files_list = list(current_files.values())
             total_files = len(current_files_list)
-            status_counts = {}
+            status_counts: dict[str, int] = {}
             for status in FileStatus:
                 status_counts[status.value] = len(
                     [f for f in current_files_list if f.status == status]
@@ -93,7 +93,7 @@ class GetStorageStatusQueryHandler(QueryHandler[GetStorageStatusQuery, Dict[str,
         overall_status = self._storage_monitor.get_overall_status()
 
         # Re-using the serialization logic from the old websocket manager
-        def _serialize_storage_info(storage_info) -> dict:
+        def _serialize_storage_info(storage_info) -> dict | None:
             if not storage_info:
                 return None
             return {

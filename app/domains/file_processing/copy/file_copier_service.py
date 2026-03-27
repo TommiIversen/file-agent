@@ -64,7 +64,7 @@ class FileCopierService:
     async def _worker_loop(self, worker_id: str) -> None:
         try:
             while self._running:
-                job: QueueJob = await self.job_queue.get_next_job()
+                job = await self.job_queue.get_next_job()
                 if job is None:
                     await asyncio.sleep(1)
                     continue

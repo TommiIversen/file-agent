@@ -8,6 +8,7 @@ når ændringer opdages.
 import logging
 from typing import Dict, List, Tuple, Optional
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.domain_event import DomainEvent
 from .models import ChannelState, JustInRecordingStatus, JustInError
 from .events import (
     ChannelRecordingStartedEvent, 
@@ -221,7 +222,7 @@ class IngestStateService:
         Returns:
             List: Liste af events der skal publiceres
         """
-        events = []
+        events: list[DomainEvent] = []
         
         # Detect recording status changes
         if old_state.is_recording != new_state.is_recording:

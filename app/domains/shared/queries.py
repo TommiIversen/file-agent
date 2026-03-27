@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 
+from app.core.cqrs.query import Query
+
 
 @dataclass
-class GetSettingsQuery:
+class GetSettingsQuery(Query):
     """Hent de nuværende applikations-settings."""
     pass
 
 
 @dataclass
-class GetConfigInfoQuery:
+class GetConfigInfoQuery(Query):
     """Hent info om den indlæste konfigurationsfil."""
     pass

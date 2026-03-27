@@ -301,11 +301,11 @@ class FileScanner:
                             f"STABILITY UPDATE: {file_path} -> READY [UUID: {tracked_file.id[:8]}...]"
                         )
                     elif recommended_status == FileStatus.GROWING:
-                        command = MarkFileGrowingCommand(
+                        growing_cmd = MarkFileGrowingCommand(
                             file_id=tracked_file.id,
                             file_path=tracked_file.file_path
                         )
-                        await self._command_bus.execute(command)
+                        await self._command_bus.execute(growing_cmd)
                         logging.info(
                             f"GROWING UPDATE: {file_path} -> GROWING [UUID: {tracked_file.id[:8]}...]"
                         )
@@ -323,11 +323,11 @@ class FileScanner:
                             )
                         
                         # Then transition to READY_TO_START_GROWING
-                        command = MarkFileReadyToStartGrowingCommand(
+                        rtsg_command = MarkFileReadyToStartGrowingCommand(
                             file_id=tracked_file.id,
                             file_path=tracked_file.file_path
                         )
-                        await self._command_bus.execute(command)
+                        await self._command_bus.execute(rtsg_command)
                         logging.info(
                             f"GROWING UPDATE: {file_path} -> READY_TO_START_GROWING [UUID: {tracked_file.id[:8]}...]"
                         )

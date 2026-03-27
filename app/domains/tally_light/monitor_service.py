@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.domain_event import DomainEvent
 from .protocols import PowerSwitchProtocol
 
 
@@ -24,29 +25,29 @@ class TallySwitchStatus:
     error_message: Optional[str] = None
 
 
-class TallySwitchOnlineEvent:
+@dataclass(frozen=True)
+class TallySwitchOnlineEvent(DomainEvent):
     """Event fired when tally switch comes online."""
-    def __init__(self, status: TallySwitchStatus):
-        self.status = status
-        self.timestamp = datetime.now()
+    status: TallySwitchStatus
 
 
-class TallySwitchOfflineEvent:
+@dataclass(frozen=True)
+class TallySwitchOfflineEvent(DomainEvent):
     """Event fired when tally switch goes offline."""
-    def __init__(self, status: TallySwitchStatus):
-        self.status = status
-        self.timestamp = datetime.now()
+    status: TallySwitchStatus
 
 
-class TallySwitchStatusUpdatedEvent:
+@dataclass(frozen=True)
+class TallySwitchStatusUpdatedEvent(DomainEvent):
     """Event fired on any status update (online/offline)."""
-    def __init__(self, status: TallySwitchStatus, previous_status: Optional[TallySwitchStatus] = None):
-        self.status = status
-        self.previous_status = previous_status
-        self.timestamp = datetime.now()
-        self.status_changed = (
-            previous_status is None or 
-            previous_status.is_online != status.is_online
+    status: TallySwitchStatus
+    previous_status: Optional[TallySwitchStatus] = None
+
+    @property
+    def status_changed(self) -> bool:
+        return (
+            self.previous_status is None or
+            self.previous_status.is_online != self.status.is_online
         )
 
 
@@ -204,17 +205,17 @@ class TallySwitchMonitorService:
         """Publish appropriate events based on status changes."""
         try:
             # Always publish general status update
-            status_event = TallySwitchStatusUpdatedEvent(new_status, previous_status)
+            status_event = TallySwitchStatusUpdatedEvent(status=new_status, previous_status=previous_status)
             await self._event_bus.publish(status_event)
             
             # Publish specific online/offline events if status changed
             if previous_status is None or previous_status.is_online != new_status.is_online:
                 if new_status.is_online:
-                    online_event = TallySwitchOnlineEvent(new_status)
+                    online_event = TallySwitchOnlineEvent(status=new_status)
                     await self._event_bus.publish(online_event)
                     logging.info(f" Tally switch {self._ip_address} came ONLINE")
                 else:
-                    offline_event = TallySwitchOfflineEvent(new_status)
+                    offline_event = TallySwitchOfflineEvent(status=new_status)
                     await self._event_bus.publish(offline_event)
                     logging.warning(f" Tally switch {self._ip_address} went OFFLINE")
             

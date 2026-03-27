@@ -1,6 +1,9 @@
 import asyncio
 from functools import lru_cache
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.domains.ingest_monitor.worker import IngestMonitorWorker
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
