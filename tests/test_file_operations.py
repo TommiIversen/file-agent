@@ -77,7 +77,7 @@ class TestGenerateConflictFreePath:
 
         result = await generate_conflict_free_path(dest_path)
 
-        assert result == tmp_path / "video_1.mxf"
+        assert result == tmp_path / "video_copy1.mxf"
         assert not result.exists()
 
     @pytest.mark.asyncio
@@ -85,12 +85,12 @@ class TestGenerateConflictFreePath:
         """Test with multiple existing files."""
         base_path = tmp_path / "video.mxf"
         base_path.touch()
-        (tmp_path / "video_1.mxf").touch()
-        (tmp_path / "video_2.mxf").touch()
+        (tmp_path / "video_copy1.mxf").touch()
+        (tmp_path / "video_copy2.mxf").touch()
 
         result = await generate_conflict_free_path(base_path)
 
-        assert result == tmp_path / "video_3.mxf"
+        assert result == tmp_path / "video_copy3.mxf"
         assert not result.exists()
 
     @pytest.mark.asyncio
@@ -101,7 +101,7 @@ class TestGenerateConflictFreePath:
 
         result = await generate_conflict_free_path(dest_path)
 
-        assert result == tmp_path / "archive_1.tar.gz"
+        assert result == tmp_path / "archive_copy1.tar.gz"
 
     @pytest.mark.asyncio
     async def test_no_extension(self, tmp_path):
@@ -111,7 +111,7 @@ class TestGenerateConflictFreePath:
 
         result = await generate_conflict_free_path(dest_path)
 
-        assert result == tmp_path / "README_1"
+        assert result == tmp_path / "README_copy1"
 
     @pytest.mark.asyncio
     async def test_max_conflicts_raises_error(self, tmp_path, mocker):

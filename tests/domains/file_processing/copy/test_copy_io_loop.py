@@ -196,3 +196,102 @@ class TestCopyIoLoop:
 
         assert bytes_copied == 0
         dst.write.assert_not_called()
+
+    async def test_chunk_retry_on_transient_timeout(self, loop, tracked_file, network_detector, tmp_path):
+        """A single timeout should be retried, not cause immediate failure."""
+        source = tmp_path / "source.bin"
+        data = b"A" * 1024
+        source.write_bytes(data)
+
+        dst = AsyncMock()
+        written_chunks = []
+        call_count = 0
+
+        async def write_with_first_timeout(chunk):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise asyncio.TimeoutError("transient timeout")
+            written_chunks.append(chunk)
+
+        dst.write = AsyncMock(side_effect=write_with_first_timeout)
+        dst.seek = AsyncMock()
+
+        bytes_copied, _, _ = await loop.copy_chunk_range(
+            source_path=str(source),
+            dst=dst,
+            start_bytes=0,
+            end_bytes=1024,
+            chunk_size=1024,
+            tracked_file=tracked_file,
+            current_file_size=1024,
+            pause_ms=0,
+            network_detector=network_detector,
+            status=FileStatus.COPYING,
+            last_progress_percent=0,
+            last_progress_update_time=datetime.now(),
+        )
+
+        assert bytes_copied == 1024
+        assert len(written_chunks) == 1  # succeeded on retry
+
+    async def test_chunk_retry_exhausted_raises(self, loop, tracked_file, network_detector, tmp_path):
+        """If all retries are exhausted, the error should propagate."""
+        source = tmp_path / "source.bin"
+        source.write_bytes(b"X" * 512)
+
+        dst = AsyncMock()
+        dst.write = AsyncMock(side_effect=asyncio.TimeoutError("persistent timeout"))
+        dst.seek = AsyncMock()
+
+        with pytest.raises(FileCopyTimeoutError):
+            await loop.copy_chunk_range(
+                source_path=str(source),
+                dst=dst,
+                start_bytes=0,
+                end_bytes=512,
+                chunk_size=256,
+                tracked_file=tracked_file,
+                current_file_size=512,
+                pause_ms=0,
+                network_detector=network_detector,
+                status=FileStatus.COPYING,
+                last_progress_percent=0,
+                last_progress_update_time=datetime.now(),
+            )
+
+    async def test_chunk_retry_on_transient_oserror(self, loop, tracked_file, network_detector, tmp_path):
+        """A transient OSError should be retried before failing."""
+        source = tmp_path / "source.bin"
+        source.write_bytes(b"A" * 512)
+
+        dst = AsyncMock()
+        call_count = 0
+        written_chunks = []
+
+        async def write_with_transient_error(chunk):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise OSError("temporary I/O glitch")
+            written_chunks.append(chunk)
+
+        dst.write = AsyncMock(side_effect=write_with_transient_error)
+        dst.seek = AsyncMock()
+
+        bytes_copied, _, _ = await loop.copy_chunk_range(
+            source_path=str(source),
+            dst=dst,
+            start_bytes=0,
+            end_bytes=512,
+            chunk_size=512,
+            tracked_file=tracked_file,
+            current_file_size=512,
+            pause_ms=0,
+            network_detector=network_detector,
+            status=FileStatus.COPYING,
+            last_progress_percent=0,
+            last_progress_update_time=datetime.now(),
+        )
+
+        assert bytes_copied == 512

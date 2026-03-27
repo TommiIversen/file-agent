@@ -14,7 +14,7 @@ class FileVerificationService:
 
     async def verify_integrity(self, source_path: str, dest_path: str) -> tuple[bool, int, int]:
         """
-        Verificer at kilde- og destinationsfil har samme størrelse.
+        Verificer at kilde- og destinationsfil har rimelig størrelse.
         
         Args:
             source_path: Sti til kildefil
@@ -28,12 +28,27 @@ class FileVerificationService:
             source_size = await aiofiles.os.path.getsize(source_path)
             dest_size = await aiofiles.os.path.getsize(dest_path)
 
+            # Critical: destination must have actual data
+            if dest_size == 0:
+                logging.error(f"Verification FAILED: destination file is empty (0 bytes): {dest_path}")
+                return False, source_size, dest_size
+
+            # For growing files, dest < source is normal (source kept growing during copy).
+            # But dest should never be larger than source.
+            if dest_size > source_size:
+                logging.error(
+                    f"Verification FAILED: destination ({dest_size}) larger than source ({source_size}): {dest_path}"
+                )
+                return False, source_size, dest_size
+
             if source_size != dest_size:
-                logging.warning(f"Size difference: source={source_size}, dest={dest_size} (normal for growing files)")
-                # For growing files er dette normalt - destination størrelsen er det vi faktisk kopierede
-                return True, source_size, dest_size
+                logging.warning(
+                    f"Size difference: source={source_size}, dest={dest_size} "
+                    f"(normal for growing files, {dest_size/source_size*100:.1f}% copied)"
+                )
+            else:
+                logging.debug(f"File integrity verified: {dest_size} bytes")
             
-            logging.debug(f"File integrity verified: {dest_size} bytes")
             return True, source_size, dest_size
             
         except Exception as e:

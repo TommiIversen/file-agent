@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 
 import aiofiles
@@ -74,12 +75,11 @@ class CopyIoLoop:
         bytes_copied = start_bytes
         bytes_to_copy = end_bytes - start_bytes
 
-        try:
-            # Gem starttidspunkt og bytes for hastighedsberegning
-            if not hasattr(self, "_copy_start_time"):
-                self._copy_start_time = datetime.now()
-                self._copy_start_bytes = bytes_copied
+        # Track timing per invocation (NOT on self — this is a shared instance)
+        copy_start_time = datetime.now()
+        copy_start_bytes = bytes_copied
 
+        try:
             async with aiofiles.open(source_path, "rb") as src:
                 try:
                     await asyncio.wait_for(
@@ -94,36 +94,75 @@ class CopyIoLoop:
                     network_detector.check_write_error(e, "file seek operation")
                     raise
 
-                while bytes_to_copy > 0:
-                    try:
-                        read_size = min(chunk_size, bytes_to_copy)
-                        chunk = await asyncio.wait_for(
-                            src.read(read_size), 
-                            timeout=self.settings.file_operation_timeout_seconds
-                        )
-                        if not chunk:
-                            logging.warning(f"Unexpected end of file while reading {source_path} at position {bytes_copied}")
-                            break
+                max_chunk_retries = self.settings.max_retry_attempts  # default: 3
 
+                while bytes_to_copy > 0:
+                    chunk_retry_count = 0
+                    chunk_written = False
+
+                    while not chunk_written:
                         try:
+                            read_size = min(chunk_size, bytes_to_copy)
+
+                            # Re-seek before retry to ensure correct position
+                            if chunk_retry_count > 0:
+                                await asyncio.wait_for(
+                                    src.seek(bytes_copied),
+                                    timeout=self.settings.file_operation_timeout_seconds
+                                )
+                                await asyncio.wait_for(
+                                    dst.seek(bytes_copied),
+                                    timeout=self.settings.file_operation_timeout_seconds
+                                )
+
+                            chunk = await asyncio.wait_for(
+                                src.read(read_size), 
+                                timeout=self.settings.file_operation_timeout_seconds
+                            )
+                            if not chunk:
+                                logging.warning(f"Unexpected end of file while reading {source_path} at position {bytes_copied}")
+                                bytes_to_copy = 0  # Force exit outer loop
+                                chunk_written = True
+                                break
+
                             await asyncio.wait_for(
                                 dst.write(chunk), 
                                 timeout=self.settings.file_operation_timeout_seconds
                             )
-                        except Exception as write_error:
-                            logging.error(f"Write error for {source_path}: {type(write_error).__name__}: {write_error}", exc_info=True)
-                            network_detector.check_write_error(
-                                write_error, "growing copy chunk write"
-                            )
-                            raise write_error
+                            chunk_written = True
 
-                    except asyncio.TimeoutError as e:
-                        logging.error(f"Timeout during chunk read/write for {source_path} at position {bytes_copied}")
-                        raise FileCopyTimeoutError(f"Chunk I/O timeout for {source_path}") from e
-                    except Exception as e:
-                        logging.error(f"Error during chunk processing for {source_path}: {type(e).__name__}: {e}", exc_info=True)
-                        network_detector.check_write_error(e, "chunk processing")
-                        raise
+                        except (asyncio.TimeoutError, OSError) as e:
+                            chunk_retry_count += 1
+                            is_timeout = isinstance(e, asyncio.TimeoutError)
+                            error_type = "Timeout" if is_timeout else type(e).__name__
+
+                            if chunk_retry_count >= max_chunk_retries:
+                                if is_timeout:
+                                    logging.error(
+                                        f"Chunk {error_type} at position {bytes_copied} for {source_path} "
+                                        f"after {max_chunk_retries} retries — giving up"
+                                    )
+                                    raise FileCopyTimeoutError(f"Chunk I/O timeout for {source_path}") from e
+                                else:
+                                    logging.error(
+                                        f"Chunk error at position {bytes_copied} for {source_path}: "
+                                        f"{error_type}: {e} after {max_chunk_retries} retries"
+                                    )
+                                    network_detector.check_write_error(e, "chunk processing")
+                                    raise
+
+                            wait_seconds = 2 ** chunk_retry_count  # exponential: 2s, 4s, 8s
+                            logging.warning(
+                                f"⚠️ Chunk {error_type} at position {bytes_copied} for "
+                                f"{os.path.basename(source_path)} — retry {chunk_retry_count}/{max_chunk_retries} "
+                                f"in {wait_seconds}s"
+                            )
+                            await asyncio.sleep(wait_seconds)
+
+                        except Exception as e:
+                            logging.error(f"Error during chunk processing for {source_path}: {type(e).__name__}: {e}", exc_info=True)
+                            network_detector.check_write_error(e, "chunk processing")
+                            raise
 
                     chunk_len = len(chunk)
                     bytes_copied += chunk_len
@@ -135,9 +174,9 @@ class CopyIoLoop:
 
                     # Opdater kun progress 1 gang i sekundet (som optimeret)
                     if (current_time - last_progress_update_time).total_seconds() >= 1.0:
-                        elapsed_seconds = (current_time - self._copy_start_time).total_seconds()
+                        elapsed_seconds = (current_time - copy_start_time).total_seconds()
                         transfer_rate = calculate_transfer_rate(
-                            bytes_copied - self._copy_start_bytes,
+                            bytes_copied - copy_start_bytes,
                             elapsed_seconds,
                         )
                         copy_speed_mbps = transfer_rate / (1024 * 1024)

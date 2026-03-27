@@ -32,7 +32,7 @@ class TestVerifyIntegrity:
         assert dst_size == 4096
 
     async def test_different_sizes_still_returns_true(self, svc, tmp_path):
-        """For growing files, size difference is normal - still returns True."""
+        """For growing files, dest < source is normal - still returns True."""
         src = tmp_path / "source.mxf"
         dst = tmp_path / "dest.mxf"
         src.write_bytes(b"x" * 8000)
@@ -42,6 +42,30 @@ class TestVerifyIntegrity:
         assert success is True
         assert src_size == 8000
         assert dst_size == 4000
+
+    async def test_empty_dest_returns_false(self, svc, tmp_path):
+        """An empty destination file should fail verification."""
+        src = tmp_path / "source.mxf"
+        dst = tmp_path / "dest.mxf"
+        src.write_bytes(b"x" * 4096)
+        dst.write_bytes(b"")  # 0 bytes
+
+        success, src_size, dst_size = await svc.verify_integrity(str(src), str(dst))
+        assert success is False
+        assert src_size == 4096
+        assert dst_size == 0
+
+    async def test_dest_larger_than_source_returns_false(self, svc, tmp_path):
+        """Destination larger than source is impossible and should fail."""
+        src = tmp_path / "source.mxf"
+        dst = tmp_path / "dest.mxf"
+        src.write_bytes(b"x" * 1000)
+        dst.write_bytes(b"x" * 2000)
+
+        success, src_size, dst_size = await svc.verify_integrity(str(src), str(dst))
+        assert success is False
+        assert src_size == 1000
+        assert dst_size == 2000
 
     async def test_missing_source_returns_false(self, svc, tmp_path):
         dst = tmp_path / "dest.mxf"

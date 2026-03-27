@@ -28,7 +28,7 @@ async def generate_conflict_free_path(dest_path: Path) -> Path:
 
     counter = 1
     while True:
-        new_name = f"{base_name}_{counter}{extensions}"
+        new_name = f"{base_name}_copy{counter}{extensions}"
         new_path = parent / new_name
 
         if not await aiofiles.os.path.exists(new_path):

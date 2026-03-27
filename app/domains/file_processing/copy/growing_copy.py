@@ -19,6 +19,7 @@ from app.domains.file_processing.copy.exceptions import FileCopyError, FileCopyT
 from app.domains.file_processing.copy.file_verification import FileVerificationService
 from app.domains.file_processing.copy.copy_io_loop import CopyIoLoop
 from app.core.events.file_events import FileCopyProgressEvent
+from app.utils.file_operations import generate_conflict_free_path
 
 
 class GrowingFileCopyStrategy():
@@ -46,8 +47,6 @@ class GrowingFileCopyStrategy():
     async def copy_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
-        temp_dest_path = None
-
         try:
             try:
                 current_size = await asyncio.wait_for(
@@ -122,6 +121,17 @@ class GrowingFileCopyStrategy():
                 logging.error(f"Directory creation failed for: {dest_dir}: {e}")
                 raise FileCopyIOError(f"Directory creation failed for {dest_dir}: {e}") from e
 
+            # Pre-copy overwrite protection: re-check destination right before copy
+            # to prevent TOCTOU race where another copy or Justin flip created a file
+            # at dest_path between preparation and execution
+            resolved_dest = str(await generate_conflict_free_path(Path(dest_path)))
+            if resolved_dest != dest_path:
+                logging.warning(
+                    f"⚠️ CONFLICT DETECTED before copy: {os.path.basename(dest_path)} already exists. "
+                    f"Using: {os.path.basename(resolved_dest)}"
+                )
+                dest_path = resolved_dest
+
             network_detector = NetworkErrorDetector(
                 event_bus=self._event_bus,
                 current_file_id=tracked_file.id
@@ -195,26 +205,31 @@ class GrowingFileCopyStrategy():
             raise
         except NetworkError:
             raise
+        except FileCopyError:
+            # Already a copy error — don't wrap again (avoids FileCopyError: FileCopyError: ...)
+            raise
         except Exception as e:
-            network_detector = NetworkErrorDetector(
-                event_bus=self._event_bus,
-                current_file_id=tracked_file.id
-            )
+            # Use the network_detector created earlier if available, otherwise create one
             try:
-                network_detector.check_write_error(e, "growing copy strategy")
+                nd = network_detector
+            except NameError:
+                nd = NetworkErrorDetector(
+                    event_bus=self._event_bus,
+                    current_file_id=tracked_file.id
+                )
+            try:
+                nd.check_write_error(e, "growing copy strategy")
             except NetworkError:
-                logging.error(f"Network error detected in growing copy strategy: {e}")
                 raise
             logging.error(f"Error in growing copy strategy for {source_path}: {type(e).__name__}: {e}", exc_info=True)
             raise FileCopyError(f"Error in growing copy strategy: {type(e).__name__}: {e}") from e
         finally:
-            if temp_dest_path and await aiofiles.os.path.exists(temp_dest_path):
-                try:
-                    await aiofiles.os.remove(temp_dest_path)
-                except Exception as e:
-                    logging.warning(
-                        f"Failed to cleanup temp file {temp_dest_path}: {e}"
-                    )
+            # We intentionally do NOT delete partial destination files on failure.
+            # A partial copy (e.g. 6GB of 20GB) is better than no data at all.
+            # The pre-copy conflict check + _copy1 suffix ensures retries won't
+            # overwrite the partial file — they get a new name instead.
+            if dest_path:
+                logging.debug(f"Copy finished for {os.path.basename(source_path)} → {os.path.basename(dest_path)}")
 
     async def _copy_growing_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile, network_detector: NetworkErrorDetector
@@ -267,6 +282,14 @@ class GrowingFileCopyStrategy():
                     pause_ms,
                     network_detector,
                 )
+
+            # Flush to ensure all data is written to the network destination
+            # before we close the file handle and verify integrity
+            try:
+                await dst.flush()
+            except Exception as flush_err:
+                logging.warning(f"Flush failed for {os.path.basename(dest_path)}: {flush_err}")
+
             return True
 
         except NetworkError:
