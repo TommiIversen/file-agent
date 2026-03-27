@@ -44,21 +44,25 @@ class GrowingFileCopyStrategy():
     def supports_file(self, tracked_file: TrackedFile) -> bool:
         return True
 
+    async def _get_file_size(self, path: str) -> int:
+        """Get file size with timeout protection."""
+        try:
+            return await asyncio.wait_for(
+                aiofiles.os.path.getsize(path),
+                timeout=1.0,
+            )
+        except asyncio.TimeoutError as e:
+            logging.error(f"File size check timed out for {path}")
+            raise FileCopyTimeoutError(f"File size check timed out for {path}") from e
+        except OSError as e:
+            logging.error(f"Failed to access file for size check: {e}")
+            raise FileCopyIOError(f"Failed to access file for size check {path}: {e}") from e
+
     async def copy_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile
     ) -> bool:
         try:
-            try:
-                current_size = await asyncio.wait_for(
-                    aiofiles.os.path.getsize(source_path),
-                    timeout=1.0, # 1 second timeout
-                )
-            except asyncio.TimeoutError as e:
-                logging.error(f"File size check timed out for {source_path}")
-                raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
-            except OSError as e:
-                logging.error(f"Failed to access source file for size check: {e}")
-                raise FileCopyIOError(f"Failed to access source file for size check {source_path}: {e}") from e
+            current_size = await self._get_file_size(source_path)
 
             # Check if this is a growing file based on its status history
             is_growing_file = self._is_file_currently_growing(tracked_file)
@@ -79,23 +83,13 @@ class GrowingFileCopyStrategy():
                         self.settings.growing_file_poll_interval_seconds
                     )
 
-                    try:
-                        current_size = await asyncio.wait_for(
-                            aiofiles.os.path.getsize(source_path),
-                            timeout=1.0, # 1 second timeout
-                        )
-                        size_mb = current_size / (1024 * 1024)
+                    current_size = await self._get_file_size(source_path)
+                    size_mb = current_size / (1024 * 1024)
 
-                        logging.debug(
-                            f" SIZE CHECK: {os.path.basename(source_path)} "
-                            f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
-                        )
-                    except asyncio.TimeoutError as e:
-                        logging.error(f"File size check timed out for {source_path}")
-                        raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
-                    except OSError as e:
-                        logging.error(f"Failed to check file size: {e}")
-                        raise FileCopyIOError(f"Failed to check file size {source_path}: {e}") from e
+                    logging.debug(
+                        f" SIZE CHECK: {os.path.basename(source_path)} "
+                        f"current={size_mb:.1f}MB, target={self.settings.growing_file_min_size_mb}MB"
+                    )
 
                 logging.info(
                     f" SIZE REACHED: {os.path.basename(source_path)} "
@@ -283,12 +277,12 @@ class GrowingFileCopyStrategy():
                     network_detector,
                 )
 
-            # Flush to ensure all data is written to the network destination
-            # before we close the file handle and verify integrity
-            try:
-                await dst.flush()
-            except Exception as flush_err:
-                logging.warning(f"Flush failed for {os.path.basename(dest_path)}: {flush_err}")
+                # Flush to ensure all data is written to the network destination
+                # before we close the file handle and verify integrity
+                try:
+                    await dst.flush()
+                except Exception as flush_err:
+                    logging.warning(f"Flush failed for {os.path.basename(dest_path)}: {flush_err}")
 
             return True
 
@@ -333,18 +327,8 @@ class GrowingFileCopyStrategy():
             # Brug 'initial_tracked_file' som reference, omdøb den til 'tracked_file'
             tracked_file = initial_tracked_file
 
-            try:
-                current_file_size = await aiofiles.os.path.getsize(source_path)
-                logging.debug(f"Current file size: {current_file_size}")
-            except asyncio.TimeoutError as e:
-                logging.warning(f"File size check timed out for: {source_path}")
-                raise FileCopyTimeoutError(f"File size check timed out for {source_path}") from e
-            except OSError as e:
-                logging.warning(f"Cannot access source file: {source_path}")
-                raise FileCopyIOError(f"Cannot access source file {source_path}: {e}") from e
-            except Exception as e:
-                logging.error(f"Error checking file size: {e}")
-                raise FileCopyError(f"Error checking file size for {source_path}: {e}") from e
+            current_file_size = await self._get_file_size(source_path)
+            logging.debug(f"Current file size: {current_file_size}")
 
             if not file_finished_growing:
                 if current_file_size > last_file_size:
