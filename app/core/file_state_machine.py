@@ -191,6 +191,7 @@ class FileStateMachine:
                     file_path=tracked_file.file_path,
                     old_status=old_status,
                     new_status=new_status,
+                    error_message=tracked_file.error_message,
                     timestamp=datetime.now()
                 )
             

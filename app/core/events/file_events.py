@@ -26,6 +26,7 @@ class FileStatusChangedEvent(DomainEvent):
     file_path: str
     old_status: Optional[FileStatus]
     new_status: FileStatus
+    error_message: Optional[str] = None
 
 
 @dataclass(frozen=True)
