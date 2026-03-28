@@ -127,13 +127,12 @@ class JobSpaceManager:
 
 
         try:
-            if tracked_file:
-                # Use state machine for atomic transition
-                await self.state_machine.transition(
-                    file_id=tracked_file.id,
-                    new_status=FileStatus.FAILED,
-                    error_message=f"Insufficient space: {space_check.reason}"
-                )
+            # Use state machine for atomic transition
+            await self.state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.FAILED,
+                error_message=f"Insufficient space: {space_check.reason}"
+            )
 
         except Exception as e:
             logging.error(

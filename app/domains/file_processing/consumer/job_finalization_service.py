@@ -11,7 +11,6 @@ from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import QueueJob
 from app.core.file_repository import FileRepository
 from app.core.events.file_events import FileCopyCompletedEvent
-from datetime import datetime
 
 
 class JobFinalizationService:
@@ -42,19 +41,13 @@ class JobFinalizationService:
             )
             return
 
-        # Mark job as completed in queue
-        # Note: JobFinalizationService doesn't have direct access to job_queue anymore
-        # This should be handled by the calling JobProcessor
-        
-        # Update fields before state transition
-        tracked_file.completed_at = datetime.now()
-        tracked_file.copy_progress = 100.0
-        tracked_file.error_message = None
-        
-        # Use state machine for status transition - this handles repository update and event publishing
+        # Use state machine for atomic status transition + field updates
+        # State machine handles: repository update, event publishing,
+        # auto-clearing error_message, and auto-setting completed_at.
         await self.state_machine.transition(
             file_id=tracked_file.id,
-            new_status=FileStatus.COMPLETED
+            new_status=FileStatus.COMPLETED,
+            copy_progress=100.0,
         )
         
         await self.event_bus.publish(FileCopyCompletedEvent(
@@ -78,13 +71,11 @@ class JobFinalizationService:
             logging.warning(f"Tracked file not found for job {job.file_path} in finalize_failure")
             return
             
-        # Update error message before state transition
-        tracked_file.error_message = error_message
-        
-        # Use state machine for status transition - this handles repository update and event publishing
+        # Use state machine for atomic transition + error message
         await self.state_machine.transition(
-            file_id=tracked_file.id, # <-- Brug .id
-            new_status=FileStatus.FAILED
+            file_id=tracked_file.id,
+            new_status=FileStatus.FAILED,
+            error_message=error_message,
         )
 
     async def finalize_max_retries(self, job: QueueJob) -> None:
@@ -99,14 +90,12 @@ class JobFinalizationService:
         if not tracked_file:
             logging.warning(f"Tracked file not found for job {job.file_path} in finalize_max_retries")
             return
-            
-        # Update error message before state transition
-        tracked_file.error_message = error_message
-        
-        # Use state machine for status transition - this handles repository update and event publishing
+
+        # Use state machine for atomic transition + error message
         await self.state_machine.transition(
-            file_id=tracked_file.id, # <-- Brug .id
-            new_status=FileStatus.FAILED
+            file_id=tracked_file.id,
+            new_status=FileStatus.FAILED,
+            error_message=error_message,
         )
         
         logging.error(f"Job failed after max retries: {job.file_path}")
