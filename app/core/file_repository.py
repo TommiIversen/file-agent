@@ -49,6 +49,7 @@ class FileRepository:
                 logging.warning(
                     f"File with ID {tracked_file.id} does not exist in repository. Cannot update."
                 )
+                return
             self._files_by_id[tracked_file.id] = tracked_file
 
     async def remove(self, file_id: str) -> bool:
