@@ -262,7 +262,7 @@ class SpaceRetryManager:
                     await self._file_repository.update(tracked_file)
             raise
         except Exception as e:
-            logging.error(f"Error in retry task for file ID {file_id}: {e}")
+            logging.error(f"Error in retry task for file ID {file_id}: {e}", exc_info=True)
             async with self._lock:
                 tracked_file = await self._file_repository.get_by_id(file_id)
                 if tracked_file:

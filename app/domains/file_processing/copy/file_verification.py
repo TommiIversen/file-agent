@@ -52,7 +52,7 @@ class FileVerificationService:
             return True, source_size, dest_size
             
         except Exception as e:
-            logging.error(f"Error verifying file integrity: {e}")
+            logging.error(f"Error verifying file integrity: {e}", exc_info=True)
             return False, 0, 0
 
     async def delete_source_file(self, source_path: str) -> tuple[bool, str | None]:

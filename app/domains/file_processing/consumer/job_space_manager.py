@@ -90,7 +90,7 @@ class JobSpaceManager:
                     error_message=f"Network unavailable: {space_check.reason}"
                 )
             except Exception as e:
-                logging.error(f"Failed to transition file {job.file_id} to WAITING_FOR_NETWORK: {e}")
+                logging.error(f"Failed to transition file {job.file_id} to WAITING_FOR_NETWORK: {e}", exc_info=True)
 
             return ProcessResult(
                 success=False,
@@ -123,7 +123,7 @@ class JobSpaceManager:
                         space_shortage=True,
                     )
                 except Exception as e:
-                    logging.error(f"Error scheduling space retry for {file_path}: {e}")
+                    logging.error(f"Error scheduling space retry for {file_path}: {e}", exc_info=True)
 
 
         try:

@@ -128,7 +128,7 @@ class GrowingFileDetector:
         except FileNotFoundError:
             return FileStatus.REMOVED
         except Exception as e:
-            logging.error(f"Error checking growth status for {tracked_file.file_path}: {e}")
+            logging.error(f"Error checking growth status for {tracked_file.file_path}: {e}", exc_info=True)
             return FileStatus.FAILED
 
     async def update_file_growth_info(

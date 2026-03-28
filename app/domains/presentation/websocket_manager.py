@@ -12,7 +12,7 @@ class WebSocketManager:
 
     def __init__(self):
         self._connections: List[WebSocket] = []
-        self._message_queue: Queue = Queue()
+        self._message_queue: Queue = Queue(maxsize=5000)
         self._sender_task: Task | None = None
         logging.info("WebSocketManager initialiseret (Pure Connection Manager)")
 
@@ -40,7 +40,7 @@ class WebSocketManager:
                 logging.info("Message sender task cancelled.")
                 break
             except Exception as e:
-                logging.error(f"Error in message sender task: {e}")
+                logging.error(f"Error in message sender task: {e}", exc_info=True)
 
     async def _broadcast_to_connections(self, message_data: Dict[str, Any]):
         if not self._connections:
@@ -76,4 +76,12 @@ class WebSocketManager:
 
     def broadcast_message(self, message_data: Dict[str, Any]) -> None:
         """Puts a message in the queue to be broadcast to all connected clients."""
-        self._message_queue.put_nowait(message_data)
+        try:
+            self._message_queue.put_nowait(message_data)
+        except asyncio.QueueFull:
+            logging.warning("WebSocket message queue full — dropping oldest message")
+            try:
+                self._message_queue.get_nowait()
+                self._message_queue.put_nowait(message_data)
+            except (asyncio.QueueEmpty, asyncio.QueueFull):
+                pass

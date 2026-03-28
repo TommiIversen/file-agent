@@ -40,7 +40,7 @@ class NetworkMountService:
             logging.info(f"Initialized {self._mounter.get_platform_name()} mounter")
 
         except (UnsupportedPlatformError, Exception) as e:
-            logging.error(f"Error initializing network mounter: {e}")
+            logging.error(f"Error initializing network mounter: {e}", exc_info=True)
             self._mounter = None
 
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
@@ -68,7 +68,7 @@ class NetworkMountService:
             return False
 
         except Exception as e:
-            logging.error(f"Error ensuring mount availability: {e}")
+            logging.error(f"Error ensuring mount availability: {e}", exc_info=True)
             return False
 
     async def verify_mount_accessible(self, local_path: str) -> bool:
@@ -81,7 +81,7 @@ class NetworkMountService:
             )
             return is_accessible
         except Exception as e:
-            logging.error(f"Error verifying mount accessibility: {e}")
+            logging.error(f"Error verifying mount accessibility: {e}", exc_info=True)
             return False
 
     def is_network_mount_configured(self) -> bool:
@@ -106,7 +106,7 @@ class NetworkMountService:
                 else None
             )
         except Exception as e:
-            logging.error(f"Error getting expected mount point: {e}")
+            logging.error(f"Error getting expected mount point: {e}", exc_info=True)
             return None
 
     def get_platform_info(self) -> dict:

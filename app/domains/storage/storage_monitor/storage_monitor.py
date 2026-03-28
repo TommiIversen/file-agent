@@ -111,14 +111,14 @@ class StorageMonitorService:
                 try:
                     await self._check_all_storage()
                 except Exception as e:
-                    logging.error(f"Error in storage monitoring loop: {e}")
+                    logging.error(f"Error in storage monitoring loop: {e}", exc_info=True)
 
                 await asyncio.sleep(self._settings.storage_check_interval_seconds)
 
         except asyncio.CancelledError:
             logging.debug("Storage monitoring loop cancelled")
         except Exception as e:
-            logging.error(f"Unexpected error in monitoring loop: {e}")
+            logging.error(f"Unexpected error in monitoring loop: {e}", exc_info=True)
 
     async def _check_all_storage(self) -> None:
         await self._check_single_storage(
@@ -300,7 +300,7 @@ class StorageMonitorService:
                 )
 
         except Exception as e:
-            logging.error(f"Error checking {storage_type} storage at {path}: {e}")
+            logging.error(f"Error checking {storage_type} storage at {path}: {e}", exc_info=True)
 
     def _get_current_info(self, storage_type: str) -> Optional[StorageInfo]:
         if storage_type == "source":
@@ -431,7 +431,7 @@ class StorageMonitorService:
             logging.info(" Destination unavailable event published - awaiting recovery")
 
         except Exception as e:
-            logging.error(f"ERROR: Error during destination pause handling: {e}")
+            logging.error(f"ERROR: Error during destination pause handling: {e}", exc_info=True)
 
     async def _handle_destination_recovery(
         self, storage_type: str, old_info: Optional[StorageInfo], new_info: StorageInfo
@@ -463,4 +463,4 @@ class StorageMonitorService:
             logging.info(" Destination recovery event published - intelligent resume initiated")
 
         except Exception as e:
-            logging.error(f"ERROR: Error during universal recovery: {e}")
+            logging.error(f"ERROR: Error during universal recovery: {e}", exc_info=True)

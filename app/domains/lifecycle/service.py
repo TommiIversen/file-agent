@@ -60,7 +60,7 @@ class LifecycleService:
                 logging.info("LifecycleService stopped.")
                 break
             except Exception as e:
-                logging.error(f"Error in LifecycleService: {e}")
+                logging.error(f"Error in LifecycleService: {e}", exc_info=True)
                 # Wait a minute before retrying on error
                 await asyncio.sleep(60)
 

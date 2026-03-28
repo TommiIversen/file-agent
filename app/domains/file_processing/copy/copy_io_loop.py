@@ -27,6 +27,9 @@ class CopyIoLoop:
     Håndterer den rå, byte-for-byte I/O-loop for kopiering.
     Er ansvarlig for at kalde FileStateMachine for at opdatere progress.
     """
+
+    _pending_tasks: set[asyncio.Task] = set()
+
     def __init__(
         self,
         settings: Settings,
@@ -200,7 +203,9 @@ class CopyIoLoop:
                                     total_bytes=current_file_size,
                                     copy_speed_mbps=copy_speed_mbps,
                                 )
-                                asyncio.create_task(self._event_bus.publish(progress_event))
+                                task = asyncio.create_task(self._event_bus.publish(progress_event))
+                                self._pending_tasks.add(task)
+                                task.add_done_callback(self._pending_tasks.discard)
                             except Exception as event_error:
                                 logging.warning(f"Failed to publish progress event for {tracked_file.id}: {type(event_error).__name__}: {event_error}")
                         

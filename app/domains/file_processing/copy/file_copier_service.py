@@ -76,6 +76,6 @@ class FileCopierService:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logging.error(f"Worker {worker_id} error: {e}")
+            logging.error(f"Worker {worker_id} error: {e}", exc_info=True)
             raise
 

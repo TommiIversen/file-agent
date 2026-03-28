@@ -94,7 +94,7 @@ class ReloadConfigCommandHandler:
             }
 
         except Exception as e:
-            logging.error(f"Failed to reload configuration: {e}")
+            logging.error(f"Failed to reload configuration: {e}", exc_info=True)
             return {
                 "success": False,
                 "message": f"Failed to reload configuration: {str(e)}",
@@ -127,5 +127,5 @@ class RestartApplicationCommandHandler:
             }
 
         except Exception as e:
-            logging.error(f"Failed to restart application: {e}")
+            logging.error(f"Failed to restart application: {e}", exc_info=True)
             return {"success": False, "message": f"Failed to restart application: {str(e)}"}

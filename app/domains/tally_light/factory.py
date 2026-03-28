@@ -29,6 +29,8 @@ def create_power_switch(settings: Settings) -> PowerSwitchProtocol:
         logging.info(f"Creating IP Power 9255 client for {settings.tally_light_switch_ip}")
         return IPPower9255Client(
             ip_address=settings.tally_light_switch_ip,
+            username=settings.tally_light_switch_username,
+            password=settings.tally_light_switch_password,
             timeout_seconds=settings.tally_light_api_timeout_seconds
         )
     

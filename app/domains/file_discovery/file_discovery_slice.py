@@ -176,7 +176,7 @@ class FileDiscoverySlice:
             logging.warning(f"Could not mark file as READY: {e}")
             return False
         except ValueError as e:
-            logging.error(f"Error in mark_file_ready (file missing?): {e}")
+            logging.error(f"Error in mark_file_ready (file missing?): {e}", exc_info=True)
             return False
 
     async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:

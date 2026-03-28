@@ -125,7 +125,7 @@ class FileScanner:
             except asyncio.CancelledError:
                 logging.debug("Scanner task cancelled successfully")
             except Exception as e:
-                logging.error(f"Error during scanner task cancellation: {e}")
+                logging.error(f"Error during scanner task cancellation: {e}", exc_info=True)
 
         # Stop growing file detector monitoring
         await self.growing_file_detector.stop_monitoring()
@@ -143,7 +143,7 @@ class FileScanner:
                     logging.info("Scanner loop cancelled")
                     break
                 except Exception as e:
-                    logging.error(f"Error in scan iteration: {e}")
+                    logging.error(f"Error in scan iteration: {e}", exc_info=True)
                     await asyncio.sleep(5)
         finally:
             # Cleanup when loop exits
@@ -176,7 +176,7 @@ class FileScanner:
             return 0
 
         except Exception as e:
-            logging.error(f"Error cleaning up missing files: {e}")
+            logging.error(f"Error cleaning up missing files: {e}", exc_info=True)
             return 0
 
     async def _discover_all_files(self) -> Set[Path]:
@@ -207,7 +207,7 @@ class FileScanner:
             logging.debug(f"Discovered {len(discovered_files)} MXF files")
 
         except Exception as e:
-            logging.error(f"Error discovering files: {e}")
+            logging.error(f"Error discovering files: {e}", exc_info=True)
 
         return discovered_files
 
@@ -250,7 +250,7 @@ class FileScanner:
                 )
 
             except Exception as e:
-                logging.error(f"Error processing file {path_obj}: {e}")
+                logging.error(f"Error processing file {path_obj}: {e}", exc_info=True)
 
     async def _check_existing_file_changes(self, tracked_file, file_path: str) -> None:
         metadata = await get_file_metadata(file_path)
@@ -333,4 +333,4 @@ class FileScanner:
                         )
 
         except Exception as e:
-            logging.error(f"Error in stability check: {e}")
+            logging.error(f"Error in stability check: {e}", exc_info=True)

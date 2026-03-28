@@ -104,7 +104,7 @@ class QueueFileCommandHandler:
         except InvalidTransitionError as e:
             logging.warning(f"Could not add job to queue (state conflict): {e}")
         except Exception as e:
-            logging.error(f"Error adding to queue: {e}")
+            logging.error(f"Error adding to queue: {e}", exc_info=True)
 
 
 class ProcessJobCommandHandler:
@@ -192,6 +192,6 @@ class ProcessJobCommandHandler:
                 logging.info(f"Job processing completed with copy failure: {file_path}")
 
         except Exception as e:
-            logging.error(f"Unexpected error during ProcessJobCommand for {file_path}: {e}")
+            logging.error(f"Unexpected error during ProcessJobCommand for {file_path}: {e}", exc_info=True)
             # Call finalization service for unexpected errors
             await self._finalization_service.finalize_failure(job, e)

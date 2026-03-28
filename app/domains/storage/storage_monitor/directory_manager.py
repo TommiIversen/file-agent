@@ -47,7 +47,7 @@ class DirectoryManager:
                 return False
 
         except Exception as e:
-            logging.error(f"Failed to create {storage_type} directory {path}: {e}")
+            logging.error(f"Failed to create {storage_type} directory {path}: {e}", exc_info=True)
             return False
 
     async def _create_directory_async(self, path_obj: Path) -> None:

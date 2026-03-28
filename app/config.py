@@ -118,6 +118,14 @@ class Settings(BaseSettings):
         default="10.65.77.9",
         description="IP address of the power switch"
     )
+    tally_light_switch_username: str = Field(
+        default="admin",
+        description="Username for the power switch"
+    )
+    tally_light_switch_password: str = Field(
+        default="",
+        description="Password for the power switch"
+    )
     tally_light_blink_interval_seconds: float = Field(
         default=0.5,
         description="Blink interval for tally light (seconds)"

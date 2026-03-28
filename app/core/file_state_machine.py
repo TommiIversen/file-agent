@@ -23,6 +23,8 @@ class FileStateMachine:
     Dette sikrer, at alle statusændringer er atomare og gyldige.
     """
 
+    _pending_tasks: set[asyncio.Task] = set()
+
     def __init__(
         self,
         file_repository: FileRepository,
@@ -197,10 +199,12 @@ class FileStateMachine:
             
             # --- SLUT AF KRITISK SEKTION ---
         
-        # 6. ANNOUNCE (Fire and Forget)
+        # 6. ANNOUNCE (Fire and Forget with reference tracking)
         # Sker UDEN FOR låsen, så vi ikke blokerer andre
         # state-ændringer, mens vi venter på langsomme subscribers.
         if event_to_publish:
-            asyncio.create_task(self._event_bus.publish(event_to_publish))
+            task = asyncio.create_task(self._event_bus.publish(event_to_publish))
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
 
         return tracked_file

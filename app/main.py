@@ -84,8 +84,8 @@ async def lifespan(app: FastAPI):
     network_services = await register_network_mount_domain(event_bus) # NetworkCoordinator registration!
     
     # Store NetworkCoordinator for dependency injection
-    from app.dependencies import _singletons
-    _singletons["network_coordinator"] = network_services["network_coordinator"]
+    from app.dependencies import register_network_coordinator
+    register_network_coordinator(network_services["network_coordinator"])
     
     # Now register domains that depend on NetworkCoordinator
     await register_file_processing_domain(command_bus, event_bus) # File processing CQRS registration
@@ -208,8 +208,16 @@ async def lifespan(app: FastAPI):
     ingest_monitor_worker = get_ingest_monitor_worker()
     await ingest_monitor_worker.stop_monitoring()
     logging.info("IngestMonitorWorker stopped")
+
+    # Close IngestApiClient HTTP connection
+    from app.dependencies import get_ingest_api_client
+    try:
+        await get_ingest_api_client().close()
+        logging.info("IngestApiClient HTTP client closed")
+    except Exception as e:
+        logging.warning(f"Error closing IngestApiClient: {e}")
     
-    if 'tally_handler' in locals() and hasattr(tally_handler, 'shutdown'):
+    if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
         await tally_handler.shutdown()
         logging.info("TallyLight domain shutdown completed")
 
@@ -217,9 +225,15 @@ async def lifespan(app: FastAPI):
     for task in _background_tasks:
         task.cancel()
 
-    # Vent på at tasks bliver cancelled
+    # Vent på at tasks bliver cancelled — med timeout
     if _background_tasks:
-        await asyncio.gather(*_background_tasks, return_exceptions=True)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_background_tasks, return_exceptions=True),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logging.error("Shutdown timeout after 30s — forcing exit")
 
     logging.info("Alle background tasks stoppet")
 

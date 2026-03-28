@@ -116,7 +116,7 @@ class ClearAllChannelErrorsCommandHandler(CommandHandler[ClearAllChannelErrorsCo
             
         except Exception as e:
             import logging
-            logging.error(f"Error clearing all channel errors: {e}")
+            logging.error(f"Error clearing all channel errors: {e}", exc_info=True)
             return {
                 "success": False,
                 "channels_cleared": 0,
@@ -175,7 +175,7 @@ class StartAllChannelsCommandHandler(CommandHandler[StartAllChannelsCommand, Dic
             
         except Exception as e:
             import logging
-            logging.error(f"Error starting all channels: {e}")
+            logging.error(f"Error starting all channels: {e}", exc_info=True)
             return {
                 "success": False,
                 "channels_started": 0,
@@ -234,7 +234,7 @@ class StopAllChannelsCommandHandler(CommandHandler[StopAllChannelsCommand, Dict[
             
         except Exception as e:
             import logging
-            logging.error(f"Error stopping all channels: {e}")
+            logging.error(f"Error stopping all channels: {e}", exc_info=True)
             return {
                 "success": False,
                 "channels_stopped": 0,

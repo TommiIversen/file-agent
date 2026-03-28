@@ -154,7 +154,7 @@ class IngestMonitorWorker:
                 logging.info("Fast polling loop cancelled")
                 break
             except Exception as e:
-                logging.error(f"Error in IngestMonitor fast_polling_loop: {e}")
+                logging.error(f"Error in IngestMonitor fast_polling_loop: {e}", exc_info=True)
                 # Mark as disconnected on API errors
                 await self._state_service.set_connection_status(False)
                 # Wait a bit before retrying on error
@@ -206,7 +206,7 @@ class IngestMonitorWorker:
                 logging.info("Slow polling loop cancelled")
                 break
             except Exception as e:
-                logging.error(f"Error in IngestMonitor slow_polling_loop: {e}")
+                logging.error(f"Error in IngestMonitor slow_polling_loop: {e}", exc_info=True)
                 # Mark as disconnected on API errors
                 await self._state_service.set_connection_status(False)
                 # Wait a bit before retrying on error

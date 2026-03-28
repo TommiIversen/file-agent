@@ -64,7 +64,7 @@ class FileProcessingEventHandler:
             await self._job_queue_service.handle_destination_unavailable()
             logging.info(" Operations paused successfully due to destination unavailable")
         except Exception as e:
-            logging.error(f"Error pausing operations: {e}")
+            logging.error(f"Error pausing operations: {e}", exc_info=True)
 
     async def handle_destination_recovered(self, event: DestinationRecoveredEvent):
         """
@@ -79,7 +79,7 @@ class FileProcessingEventHandler:
             await self._job_queue_service.process_waiting_network_files()
             logging.info(" Operations resumed successfully after destination recovery")
         except Exception as e:
-            logging.error(f"Error resuming operations: {e}")
+            logging.error(f"Error resuming operations: {e}", exc_info=True)
 
     async def handle_network_status_changed(self, event: NetworkStatusChanged):
         """
@@ -104,4 +104,4 @@ class FileProcessingEventHandler:
                 await self._job_queue_service.handle_destination_unavailable()
                 logging.info(" Network unavailable - paused file processing")
         except Exception as e:
-            logging.error(f"Error handling network status change: {e}")
+            logging.error(f"Error handling network status change: {e}", exc_info=True)

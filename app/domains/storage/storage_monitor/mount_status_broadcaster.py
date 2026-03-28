@@ -83,4 +83,4 @@ class MountStatusBroadcaster:
             await self._notification_handler.handle_mount_status(mount_update)
 
         except Exception as e:
-            logging.error(f"Error broadcasting mount status: {e}")
+            logging.error(f"Error broadcasting mount status: {e}", exc_info=True)

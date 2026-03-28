@@ -85,7 +85,7 @@ class MacOSMounter(BaseMounter):
                 return False
 
         except Exception as e:
-            logging.error(f"Exception during macOS mount attempt: {e}")
+            logging.error(f"Exception during macOS mount attempt: {e}", exc_info=True)
             return False
 
     async def verify_mount_accessible(self, local_path: str) -> tuple[bool, bool]:
@@ -136,5 +136,5 @@ class MacOSMounter(BaseMounter):
             return mount_point
 
         except Exception as e:
-            logging.error(f"Error getting mount point from URL {share_url}: {e}")
+            logging.error(f"Error getting mount point from URL {share_url}: {e}", exc_info=True)
             return "/Volumes/NetworkShare"

@@ -63,7 +63,7 @@ class IngestApiClient:
             logging.warning(f"Could not fetch activeChannels: {e}")
             return None # Return None on error to indicate API failure
         except Exception as e:
-            logging.error(f"Unexpected error fetching activeChannels: {e}")
+            logging.error(f"Unexpected error fetching activeChannels: {e}", exc_info=True)
             return None
 
     async def get_channel_status(self, channel_name: str) -> Optional[JustInRecordingStatus]:
@@ -87,7 +87,7 @@ class IngestApiClient:
             logging.warning(f"Could not fetch status for {channel_name}: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error fetching status for {channel_name}: {e}")
+            logging.error(f"Unexpected error fetching status for {channel_name}: {e}", exc_info=True)
             return None
 
     async def get_channel_errors(self, channel_name: str, clear: bool = False) -> List[JustInError]:
@@ -116,7 +116,7 @@ class IngestApiClient:
             logging.warning(f"Could not fetch errors for {channel_name}: {e}")
             return []
         except Exception as e:
-            logging.error(f"Unexpected error fetching errors for {channel_name}: {e}")
+            logging.error(f"Unexpected error fetching errors for {channel_name}: {e}", exc_info=True)
             return []
 
     async def get_all_channel_statuses(self, channel_names: List[str]) -> Optional[List[Tuple[str, JustInRecordingStatus]]]:
@@ -221,7 +221,7 @@ class IngestApiClient:
             logging.warning(f"Could not start channel {channel_name}: {e}")
             return False
         except Exception as e:
-            logging.error(f"Unexpected error starting channel {channel_name}: {e}")
+            logging.error(f"Unexpected error starting channel {channel_name}: {e}", exc_info=True)
             return False
 
     async def stop_channel(self, channel_name: str) -> bool:
@@ -250,7 +250,7 @@ class IngestApiClient:
             logging.warning(f"Could not stop channel {channel_name}: {e}")
             return False
         except Exception as e:
-            logging.error(f"Unexpected error stopping channel {channel_name}: {e}")
+            logging.error(f"Unexpected error stopping channel {channel_name}: {e}", exc_info=True)
             return False
 
     async def start_all_channels(self, channel_names: List[str]) -> int:
@@ -341,7 +341,7 @@ class IngestApiClient:
                 await self.get_channel_errors(name, clear=True)
                 return True
             except Exception as e:
-                logging.error(f"Failed to clear errors for {name}: {e}")
+                logging.error(f"Failed to clear errors for {name}: {e}", exc_info=True)
                 return False
 
         # Clear all errors in parallel
@@ -377,7 +377,7 @@ class IngestApiClient:
             logging.warning(f"Could not fetch recordingConfiguration for {channel_name}: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error fetching recordingConfiguration for {channel_name}: {e}")
+            logging.error(f"Unexpected error fetching recordingConfiguration for {channel_name}: {e}", exc_info=True)
             return None
 
     async def get_destination_presets(self, channel_name: str) -> Optional[JustInDestinationPresets]:
@@ -397,7 +397,7 @@ class IngestApiClient:
             logging.warning(f"Could not fetch destination presets for {channel_name}: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error fetching destination presets for {channel_name}: {e}")
+            logging.error(f"Unexpected error fetching destination presets for {channel_name}: {e}", exc_info=True)
             return None
 
     async def load_destination_preset(
@@ -424,7 +424,7 @@ class IngestApiClient:
             logging.warning(f"Could not load destination preset for {channel_name}: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error loading destination preset for {channel_name}: {e}")
+            logging.error(f"Unexpected error loading destination preset for {channel_name}: {e}", exc_info=True)
             return None
 
     async def discover_recording_paths(

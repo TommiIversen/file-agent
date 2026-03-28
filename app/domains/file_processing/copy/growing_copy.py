@@ -55,7 +55,7 @@ class GrowingFileCopyStrategy():
             logging.error(f"File size check timed out for {path}")
             raise FileCopyTimeoutError(f"File size check timed out for {path}") from e
         except OSError as e:
-            logging.error(f"Failed to access file for size check: {e}")
+            logging.error(f"Failed to access file for size check: {e}", exc_info=True)
             raise FileCopyIOError(f"Failed to access file for size check {path}: {e}") from e
 
     async def copy_file(
@@ -112,7 +112,7 @@ class GrowingFileCopyStrategy():
                 await aiofiles.os.makedirs(dest_dir, exist_ok=True)
                 logging.debug(f"Ensured destination directory exists: {dest_dir}")
             except Exception as e:
-                logging.error(f"Directory creation failed for: {dest_dir}: {e}")
+                logging.error(f"Directory creation failed for: {dest_dir}: {e}", exc_info=True)
                 raise FileCopyIOError(f"Directory creation failed for {dest_dir}: {e}") from e
 
             # Pre-copy overwrite protection: re-check destination right before copy
@@ -156,7 +156,7 @@ class GrowingFileCopyStrategy():
                                 error_message=f"Could not delete source file: {delete_error}"
                             )
                         except (InvalidTransitionError, ValueError) as e:
-                            logging.error(f"Kunne ikke sætte status til COMPLETED_DELETE_FAILED for {tracked_file.id}: {e}")
+                            logging.error(f"Kunne ikke sætte status til COMPLETED_DELETE_FAILED for {tracked_file.id}: {e}", exc_info=True)
                         return True # Still a success from a copy perspective
 
                     # Use state machine for atomic transition
@@ -187,7 +187,7 @@ class GrowingFileCopyStrategy():
                         return True
 
                     except (InvalidTransitionError, ValueError) as e:
-                        logging.error(f"Kunne ikke sætte status til COMPLETED for {tracked_file.id}: {e}")
+                        logging.error(f"Kunne ikke sætte status til COMPLETED for {tracked_file.id}: {e}", exc_info=True)
                         raise FileCopyError(f"State transition til COMPLETED fejlede: {e}") from e
                 else:
                     logging.error(f"Growing copy verification failed: {source_path}")
@@ -389,12 +389,14 @@ class GrowingFileCopyStrategy():
                 if (current_time - last_progress_update_time).total_seconds() >= 1.0:
                     # Send kun en progress-event, SÆT IKKE STATUS
                     if self._event_bus:
-                        asyncio.create_task(self._event_bus.publish(FileCopyProgressEvent(
+                        task = asyncio.create_task(self._event_bus.publish(FileCopyProgressEvent(
                             file_id=tracked_file.id,
                             bytes_copied=bytes_copied,
                             total_bytes=current_file_size,
                             copy_speed_mbps=0 # Vi venter
                         )))
+                        CopyIoLoop._pending_tasks.add(task)
+                        task.add_done_callback(CopyIoLoop._pending_tasks.discard)
                     last_progress_update_time = current_time # Opdater tiden
 
             if file_finished_growing and bytes_copied >= current_file_size:

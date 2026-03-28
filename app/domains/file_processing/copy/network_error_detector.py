@@ -17,6 +17,8 @@ class NetworkErrorDetector:
     Nu med event publishing for NetworkCoordinator integration! 
     """
 
+    _pending_tasks: set[asyncio.Task] = set()
+
     # Network error indicators to check for
     NETWORK_ERROR_STRINGS = {
         "input/output error",
@@ -100,7 +102,9 @@ class NetworkErrorDetector:
                     file_id=self._current_file_id,
                     operation=operation
                 )
-                # Fire-and-forget event publishing
-                asyncio.create_task(self._event_bus.publish(event))
+                # Fire-and-forget event publishing (with reference tracking)
+                task = asyncio.create_task(self._event_bus.publish(event))
+                self._pending_tasks.add(task)
+                task.add_done_callback(self._pending_tasks.discard)
                 
             raise NetworkError(f"Network error during {operation}: {error}")

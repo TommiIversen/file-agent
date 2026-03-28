@@ -149,7 +149,7 @@ class TallyLightEventHandler:
                 self._current_tally_state = new_state # Store the new state
 
             except PowerSwitchError as e:
-                logging.error(f"Could not update tally light to {new_state_str}: {e}")
+                logging.error(f"Could not update tally light to {new_state_str}: {e}", exc_info=True)
                 # We don't update _current_tally_state, so it will try again on next event
 
     async def _blinker_loop(self) -> None:
@@ -170,10 +170,10 @@ class TallyLightEventHandler:
                 await self._power_switch.turn_off()
                 logging.info("Blinker task stopped, light turned off")
             except PowerSwitchError as e:
-                logging.error(f"Could not turn off tally light during blink stop: {e}")
+                logging.error(f"Could not turn off tally light during blink stop: {e}", exc_info=True)
             raise # Re-raise CancelledError
         except Exception as e:
-            logging.error(f"Error in blinker loop: {e}")
+            logging.error(f"Error in blinker loop: {e}", exc_info=True)
             # Reset state to OFF so it can be restarted
             self._current_tally_state = TallyState.OFF
 

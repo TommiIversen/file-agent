@@ -225,6 +225,11 @@ def get_network_coordinator():
     return _singletons["network_coordinator"]
 
 
+def register_network_coordinator(coordinator) -> None:
+    """Register the NetworkCoordinator singleton after domain registration."""
+    _singletons["network_coordinator"] = coordinator
+
+
 def get_storage_monitor() -> StorageMonitorService:
     if "storage_monitor" not in _singletons:
         _singletons["storage_monitor"] = StorageMonitorService(
@@ -344,7 +349,11 @@ def get_tally_switch_monitor() -> TallySwitchMonitorService:
         ip_address = settings.tally_light_switch_ip # From config.py
         
         # Create switch client with IP address
-        switch_client = IPPower9255Client(ip_address=ip_address)
+        switch_client = IPPower9255Client(
+            ip_address=ip_address,
+            username=settings.tally_light_switch_username,
+            password=settings.tally_light_switch_password,
+        )
         
         _singletons["tally_switch_monitor"] = TallySwitchMonitorService(
             switch_client=switch_client,

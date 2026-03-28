@@ -53,7 +53,7 @@ class NotificationHandler:
         try:
             await self._event_bus.publish(StorageStatusChangedEvent(update=update))
         except Exception as e:
-            logging.error(f"Error publishing StorageStatusChangedEvent: {e}")
+            logging.error(f"Error publishing StorageStatusChangedEvent: {e}", exc_info=True)
 
 
     async def handle_mount_status(self, mount_update: MountStatusUpdate) -> None:
@@ -79,7 +79,7 @@ class NotificationHandler:
             try:
                 await self._event_bus.publish(MountStatusChangedEvent(update=mount_update))
             except Exception as e:
-                logging.error(f"Error publishing MountStatusChangedEvent: {e}")
+                logging.error(f"Error publishing MountStatusChangedEvent: {e}", exc_info=True)
         else:
             # Just debug log for unchanged status
             logging.debug(
@@ -99,7 +99,7 @@ class NotificationHandler:
             )
             logging.debug(f"Published DestinationUnavailableEvent: {reason}")
         except Exception as e:
-            logging.error(f"Error publishing DestinationUnavailableEvent: {e}")
+            logging.error(f"Error publishing DestinationUnavailableEvent: {e}", exc_info=True)
 
     async def publish_destination_recovered(
         self, reason: str, storage_info: StorageInfo
@@ -111,5 +111,5 @@ class NotificationHandler:
             )
             logging.debug(f"Published DestinationRecoveredEvent: {reason}")
         except Exception as e:
-            logging.error(f"Error publishing DestinationRecoveredEvent: {e}")
+            logging.error(f"Error publishing DestinationRecoveredEvent: {e}", exc_info=True)
 

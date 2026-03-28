@@ -43,8 +43,7 @@ class JustInActiveChannels(BaseModel):
     """Active channels response from Just In Engine."""
     channel_names: List[str] = Field(..., alias="channel-names")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 
 class JustInErrorInfo(BaseModel):

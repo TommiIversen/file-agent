@@ -1,8 +1,10 @@
 import logging
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 
 # Importer fra de nye, domæne-specifikke placeringer
-from app.dependencies import get_query_bus # Antager du har en get_query_bus
+from app.dependencies import get_query_bus, get_settings
 from app.core.cqrs.query_bus import QueryBus
 from app.domains.directory_browsing.models import DirectoryScanResult
 from app.domains.directory_browsing.queries import (
@@ -35,8 +37,8 @@ async def scan_source_directory(
         return result
         
     except Exception as e:
-        logging.error(f"API: Unexpected error during source directory scan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"API: Unexpected error during source directory scan: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 
@@ -57,8 +59,8 @@ async def scan_destination_directory(
         return result
 
     except Exception as e:
-        logging.error(f"API: Unexpected error during destination directory scan: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"API: Unexpected error during destination directory scan: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @directory_router.get("/scan/custom")
@@ -70,6 +72,16 @@ async def scan_custom_directory(
 ) -> DirectoryScanResult:
     if not path or not path.strip():
         raise HTTPException(status_code=400, detail="Directory path is required")
+
+    # Path traversal protection: restrict to source/destination directories
+    settings = get_settings()
+    allowed_roots = [
+        Path(settings.source_directory).resolve(),
+        Path(settings.destination_directory).resolve(),
+    ]
+    requested = Path(path.strip()).resolve()
+    if not any(requested == root or requested.is_relative_to(root) for root in allowed_roots):
+        raise HTTPException(status_code=403, detail="Path is outside allowed directories")
 
     try:
         query = ScanCustomDirectoryQuery(
@@ -83,9 +95,11 @@ async def scan_custom_directory(
         )
         return result
 
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
-        logging.error(f"API: Unexpected error during custom directory scan {path}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"API: Unexpected error during custom directory scan: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @directory_router.get("/scanner/info")
@@ -97,8 +111,8 @@ async def get_scanner_info(
         return await query_bus.execute(query)
 
     except Exception as e:
-        logging.error(f"API: Error getting scanner info: {e}")
+        logging.error(f"API: Error getting scanner info: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Failed to get scanner info: {str(e)}"
+            status_code=500, detail="Failed to get scanner info"
         )
 

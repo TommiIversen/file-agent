@@ -118,7 +118,7 @@ def get_hostname_settings_file() -> str:
         return str(host_settings)
 
     except Exception as e:
-        logging.error(f"Error handling host-specific settings: {e}")
+        logging.error(f"Error handling host-specific settings: {e}", exc_info=True)
         logging.info("Falling back to default settings.env")
         return "settings.env"
 

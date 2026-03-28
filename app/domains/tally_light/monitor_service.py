@@ -147,12 +147,12 @@ class TallySwitchMonitorService:
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logging.error(f"Error in tally switch monitor loop: {e}")
+                    logging.error(f"Error in tally switch monitor loop: {e}", exc_info=True)
                     # Continue monitoring even if one check fails
                     await asyncio.sleep(self._check_interval)
                     
         except Exception as e:
-            logging.error(f"Fatal error in tally switch monitor loop: {e}")
+            logging.error(f"Fatal error in tally switch monitor loop: {e}", exc_info=True)
         finally:
             self._is_running = False
 
@@ -220,7 +220,7 @@ class TallySwitchMonitorService:
                     logging.warning(f" Tally switch {self._ip_address} went OFFLINE")
             
         except Exception as e:
-            logging.error(f"Error publishing tally switch events: {e}")
+            logging.error(f"Error publishing tally switch events: {e}", exc_info=True)
 
     def get_status_dict(self) -> Dict[str, Any]:
         """

@@ -22,6 +22,17 @@ class LogFileQueryHandler:
     
     def __init__(self):
         self.settings = get_settings()
+
+    def _safe_log_path(self, filename: str) -> Path:
+        """Resolve a log filename to a safe path within the logs directory."""
+        logs_dir = Path(self.settings.log_directory).resolve()
+        file_path = (logs_dir / filename).resolve()
+        if not file_path.is_relative_to(logs_dir):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        return file_path
     
     async def handle_list_log_files(self, query: ListLogFilesQuery) -> List[Dict[str, Any]]:
         """
@@ -71,8 +82,7 @@ class LogFileQueryHandler:
         Returns:
             Dictionary with file content and metadata
         """
-        logs_dir = Path(self.settings.log_directory)
-        file_path = logs_dir / query.filename
+        file_path = self._safe_log_path(query.filename)
         
         if not file_path.exists():
             raise HTTPException(
@@ -101,10 +111,13 @@ class LogFileQueryHandler:
                 "size": len(reversed_content),
                 "lines": len(lines)
             }
+        except HTTPException:
+            raise
         except Exception as e:
+            logging.error(f"Error reading log file: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error reading log file: {str(e)}"
+                detail="Error reading log file"
             )
     
     async def handle_get_log_content_chunk(self, query: GetLogContentChunkQuery) -> Dict[str, Any]:
@@ -118,8 +131,7 @@ class LogFileQueryHandler:
         Returns:
             Dictionary with chunk content and pagination metadata
         """
-        logs_dir = Path(self.settings.log_directory)
-        file_path = logs_dir / query.filename
+        file_path = self._safe_log_path(query.filename)
         
         if not file_path.exists():
             raise HTTPException(
@@ -151,10 +163,13 @@ class LogFileQueryHandler:
                 "total_lines": total_lines,
                 "has_more": end < total_lines
             }
+        except HTTPException:
+            raise
         except Exception as e:
+            logging.error(f"Error reading log file chunk: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error reading log file chunk: {str(e)}"
+                detail="Error reading log file chunk"
             )
     
     async def handle_download_log_file(self, query: DownloadLogFileQuery) -> Response:
@@ -169,8 +184,7 @@ class LogFileQueryHandler:
         Returns:
             FileResponse for file download
         """
-        logs_dir = Path(self.settings.log_directory)
-        file_path = logs_dir / query.filename
+        file_path = self._safe_log_path(query.filename)
         
         if not file_path.exists():
             raise HTTPException(

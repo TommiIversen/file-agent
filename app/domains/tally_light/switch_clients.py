@@ -29,21 +29,20 @@ class IPPower9255Client(PowerSwitchProtocol):
     - Default outlet: p61 (port 1)
     """
 
-    # Hardcoded credentials as requested
-    DEFAULT_USERNAME = "admin"
-    DEFAULT_PASSWORD = "12345678"
     DEFAULT_OUTLET = "p61" # Port 1
 
-    def __init__(self, ip_address: str, timeout_seconds: float = 2.0):
+    def __init__(self, ip_address: str, username: str = "admin", password: str = "", timeout_seconds: float = 2.0):
         """
         Initialize IP Power 9255 client.
         
         Args:
             ip_address: IP address of the switch (e.g., "10.65.77.9")
+            username: HTTP Basic Auth username
+            password: HTTP Basic Auth password
             timeout_seconds: HTTP timeout for requests
         """
         self._ip_address = ip_address
-        self._base_url = f"http://{self.DEFAULT_USERNAME}:{self.DEFAULT_PASSWORD}@{ip_address}"
+        self._base_url = f"http://{username}:{password}@{ip_address}"
         self._timeout = timeout_seconds
         self._client: Optional[httpx.AsyncClient] = None
         
@@ -78,13 +77,13 @@ class IPPower9255Client(PowerSwitchProtocol):
             return True
             
         except httpx.RequestError as e:
-            logging.error(f"Network error turning ON IP Power 9255: {e}")
+            logging.error(f"Network error turning ON IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchConnectionError(f"Failed to connect to switch at {self._ip_address}: {e}")
         except httpx.HTTPStatusError as e:
-            logging.error(f"HTTP error turning ON IP Power 9255: {e}")
+            logging.error(f"HTTP error turning ON IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchCommandError(f"Switch rejected ON command: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error turning ON IP Power 9255: {e}")
+            logging.error(f"Unexpected error turning ON IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchError(f"Unexpected error: {e}")
 
     async def turn_off(self) -> bool:
@@ -105,13 +104,13 @@ class IPPower9255Client(PowerSwitchProtocol):
             return True
             
         except httpx.RequestError as e:
-            logging.error(f"Network error turning OFF IP Power 9255: {e}")
+            logging.error(f"Network error turning OFF IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchConnectionError(f"Failed to connect to switch at {self._ip_address}: {e}")
         except httpx.HTTPStatusError as e:
-            logging.error(f"HTTP error turning OFF IP Power 9255: {e}")
+            logging.error(f"HTTP error turning OFF IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchCommandError(f"Switch rejected OFF command: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error turning OFF IP Power 9255: {e}")
+            logging.error(f"Unexpected error turning OFF IP Power 9255: {e}", exc_info=True)
             raise PowerSwitchError(f"Unexpected error: {e}")
 
     async def get_status(self) -> bool:
@@ -142,7 +141,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             logging.warning(f"HTTP error checking IP Power 9255 status: {e}")
             raise PowerSwitchCommandError(f"Status check failed: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error checking IP Power 9255 status: {e}")
+            logging.error(f"Unexpected error checking IP Power 9255 status: {e}", exc_info=True)
             raise PowerSwitchError(f"Unexpected error: {e}")
 
     async def is_online(self) -> bool:

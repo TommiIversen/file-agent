@@ -60,7 +60,7 @@ class JobQueueService:
             logging.info("Job Queue Producer blev cancelled")
             raise
         except Exception as e:
-            logging.error(f"Fejl i producer task: {e}")
+            logging.error(f"Fejl i producer task: {e}", exc_info=True)
             raise
         finally:
             self._running = False
@@ -110,7 +110,7 @@ class JobQueueService:
             )
 
         except Exception as e:
-            logging.error(f" Error processing waiting network files: {e}")
+            logging.error(f" Error processing waiting network files: {e}", exc_info=True)
 
     async def handle_destination_unavailable(self) -> None:
         """Handle destination becoming unavailable - similar to previous StateManager version"""
@@ -126,7 +126,7 @@ class JobQueueService:
             logging.info(" Destination unavailable handling completed - relying on existing network checks")
             
         except Exception as e:
-            logging.error(f" Error handling destination unavailable: {e}")
+            logging.error(f" Error handling destination unavailable: {e}", exc_info=True)
 
     def get_queue(self) -> Optional[asyncio.PriorityQueue[QueueJob]]:
         """
@@ -152,7 +152,7 @@ class JobQueueService:
             return None
 
         except Exception as e:
-            logging.error(f"Fejl ved hentning fra queue: {e}")
+            logging.error(f"Fejl ved hentning fra queue: {e}", exc_info=True)
             return None
 
     async def mark_job_completed(
@@ -171,7 +171,7 @@ class JobQueueService:
             logging.info(f"Job completed successfully: {result}")
 
         except Exception as e:
-            logging.error(f"Fejl ved marking job completed: {e}")
+            logging.error(f"Fejl ved marking job completed: {e}", exc_info=True)
 
     async def mark_job_failed(
         self, job: QueueJob, error_message: str, processing_time: float = 0.0
@@ -199,4 +199,4 @@ class JobQueueService:
                 self._failed_jobs = self._failed_jobs[-100:]
 
         except Exception as e:
-            logging.error(f"Fejl ved marking job failed: {e}")
+            logging.error(f"Fejl ved marking job failed: {e}", exc_info=True)

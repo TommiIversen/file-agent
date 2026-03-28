@@ -52,7 +52,7 @@ class WindowsMounter(BaseMounter):
                 return False
 
         except Exception as e:
-            logging.error(f"Exception during Windows mount attempt: {e}")
+            logging.error(f"Exception during Windows mount attempt: {e}", exc_info=True)
             return False
 
     async def verify_mount_accessible(self, local_path: str) -> Tuple[bool, bool]:
@@ -96,7 +96,7 @@ class WindowsMounter(BaseMounter):
                 return True, False
 
         except Exception as e:
-            logging.error(f"Exception during mount verification: {e}")
+            logging.error(f"Exception during mount verification: {e}", exc_info=True)
             return False, False
 
     def get_platform_name(self) -> str:
@@ -117,7 +117,7 @@ class WindowsMounter(BaseMounter):
             return unc_path
 
         except Exception as e:
-            logging.error(f"Error converting URL to UNC path: {e}")
+            logging.error(f"Error converting URL to UNC path: {e}", exc_info=True)
             return share_url
 
     def get_mount_point_from_url(self, share_url: str) -> str:

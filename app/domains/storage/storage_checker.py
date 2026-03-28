@@ -44,7 +44,7 @@ class StorageChecker:
 
         except Exception as e:
             error_message = f"Storage check error: {str(e)}"
-            logging.error(f"Storage check failed for {path}: {e}")
+            logging.error(f"Storage check failed for {path}: {e}", exc_info=True)
 
         status = self._evaluate_status(
             free_gb,
@@ -113,7 +113,7 @@ class StorageChecker:
             logging.error(f"Disk usage check timed out for {path}")
             raise StorageAccessError(f"Disk usage check timed out for {path}")
         except Exception as e:
-            logging.error(f"Cannot get disk usage for {path}: {e}")
+            logging.error(f"Cannot get disk usage for {path}: {e}", exc_info=True)
             raise StorageAccessError(f"Disk usage check failed: {e}")
 
     async def _check_write_access(self, path: str) -> bool:
@@ -206,7 +206,7 @@ class StorageChecker:
                 )
 
         except Exception as e:
-            logging.error(f"Error during old test files cleanup in {directory}: {e}")
+            logging.error(f"Error during old test files cleanup in {directory}: {e}", exc_info=True)
 
         return cleaned_count
 
