@@ -13,6 +13,8 @@ from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus
+from app.domains.file_discovery.file_selection_logic import FileSelectionLogic
+from app.domains.file_discovery.cooldown_checker import CooldownChecker
 
 
 class FileDiscoverySlice:
@@ -38,48 +40,8 @@ class FileDiscoverySlice:
         """
         Get the currently active file for a given path.
         """
-        active_statuses = {
-            FileStatus.DISCOVERED,
-            FileStatus.READY,
-            FileStatus.GROWING,
-            FileStatus.READY_TO_START_GROWING,
-            FileStatus.IN_QUEUE,
-            FileStatus.COPYING,
-            FileStatus.GROWING_COPY,
-            FileStatus.WAITING_FOR_SPACE,
-            FileStatus.SPACE_ERROR,
-            FileStatus.WAITING_FOR_NETWORK,
-        }
-        
         all_files = await self._file_repository.get_all()
-        candidates = [
-            f for f in all_files 
-            if f.file_path == file_path and f.status in active_statuses
-        ]
-        
-        if not candidates:
-            return None
-
-        # Sort by priority: active operations first, then by discovery time
-        # Matches original StateManager sort_key logic exactly
-        def sort_key(f: TrackedFile):
-            active_priority = {
-                FileStatus.COPYING: 1,
-                FileStatus.IN_QUEUE: 2,
-                FileStatus.GROWING_COPY: 3,
-                FileStatus.READY_TO_START_GROWING: 4,
-                FileStatus.READY: 5,
-                FileStatus.GROWING: 6,
-                FileStatus.DISCOVERED: 7,
-                FileStatus.WAITING_FOR_SPACE: 8,
-                FileStatus.WAITING_FOR_NETWORK: 8,
-                FileStatus.SPACE_ERROR: 9,
-            }
-            priority = active_priority.get(f.status, 99)
-            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
-            return (priority, time_priority)
-
-        return min(candidates, key=sort_key)
+        return FileSelectionLogic.select_active_for_path(all_files, file_path)
 
     async def get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
         """
@@ -87,57 +49,21 @@ class FileDiscoverySlice:
         Matches original StateManager._get_current_file_for_path logic exactly.
         """
         all_files = await self._file_repository.get_all()
-        candidates = [f for f in all_files if f.file_path == file_path]
-        if not candidates:
-            return None
-
-        # Matches original StateManager sort_key logic exactly
-        def sort_key(f: TrackedFile):
-            status_priority = {
-                FileStatus.COPYING: 1,
-                FileStatus.IN_QUEUE: 2,
-                FileStatus.GROWING_COPY: 3,
-                FileStatus.READY_TO_START_GROWING: 4,
-                FileStatus.READY: 5,
-                FileStatus.GROWING: 6,
-                FileStatus.DISCOVERED: 7,
-                FileStatus.WAITING_FOR_SPACE: 8,
-                FileStatus.WAITING_FOR_NETWORK: 9,
-                FileStatus.COMPLETED: 10,
-                FileStatus.COMPLETED_DELETE_FAILED: 11,
-                FileStatus.FAILED: 12,
-                FileStatus.REMOVED: 13,
-                FileStatus.SPACE_ERROR: 14,
-            }
-            priority = status_priority.get(f.status, 99)
-            time_priority = -(f.discovered_at.timestamp() if f.discovered_at else 0)
-            return (priority, time_priority)
-
-        return min(candidates, key=sort_key)
+        return FileSelectionLogic.select_current_for_path(all_files, file_path)
 
     def _is_space_error_in_cooldown(self, tracked_file: TrackedFile) -> bool:
         """
         Check if a file with space error is still in cooldown period.
         Matches original StateManager._is_space_error_in_cooldown logic exactly.
         """
-        if tracked_file.status != FileStatus.SPACE_ERROR:
-            return False
-        
-        if not tracked_file.space_error_at:
-            return False
-        
-        cooldown_duration = timedelta(minutes=self._cooldown_minutes)
-        time_since_error = datetime.now() - tracked_file.space_error_at
-        is_in_cooldown = time_since_error < cooldown_duration
-        
-        if is_in_cooldown:
-            remaining_minutes = (cooldown_duration - time_since_error).total_seconds() / 60
+        should_skip, reason = CooldownChecker.should_skip_space_error(
+            tracked_file, self._cooldown_minutes, datetime.now()
+        )
+        if should_skip:
             logging.debug(
-                f"File {tracked_file.file_path} in SPACE_ERROR cooldown - "
-                f"{remaining_minutes:.1f} minutes remaining"
+                f"File {tracked_file.file_path} in SPACE_ERROR cooldown - {reason}"
             )
-        
-        return is_in_cooldown
+        return should_skip
 
     async def should_skip_file_processing(self, file_path: str) -> bool:
         """

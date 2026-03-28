@@ -10,6 +10,7 @@ import aiofiles
 import aiofiles.os
 
 from app.models import StorageInfo, StorageStatus
+from app.domains.storage.storage_status_evaluator import StorageStatusEvaluator
 
 
 class StorageAccessError(Exception):
@@ -247,16 +248,10 @@ class StorageChecker:
         is_accessible: bool,
         has_write_access: bool,
     ) -> StorageStatus:
-        if not is_accessible:
-            return StorageStatus.ERROR
-
-        if not has_write_access:
-            return StorageStatus.CRITICAL
-
-        if free_gb < critical_threshold_gb:
-            return StorageStatus.CRITICAL
-
-        if free_gb < warning_threshold_gb:
-            return StorageStatus.WARNING
-
-        return StorageStatus.OK
+        return StorageStatusEvaluator.evaluate(
+            free_gb=free_gb,
+            warning_threshold_gb=warning_threshold_gb,
+            critical_threshold_gb=critical_threshold_gb,
+            is_accessible=is_accessible,
+            has_write_access=has_write_access,
+        )

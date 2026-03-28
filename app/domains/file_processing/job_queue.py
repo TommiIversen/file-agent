@@ -9,6 +9,7 @@ from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import QueueJob, JobResult
 from app.core.file_repository import FileRepository
+from app.domains.file_processing.retry_logic import NetworkRecoveryDecision
 
 
 class JobQueueService:
@@ -86,22 +87,10 @@ class JobQueueService:
 
             for tracked_file in waiting_files:
                 try:
-                    # Determine if this was a growing file by checking file metadata
-                    # A file that had growth_rate_mbps > 0 was likely a growing file
-                    was_growing_file = tracked_file.growth_rate_mbps > 0
-                    
-                    if was_growing_file:
-                        # For growing files, transition back to READY_TO_START_GROWING
-                        new_status = FileStatus.READY_TO_START_GROWING
-                        logging.info(
-                            f" NETWORK RECOVERY: Growing file {tracked_file.file_path} -> READY_TO_START_GROWING"
-                        )
-                    else:
-                        # For regular files, transition back to DISCOVERED for re-evaluation
-                        new_status = FileStatus.DISCOVERED
-                        logging.info(
-                            f" NETWORK RECOVERY: Regular file {tracked_file.file_path} -> DISCOVERED"
-                        )
+                    new_status, reason = NetworkRecoveryDecision.determine_recovery_status(tracked_file)
+                    logging.info(
+                        f" NETWORK RECOVERY: {tracked_file.file_path} -> {new_status.value} ({reason})"
+                    )
                     
                     await self._state_machine.transition(
                         file_id=tracked_file.id,

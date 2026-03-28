@@ -194,8 +194,7 @@ async def test_network_recovery_logs_reactivation_messages(
     await job_queue.process_waiting_network_files()
 
     # Check for reactivation log message
-    assert (
-        "NETWORK RECOVERY: Regular file c:/temp/test.mxf -> DISCOVERED"
-        in caplog.text
-    )
+    assert "NETWORK RECOVERY:" in caplog.text
+    assert "c:/temp/test.mxf" in caplog.text
+    assert "Discovered" in caplog.text
     assert "NETWORK RECOVERY: Completed processing 1 files" in caplog.text

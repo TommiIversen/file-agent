@@ -10,6 +10,7 @@ from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
 from app.models import TrackedFile, FileStatus, RetryInfo, SpaceCheckResult
 from app.config import Settings
+from app.domains.file_processing.retry_logic import RetryLimitChecker
 
 
 
@@ -147,7 +148,10 @@ class SpaceRetryManager:
 
 
     def _should_give_up_retry(self, current_retry_count: int) -> bool:
-        return current_retry_count >= self._settings.max_space_retries
+        give_up, _ = RetryLimitChecker.should_give_up(
+            current_retry_count, self._settings.max_space_retries
+        )
+        return give_up
 
 
     async def cancel_all_retries(self) -> int:

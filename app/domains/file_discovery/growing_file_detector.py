@@ -8,6 +8,7 @@ from app.models import FileStatus, TrackedFile
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from .commands import UpdateFileGrowthInfoCommand
+from .growth_status_analyzer import GrowthStatusAnalyzer
 
 
 class GrowingFileDetector:
@@ -92,40 +93,37 @@ class GrowingFileDetector:
                 await self._command_bus.execute(command)
                 return FileStatus.DISCOVERED
 
-            if current_size != tracked_file.file_size:
-                # File is growing
-                command = UpdateFileGrowthInfoCommand(
-                    file_id=tracked_file.id,
-                    file_size=current_size,
-                    previous_file_size=tracked_file.file_size,
-                    growth_stable_since=None, # Reset stability timer
-                    last_growth_check=current_time,
-                )
-                await self._command_bus.execute(command)
-                if current_size >= self.min_size_bytes:
-                    return FileStatus.READY_TO_START_GROWING
-                else:
-                    return FileStatus.GROWING
-            else:
-                # File is not growing
-                if tracked_file.growth_stable_since is None:
-                    # Just stopped growing, start stability timer
-                    command = UpdateFileGrowthInfoCommand(
-                        file_id=tracked_file.id,
-                        file_size=current_size,
-                        growth_stable_since=current_time,
-                        last_growth_check=current_time,
-                    )
-                    await self._command_bus.execute(command)
-                    return tracked_file.status
+            # Determine new stability timestamp
+            new_stable_since = GrowthStatusAnalyzer.determine_stability_timestamp(
+                current_size, tracked_file.file_size,
+                tracked_file.growth_stable_since, current_time,
+            )
 
-                stable_duration = (current_time - tracked_file.growth_stable_since).total_seconds()
-                if stable_duration >= self.growth_timeout:
-                    # File is stable
-                    return FileStatus.READY
-                else:
-                    # Not stable long enough
-                    return tracked_file.status
+            # Update file info via CQRS
+            command = UpdateFileGrowthInfoCommand(
+                file_id=tracked_file.id,
+                file_size=current_size,
+                previous_file_size=tracked_file.file_size,
+                growth_stable_since=new_stable_since,
+                last_growth_check=current_time,
+            )
+            await self._command_bus.execute(command)
+
+            # Determine status using pure logic
+            status = GrowthStatusAnalyzer.determine_status(
+                current_size=current_size,
+                previous_size=tracked_file.file_size,
+                growth_stable_since=new_stable_since,
+                current_time=current_time,
+                min_size_bytes=self.min_size_bytes,
+                stability_timeout_seconds=self.growth_timeout,
+            )
+            # If analyzer returns GROWING but file hasn't changed status, keep current
+            if status == FileStatus.GROWING and tracked_file.status not in (
+                FileStatus.DISCOVERED, FileStatus.GROWING,
+            ):
+                return tracked_file.status
+            return status
 
         except FileNotFoundError:
             return FileStatus.REMOVED
@@ -142,22 +140,16 @@ class GrowingFileDetector:
         # Calculate growth rate if we have previous data
         growth_rate = tracked_file.growth_rate_mbps
         if tracked_file.last_growth_check and tracked_file.first_seen_size > 0:
-            time_diff = (current_time - tracked_file.last_growth_check).total_seconds()
-            if time_diff > 0:
-                size_diff = new_size - tracked_file.first_seen_size
-                growth_rate = (size_diff / (1024 * 1024)) / time_diff
+            elapsed = (current_time - tracked_file.last_growth_check).total_seconds()
+            growth_rate = GrowthStatusAnalyzer.calculate_growth_rate_mbps(
+                new_size, tracked_file.first_seen_size, elapsed,
+            )
 
-        # Determine if growth has stopped
-        growth_stable_since = tracked_file.growth_stable_since
-        if new_size > tracked_file.file_size:
-            # File is still growing
-            growth_stable_since = None
-        elif growth_stable_since is None:
-            # File stopped growing, mark the time
-            growth_stable_since = current_time
-
-        # NOTE: PAUSED file checks removed in fail-and-rediscover strategy
-        # Files now fail immediately instead of pausing during network issues
+        # Determine stability timestamp using pure logic
+        growth_stable_since = GrowthStatusAnalyzer.determine_stability_timestamp(
+            new_size, tracked_file.file_size,
+            tracked_file.growth_stable_since, current_time,
+        )
 
         # Update TrackedFile with new growth information via CQRS
         command = UpdateFileGrowthInfoCommand(
