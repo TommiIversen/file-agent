@@ -1,5 +1,6 @@
 """Output Folder Template Engine for File Transfer Agent."""
 
+import fnmatch
 import json
 import logging
 import re
@@ -22,8 +23,6 @@ class TemplateRule:
             return bool(re.search(self.pattern, filename, re.IGNORECASE))
         else:
             # Simple wildcard matching
-            import fnmatch
-
             return fnmatch.fnmatch(filename.lower(), self.pattern.lower())
 
 

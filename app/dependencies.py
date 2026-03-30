@@ -1,9 +1,6 @@
 import asyncio
 from functools import lru_cache
-from typing import Dict, Any, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.domains.ingest_monitor.worker import IngestMonitorWorker
+from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
@@ -38,6 +35,9 @@ from app.domains.tally_light.event_handlers import TallyLightEventHandler
 from app.domains.tally_light.monitor_service import TallySwitchMonitorService
 from app.domains.ingest_monitor.api_client import IngestApiClient
 from app.domains.ingest_monitor.state_service import IngestStateService
+from app.domains.ingest_monitor.worker import IngestMonitorWorker
+from app.core.global_event_logger import GlobalEventLogger
+from app.domains.tally_light.switch_clients import IPPower9255Client
 
 # Global singleton instances
 _singletons: Dict[str, Any] = {}
@@ -300,7 +300,6 @@ def get_presentation_event_handlers() -> PresentationEventHandlers:
 def get_global_event_logger():
     """Get the GlobalEventLogger singleton for UI event visibility."""
     if "global_event_logger" not in _singletons:
-        from app.core.global_event_logger import GlobalEventLogger
         _singletons["global_event_logger"] = GlobalEventLogger(max_size=200)
     return _singletons["global_event_logger"]
 
@@ -342,8 +341,6 @@ def get_tally_switch_monitor() -> TallySwitchMonitorService:
     and publishes status updates via the event bus.
     """
     if "tally_switch_monitor" not in _singletons:
-        from app.domains.tally_light.switch_clients import IPPower9255Client
-        
         settings = get_settings()
         # Get IP address from settings - use correct field name
         ip_address = settings.tally_light_switch_ip # From config.py
@@ -394,7 +391,7 @@ def get_ingest_api_client() -> IngestApiClient:
     return _singletons["ingest_api_client"]
 
 
-def get_ingest_monitor_worker() -> "IngestMonitorWorker":
+def get_ingest_monitor_worker() -> IngestMonitorWorker:
     """
     Get the IngestMonitorWorker singleton - the refactored orchestration worker.
     
@@ -403,8 +400,6 @@ def get_ingest_monitor_worker() -> "IngestMonitorWorker":
     management to StateService.
     """
     if "ingest_monitor_worker" not in _singletons:
-        from app.domains.ingest_monitor.worker import IngestMonitorWorker
-        
         _singletons["ingest_monitor_worker"] = IngestMonitorWorker(
             settings=get_settings(),
             api_client=get_ingest_api_client(),

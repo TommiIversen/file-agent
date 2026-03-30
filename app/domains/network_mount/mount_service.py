@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 
 from .base_mounter import BaseMounter
+from .macos_mounter import MacOSMounter
 from .mount_config import MountConfigHandler
 from .platform_factory import PlatformFactory, UnsupportedPlatformError
 from .windows_mounter import WindowsMounter
@@ -30,7 +31,6 @@ class NetworkMountService:
                     drive_letter=self._config.get_windows_drive_letter()
                 )
             elif platform_name == "macos":
-                from .macos_mounter import MacOSMounter
                 self._mounter = MacOSMounter(
                     mount_point=self._config.get_macos_mount_point()
                 )

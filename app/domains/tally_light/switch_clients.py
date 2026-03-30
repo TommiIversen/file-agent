@@ -3,6 +3,7 @@ IP Power Switch Implementations
 
 Concrete implementations of power switch protocols for various hardware models.
 """
+import asyncio
 import logging
 import httpx
 from typing import Optional
@@ -151,8 +152,6 @@ class IPPower9255Client(PowerSwitchProtocol):
         Uses a simple TCP connectivity check to port 80 with 3-second timeout.
         This is much more reliable than HTTP requests for basic connectivity.
         """
-        import asyncio
-        
         try:
             # Simple TCP connectivity check to port 80
             future = asyncio.open_connection(self._ip_address, 80)

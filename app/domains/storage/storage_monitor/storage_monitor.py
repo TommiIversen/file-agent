@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional
 
 from app.core.events.event_bus import DomainEventBus
@@ -160,8 +161,6 @@ class StorageMonitorService:
                     f" TIMEOUT: Storage check for {storage_type} at {path} timed out after {immediate_timeout} seconds - assuming network is down"
                 )
                 # Create a synthetic StorageInfo for timeout case
-                from app.models import StorageInfo
-                from datetime import datetime
                 new_info = StorageInfo(
                     path=path,
                     is_accessible=False,

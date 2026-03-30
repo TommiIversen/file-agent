@@ -23,6 +23,8 @@ from .domains.directory_browsing import api as directory
 from .config import Settings
 from .dependencies import (
     get_event_bus,
+    get_global_event_logger,
+    get_ingest_api_client,
     get_job_queue_service,
     get_file_copier,
     get_websocket_manager,
@@ -30,12 +32,13 @@ from .dependencies import (
     get_storage_checker,
     get_query_bus,
     get_command_bus,
-    get_file_discovery_slice, # Import the new slice getter
+    get_file_discovery_slice,
     get_file_scanner,
-    get_lifecycle_service, # Import lifecycle service
-    get_ingest_monitor_worker, # Import refactored ingest monitor worker
-    get_tally_light_event_handler, # Import tally light handler
-    get_tally_switch_monitor # Import tally switch monitor service
+    get_lifecycle_service,
+    get_ingest_monitor_worker,
+    get_tally_light_event_handler,
+    get_tally_switch_monitor,
+    register_network_coordinator,
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -69,7 +72,6 @@ async def lifespan(app: FastAPI):
     event_bus = get_event_bus()
     
     # Register GlobalEventLogger to capture all domain events for UI visibility
-    from app.dependencies import get_global_event_logger
     global_event_logger = get_global_event_logger()
     await global_event_logger.register_with_event_bus(event_bus)
     logging.info("GlobalEventLogger registered for UI event visibility")
@@ -84,7 +86,6 @@ async def lifespan(app: FastAPI):
     network_services = await register_network_mount_domain(event_bus) # NetworkCoordinator registration!
     
     # Store NetworkCoordinator for dependency injection
-    from app.dependencies import register_network_coordinator
     register_network_coordinator(network_services["network_coordinator"])
     
     # Now register domains that depend on NetworkCoordinator
@@ -210,7 +211,6 @@ async def lifespan(app: FastAPI):
     logging.info("IngestMonitorWorker stopped")
 
     # Close IngestApiClient HTTP connection
-    from app.dependencies import get_ingest_api_client
     try:
         await get_ingest_api_client().close()
         logging.info("IngestApiClient HTTP client closed")

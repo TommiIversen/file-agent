@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from .utils.host_config import get_hostname_settings_file
+from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files
 
 
 class Settings(BaseSettings):
@@ -145,8 +145,6 @@ class Settings(BaseSettings):
     @property
     def config_file_info(self) -> dict:
         """Return information about which configuration file is being used."""
-        from .utils.host_config import get_hostname, list_all_settings_files
-
         return {
             "hostname": get_hostname(),
             "active_config_file": get_hostname_settings_file(),

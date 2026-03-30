@@ -5,6 +5,7 @@ This module contains both query and command handlers for ingest monitor operatio
 following the CQRS pattern.
 """
 
+import logging
 from typing import Dict, Any
 from app.core.cqrs.query import QueryHandler
 from app.core.cqrs.command import CommandHandler
@@ -115,7 +116,6 @@ class ClearAllChannelErrorsCommandHandler(CommandHandler[ClearAllChannelErrorsCo
             }
             
         except Exception as e:
-            import logging
             logging.error(f"Error clearing all channel errors: {e}", exc_info=True)
             return {
                 "success": False,
@@ -174,7 +174,6 @@ class StartAllChannelsCommandHandler(CommandHandler[StartAllChannelsCommand, Dic
             }
             
         except Exception as e:
-            import logging
             logging.error(f"Error starting all channels: {e}", exc_info=True)
             return {
                 "success": False,
@@ -233,7 +232,6 @@ class StopAllChannelsCommandHandler(CommandHandler[StopAllChannelsCommand, Dict[
             }
             
         except Exception as e:
-            import logging
             logging.error(f"Error stopping all channels: {e}", exc_info=True)
             return {
                 "success": False,

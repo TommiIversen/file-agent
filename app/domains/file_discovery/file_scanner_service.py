@@ -12,6 +12,7 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.domains.file_discovery.file_scanner import FileScanner
 from app.domains.file_discovery.domain_objects import ScanConfiguration
+from app.domains.file_discovery.queries import GetActiveFileByPathQuery
 
 if TYPE_CHECKING:
     from app.domains.storage.storage_monitor import StorageMonitorService
@@ -104,6 +105,5 @@ class FileScannerService:
 
     async def get_active_file_by_path(self, file_path: str):
         """Get active file by path using CQRS query."""
-        from app.domains.file_discovery.queries import GetActiveFileByPathQuery
         query = GetActiveFileByPathQuery(file_path=file_path)
         return await self._query_bus.execute(query)

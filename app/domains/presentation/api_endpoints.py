@@ -5,7 +5,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends
 
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_query_bus
+from app.dependencies import get_query_bus, get_tally_switch_monitor, get_ingest_monitor_worker
 from app.domains.presentation.queries import GetAllFilesQuery, GetStatisticsQuery, GetStorageStatusQuery
 
 
@@ -43,7 +43,6 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
     # Get tally switch status from monitor service
     tally_status = None
     try:
-        from app.dependencies import get_tally_switch_monitor
         tally_service = get_tally_switch_monitor()
         if tally_service and tally_service.current_status:
             status = tally_service.current_status
@@ -78,7 +77,6 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
     # Get ingest connection status from monitor worker
     ingest_connection_status = None
     try:
-        from app.dependencies import get_ingest_monitor_worker
         ingest_worker = get_ingest_monitor_worker()
         if ingest_worker:
             ingest_connection_status = {
