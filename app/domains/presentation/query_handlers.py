@@ -53,25 +53,23 @@ class GetStatisticsQueryHandler(QueryHandler[GetStatisticsQuery, Dict[str, Any]]
                     [f for f in current_files_list if f.status == status]
                 )
             total_size = sum(f.file_size for f in current_files_list)
-            copying_files = [
-                f for f in current_files_list if f.status == FileStatus.COPYING
-            ]
-            growing_files = [
-                f
-                for f in current_files_list
-                if f.status
-                in [
-                    FileStatus.GROWING,
-                    FileStatus.READY_TO_START_GROWING,
-                    FileStatus.GROWING_COPY,
-                ]
-            ]
+            completed_count = status_counts.get(FileStatus.COMPLETED.value, 0) + status_counts.get(FileStatus.COMPLETED_DELETE_FAILED.value, 0)
+            failed_count = status_counts.get(FileStatus.FAILED.value, 0)
+            growing_count = sum(
+                status_counts.get(s.value, 0)
+                for s in [FileStatus.GROWING, FileStatus.READY_TO_START_GROWING, FileStatus.GROWING_COPY]
+            )
+            active_count = total_files - completed_count - failed_count
+
             return {
                 "total_files": total_files,
                 "status_counts": status_counts,
                 "total_size_bytes": total_size,
-                "active_copies": len(copying_files),
-                "growing_files": len(growing_files),
+                "totalFiles": total_files,
+                "activeFiles": active_count,
+                "completedFiles": completed_count,
+                "failedFiles": failed_count,
+                "growingFiles": growing_count,
             }
 
 
