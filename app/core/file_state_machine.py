@@ -45,6 +45,7 @@ class FileStateMachine:
             },
             FileStatus.GROWING: {
                 FileStatus.READY_TO_START_GROWING,
+                FileStatus.READY,
                 FileStatus.REMOVED,
             },
             FileStatus.READY_TO_START_GROWING: {
