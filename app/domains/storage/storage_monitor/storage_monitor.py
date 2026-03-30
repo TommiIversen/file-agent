@@ -270,9 +270,15 @@ class StorageMonitorService:
                 storage_type, old_info, new_info
             )
 
-            # Mount status for destination is already broadcast at mount time
-            # (L215 for success, L235 for failure). No need to re-broadcast here
-            # — doing so caused duplicate MountStatusChangedEvents in the UI.
+            # For destination: broadcast NOT_CONFIGURED if inaccessible and has no
+            # network mount service. The SUCCESS broadcast is already handled at
+            # mount time (L215), so we only need the NOT_CONFIGURED fallback here.
+            if storage_type == "destination":
+                if not (new_info.is_accessible and new_info.status == StorageStatus.OK):
+                    await self._mount_broadcaster.broadcast_not_configured(
+                        storage_type="destination",
+                        target_path=self._settings.destination_directory
+                    )
 
             if self._is_destination_unavailable(storage_type, old_info, new_info):
                 await self._handle_destination_unavailable(
