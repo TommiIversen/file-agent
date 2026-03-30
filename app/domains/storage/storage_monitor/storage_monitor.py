@@ -270,24 +270,9 @@ class StorageMonitorService:
                 storage_type, old_info, new_info
             )
 
-            # Send mount status for destination to provide consistent UI feedback
-            if storage_type == "destination":
-                if new_info.is_accessible and new_info.status == StorageStatus.OK:
-                    # Destination is accessible - broadcast SUCCESS
-                    # For UNC paths, use the destination path as share_url
-                    share_url = self._settings.destination_directory
-                    await self._mount_broadcaster.broadcast_mount_success(
-                        storage_type="destination",
-                        share_url=share_url,
-                        target_path=self._settings.destination_directory,
-                        mount_path=new_info.path
-                    )
-                else:
-                    # Destination is not accessible - broadcast NOT_CONFIGURED
-                    await self._mount_broadcaster.broadcast_not_configured(
-                        storage_type="destination",
-                        target_path=self._settings.destination_directory
-                    )
+            # Mount status for destination is already broadcast at mount time
+            # (L215 for success, L235 for failure). No need to re-broadcast here
+            # — doing so caused duplicate MountStatusChangedEvents in the UI.
 
             if self._is_destination_unavailable(storage_type, old_info, new_info):
                 await self._handle_destination_unavailable(
