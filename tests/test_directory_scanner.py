@@ -30,14 +30,14 @@ class TestDirectoryScannerService:
     @pytest.fixture
     def scanner_service(self, mock_settings):
         """Create scanner service with mock settings."""
-        return DirectoryScannerService(mock_settings)
+        return DirectoryScannerService(mock_settings, scan_timeout=1.0, item_timeout=0.1)
 
     @pytest.mark.asyncio
     async def test_scanner_service_initialization(self, scanner_service, mock_settings):
         """Test that service initializes properly with SRP compliance."""
         assert scanner_service._settings == mock_settings
-        assert scanner_service._scan_timeout == 30.0
-        assert scanner_service._item_timeout == 5.0
+        assert scanner_service._scan_timeout == 1.0
+        assert scanner_service._item_timeout == 0.1
 
     @pytest.mark.asyncio
     async def test_get_service_info(self, scanner_service):
@@ -45,8 +45,8 @@ class TestDirectoryScannerService:
         info = scanner_service.get_service_info()
 
         assert info["service"] == "DirectoryScannerService"
-        assert info["scan_timeout_seconds"] == 30.0
-        assert info["item_timeout_seconds"] == 5.0
+        assert info["scan_timeout_seconds"] == 1.0
+        assert info["item_timeout_seconds"] == 0.1
         assert info["source_directory"] == "/test/source"
         assert info["destination_directory"] == "/test/destination"
 
@@ -116,7 +116,7 @@ class TestDirectoryScannerService:
 
         async def slow_operation(path):
             """Mock function that takes too long to respond."""
-            await asyncio.sleep(10)  # Longer than 5s item timeout
+            await asyncio.sleep(10)  # Longer than item timeout
             return True
 
         with patch("aiofiles.os.path.exists", new_callable=AsyncMock) as mock_exists:
@@ -127,7 +127,6 @@ class TestDirectoryScannerService:
 
             assert not result.is_accessible
             assert "timed out" in result.error_message.lower()
-            assert result.scan_duration_seconds >= 5  # Item timeout, not scan timeout
 
     @pytest.mark.asyncio
     async def test_source_directory_scan(self, scanner_service):

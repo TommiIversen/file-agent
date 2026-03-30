@@ -37,10 +37,10 @@ class DirectoryScannerService:
     No dependencies on other services - only uses Settings for configuration.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, scan_timeout: float = 30.0, item_timeout: float = 5.0):
         self._settings = settings
-        self._scan_timeout = 30.0 # 30 second timeout for directory scans
-        self._item_timeout = 5.0 # 5 second timeout per item metadata fetch
+        self._scan_timeout = scan_timeout
+        self._item_timeout = item_timeout
         self._max_depth = 10 # Maximum recursion depth to prevent infinite loops
 
         logging.info("DirectoryScannerService initialized with SRP compliance")
@@ -273,8 +273,7 @@ class DirectoryScannerService:
                                 max_depth=max_depth,
                                 current_depth=current_depth + 1,
                             ),
-                            timeout=self._scan_timeout
-                            // (current_depth + 2), # Reduced timeout for deeper levels
+                            timeout=max(0.05, self._scan_timeout / (current_depth + 2)),
                         )
                     )
 

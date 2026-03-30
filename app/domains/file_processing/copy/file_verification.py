@@ -9,7 +9,8 @@ class FileVerificationService:
     """
     Håndterer post-kopi verificering og oprydning af kildefil.
     """
-    def __init__(self):
+    def __init__(self, retry_delay: float = 2.0):
+        self._retry_delay = retry_delay
         logging.info("FileVerificationService initialiseret")
 
     async def verify_integrity(self, source_path: str, dest_path: str) -> tuple[bool, int, int]:
@@ -77,5 +78,5 @@ class FileVerificationService:
                     f"Delete attempt {i + 1}/3 failed for {os.path.basename(source_path)}: {e}"
                 )
                 if i < 2:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(self._retry_delay)
         return False, last_error

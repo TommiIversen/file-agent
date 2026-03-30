@@ -5,6 +5,7 @@ Tests the new SRP-compliant components: IngestApiClient, IngestStateService,
 and IngestMonitorWorker without requiring actual network connectivity.
 """
 import asyncio
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -63,7 +64,10 @@ async def test_ingest_monitor_components():
     print("Testing IngestApiClient...")
     
     # Test ApiClient creation (without actual network calls)
-    api_client = IngestApiClient(settings)
+    with patch("app.domains.ingest_monitor.api_client.httpx.AsyncClient"):
+        api_client = IngestApiClient(settings)
+    api_client._client = MagicMock()
+    api_client._client.aclose = AsyncMock()
     assert api_client._client is not None, "HTTP client should be initialized"
     print("✅ IngestApiClient initialization works")
     

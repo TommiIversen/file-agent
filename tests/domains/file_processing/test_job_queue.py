@@ -47,6 +47,7 @@ def deps():
 @pytest.fixture
 def svc(deps):
     s = JobQueueService(**deps)
+    s._queue_get_timeout = 0.01
     s.job_queue = asyncio.PriorityQueue()
     return s
 

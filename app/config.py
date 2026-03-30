@@ -6,6 +6,12 @@ from .utils.host_config import get_hostname, get_hostname_settings_file, list_al
 
 
 class Settings(BaseSettings):
+    # Database
+    database_path: str = Field(
+        default="data/file-agent.db",
+        description="Path to SQLite database file"
+    )
+
     # Filstier
     source_directory: str
     destination_directory: str

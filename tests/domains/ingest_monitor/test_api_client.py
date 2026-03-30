@@ -27,7 +27,8 @@ def _mock_response(json_data, status_code=200):
 
 @pytest.fixture
 def client():
-    c = IngestApiClient(_settings())
+    with patch("app.domains.ingest_monitor.api_client.httpx.AsyncClient"):
+        c = IngestApiClient(_settings())
     c._client = AsyncMock(spec=httpx.AsyncClient)
     return c
 

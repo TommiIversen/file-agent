@@ -136,21 +136,22 @@ class TestCopyIoLoop:
 
         detector = NetworkErrorDetector()
 
-        with pytest.raises(NetworkError):
-            await loop.copy_chunk_range(
-                source_path=str(source),
-                dst=dst,
-                start_bytes=0,
-                end_bytes=512,
-                chunk_size=256,
-                tracked_file=tracked_file,
-                current_file_size=512,
-                pause_ms=0,
-                network_detector=detector,
-                status=FileStatus.COPYING,
-                last_progress_percent=0,
-                last_progress_update_time=datetime.now(),
-            )
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(NetworkError):
+                await loop.copy_chunk_range(
+                    source_path=str(source),
+                    dst=dst,
+                    start_bytes=0,
+                    end_bytes=512,
+                    chunk_size=256,
+                    tracked_file=tracked_file,
+                    current_file_size=512,
+                    pause_ms=0,
+                    network_detector=detector,
+                    status=FileStatus.COPYING,
+                    last_progress_percent=0,
+                    last_progress_update_time=datetime.now(),
+                )
 
     async def test_nonexistent_source_raises(self, loop, tracked_file, network_detector):
         """Opening a nonexistent source file should raise."""
@@ -217,20 +218,21 @@ class TestCopyIoLoop:
         dst.write = AsyncMock(side_effect=write_with_first_timeout)
         dst.seek = AsyncMock()
 
-        bytes_copied, _, _ = await loop.copy_chunk_range(
-            source_path=str(source),
-            dst=dst,
-            start_bytes=0,
-            end_bytes=1024,
-            chunk_size=1024,
-            tracked_file=tracked_file,
-            current_file_size=1024,
-            pause_ms=0,
-            network_detector=network_detector,
-            status=FileStatus.COPYING,
-            last_progress_percent=0,
-            last_progress_update_time=datetime.now(),
-        )
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            bytes_copied, _, _ = await loop.copy_chunk_range(
+                source_path=str(source),
+                dst=dst,
+                start_bytes=0,
+                end_bytes=1024,
+                chunk_size=1024,
+                tracked_file=tracked_file,
+                current_file_size=1024,
+                pause_ms=0,
+                network_detector=network_detector,
+                status=FileStatus.COPYING,
+                last_progress_percent=0,
+                last_progress_update_time=datetime.now(),
+            )
 
         assert bytes_copied == 1024
         assert len(written_chunks) == 1  # succeeded on retry
@@ -244,21 +246,22 @@ class TestCopyIoLoop:
         dst.write = AsyncMock(side_effect=asyncio.TimeoutError("persistent timeout"))
         dst.seek = AsyncMock()
 
-        with pytest.raises(FileCopyTimeoutError):
-            await loop.copy_chunk_range(
-                source_path=str(source),
-                dst=dst,
-                start_bytes=0,
-                end_bytes=512,
-                chunk_size=256,
-                tracked_file=tracked_file,
-                current_file_size=512,
-                pause_ms=0,
-                network_detector=network_detector,
-                status=FileStatus.COPYING,
-                last_progress_percent=0,
-                last_progress_update_time=datetime.now(),
-            )
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(FileCopyTimeoutError):
+                await loop.copy_chunk_range(
+                    source_path=str(source),
+                    dst=dst,
+                    start_bytes=0,
+                    end_bytes=512,
+                    chunk_size=256,
+                    tracked_file=tracked_file,
+                    current_file_size=512,
+                    pause_ms=0,
+                    network_detector=network_detector,
+                    status=FileStatus.COPYING,
+                    last_progress_percent=0,
+                    last_progress_update_time=datetime.now(),
+                )
 
     async def test_chunk_retry_on_transient_oserror(self, loop, tracked_file, network_detector, tmp_path):
         """A transient OSError should be retried before failing."""
@@ -279,19 +282,20 @@ class TestCopyIoLoop:
         dst.write = AsyncMock(side_effect=write_with_transient_error)
         dst.seek = AsyncMock()
 
-        bytes_copied, _, _ = await loop.copy_chunk_range(
-            source_path=str(source),
-            dst=dst,
-            start_bytes=0,
-            end_bytes=512,
-            chunk_size=512,
-            tracked_file=tracked_file,
-            current_file_size=512,
-            pause_ms=0,
-            network_detector=network_detector,
-            status=FileStatus.COPYING,
-            last_progress_percent=0,
-            last_progress_update_time=datetime.now(),
-        )
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            bytes_copied, _, _ = await loop.copy_chunk_range(
+                source_path=str(source),
+                dst=dst,
+                start_bytes=0,
+                end_bytes=512,
+                chunk_size=512,
+                tracked_file=tracked_file,
+                current_file_size=512,
+                pause_ms=0,
+                network_detector=network_detector,
+                status=FileStatus.COPYING,
+                last_progress_percent=0,
+                last_progress_update_time=datetime.now(),
+            )
 
         assert bytes_copied == 512

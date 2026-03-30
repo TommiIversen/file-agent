@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
+from app.core.sqlite_file_repository import SqliteFileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.domains.file_processing.copy.file_copier_service import FileCopierService
 
@@ -64,9 +65,10 @@ def get_event_bus() -> "DomainEventBus":
     return _singletons["event_bus"]
 
 
-def get_file_repository() -> FileRepository:
+def get_file_repository() -> SqliteFileRepository:
     if "file_repository" not in _singletons:
-        _singletons["file_repository"] = FileRepository()
+        settings = get_settings()
+        _singletons["file_repository"] = SqliteFileRepository(settings.database_path)
     return _singletons["file_repository"]
 
 def get_file_state_machine() -> FileStateMachine:

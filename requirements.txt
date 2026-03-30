@@ -6,6 +6,9 @@ pydantic-settings==2.13.1
 aiofiles==25.1.0
 rich==14.3.3
 httpx==0.28.1
+aiosqlite==0.22.1
+alembic==1.18.4
+sqlalchemy==2.0.48
 
 # Dev / Test
 pytest==9.0.2

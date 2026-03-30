@@ -5,7 +5,7 @@ from typing import Dict, Set, Optional
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileStatusChangedEvent
-from app.core.file_repository import FileRepository
+from app.core.protocols import FileRepositoryProtocol
 from app.models import FileStatus, TrackedFile
 from app.core.exceptions import InvalidTransitionError
 
@@ -27,7 +27,7 @@ class FileStateMachine:
 
     def __init__(
         self,
-        file_repository: FileRepository,
+        file_repository: FileRepositoryProtocol,
         event_bus: DomainEventBus,
     ):
         self._repository = file_repository

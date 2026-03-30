@@ -29,6 +29,7 @@ class JobQueueService:
         self._total_jobs_added = 0
         self._total_jobs_processed = 0
         self._failed_jobs: List[JobResult] = []
+        self._queue_get_timeout: float = 1.0
 
         self._running = False
         self._producer_task: Optional[asyncio.Task] = None
@@ -142,7 +143,7 @@ class JobQueueService:
             return None
 
         try:
-            job = await asyncio.wait_for(self.job_queue.get(), timeout=1.0)
+            job = await asyncio.wait_for(self.job_queue.get(), timeout=self._queue_get_timeout)
             self._total_jobs_processed += 1
 
             logging.debug(f"Typed job hentet fra queue: {job}")

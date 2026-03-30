@@ -6,7 +6,7 @@ to WebSocket notifications for real-time UI feedback.
 """
 
 from datetime import datetime
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
 
@@ -84,12 +84,16 @@ class TestMountStatusWebSocketIntegration:
 
         mock_storage_checker.check_path = AsyncMock(return_value=inaccessible_info)
 
-        return StorageMonitorService(
+        service = StorageMonitorService(
             settings=settings,
             storage_checker=mock_storage_checker,
             event_bus=event_bus,
             network_mount_service=network_mount_service,
         )
+        # Mock directory manager to avoid real I/O on UNC paths
+        service._directory_manager = Mock()
+        service._directory_manager.ensure_directory_exists = AsyncMock(return_value=False)
+        return service
 
     @pytest.mark.asyncio
     async def test_mount_success_websocket_broadcast(

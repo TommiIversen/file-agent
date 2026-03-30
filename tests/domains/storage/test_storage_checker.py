@@ -9,7 +9,7 @@ from app.models import StorageStatus
 
 @pytest.fixture
 def checker():
-    return StorageChecker(test_file_prefix=".test_")
+    return StorageChecker(test_file_prefix=".test_", io_timeout=0.05)
 
 
 # ── check_path (integration of sub-methods) ─────────────────────

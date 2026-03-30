@@ -65,6 +65,11 @@ async def lifespan(app: FastAPI):
     # Startup
     setup_logging(settings)
 
+    # === DATABASE INITIALIZATION ===
+    file_repo = get_file_repository()
+    await file_repo.init_db()
+    logging.info("Database initialized")
+
     # === START: NYT REGISTRERINGSTRIN ===
     logging.info("Registrerer CQRS handlers...")
     query_bus = get_query_bus()
@@ -234,6 +239,14 @@ async def lifespan(app: FastAPI):
             )
         except asyncio.TimeoutError:
             logging.error("Shutdown timeout after 30s — forcing exit")
+
+    # Close database connection
+    try:
+        file_repo = get_file_repository()
+        await file_repo.close()
+        logging.info("Database connection closed")
+    except Exception as e:
+        logging.warning(f"Error closing database: {e}")
 
     logging.info("Alle background tasks stoppet")
 

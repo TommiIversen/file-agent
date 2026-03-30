@@ -268,7 +268,9 @@ class TestApiClientDiscoverRecordingPaths:
 
     @pytest.fixture
     def api_client(self, settings):
-        return IngestApiClient(settings)
+        with patch("app.domains.ingest_monitor.api_client.httpx.AsyncClient"):
+            client = IngestApiClient(settings)
+        return client
 
     async def test_full_discovery_flow(self, api_client):
         """Happy path: 3-step flow returns paths and preset name."""

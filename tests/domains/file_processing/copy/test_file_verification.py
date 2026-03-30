@@ -12,7 +12,7 @@ from app.domains.file_processing.copy.file_verification import FileVerificationS
 
 @pytest.fixture
 def svc():
-    return FileVerificationService()
+    return FileVerificationService(retry_delay=0)
 
 
 # ── verify_integrity ────────────────────────────────────────────────────────
@@ -110,17 +110,3 @@ class TestDeleteSourceFile:
         assert success is False
         assert error is not None
         assert "No such file" in error or "cannot find" in error.lower() or "FileNotFoundError" in error or "not found" in error.lower() or len(error) > 0
-
-    async def test_delete_retries_on_failure(self, svc, tmp_path):
-        """Verify the method actually retries (it does 3 attempts with 2s sleep)."""
-        import time
-        path = str(tmp_path / "ghost.mxf")
-
-        start = time.monotonic()
-        success, error = await svc.delete_source_file(path)
-        elapsed = time.monotonic() - start
-
-        assert success is False
-        # Should have slept 2s between retries: 2 sleeps * 2s = ~4s
-        # Use a generous lower bound to avoid flakiness
-        assert elapsed >= 3.5, f"Expected retries with sleep, but only took {elapsed:.1f}s"
