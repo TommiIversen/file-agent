@@ -8,8 +8,10 @@ from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 config = context.config
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+
+# NOTE: We intentionally skip fileConfig() here because our app's logging
+# is already configured by setup_logging() before migrations run.
+# Calling fileConfig() would reset the root logger and remove all handlers.
 
 target_metadata = None
 

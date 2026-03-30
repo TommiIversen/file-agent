@@ -23,6 +23,7 @@ from .domains.directory_browsing import api as directory
 from .config import Settings
 from .dependencies import (
     get_event_bus,
+    get_file_repository,
     get_global_event_logger,
     get_ingest_api_client,
     get_job_queue_service,
