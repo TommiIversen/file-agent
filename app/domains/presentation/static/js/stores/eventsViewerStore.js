@@ -4,398 +4,236 @@
 
 document.addEventListener('alpine:init', () => {
     Alpine.store('eventsViewer', {
-        // === STATE PROPERTIES ===
-
-        /**
-         * Whether the events viewer modal is open.
-         * @type {boolean}
-         */
+        // === STATE ===
         isOpen: false,
-
-        /**
-         * True when events are being loaded from the API.
-         * @type {boolean}
-         */
         isLoading: false,
-
-        /**
-         * Holds any error message that occurred during an API call.
-         * @type {string|null}
-         */
+        isLoadingMore: false,
         error: null,
-        
-        /**
-         * The master list of all events loaded from the API.
-         * @type {LogEvent[]}
-         */
+        hasMore: true,
+
+        /** @type {LogEvent[]} All loaded events (newest first) */
         events: [],
-
-        /**
-         * The list of events after all filters have been applied.
-         * @type {LogEvent[]}
-         */
+        /** @type {LogEvent[]} Events after client-side type filter */
         filteredEvents: [],
-        
-        /**
-         * The current filter for event severity level.
-         * @type {'all'|'info'|'warning'|'error'}
-         */
+
         levelFilter: 'all',
-
-        /**
-         * The current filter for event type. 'all' means no filter.
-         * @type {string}
-         */
         eventTypeFilter: 'all',
-
-        /**
-         * A sorted list of unique event types available for filtering.
-         * @type {string[]}
-         */
+        /** @type {string[]} */
         availableEventTypes: [],
-        
-        /**
-         * The current page number for pagination.
-         * @type {number}
-         */
-        currentPage: 1,
 
-        /**
-         * The number of events to display per page.
-         * @type {number}
-         */
-        eventsPerPage: 50,
+        /** @type {string} Selected date for jump-to-date (YYYY-MM-DD) */
+        selectedDate: '',
 
-        /**
-         * The total number of events after filtering.
-         * @type {number}
-         */
-        totalEvents: 0,
-        
-        /**
-         * Statistics about the events in the log.
-         * @type {EventStats}
-         */
-        stats: {
-            total_events: 0,
-            max_capacity: 200,
-            levels: {},
-            event_types: {},
-            oldest_event: null,
-            newest_event: null
-        },
-        
-        // Auto-refresh functionality is not implemented yet.
-        autoRefresh: false,
-        refreshInterval: null,
-        
-        // === METHODS ===
+        PAGE_SIZE: 50,
 
-        /**
-         * Opens the events viewer modal and loads initial data.
-         */
+        // === LIFECYCLE ===
+
         openModal() {
             this.isOpen = true;
+            this.reset();
             this.loadEvents();
-            this.loadStats();
         },
-        
-        /**
-         * Closes the events viewer modal.
-         */
+
         closeModal() {
             this.isOpen = false;
         },
-        
-        /**
-         * Fetches the list of events from the API based on the current level filter.
-         * @async
-         */
+
+        reset() {
+            this.events = [];
+            this.filteredEvents = [];
+            this.hasMore = true;
+            this.error = null;
+            this.selectedDate = '';
+        },
+
+        // === DATA LOADING ===
+
         async loadEvents() {
             this.isLoading = true;
             this.error = null;
-            
+            this.events = [];
+            this.hasMore = true;
             try {
-                const params = new URLSearchParams();
-                if (this.levelFilter !== 'all') {
-                    params.append('level', this.levelFilter);
-                }
-                
-                const response = await fetch(`/api/events/?${params.toString()}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                this.events = await response.json();
+                const data = await this._fetchPage();
+                this.events = data;
+                this.hasMore = data.length >= this.PAGE_SIZE;
                 this.updateAvailableEventTypes();
                 this.applyFilters();
-                
-            } catch (error) {
-                console.error('Failed to load events:', error);
-                if (error instanceof Error) {
-                    this.error = `Failed to load events: ${error.message}`;
-                } else {
-                    this.error = 'Failed to load events: An unknown error occurred';
-                }
+            } catch (err) {
+                this.error = `Failed to load events: ${err instanceof Error ? err.message : err}`;
             } finally {
                 this.isLoading = false;
             }
         },
-        
-        /**
-         * Fetches event statistics from the API.
-         * @async
-         */
-        async loadStats() {
+
+        async loadMore() {
+            if (this.isLoadingMore || !this.hasMore) return;
+            const lastId = this._lastId();
+            if (lastId === null) return;
+
+            this.isLoadingMore = true;
             try {
-                const response = await fetch('/api/events/stats');
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const data = await this._fetchPage(lastId);
+                if (data.length === 0) {
+                    this.hasMore = false;
+                } else {
+                    this.events = [...this.events, ...data];
+                    this.hasMore = data.length >= this.PAGE_SIZE;
+                    this.updateAvailableEventTypes();
+                    this.applyFilters();
                 }
-                
-                this.stats = await response.json();
-                
-            } catch (error) {
-                console.error('Failed to load event stats:', error);
-                // Optionally set an error state for stats loading as well
+            } catch (err) {
+                console.error('Failed to load more events:', err);
+            } finally {
+                this.isLoadingMore = false;
             }
         },
-        
+
         /**
-         * Populates `availableEventTypes` from the master list of events.
+         * @param {number} [beforeId]
+         * @returns {Promise<LogEvent[]>}
          */
+        async _fetchPage(beforeId) {
+            const params = new URLSearchParams();
+            params.append('limit', String(this.PAGE_SIZE));
+            if (this.levelFilter !== 'all') {
+                params.append('level', this.levelFilter);
+            }
+            if (this.selectedDate) {
+                params.append('from_date', `${this.selectedDate}T00:00:00`);
+            }
+            if (beforeId !== undefined) {
+                params.append('before_id', String(beforeId));
+            }
+            const response = await fetch(`/api/events/?${params.toString()}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            return response.json();
+        },
+
+        /** @returns {number|null} */
+        _lastId() {
+            if (this.events.length === 0) return null;
+            return this.events[this.events.length - 1].id;
+        },
+
+        // === INFINITE SCROLL ===
+
+        handleScroll(event) {
+            const el = event.target;
+            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+            if (nearBottom && !this.isLoadingMore && this.hasMore) {
+                this.loadMore();
+            }
+        },
+
+        // === FILTERS ===
+
+        get computedStats() {
+            const total = this.events.length;
+            let errors = 0;
+            let warnings = 0;
+            for (const event of this.events) {
+                if (event.level === 'ERROR') errors++;
+                else if (event.level === 'WARNING') warnings++;
+            }
+            return { total_events: total, error_count: errors, warning_count: warnings };
+        },
+
         updateAvailableEventTypes() {
-            const types = [...new Set(this.events.map((/** @type {LogEvent} */ event) => event.event_type))];
+            const types = [...new Set(this.events.map((/** @type {LogEvent} */ e) => e.event_type))];
             this.availableEventTypes = types.sort();
         },
-        
-        /**
-         * Applies the current filters to the master `events` list and updates `filteredEvents`.
-         */
+
         applyFilters() {
-            let filtered = [...this.events];
-            
-            // Filter by event type
+            let filtered = this.events;
             if (this.eventTypeFilter !== 'all') {
-                filtered = filtered.filter(event => event.event_type === this.eventTypeFilter);
+                filtered = filtered.filter(e => e.event_type === this.eventTypeFilter);
             }
-            
             this.filteredEvents = filtered;
-            this.totalEvents = filtered.length;
         },
-        
-        /**
-         * Sets the level filter and reloads the events from the API.
-         * @param {'all'|'info'|'warning'|'error'} level - The level to filter by.
-         */
+
         setLevelFilter(level) {
             this.levelFilter = level;
-            this.currentPage = 1;
             this.loadEvents();
         },
-        
-        /**
-         * Sets the event type filter and reapplies filters to the existing event list.
-         * @param {string} eventType - The event type to filter by.
-         */
+
         setEventTypeFilter(eventType) {
             this.eventTypeFilter = eventType;
-            this.currentPage = 1;
             this.applyFilters();
         },
-        
-        // === GETTERS ===
 
-        /**
-         * Gets the slice of events for the current page.
-         * @returns {LogEvent[]} A subset of the filtered events for the current page.
-         */
-        get paginatedEvents() {
-            const start = (this.currentPage - 1) * this.eventsPerPage;
-            const end = start + this.eventsPerPage;
-            return this.filteredEvents.slice(start, end);
-        },
-        
-        /**
-         * Calculates the total number of pages for pagination.
-         * @returns {number} The total number of pages.
-         */
-        get totalPages() {
-            return Math.ceil(this.totalEvents / this.eventsPerPage);
-        },
-        
-        // === PAGINATION METHODS ===
+        // === DATE PICKER ===
 
-        /**
-         * Navigates to a specific page number.
-         * @param {number} page - The page number to navigate to.
-         */
-        goToPage(page) {
-            if (page >= 1 && page <= this.totalPages) {
-                this.currentPage = page;
+        jumpToDate() {
+            if (!this.selectedDate) {
+                this.selectedDate = '';
+                this.loadEvents();
+                return;
             }
+            this.loadEvents();
         },
-        
-        /**
-         * Navigates to the next page.
-         */
-        nextPage() {
-            this.goToPage(this.currentPage + 1);
+
+        clearDate() {
+            this.selectedDate = '';
+            this.loadEvents();
         },
-        
-        /**
-         * Navigates to the previous page.
-         */
-        previousPage() {
-            this.goToPage(this.currentPage - 1);
+
+        // === DOWNLOAD ===
+
+        downloadDay() {
+            const day = this.selectedDate || new Date().toISOString().slice(0, 10);
+            window.open(`/api/events/download?day=${day}`, '_blank');
         },
-        
+
+        // === REFRESH ===
+
+        refresh() {
+            this.reset();
+            this.loadEvents();
+        },
+
         // === UI HELPERS ===
 
-        /**
-         * Manually triggers a refresh of both events and stats.
-         */
-        refresh() {
-            this.loadEvents();
-            this.loadStats();
-        },
-        
-        /**
-         * Gets the Tailwind CSS classes for a level's badge color.
-         * @param {string} level - The event level.
-         * @returns {string} The corresponding CSS classes.
-         */
         getLevelBadgeColor(level) {
             switch (level.toLowerCase()) {
-                case 'error':
-                    return 'bg-red-500 text-white';
-                case 'warning':
-                    return 'bg-yellow-500 text-black';
-                case 'info':
-                    return 'bg-blue-500 text-white';
-                default:
-                    return 'bg-gray-500 text-white';
+                case 'error': return 'bg-red-500 text-white';
+                case 'warning': return 'bg-yellow-500 text-black';
+                case 'info': return 'bg-blue-500 text-white';
+                default: return 'bg-gray-500 text-white';
             }
         },
-        
-        /**
-         * Gets an icon for a given event type.
-         * @param {string} eventType - The event type.
-         * @returns {string} An emoji icon.
-         */
+
         getEventTypeIcon(eventType) {
-            if (eventType.includes('Network')) return '🌐';
-            if (eventType.includes('Storage')) return '💾';
-            if (eventType.includes('Mount')) return '🔗';
-            if (eventType.includes('File')) return '📄';
-            if (eventType.includes('Scanner')) return '🔍';
-            if (eventType.includes('Destination')) return '🎯';
-            return '📊';
+            if (eventType.includes('Network')) return '\u{1F310}';
+            if (eventType.includes('Storage')) return '\u{1F4BE}';
+            if (eventType.includes('Mount')) return '\u{1F517}';
+            if (eventType.includes('File')) return '\u{1F4C4}';
+            if (eventType.includes('Scanner')) return '\u{1F50D}';
+            if (eventType.includes('Destination')) return '\u{1F3AF}';
+            return '\u{1F4CA}';
         },
-        
-        /**
-         * Formats a timestamp for display in the UI.
-         * @param {string} timestamp - The ISO 8601 timestamp.
-         * @returns {string} A localized, human-readable date and time string.
-         */
+
         formatTimestamp(timestamp) {
             const date = new Date(timestamp);
             return date.toLocaleString('da-DK', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
         },
-        
-        /**
-         * Formats a timestamp into a relative time string (e.g., "2 minutes ago").
-         * @param {string} timestamp - The ISO 8601 timestamp.
-         * @returns {string} A relative time string.
-         */
+
         formatRelativeTime(timestamp) {
             const now = new Date();
             const eventTime = new Date(timestamp);
             const diffInSeconds = Math.floor((now.getTime() - eventTime.getTime()) / 1000);
-            
-            if (diffInSeconds < 60) {
-                return `${diffInSeconds} sek siden`;
-            } else if (diffInSeconds < 3600) {
-                const minutes = Math.floor(diffInSeconds / 60);
-                return `${minutes} min siden`;
-            } else if (diffInSeconds < 86400) {
-                const hours = Math.floor(diffInSeconds / 3600);
-                return `${hours} timer siden`;
-            } else {
-                const days = Math.floor(diffInSeconds / 86400);
-                return `${days} dage siden`;
-            }
+            if (diffInSeconds < 60) return `${diffInSeconds} sek siden`;
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min siden`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} timer siden`;
+            return `${Math.floor(diffInSeconds / 86400)} dage siden`;
         },
-        
-        /**
-         * Triggers a download of the currently loaded events as a CSV file.
-         */
-        downloadEvents() {
-            try {
-                const events = this.events;
-                if (!events.length) {
-                    console.warn('No events to download');
-                    return;
-                }
 
-                // Create CSV content
-                const headers = ['Timestamp', 'Level', 'Event Type', 'Details'];
-                const csvContent = [
-                    headers.join(','),
-                    ...events.map((/** @type {LogEvent} */ event) => {
-                        const timestamp = this.formatTimestamp(event.timestamp);
-                        const level = event.level;
-                        const eventType = event.event_type;
-                        const details = event.details 
-                            ? Object.entries(event.details).map(([k,v]) => `${k}: ${v}`).join(' | ')
-                            : 'No details';
-                        
-                        // Escape CSV values
-                        return [timestamp, level, eventType, details]
-                            .map(field => `"${String(field).replace(/"/g, '""')}"`)
-                            .join(',');
-                    })
-                ].join('\n');
-
-                // Create and download file
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                
-                if (link.download !== undefined) {
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', `events-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`);
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                }
-            } catch (error) {
-                console.error('Error downloading events:', error);
-            }
-        },
-        
-        /**
-         * Formats an event's details object into a single string for display.
-         * @param {Object.<string, any>|null} details - The details object.
-         * @returns {string|null} A formatted string or null if details are empty.
-         */
         getFormattedDetails(details) {
-            if (!details || Object.keys(details).length === 0) {
-                return null;
-            }
-            
-            return Object.entries(details)
-                .map(([key, value]) => `${key}: ${value}`)
-                .join(', ');
+            if (!details || Object.keys(details).length === 0) return null;
+            return Object.entries(details).map(([key, value]) => `${key}: ${value}`).join(', ');
         }
     });
 });

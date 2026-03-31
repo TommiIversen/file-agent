@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
 from app.core.sqlite_file_repository import SqliteFileRepository
+from app.core.sqlite_event_store import SqliteEventStore
 from app.core.file_state_machine import FileStateMachine
 from app.domains.file_processing.copy.file_copier_service import FileCopierService
 
@@ -302,8 +303,19 @@ def get_presentation_event_handlers() -> PresentationEventHandlers:
 def get_global_event_logger():
     """Get the GlobalEventLogger singleton for UI event visibility."""
     if "global_event_logger" not in _singletons:
-        _singletons["global_event_logger"] = GlobalEventLogger(max_size=200)
+        _singletons["global_event_logger"] = GlobalEventLogger()
     return _singletons["global_event_logger"]
+
+
+def get_event_store() -> SqliteEventStore:
+    """Get the SqliteEventStore singleton, sharing the DB connection from FileRepository."""
+    if "event_store" not in _singletons:
+        file_repo = get_file_repository()
+        _singletons["event_store"] = SqliteEventStore(
+            db=file_repo.connection,
+            write_lock=file_repo.write_lock,
+        )
+    return _singletons["event_store"]
 
 
 def get_lifecycle_service() -> LifecycleService:

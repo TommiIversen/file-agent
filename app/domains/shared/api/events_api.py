@@ -1,12 +1,15 @@
 """
 API endpoints for system event logs.
-Provides access to GlobalEventLogger's in-memory event collection for UI visibility.
+Provides access to persisted events from SQLite via GlobalEventLogger.
 """
 
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
+import csv
+import io
 
 from app.dependencies import get_global_event_logger
 from app.core.global_event_logger import GlobalEventLogger
@@ -14,36 +17,42 @@ from app.core.global_event_logger import GlobalEventLogger
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
+PAGE_SIZE = 50
+
 
 class EventResponse(BaseModel):
     """API response model for logged events"""
+    id: Optional[int] = None
     timestamp: datetime
     level: str
     event_type: str
     details: Dict[str, Any]
     
     class Config:
-        # Enable conversion from LoggedEvent dataclass
         from_attributes = True
 
 
 @router.get("/", response_model=List[EventResponse])
 async def get_events(
-    limit: Optional[int] = Query(None, description="Maximum number of events to return"),
+    limit: int = Query(PAGE_SIZE, description="Number of events to return"),
     level: Optional[str] = Query(None, description="Filter by event level (info, warning, error)"),
+    from_date: Optional[datetime] = Query(None, description="Only return events from this datetime onwards (ISO 8601)"),
+    before_id: Optional[int] = Query(None, description="Cursor: only return events with id < this value (for infinite scroll)"),
     event_logger: GlobalEventLogger = Depends(get_global_event_logger)
 ):
     """
-    Get recent system events from the in-memory event log.
+    Get system events with cursor-based pagination.
     
-    - **limit**: Optional limit on number of events (default: all available)
-    - **level**: Optional filter by event level (info, warning, error)
+    First call: GET /api/events/?limit=50 → returns newest 50 events.
+    Next page: GET /api/events/?limit=50&before_id=<last event id> → next 50 older.
     """
-    events = event_logger.get_events(limit=limit, level=level)
+    events = await event_logger.get_events(
+        limit=limit, level=level, from_date=from_date, before_id=before_id
+    )
     
-    # Convert LoggedEvent dataclasses to API response models
     return [
         EventResponse(
+            id=event.id,
             timestamp=event.timestamp,
             level=event.level,
             event_type=event.event_type,
@@ -53,54 +62,39 @@ async def get_events(
     ]
 
 
-@router.get("/stats", response_model=Dict[str, Any])
-async def get_event_stats(
+@router.get("/download")
+async def download_events_for_day(
+    day: date = Query(..., description="Date to download events for (YYYY-MM-DD)"),
     event_logger: GlobalEventLogger = Depends(get_global_event_logger)
 ):
-    """
-    Get statistics about the event log.
-    """
-    all_events = event_logger.get_events()
+    """Download all events for a specific day as CSV."""
+    from_dt = datetime(day.year, day.month, day.day, 0, 0, 0)
+    to_dt = datetime(day.year, day.month, day.day, 23, 59, 59, 999999)
     
-    # Count by level
-    level_counts: dict[str, int] = {}
-    for event in all_events:
-        level = event.level
-        level_counts[level] = level_counts.get(level, 0) + 1
+    # Get all events for the day (from_date gives us >= start, we filter <= end in Python)
+    events = await event_logger.get_events(from_date=from_dt)
+    day_events = [e for e in events if e.timestamp <= to_dt]
+    # Reverse to chronological order for CSV
+    day_events.reverse()
     
-    # Count by event type
-    type_counts: dict[str, int] = {}
-    for event in all_events:
-        event_type = event.event_type
-        type_counts[event_type] = type_counts.get(event_type, 0) + 1
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Timestamp", "Level", "Event Type", "Message", "Details"])
+    for event in day_events:
+        details = ""
+        if event.context:
+            details = " | ".join(f"{k}: {v}" for k, v in event.context.items())
+        writer.writerow([
+            event.timestamp.isoformat(),
+            event.level,
+            event.event_type,
+            event.message,
+            details,
+        ])
     
-    return {
-        "total_events": len(all_events),
-        "max_capacity": event_logger.max_size,
-        "levels": level_counts,
-        "event_types": type_counts,
-        "oldest_event": all_events[-1].timestamp.isoformat() if all_events else None,
-        "newest_event": all_events[0].timestamp.isoformat() if all_events else None
-    }
-
-
-@router.get("/latest", response_model=Optional[EventResponse])
-async def get_latest_event(
-    level: Optional[str] = Query(None, description="Filter by event level"),
-    event_logger: GlobalEventLogger = Depends(get_global_event_logger)
-):
-    """
-    Get the most recent event, optionally filtered by level.
-    """
-    events = event_logger.get_events(limit=1, level=level)
-    
-    if not events:
-        return None
-    
-    event = events[0]
-    return EventResponse(
-        timestamp=event.timestamp,
-        level=event.level,
-        event_type=event.event_type,
-        details=event.context or {}
+    filename = f"events-{day.isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

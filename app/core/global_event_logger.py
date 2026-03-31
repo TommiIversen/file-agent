@@ -1,13 +1,10 @@
-"""
-GlobalEventLogger - In-memory event logging for UI visibility 
+"""GlobalEventLogger - Event logging for UI visibility with SQLite persistence.
 
-En singleton service der abonnerer på kritiske domæne-events og gemmer dem
-i en in-memory deque for UI'et at forespørge.
+En singleton service der abonnerer på kritiske domæne-events og
+persisterer dem til SQLite. Alle reads går direkte til databasen.
 """
 import logging
-import asyncio
-from collections import deque
-from typing import List, Deque, Optional
+from typing import List, Optional
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -27,6 +24,11 @@ from app.core.events.storage_events import (
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.models import FileStatus, StorageStatus, MountStatus
 
+# TYPE_CHECKING avoids circular import — SqliteEventStore only used for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.core.sqlite_event_store import SqliteEventStore
+
 
 @dataclass
 class LoggedEvent:
@@ -36,6 +38,7 @@ class LoggedEvent:
     message: str
     level: str # INFO, WARNING, ERROR
     context: Optional[dict] = None # Extra context data
+    id: Optional[int] = None # DB primary key, used for cursor pagination
 
     def to_dict(self):
         result = {
@@ -51,19 +54,24 @@ class LoggedEvent:
 
 class GlobalEventLogger:
     """
-    En in-memory log, der abonnerer på kritiske domæne-events
-    og gør dem tilgængelige for UI'et.
+    Event logger der abonnerer på kritiske domæne-events, persisterer dem
+    til SQLite og gør dem tilgængelige for UI'et.
     
-    Implementeret som thread-safe singleton med automatisk cleanup.
+    Writes: event → SQLite (via SqliteEventStore)
+    Reads: alle queries går direkte til SQLite
     """
     
-    def __init__(self, max_size: int = 200):
-        # En 'deque' er en liste, der automatisk fjerner de ældste
-        # elementer, når den bliver fuld. Perfekt til en in-memory log.
-        self.max_size = max_size
-        self._events: Deque[LoggedEvent] = deque(maxlen=max_size)
-        self._lock = asyncio.Lock()
-        logging.info(f"GlobalEventLogger initialiseret med plads til {max_size} events.")
+    def __init__(self):
+        self._event_store: Optional["SqliteEventStore"] = None
+        logging.info("GlobalEventLogger initialiseret.")
+
+    def set_event_store(self, store: Optional["SqliteEventStore"]) -> None:
+        """Attach or detach a persistent event store."""
+        self._event_store = store
+        if store is not None:
+            logging.info("GlobalEventLogger: SQLite event store attached")
+        else:
+            logging.info("GlobalEventLogger: SQLite event store detached")
 
     async def register_with_event_bus(self, event_bus):
         """
@@ -89,7 +97,7 @@ class GlobalEventLogger:
         level: str, 
         context: Optional[dict] = None
     ):
-        """Tilføjer en ny, formateret logbesked til listen."""
+        """Persist a new event to SQLite."""
         log_entry = LoggedEvent(
             timestamp=event.timestamp,
             event_type=type(event).__name__,
@@ -97,47 +105,30 @@ class GlobalEventLogger:
             level=level,
             context=context
         )
-        async with self._lock:
-            self._events.appendleft(log_entry) # Tilføj i starten (nyeste først)
 
-    async def get_all_logs(self, limit: Optional[int] = None) -> List[dict]:
-        """Henter alle gemte logs (thread-safe) med optional limit."""
-        async with self._lock:
-            events_to_return = list(self._events)
-            if limit:
-                events_to_return = events_to_return[:limit]
-            return [entry.to_dict() for entry in events_to_return]
+        if self._event_store is not None:
+            try:
+                await self._event_store.add_event(log_entry)
+            except Exception:
+                logging.error("Failed to persist event to SQLite", exc_info=True)
 
-    async def get_logs_by_level(self, level: str, limit: Optional[int] = None) -> List[dict]:
-        """Henter logs filtreret efter level (ERROR, WARNING, INFO)."""
-        async with self._lock:
-            filtered_events = [entry for entry in self._events if entry.level == level]
-            if limit:
-                filtered_events = filtered_events[:limit]
-            return [entry.to_dict() for entry in filtered_events]
-
-    async def clear_logs(self):
-        """Rydder alle logs (for maintenance)."""
-        async with self._lock:
-            self._events.clear()
-        logging.info("GlobalEventLogger: Alle logs ryddet")
-
-    def get_events(self, limit: Optional[int] = None, level: Optional[str] = None) -> List:
+    async def get_events(
+        self,
+        limit: Optional[int] = None,
+        level: Optional[str] = None,
+        from_date: Optional[datetime] = None,
+        before_id: Optional[int] = None,
+    ) -> List[LoggedEvent]:
         """
-        Sync metode for API adgang til events.
-        Returnerer LoggedEvent objekter direkte (ikke dicts).
+        Query events from SQLite with optional filters.
+        
+        Returns newest-first. All reads go to the database.
         """
-        events_list = list(self._events)
-        
-        # Filter by level if specified
-        if level:
-            events_list = [event for event in events_list if event.level.lower() == level.lower()]
-        
-        # Apply limit if specified
-        if limit:
-            events_list = events_list[:limit]
-            
-        return events_list
+        if self._event_store is None:
+            return []
+        return await self._event_store.get_events(
+            limit=limit, level=level, from_date=from_date, before_id=before_id
+        )
 
     # --- Event Handlers (Disse kaldes af EventBus) ---
 
@@ -261,7 +252,6 @@ class GlobalEventLogger:
             "INFO",
             {
                 "is_active": event.is_scanning,
-                "service_name": getattr(event, 'service_name', 'unknown')
             }
         )
 

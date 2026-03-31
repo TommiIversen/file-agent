@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 import uvicorn
@@ -23,6 +24,7 @@ from .domains.directory_browsing import api as directory
 from .config import Settings
 from .dependencies import (
     get_event_bus,
+    get_event_store,
     get_file_repository,
     get_global_event_logger,
     get_ingest_api_client,
@@ -51,6 +53,7 @@ from app.domains.lifecycle.registration import register_lifecycle_domain # Impor
 from app.domains.tally_light.registration import register_tally_light_domain # Import tally light domain registration
 from app.domains.ingest_monitor.registration import register_ingest_monitor_domain # Import ingest monitor domain registration
 
+from app.core.global_event_logger import LoggedEvent
 from .logging_config import setup_logging
 from app.domains.presentation import views
 
@@ -79,8 +82,20 @@ async def lifespan(app: FastAPI):
     
     # Register GlobalEventLogger to capture all domain events for UI visibility
     global_event_logger = get_global_event_logger()
+    event_store = get_event_store()
+    global_event_logger.set_event_store(event_store)
     await global_event_logger.register_with_event_bus(event_bus)
-    logging.info("GlobalEventLogger registered for UI event visibility")
+    logging.info("GlobalEventLogger registered with SQLite persistence")
+
+    # Log application startup event (visible in UI event log)
+    startup_event = LoggedEvent(
+        timestamp=datetime.now(),
+        event_type="ApplicationStarted",
+        message="File Transfer Agent started",
+        level="INFO",
+        context={"hostname": settings.config_file_info["hostname"]},
+    )
+    await event_store.add_event(startup_event)
     
     # Kald registrerings-funktionerne for hvert domæne
     register_directory_browsing_handlers(query_bus, command_bus)
@@ -226,6 +241,21 @@ async def lifespan(app: FastAPI):
     if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
         await tally_handler.shutdown()
         logging.info("TallyLight domain shutdown completed")
+
+    # Log shutdown event while DB is still in a clean state
+    try:
+        shutdown_event = LoggedEvent(
+            timestamp=datetime.now(),
+            event_type="ApplicationStopped",
+            message="File Transfer Agent stopped",
+            level="INFO",
+        )
+        await event_store.add_event(shutdown_event)
+    except Exception:
+        logging.warning("Failed to write shutdown event", exc_info=True)
+
+    # Detach event store to prevent write-after-close from cancelled tasks
+    global_event_logger.set_event_store(None)
 
     # Cancel alle background tasks
     for task in _background_tasks:

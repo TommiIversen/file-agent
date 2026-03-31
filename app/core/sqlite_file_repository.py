@@ -57,6 +57,16 @@ class SqliteFileRepository:
         self._db: Optional[aiosqlite.Connection] = None
         self._write_lock = asyncio.Lock()
 
+    @property
+    def connection(self) -> aiosqlite.Connection:
+        """Expose the open DB connection for shared use (e.g. SqliteEventStore)."""
+        return self._ensure_db()
+
+    @property
+    def write_lock(self) -> asyncio.Lock:
+        """Expose the write lock for shared use by other stores on the same DB."""
+        return self._write_lock
+
     def _ensure_db(self) -> aiosqlite.Connection:
         """Return the open DB connection, or raise if not initialized."""
         if self._db is None:
@@ -126,6 +136,18 @@ class SqliteFileRepository:
             CREATE INDEX IF NOT EXISTS ix_tracked_files_status ON tracked_files(status);
             CREATE INDEX IF NOT EXISTS ix_tracked_files_discovered_at ON tracked_files(discovered_at);
             CREATE INDEX IF NOT EXISTS ix_tracked_files_completed_at ON tracked_files(completed_at);
+
+            CREATE TABLE IF NOT EXISTS system_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                level TEXT NOT NULL,
+                message TEXT NOT NULL,
+                context TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_system_events_timestamp ON system_events(timestamp);
+            CREATE INDEX IF NOT EXISTS ix_system_events_level ON system_events(level);
+            CREATE INDEX IF NOT EXISTS ix_system_events_event_type ON system_events(event_type);
         """)
 
     async def _run_migrations(self) -> None:
