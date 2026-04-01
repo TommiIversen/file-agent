@@ -3,7 +3,18 @@
 
     <template x-for="file in $store.files.filteredFiles" :key="file.id">
         <!-- Simple File Row with Hover Tooltip -->
-        <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative group cursor-pointer">
+        <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative cursor-pointer"
+             x-data="{ showTip: false, tipStyle: {} }"
+             @mouseenter="
+                showTip = true;
+                const rect = $el.getBoundingClientRect();
+                tipStyle = {
+                    position: 'fixed',
+                    bottom: (window.innerHeight - rect.top + 8) + 'px',
+                    left: rect.left + 'px'
+                };
+             "
+             @mouseleave="showTip = false">
             <div class="flex items-center space-x-4">
 
                 <!-- File Name -->
@@ -45,7 +56,10 @@
             </div>
 
             <!-- Hover Tooltip with Additional Info -->
-            <div class="absolute top-full left-0 mt-2 w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <div x-show="showTip"
+                 x-transition.opacity.duration.200ms
+                 :style="tipStyle"
+                 class="w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 pointer-events-none">
                 <div class="grid grid-cols-2 gap-6 text-sm">
                     <!-- Left Column -->
                     <div class="space-y-2">
@@ -98,8 +112,8 @@
                     </div>
                 </div>
 
-                <!-- Arrow pointing up -->
-                <div class="absolute bottom-full left-8 w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-gray-900"></div>
+                <!-- Arrow pointing down -->
+                <div class="absolute top-full left-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900"></div>
             </div>
 
             <!-- Error Message -->
