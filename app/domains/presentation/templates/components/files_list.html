@@ -1,5 +1,5 @@
 <!-- Files List Component -->
-<div class="space-y-2 mt-2 max-h-[70vh] overflow-y-auto" @scroll="$store.files.handleFilesScroll($event)">
+<div class="h-full overflow-y-auto space-y-2" @scroll="$store.files.handleFilesScroll($event)">
 
     <template x-for="file in $store.files.filteredFiles" :key="file.id">
         <!-- Simple File Row with Hover Tooltip -->

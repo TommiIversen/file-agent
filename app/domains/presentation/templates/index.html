@@ -40,14 +40,13 @@
     <script defer src="/static/js/jslib/alpinejs.js"></script>
 
 </head>
-<body>
-<body class="gradientHolder min-h-screen"
+<body class="gradientHolder h-screen overflow-hidden"
       x-data="{}"
       x-init="() => { /* Application will auto-initialize via app.js */ }">
 
-<div class="container mx-auto p-4 max-w-7xl">
+<div class="h-full flex flex-col p-4 max-w-7xl mx-auto">
     <!-- Header with Status -->
-    <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 text-white">
+    <div class="bg-gray-800 bg-opacity-80 rounded-lg shadow-lg p-4 text-white flex-shrink-0">
 
         <!-- Logo and Title -->
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4 relative">
@@ -112,8 +111,10 @@
         {% include "components/scanner_controls_toolbar.html" %}
     </div>
 
-    <!-- Files List -->
-    {% include "components/files_list.html" %}
+    <!-- Files List (fills remaining space, only scrollable zone) -->
+    <div class="flex-1 min-h-0 mt-2">
+        {% include "components/files_list.html" %}
+    </div>
 </div>
 
 <!-- Log Viewer Modal -->
