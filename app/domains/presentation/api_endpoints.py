@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.cqrs.query_bus import QueryBus
 from app.dependencies import get_query_bus, get_tally_switch_monitor, get_ingest_monitor_worker
-from app.domains.presentation.queries import GetAllFilesQuery, GetStatisticsQuery, GetStorageStatusQuery
+from app.domains.presentation.queries import GetAllFilesQuery, GetRecentFilesQuery, GetStatisticsQuery, GetStorageStatusQuery
 
 
 presentation_router = APIRouter()
@@ -29,7 +29,7 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
 
     # Execute queries in parallel to fetch all necessary data
     all_files, statistics, storage_status = await asyncio.gather(
-        query_bus.execute(GetAllFilesQuery()),
+        query_bus.execute(GetRecentFilesQuery(limit=20)),
         query_bus.execute(GetStatisticsQuery()),
         query_bus.execute(GetStorageStatusQuery()),
     )
@@ -100,3 +100,21 @@ async def get_initial_state(query_bus: QueryBus = Depends(get_query_bus)) -> Dic
         "tally_switch": tally_status,
         "ingest_connection": ingest_connection_status,
     }
+
+
+@presentation_router.get("/api/files", tags=["Presentation"])
+async def get_files(
+    limit: int = Query(20, description="Number of files to return"),
+    offset: int = Query(0, description="Offset for pagination"),
+    status: Optional[str] = Query(None, description="Filter by file status"),
+    query_bus: QueryBus = Depends(get_query_bus),
+) -> List[Dict[str, Any]]:
+    """
+    Get files with offset-based pagination.
+    
+    Used by infinite scroll to load older files beyond the initial batch.
+    """
+    files = await query_bus.execute(
+        GetRecentFilesQuery(limit=limit, offset=offset, status=status)
+    )
+    return [_serialize_tracked_file(f) for f in files]

@@ -192,6 +192,26 @@ class SqliteFileRepository:
             rows = await cursor.fetchall()
             return [self._row_to_tracked_file(r) for r in rows]
 
+    async def get_recent(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        status: Optional[str] = None,
+    ) -> List[TrackedFile]:
+        """Get files ordered by discovered_at DESC with limit/offset pagination."""
+        db = self._ensure_db()
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT * FROM tracked_files{where} ORDER BY discovered_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+            return [self._row_to_tracked_file(r) for r in rows]
+
     async def add(self, tracked_file: TrackedFile) -> None:
         """Add a new tracked file to the repository. Duplicates are silently ignored."""
         db = self._ensure_db()

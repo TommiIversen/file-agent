@@ -10,8 +10,8 @@ from app.dependencies import (
 )
 
 # Importer de queries, den håndterer (som før)
-from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuery, GetStorageStatusQuery
-from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, GetAllFilesQueryHandler, GetStorageStatusQueryHandler
+from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuery, GetRecentFilesQuery, GetStorageStatusQuery
+from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, GetAllFilesQueryHandler, GetRecentFilesQueryHandler, GetStorageStatusQueryHandler
 
 # Importer de events, den skal lytte til (NYT)
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
@@ -44,6 +44,7 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
 
         query_bus.register(GetStatisticsQuery, GetStatisticsQueryHandler(file_repository).handle)
         query_bus.register(GetAllFilesQuery, GetAllFilesQueryHandler(file_repository).handle)
+        query_bus.register(GetRecentFilesQuery, GetRecentFilesQueryHandler(file_repository).handle)
         query_bus.register(GetStorageStatusQuery, GetStorageStatusQueryHandler(storage_monitor).handle)
 
     # --- Del 2: Registrer Event Subscribers (NYT) ---

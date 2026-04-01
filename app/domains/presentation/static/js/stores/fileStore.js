@@ -13,15 +13,20 @@ document.addEventListener('alpine:init', () => {
     Alpine.store('files', {
         // === STATE ===
 
-        /** @type {number} - Maximum number of files to keep in the store. */
-        MAX_FILES: 400,
-
         /** @type {Map<string, TrackedFile>} - Map of fileId to TrackedFile object. */
         items: new Map(),
         /** @type {SortBy} - Current sort method. */
         sortBy: 'discovered',
         /** @type {ActiveFilter} - Current active filter. */
         activeFilter: 'all',
+
+        /** @type {boolean} */
+        isLoadingMore: false,
+        /** @type {boolean} */
+        hasMore: true,
+        /** @type {number} - Tracks how many files have been loaded for offset pagination. */
+        loadedCount: 0,
+        PAGE_SIZE: 20,
 
         /** Statistics about the files. */
         statistics: {
@@ -59,15 +64,6 @@ document.addEventListener('alpine:init', () => {
             }
 
             this.items.set(file.id, file);
-
-            if (this.items.size > this.MAX_FILES) {
-                const oldestFileId = this.items.keys().next().value;
-                if (oldestFileId) {
-                    this.items.delete(oldestFileId);
-                    console.log(`Removed oldest file (ID: ${oldestFileId}) to maintain limit of ${this.MAX_FILES}`);
-                }
-            }
-
             this.updateStatisticsFromFiles();
             console.log(`File added: ${file.file_path} (ID: ${file.id})`);
         },
@@ -159,7 +155,53 @@ document.addEventListener('alpine:init', () => {
                 }
             });
 
+            this.loadedCount = files.length;
+            this.hasMore = files.length >= this.PAGE_SIZE;
             this.updateStatisticsFromFiles();
+        },
+
+        /**
+         * Loads the next page of files from the API (infinite scroll).
+         */
+        async loadMore() {
+            if (this.isLoadingMore || !this.hasMore) return;
+            this.isLoadingMore = true;
+            try {
+                const params = new URLSearchParams();
+                params.append('limit', String(this.PAGE_SIZE));
+                params.append('offset', String(this.loadedCount));
+                const response = await fetch(`/api/files?${params.toString()}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const files = await response.json();
+                if (files.length === 0) {
+                    this.hasMore = false;
+                } else {
+                    files.forEach((/** @type {TrackedFile} */ file) => {
+                        if (file && file.id && !this.items.has(file.id)) {
+                            this.items.set(file.id, file);
+                        }
+                    });
+                    this.loadedCount += files.length;
+                    this.hasMore = files.length >= this.PAGE_SIZE;
+                    this.updateStatisticsFromFiles();
+                }
+            } catch (err) {
+                console.error('Failed to load more files:', err);
+            } finally {
+                this.isLoadingMore = false;
+            }
+        },
+
+        /**
+         * Handles scroll events for infinite scroll.
+         * @param {Event} event
+         */
+        handleFilesScroll(event) {
+            const el = event.target;
+            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+            if (nearBottom && !this.isLoadingMore && this.hasMore) {
+                this.loadMore();
+            }
         },
 
         /**

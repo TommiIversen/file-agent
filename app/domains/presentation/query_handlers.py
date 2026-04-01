@@ -3,7 +3,7 @@ import asyncio
 
 from app.core.cqrs.query import QueryHandler
 from app.core.file_repository import FileRepository
-from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuery, GetStorageStatusQuery
+from app.domains.presentation.queries import GetStatisticsQuery, GetAllFilesQuery, GetRecentFilesQuery, GetStorageStatusQuery
 from app.models import FileStatus, TrackedFile
 from app.domains.storage.storage_monitor import StorageMonitorService
 
@@ -79,6 +79,16 @@ class GetAllFilesQueryHandler(QueryHandler[GetAllFilesQuery, list[TrackedFile]])
 
     async def handle(self, query: GetAllFilesQuery) -> list[TrackedFile]:
         return await self.file_repository.get_all()
+
+
+class GetRecentFilesQueryHandler(QueryHandler[GetRecentFilesQuery, list[TrackedFile]]):
+    def __init__(self, file_repository: FileRepository):
+        self.file_repository = file_repository
+
+    async def handle(self, query: GetRecentFilesQuery) -> list[TrackedFile]:
+        return await self.file_repository.get_recent(
+            limit=query.limit, offset=query.offset, status=query.status
+        )
 
 
 class GetStorageStatusQueryHandler(QueryHandler[GetStorageStatusQuery, Dict[str, Any]]):

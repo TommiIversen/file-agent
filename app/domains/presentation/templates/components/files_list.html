@@ -1,5 +1,5 @@
 <!-- Files List Component -->
-<div class="space-y-2 mt-2">
+<div class="space-y-2 mt-2 max-h-[70vh] overflow-y-auto" @scroll="$store.files.handleFilesScroll($event)">
 
     <template x-for="file in $store.files.filteredFiles" :key="file.id">
         <!-- Simple File Row with Hover Tooltip -->
@@ -123,5 +123,16 @@
             <div class="text-4xl mb-4">📁</div>
             Ingen filer fundet
         </div>
+    </div>
+
+    <!-- Loading more indicator -->
+    <div x-show="$store.files.isLoadingMore" class="p-4 text-center text-gray-400 text-sm">
+        <span class="animate-pulse">Henter flere filer...</span>
+    </div>
+
+    <!-- End of list -->
+    <div x-show="!$store.files.hasMore && $store.files.filteredFiles.length > 0"
+         class="p-3 text-center text-gray-500 text-xs">
+        Ingen flere filer
     </div>
 </div>
