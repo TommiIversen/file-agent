@@ -7,7 +7,7 @@ with GlobalEventLogger (write-through + rehydration).
 
 import asyncio
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.sqlite_file_repository import SqliteFileRepository
 from app.core.sqlite_event_store import SqliteEventStore
@@ -22,7 +22,7 @@ def _make_event(
     context: dict = None,
 ) -> LoggedEvent:
     return LoggedEvent(
-        timestamp=timestamp or datetime.now(),
+        timestamp=timestamp or datetime.now(timezone.utc),
         event_type=event_type,
         message=message,
         level=level,
@@ -105,7 +105,7 @@ class TestSqliteEventStoreCRUD:
 
     @pytest.mark.asyncio
     async def test_datetime_precision(self, store):
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         event = _make_event(timestamp=now)
         await store.add_event(event)
         events = await store.get_events()
@@ -181,8 +181,8 @@ class TestSqliteEventStorePrune:
 
     @pytest.mark.asyncio
     async def test_prune_removes_old_events(self, store):
-        old = _make_event(timestamp=datetime.now() - timedelta(days=60))
-        recent = _make_event(timestamp=datetime.now())
+        old = _make_event(timestamp=datetime.now(timezone.utc) - timedelta(days=60))
+        recent = _make_event(timestamp=datetime.now(timezone.utc))
         await store.add_event(old)
         await store.add_event(recent)
 
@@ -190,11 +190,11 @@ class TestSqliteEventStorePrune:
         assert pruned == 1
         remaining = await store.get_events()
         assert len(remaining) == 1
-        assert remaining[0].timestamp > datetime.now() - timedelta(days=1)
+        assert remaining[0].timestamp > datetime.now(timezone.utc) - timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_prune_returns_zero_when_nothing_to_prune(self, store):
-        await store.add_event(_make_event(timestamp=datetime.now()))
+        await store.add_event(_make_event(timestamp=datetime.now(timezone.utc)))
         pruned = await store.prune_old_events(days=30)
         assert pruned == 0
 
@@ -217,7 +217,7 @@ class TestGlobalEventLoggerIntegration:
         # Simulate an event via _add_log (needs a DomainEvent-like object)
         from unittest.mock import MagicMock
         mock_event = MagicMock()
-        mock_event.timestamp = datetime.now()
+        mock_event.timestamp = datetime.now(timezone.utc)
         type(mock_event).__name__ = "FileStatusChangedEvent"
 
         await logger._add_log(mock_event, "File completed", "INFO", {"file_id": "f1"})
@@ -236,7 +236,7 @@ class TestGlobalEventLoggerIntegration:
 
         from unittest.mock import MagicMock
         mock_event = MagicMock()
-        mock_event.timestamp = datetime.now()
+        mock_event.timestamp = datetime.now(timezone.utc)
         type(mock_event).__name__ = "TestEvent"
 
         await logger._add_log(mock_event, "Persisted test", "INFO")

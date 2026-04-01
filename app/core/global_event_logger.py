@@ -117,6 +117,7 @@ class GlobalEventLogger:
         limit: Optional[int] = None,
         level: Optional[str] = None,
         from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
         before_id: Optional[int] = None,
     ) -> List[LoggedEvent]:
         """
@@ -127,7 +128,7 @@ class GlobalEventLogger:
         if self._event_store is None:
             return []
         return await self._event_store.get_events(
-            limit=limit, level=level, from_date=from_date, before_id=before_id
+            limit=limit, level=level, from_date=from_date, to_date=to_date, before_id=before_id
         )
 
     # --- Event Handlers (Disse kaldes af EventBus) ---

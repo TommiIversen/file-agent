@@ -100,7 +100,8 @@ document.addEventListener('alpine:init', () => {
                 params.append('level', this.levelFilter);
             }
             if (this.selectedDate) {
-                params.append('from_date', `${this.selectedDate}T00:00:00`);
+                params.append('from_date', `${this.selectedDate}T00:00:00Z`);
+                params.append('to_date', `${this.selectedDate}T23:59:59Z`);
             }
             if (beforeId !== undefined) {
                 params.append('before_id', String(beforeId));

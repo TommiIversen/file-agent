@@ -8,7 +8,7 @@ write-through persistence and query capabilities for the GlobalEventLogger.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import aiosqlite
@@ -55,6 +55,7 @@ class SqliteEventStore:
         limit: Optional[int] = None,
         level: Optional[str] = None,
         from_date: Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
         before_id: Optional[int] = None,
     ) -> List[LoggedEvent]:
         """
@@ -62,6 +63,7 @@ class SqliteEventStore:
 
         Results are returned newest-first (descending id).
         Use before_id for cursor-based pagination (fetch events older than this id).
+        Use from_date + to_date together to query a single day.
         """
         clauses: list[str] = []
         params: list = []
@@ -73,6 +75,10 @@ class SqliteEventStore:
         if from_date:
             clauses.append("timestamp >= ?")
             params.append(from_date.isoformat())
+
+        if to_date:
+            clauses.append("timestamp <= ?")
+            params.append(to_date.isoformat())
 
         if before_id is not None:
             clauses.append("id < ?")
@@ -107,7 +113,7 @@ class SqliteEventStore:
 
     async def prune_old_events(self, days: int = 30) -> int:
         """Delete events older than `days` days. Returns number of deleted rows."""
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
         async with self._write_lock:
             await self._db.execute("BEGIN IMMEDIATE")
@@ -126,8 +132,11 @@ class SqliteEventStore:
         """Convert a database row to a LoggedEvent."""
         context_raw = row["context"]
         context = json.loads(context_raw) if context_raw else None
+        ts = datetime.fromisoformat(row["timestamp"])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
         return LoggedEvent(
-            timestamp=datetime.fromisoformat(row["timestamp"]),
+            timestamp=ts,
             event_type=row["event_type"],
             message=row["message"],
             level=row["level"],

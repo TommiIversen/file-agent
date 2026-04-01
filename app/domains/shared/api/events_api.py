@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import csv
 import io
 
@@ -37,6 +37,7 @@ async def get_events(
     limit: int = Query(PAGE_SIZE, description="Number of events to return"),
     level: Optional[str] = Query(None, description="Filter by event level (info, warning, error)"),
     from_date: Optional[datetime] = Query(None, description="Only return events from this datetime onwards (ISO 8601)"),
+    to_date: Optional[datetime] = Query(None, description="Only return events up to this datetime (ISO 8601)"),
     before_id: Optional[int] = Query(None, description="Cursor: only return events with id < this value (for infinite scroll)"),
     event_logger: GlobalEventLogger = Depends(get_global_event_logger)
 ):
@@ -45,9 +46,10 @@ async def get_events(
     
     First call: GET /api/events/?limit=50 → returns newest 50 events.
     Next page: GET /api/events/?limit=50&before_id=<last event id> → next 50 older.
+    Single day: GET /api/events/?from_date=...T00:00:00Z&to_date=...T23:59:59Z
     """
     events = await event_logger.get_events(
-        limit=limit, level=level, from_date=from_date, before_id=before_id
+        limit=limit, level=level, from_date=from_date, to_date=to_date, before_id=before_id
     )
     
     return [
@@ -68,19 +70,17 @@ async def download_events_for_day(
     event_logger: GlobalEventLogger = Depends(get_global_event_logger)
 ):
     """Download all events for a specific day as CSV."""
-    from_dt = datetime(day.year, day.month, day.day, 0, 0, 0)
-    to_dt = datetime(day.year, day.month, day.day, 23, 59, 59, 999999)
+    from_dt = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=timezone.utc)
+    to_dt = datetime(day.year, day.month, day.day, 23, 59, 59, 999999, tzinfo=timezone.utc)
     
-    # Get all events for the day (from_date gives us >= start, we filter <= end in Python)
-    events = await event_logger.get_events(from_date=from_dt)
-    day_events = [e for e in events if e.timestamp <= to_dt]
+    events = await event_logger.get_events(from_date=from_dt, to_date=to_dt)
     # Reverse to chronological order for CSV
-    day_events.reverse()
+    events.reverse()
     
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Timestamp", "Level", "Event Type", "Message", "Details"])
-    for event in day_events:
+    for event in events:
         details = ""
         if event.context:
             details = " | ".join(f"{k}: {v}" for k, v in event.context.items())

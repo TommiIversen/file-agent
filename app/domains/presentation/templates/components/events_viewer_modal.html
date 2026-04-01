@@ -32,25 +32,7 @@
             </div>
         </div>
 
-        <!-- Stats Bar -->
-        <div class="bg-gray-900 bg-opacity-60 rounded-lg p-3 mb-4">
-            <div class="grid grid-cols-3 gap-4 text-sm">
-                <div class="text-center">
-                    <div class="text-gray-300">Loaded</div>
-                    <div class="text-white font-bold text-lg" x-text="$store.eventsViewer.computedStats.total_events">0</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-gray-300">Errors</div>
-                    <div class="text-red-400 font-bold text-lg" x-text="$store.eventsViewer.computedStats.error_count">0</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-gray-300">Warnings</div>
-                    <div class="text-yellow-400 font-bold text-lg" x-text="$store.eventsViewer.computedStats.warning_count">0</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filters + Date Picker -->
+        <!-- Filters + Date Picker + Stats -->
         <div class="bg-gray-900 bg-opacity-60 rounded-lg p-3 mb-4">
             <div class="flex flex-wrap gap-4 items-center">
                 <!-- Level Filter -->
@@ -91,6 +73,13 @@
                             <option :value="eventType" x-text="eventType"></option>
                         </template>
                     </select>
+                </div>
+
+                <!-- Stats (inline) -->
+                <div class="flex items-center space-x-3 text-sm">
+                    <span class="text-gray-400"><span class="text-white font-bold" x-text="$store.eventsViewer.computedStats.total_events">0</span> loaded</span>
+                    <span class="text-gray-400"><span class="text-red-400 font-bold" x-text="$store.eventsViewer.computedStats.error_count">0</span> errors</span>
+                    <span class="text-gray-400"><span class="text-yellow-400 font-bold" x-text="$store.eventsViewer.computedStats.warning_count">0</span> warnings</span>
                 </div>
 
                 <!-- Date Picker -->

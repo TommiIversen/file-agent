@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 
     # Log application startup event (visible in UI event log)
     startup_event = LoggedEvent(
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         event_type="ApplicationStarted",
         message="File Transfer Agent started",
         level="INFO",
@@ -245,7 +245,7 @@ async def lifespan(app: FastAPI):
     # Log shutdown event while DB is still in a clean state
     try:
         shutdown_event = LoggedEvent(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             event_type="ApplicationStopped",
             message="File Transfer Agent stopped",
             level="INFO",
