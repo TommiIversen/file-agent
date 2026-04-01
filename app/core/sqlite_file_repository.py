@@ -276,7 +276,7 @@ class SqliteFileRepository:
         db = self._ensure_db()
         async with db.execute("SELECT COUNT(*) FROM tracked_files") as cursor:
             row = await cursor.fetchone()
-            return row[0]
+            return row[0] if row else 0
 
     async def prune_terminal_files(
         self,

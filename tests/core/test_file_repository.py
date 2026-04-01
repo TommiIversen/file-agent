@@ -5,7 +5,7 @@ Covers CRUD operations, duplicate handling, the update bug fix, and prune logic.
 import pytest
 from datetime import datetime, timedelta
 
-from app.core.file_repository import FileRepository
+from app.core.file_repository import InMemoryFileRepository as FileRepository
 from app.models import TrackedFile, FileStatus
 
 

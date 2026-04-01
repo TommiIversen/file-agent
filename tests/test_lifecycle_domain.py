@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from app.domains.lifecycle.commands import PruneOldFilesCommand
 from app.domains.lifecycle.handlers import PruneOldFilesCommandHandler
 from app.models import TrackedFile, FileStatus
-from app.core.file_repository import FileRepository
+from app.core.file_repository import InMemoryFileRepository as FileRepository
 
 
 @pytest.mark.asyncio

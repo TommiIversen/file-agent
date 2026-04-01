@@ -105,11 +105,11 @@ class SqliteEventStore:
                 "SELECT COUNT(*) FROM system_events WHERE level = ?", (level.upper(),)
             ) as cursor:
                 row = await cursor.fetchone()
-                return row[0]
+                return row[0] if row else 0
         else:
             async with self._db.execute("SELECT COUNT(*) FROM system_events") as cursor:
                 row = await cursor.fetchone()
-                return row[0]
+                return row[0] if row else 0
 
     async def prune_old_events(self, days: int = 30) -> int:
         """Delete events older than `days` days. Returns number of deleted rows."""

@@ -1,16 +1,34 @@
 """
-File Repository - A pure data access layer for TrackedFile objects.
+File Repository - Protocol and in-memory implementation for TrackedFile storage.
 """
 
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Protocol, Set, runtime_checkable
 
 from app.models import TrackedFile, FileStatus
 
 
-class FileRepository:
+@runtime_checkable
+class FileRepository(Protocol):
+    """
+    Protocol defining the interface for TrackedFile storage.
+    Both InMemoryFileRepository and SqliteFileRepository implement this.
+    """
+
+    async def get_by_id(self, file_id: str) -> Optional[TrackedFile]: ...
+    async def get_all(self) -> List[TrackedFile]: ...
+    async def add(self, tracked_file: TrackedFile) -> None: ...
+    async def update(self, tracked_file: TrackedFile) -> None: ...
+    async def remove(self, file_id: str) -> bool: ...
+    async def count(self) -> int: ...
+    async def prune_terminal_files(
+        self, terminal_states: Set[FileStatus], cutoff_date: datetime
+    ) -> int: ...
+
+
+class InMemoryFileRepository:
     """
     Provides a thread-safe, in-memory repository for TrackedFile objects.
     This class is responsible for the direct storage and retrieval of file data,
