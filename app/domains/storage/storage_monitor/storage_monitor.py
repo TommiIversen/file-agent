@@ -85,11 +85,16 @@ class StorageMonitorService:
         # Immediately check destination storage with faster timeout
         await self._check_destination_immediate()
         
-        # Also immediately broadcast mount status as NOT_CONFIGURED to prioritize over storage info
-        await self._mount_broadcaster.broadcast_not_configured(
-            storage_type="destination",
-            target_path=self._settings.destination_directory
+        # Only broadcast NOT_CONFIGURED if network mount is not configured
+        mount_configured = (
+            self._network_mount_service
+            and self._network_mount_service.is_network_mount_configured()
         )
+        if not mount_configured:
+            await self._mount_broadcaster.broadcast_not_configured(
+                storage_type="destination",
+                target_path=self._settings.destination_directory
+            )
 
     async def _check_destination_immediate(self) -> None:
         """
@@ -100,7 +105,7 @@ class StorageMonitorService:
             path=self._settings.destination_directory,
             warning_threshold=self._settings.destination_warning_threshold_gb,
             critical_threshold=self._settings.destination_critical_threshold_gb,
-            immediate_timeout=2.0 # Aggressive 2-second timeout for immediate checks
+            immediate_timeout=10.0 # 10-second timeout for immediate checks (SMB needs time)
         )
 
     async def _monitoring_loop(self) -> None:
@@ -142,9 +147,11 @@ class StorageMonitorService:
         path: str,
         warning_threshold: float,
         critical_threshold: float,
-        immediate_timeout: float = 8.0, # Default to 8 seconds, but allow override
+        immediate_timeout: float = 0,  # 0 means use settings default
     ) -> None:
         try:
+            if immediate_timeout == 0:
+                immediate_timeout = self._settings.storage_check_timeout_seconds
             # Add aggressive timeout wrapper for the entire storage check operation
             # to prevent blocking the event loop on network timeouts
             try:
@@ -270,15 +277,20 @@ class StorageMonitorService:
                 storage_type, old_info, new_info
             )
 
-            # For destination: broadcast NOT_CONFIGURED if inaccessible and has no
-            # network mount service. The SUCCESS broadcast is already handled at
-            # mount time (L215), so we only need the NOT_CONFIGURED fallback here.
+            # For destination: broadcast NOT_CONFIGURED only if network mount is
+            # not configured. When mount IS configured but degraded, the mount
+            # flow above already handles status broadcasting.
             if storage_type == "destination":
                 if not (new_info.is_accessible and new_info.status == StorageStatus.OK):
-                    await self._mount_broadcaster.broadcast_not_configured(
-                        storage_type="destination",
-                        target_path=self._settings.destination_directory
+                    mount_configured = (
+                        self._network_mount_service
+                        and self._network_mount_service.is_network_mount_configured()
                     )
+                    if not mount_configured:
+                        await self._mount_broadcaster.broadcast_not_configured(
+                            storage_type="destination",
+                            target_path=self._settings.destination_directory
+                        )
 
             if self._is_destination_unavailable(storage_type, old_info, new_info):
                 await self._handle_destination_unavailable(
@@ -389,7 +401,7 @@ class StorageMonitorService:
 
         problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
         is_unavailable = (
-            old_info.status == StorageStatus.OK
+            old_info.status not in problematic_states
             and new_info.status in problematic_states
         )
 

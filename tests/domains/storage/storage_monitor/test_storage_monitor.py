@@ -23,6 +23,7 @@ def _make_settings(**overrides):
     s.destination_warning_threshold_gb = overrides.get("destination_warning_threshold_gb", 50.0)
     s.destination_critical_threshold_gb = overrides.get("destination_critical_threshold_gb", 20.0)
     s.storage_check_interval_seconds = overrides.get("storage_check_interval_seconds", 30)
+    s.storage_check_timeout_seconds = overrides.get("storage_check_timeout_seconds", 30.0)
     return s
 
 
@@ -378,6 +379,48 @@ class TestRecoveryAndUnavailableDetection:
             )
             mock_recovered.assert_not_awaited()
 
+    async def test_warning_to_critical_detected_as_unavailable(self):
+        """WARNING → CRITICAL should trigger destination unavailable."""
+        svc, _, checker, _ = _build_service()
+
+        warn_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.WARNING, free=30.0)
+        svc._storage_state.update_destination_info(warn_info)
+
+        crit_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.CRITICAL, free=5.0)
+        checker.check_path = AsyncMock(return_value=crit_info)
+
+        with patch.object(
+            svc._notification_handler, "publish_destination_unavailable", new_callable=AsyncMock
+        ) as mock_unavail:
+            await svc._check_single_storage(
+                storage_type="destination",
+                path="/dest",
+                warning_threshold=50.0,
+                critical_threshold=20.0,
+            )
+            mock_unavail.assert_awaited_once()
+
+    async def test_ok_to_warning_not_detected_as_unavailable(self):
+        """OK → WARNING should NOT trigger destination unavailable."""
+        svc, _, checker, _ = _build_service()
+
+        ok_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.OK)
+        svc._storage_state.update_destination_info(ok_info)
+
+        warn_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.WARNING, free=30.0)
+        checker.check_path = AsyncMock(return_value=warn_info)
+
+        with patch.object(
+            svc._notification_handler, "publish_destination_unavailable", new_callable=AsyncMock
+        ) as mock_unavail:
+            await svc._check_single_storage(
+                storage_type="destination",
+                path="/dest",
+                warning_threshold=50.0,
+                critical_threshold=20.0,
+            )
+            mock_unavail.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # handle_network_failure_detected
@@ -396,6 +439,45 @@ class TestNetworkFailureDetected:
 
         # check_path should have been called (immediate check)
         checker.check_path.assert_awaited()
+
+    async def test_not_configured_only_broadcast_when_mount_not_configured(self):
+        """NOT_CONFIGURED should NOT be broadcast when mount IS configured but destination has issues."""
+        mount_svc = MagicMock()
+        mount_svc.is_network_mount_configured.return_value = True
+
+        svc, _, checker, _ = _build_service(mount_service=mount_svc)
+
+        # Destination returns CRITICAL (e.g., read-only)
+        crit_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.CRITICAL, free=5.0)
+        checker.check_path = AsyncMock(return_value=crit_info)
+
+        event = MagicMock()
+        event.error_message = "Connection reset"
+
+        with patch.object(
+            svc._mount_broadcaster, "broadcast_not_configured", new_callable=AsyncMock
+        ) as mock_not_configured:
+            await svc.handle_network_failure_detected(event)
+            mock_not_configured.assert_not_awaited()
+
+    async def test_not_configured_broadcast_when_mount_not_configured(self):
+        """NOT_CONFIGURED SHOULD be broadcast when mount is not configured."""
+        svc, _, checker, _ = _build_service()  # no mount_service
+
+        err_info = _make_storage_info(path="/dest", accessible=False, status=StorageStatus.ERROR)
+        checker.check_path = AsyncMock(return_value=err_info)
+
+        event = MagicMock()
+        event.error_message = "Connection reset"
+
+        with patch.object(
+            svc._directory_manager, "ensure_directory_exists", new_callable=AsyncMock, return_value=False
+        ):
+            with patch.object(
+                svc._mount_broadcaster, "broadcast_not_configured", new_callable=AsyncMock
+            ) as mock_not_configured:
+                await svc.handle_network_failure_detected(event)
+                mock_not_configured.assert_awaited()
 
 
 # ---------------------------------------------------------------------------

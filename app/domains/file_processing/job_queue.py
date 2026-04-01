@@ -114,17 +114,42 @@ class JobQueueService:
             logging.error(f" Error processing waiting network files: {e}", exc_info=True)
 
     async def handle_destination_unavailable(self) -> None:
-        """Handle destination becoming unavailable - similar to previous StateManager version"""
+        """Handle destination becoming unavailable — move IN_QUEUE files to WAITING_FOR_NETWORK."""
         try:
             logging.info(" DESTINATION UNAVAILABLE: Network disruption detected")
             
-            # In the previous version, files would automatically be checked for network availability
-            # before queueing in _handle_state_change. Here we don't need to do much since:
-            # 1. New files will be caught by _is_network_available() in handle_file_ready()
-            # 2. Files in queue will be handled by consumer with retry logic
-            # 3. Recovery happens through process_waiting_network_files()
-            
-            logging.info(" Destination unavailable handling completed - relying on existing network checks")
+            all_files = await self.file_repository.get_all()
+            in_queue_files = [f for f in all_files if f.status == FileStatus.IN_QUEUE]
+
+            if not in_queue_files:
+                logging.info(" DESTINATION UNAVAILABLE: No IN_QUEUE files to pause")
+                return
+
+            logging.info(
+                f" DESTINATION UNAVAILABLE: Pausing {len(in_queue_files)} IN_QUEUE files"
+            )
+
+            paused_count = 0
+            for tracked_file in in_queue_files:
+                try:
+                    await self._state_machine.transition(
+                        file_id=tracked_file.id,
+                        new_status=FileStatus.WAITING_FOR_NETWORK,
+                        error_message="Network unavailable - waiting for recovery",
+                    )
+                    paused_count += 1
+                except (InvalidTransitionError, ValueError) as e:
+                    logging.warning(
+                        f"Could not pause IN_QUEUE file {tracked_file.id}: {e}"
+                    )
+                except Exception as e:
+                    logging.error(
+                        f" Error pausing {tracked_file.file_path}: {e}"
+                    )
+
+            logging.info(
+                f" DESTINATION UNAVAILABLE: Paused {paused_count}/{len(in_queue_files)} files"
+            )
             
         except Exception as e:
             logging.error(f" Error handling destination unavailable: {e}", exc_info=True)

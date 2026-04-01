@@ -28,6 +28,7 @@ class TestMountStatusWebSocketIntegration:
         settings.DESTINATION_PATH = r"\\nas\shared\dest"
         settings.destination_directory = r"\\nas\shared\dest"
         settings.enable_auto_mount = True
+        settings.storage_check_timeout_seconds = 30.0
         return settings
 
     @pytest.fixture

@@ -177,9 +177,48 @@ class TestProcessWaitingNetworkFiles:
 
 class TestHandleDestinationUnavailable:
     @pytest.mark.asyncio
-    async def test_does_not_raise(self, svc):
-        # This is currently a no-op that logs, just verify it doesn't crash
+    async def test_transitions_in_queue_files_to_waiting_for_network(self, svc, deps):
+        tf1 = _tf(file_id="f1", status=FileStatus.IN_QUEUE)
+        tf2 = _tf(file_id="f2", status=FileStatus.IN_QUEUE)
+        tf_other = _tf(file_id="f3", status=FileStatus.COPYING)
+        deps["file_repository"].get_all.return_value = [tf1, tf2, tf_other]
+
         await svc.handle_destination_unavailable()
+
+        assert deps["state_machine"].transition.await_count == 2
+        for call in deps["state_machine"].transition.call_args_list:
+            assert call[1]["new_status"] == FileStatus.WAITING_FOR_NETWORK
+
+    @pytest.mark.asyncio
+    async def test_handles_empty_queue_gracefully(self, svc, deps):
+        deps["file_repository"].get_all.return_value = []
+
+        await svc.handle_destination_unavailable()
+        deps["state_machine"].transition.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_invalid_transition_is_logged_not_raised(self, svc, deps):
+        tf = _tf(file_id="f1", status=FileStatus.IN_QUEUE)
+        deps["file_repository"].get_all.return_value = [tf]
+        deps["state_machine"].transition.side_effect = InvalidTransitionError(
+            "f.mxf", "InQueue", "WaitingForNetwork"
+        )
+
+        # Should not raise
+        await svc.handle_destination_unavailable()
+
+    @pytest.mark.asyncio
+    async def test_continues_after_single_file_error(self, svc, deps):
+        tf1 = _tf(file_id="f1", status=FileStatus.IN_QUEUE)
+        tf2 = _tf(file_id="f2", status=FileStatus.IN_QUEUE)
+        deps["file_repository"].get_all.return_value = [tf1, tf2]
+        deps["state_machine"].transition.side_effect = [
+            InvalidTransitionError("f.mxf", "InQueue", "WaitingForNetwork"),
+            None,  # second call succeeds
+        ]
+
+        await svc.handle_destination_unavailable()
+        assert deps["state_machine"].transition.await_count == 2
 
 
 # ── Producer lifecycle ───────────────────────────────────────────

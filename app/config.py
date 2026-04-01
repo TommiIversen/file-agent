@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     destination_warning_threshold_gb: float = 50.0
     destination_critical_threshold_gb: float = 20.0
     storage_test_file_prefix: str = ".file_agent_test_"
+    storage_io_timeout_seconds: float = 5.0  # Per-operation I/O timeout for local paths
+    storage_io_timeout_network_seconds: float = 10.0  # Per-operation I/O timeout for network/UNC paths
+    storage_check_timeout_seconds: float = 30.0  # Outer timeout for entire storage check operation
 
     # Space management for file copying
     enable_pre_copy_space_check: bool = True

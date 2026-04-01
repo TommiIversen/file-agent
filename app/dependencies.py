@@ -201,7 +201,9 @@ def get_storage_checker() -> StorageChecker:
     if "storage_checker" not in _singletons:
         settings = get_settings()
         _singletons["storage_checker"] = StorageChecker(
-            test_file_prefix=settings.storage_test_file_prefix
+            test_file_prefix=settings.storage_test_file_prefix,
+            io_timeout=settings.storage_io_timeout_seconds,
+            network_io_timeout=settings.storage_io_timeout_network_seconds,
         )
 
     return _singletons["storage_checker"]

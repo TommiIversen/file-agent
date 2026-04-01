@@ -18,9 +18,16 @@ class StorageAccessError(Exception):
 
 
 class StorageChecker:
-    def __init__(self, test_file_prefix: str = ".storage_test_", io_timeout: float = 3.0):
+    def __init__(self, test_file_prefix: str = ".storage_test_", io_timeout: float = 5.0, network_io_timeout: float = 10.0):
         self._test_file_prefix = test_file_prefix
         self._io_timeout = io_timeout
+        self._network_io_timeout = network_io_timeout
+
+    def _get_timeout_for_path(self, path: str) -> float:
+        """Return appropriate timeout based on path type (local vs network/UNC)."""
+        if path.startswith("\\\\") or path.startswith("//"):
+            return self._network_io_timeout
+        return self._io_timeout
 
     async def check_path(
         self, path: str, warning_threshold_gb: float, critical_threshold_gb: float
@@ -37,8 +44,10 @@ class StorageChecker:
         try:
             is_accessible = await self._check_accessibility(path)
             if is_accessible:
-                free_gb, total_gb, used_gb = await self._get_disk_usage(path)
-                has_write_access = await self._check_write_access(path)
+                (free_gb, total_gb, used_gb), has_write_access = await asyncio.gather(
+                    self._get_disk_usage(path),
+                    self._check_write_access(path),
+                )
             else:
                 error_message = f"Path {path} is not accessible"
 
@@ -53,6 +62,15 @@ class StorageChecker:
             is_accessible,
             has_write_access,
         )
+
+        # Populate error_message from evaluator if not already set
+        if error_message is None and status not in (StorageStatus.OK, StorageStatus.WARNING):
+            error_message = StorageStatusEvaluator.build_error_message(
+                is_accessible=is_accessible,
+                has_write_access=has_write_access,
+                free_gb=free_gb,
+                critical_threshold_gb=critical_threshold_gb,
+            )
 
         return StorageInfo(
             path=path,
@@ -79,7 +97,7 @@ class StorageChecker:
 
             return await asyncio.wait_for(
                 _async_check(),
-                timeout=self._io_timeout,
+                timeout=self._get_timeout_for_path(path),
             )
         except asyncio.TimeoutError:
             logging.warning(f"Accessibility check timed out for {path}")
@@ -102,7 +120,7 @@ class StorageChecker:
 
             free_gb, total_gb, used_gb = await asyncio.wait_for(
                 asyncio.to_thread(_sync_disk_usage),
-                timeout=5.0, # Reduced from 10 to 5 seconds
+                timeout=self._get_timeout_for_path(path),
             )
 
             logging.debug(
@@ -133,15 +151,16 @@ class StorageChecker:
     async def _create_test_file(self, directory: str) -> str:
         test_filename = f"{self._test_file_prefix}{uuid4().hex}.tmp"
         test_file_path = os.path.join(directory, test_filename)
+        timeout = self._get_timeout_for_path(directory)
 
         try:
             # Åbn filen med timeout
             file_opener = aiofiles.open(test_file_path, "w")
-            f = await asyncio.wait_for(file_opener, timeout=self._io_timeout)
+            f = await asyncio.wait_for(file_opener, timeout=timeout)
 
             # Brug 'try...finally' til at sikre, at filen lukkes
             try:
-                await asyncio.wait_for(f.write("storage_write_test"), timeout=self._io_timeout)
+                await asyncio.wait_for(f.write("storage_write_test"), timeout=timeout)
             finally:
                 await f.close() # Luk filen manuelt
 
@@ -152,15 +171,16 @@ class StorageChecker:
 
     async def _cleanup_test_file(self, test_file_path: str) -> None:
         """Cleanup test file using aiofiles."""
+        timeout = self._get_timeout_for_path(test_file_path)
         try:
             exists = await asyncio.wait_for(
                 aiofiles.os.path.exists(test_file_path), 
-                timeout=self._io_timeout
+                timeout=timeout
             )
             if exists:
                 await asyncio.wait_for(
                     aiofiles.os.remove(test_file_path), 
-                    timeout=self._io_timeout
+                    timeout=timeout
                 )
                 logging.debug(f"Test file cleaned up: {test_file_path}")
         except Exception as e:
