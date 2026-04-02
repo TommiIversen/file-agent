@@ -14,7 +14,7 @@ from app.domains.ingest_monitor.events import (
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
 )
-from app.domains.tally_light.monitor_service import (
+from app.domains.tally_light.events import (
     TallySwitchStatusUpdatedEvent, 
     TallySwitchOnlineEvent, 
     TallySwitchOfflineEvent

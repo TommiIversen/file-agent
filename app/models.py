@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Protocol, runtime_checkable
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -256,6 +256,15 @@ class StorageInfo(BaseModel):
             }
         }
     )
+
+
+@runtime_checkable
+class StorageInfoProvider(Protocol):
+    """Protocol for accessing storage information without coupling to StorageMonitorService."""
+
+    def get_destination_info(self) -> Optional[StorageInfo]: ...
+    def get_source_info(self) -> Optional[StorageInfo]: ...
+    def get_overall_status(self) -> "StorageStatus": ...
 
 
 class StorageUpdate(BaseModel):

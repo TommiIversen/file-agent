@@ -7,48 +7,12 @@ and publishes status updates via WebSocket.
 import asyncio
 import logging
 from typing import Optional, Dict, Any
-from dataclasses import dataclass
 from datetime import datetime
 
 from app.core.events.event_bus import DomainEventBus
-from app.core.events.domain_event import DomainEvent
 from .protocols import PowerSwitchProtocol
-
-
-@dataclass
-class TallySwitchStatus:
-    """Represents the current status of a tally switch."""
-    is_online: bool
-    switch_type: str
-    ip_address: str
-    last_checked: datetime
-    error_message: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TallySwitchOnlineEvent(DomainEvent):
-    """Event fired when tally switch comes online."""
-    status: TallySwitchStatus
-
-
-@dataclass(frozen=True)
-class TallySwitchOfflineEvent(DomainEvent):
-    """Event fired when tally switch goes offline."""
-    status: TallySwitchStatus
-
-
-@dataclass(frozen=True)
-class TallySwitchStatusUpdatedEvent(DomainEvent):
-    """Event fired on any status update (online/offline)."""
-    status: TallySwitchStatus
-    previous_status: Optional[TallySwitchStatus] = None
-
-    @property
-    def status_changed(self) -> bool:
-        return (
-            self.previous_status is None or
-            self.previous_status.is_online != self.status.is_online
-        )
+from .models import TallySwitchStatus
+from .events import TallySwitchOnlineEvent, TallySwitchOfflineEvent, TallySwitchStatusUpdatedEvent
 
 
 class TallySwitchMonitorService:

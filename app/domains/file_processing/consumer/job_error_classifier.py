@@ -8,10 +8,9 @@ import os
 from pathlib import Path
 from typing import Tuple
 
-from app.models import StorageStatus, FileStatus
+from app.models import StorageStatus, FileStatus, StorageInfoProvider
 from app.domains.file_processing.copy.network_error_detector import NetworkError
 from app.domains.file_processing.copy.exceptions import FileCopyError, FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError
-from app.domains.storage.storage_monitor.storage_monitor import StorageMonitorService
 
 
 class JobErrorClassifier:
@@ -76,7 +75,7 @@ class JobErrorClassifier:
         13, # Windows-specific network error codes including errno 22
     }
 
-    def __init__(self, storage_monitor: StorageMonitorService):
+    def __init__(self, storage_monitor: StorageInfoProvider):
         self.storage_monitor = storage_monitor
 
     def classify_copy_error(

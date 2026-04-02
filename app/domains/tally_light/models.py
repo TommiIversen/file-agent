@@ -7,6 +7,8 @@ for managing IP Power Switch states based on recording status.
 
 from enum import Enum
 from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -52,3 +54,13 @@ class TallyLightCommand(BaseModel):
     class Config:
         """Pydantic configuration for the model"""
         use_enum_values = True
+
+
+@dataclass
+class TallySwitchStatus:
+    """Represents the current status of a tally switch."""
+    is_online: bool
+    switch_type: str
+    ip_address: str
+    last_checked: datetime
+    error_message: Optional[str] = None

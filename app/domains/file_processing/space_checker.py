@@ -2,12 +2,11 @@ import logging
 from typing import Optional
 
 from app.config import Settings
-from app.models import SpaceCheckResult
-from app.domains.storage.storage_monitor import StorageMonitorService
+from app.models import SpaceCheckResult, StorageInfoProvider
 
 
 class SpaceChecker:
-    def __init__(self, settings: Settings, storage_monitor: StorageMonitorService):
+    def __init__(self, settings: Settings, storage_monitor: StorageInfoProvider):
         self._settings = settings
         self._storage_monitor = storage_monitor
 
