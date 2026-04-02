@@ -7,9 +7,10 @@
     <!-- Tailwind CSS CDN -->
     <link rel="stylesheet" href="/static/css/tailwind.css">
     
-    <!-- Alpine.js x-cloak CSS -->
+    <!-- Alpine.js x-cloak CSS + Lucide icon alignment -->
     <style>
         [x-cloak] { display: none !important; }
+        [data-lucide] { display: inline-block; vertical-align: -0.125em; }
     </style>
 
     <!-- File Transfer Agent - Modular Architecture (Load BEFORE Alpine.js) -->
@@ -31,6 +32,25 @@
 
     <!-- Main Application -->
     <script src="/static/js/app.js"></script>
+
+    <!-- Lucide Icons (bundled) -->
+    <script src="/static/js/lucide.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            let pending = false;
+            const observer = new MutationObserver(() => {
+                if (!pending) {
+                    pending = true;
+                    requestAnimationFrame(() => {
+                        lucide.createIcons();
+                        pending = false;
+                    });
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
 
     <!-- Alpine Plugins (Load BEFORE Alpine Core) -->
     <script defer src="/static/js/jslib/intersect3-15-1.js"></script>
@@ -93,16 +113,16 @@
             <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
                 <div class="flex items-center space-x-3">
                     <button @click="$store.logViewer.openLogViewerModal()"
-                            class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        📋 Logs
+                            class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Logs
                     </button>
                     <button @click="$store.eventsViewer.openModal()"
-                            class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        📊 Events
+                            class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        <i data-lucide="activity" class="w-4 h-4"></i> Events
                     </button>
                     <button @click="$store.settings.openSettingsModal()"
-                            class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        ⚙️ Settings
+                            class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        <i data-lucide="settings" class="w-4 h-4"></i> Settings
                     </button>
                 </div>
             </div>

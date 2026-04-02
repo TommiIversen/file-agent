@@ -17,13 +17,13 @@
         <!-- Header -->
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-bold text-white flex items-center">
-                📊 System Events
+                <i data-lucide="activity" class="inline-block w-6 h-6 mr-2"></i> System Events
             </h2>
             <div class="flex items-center space-x-3">
                 <button @click="$store.eventsViewer.refresh()"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200"
                         :disabled="$store.eventsViewer.isLoading">
-                    🔄 Refresh
+                    <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
                 </button>
                 <button @click="$store.eventsViewer.closeModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
@@ -97,7 +97,7 @@
                     <button @click="$store.eventsViewer.downloadDay()"
                             class="text-gray-400 hover:text-white text-xs px-3 py-1 bg-gray-700 rounded transition-colors duration-200"
                             :title="$store.eventsViewer.selectedDate ? 'Download events for ' + $store.eventsViewer.selectedDate : 'Download today\'s events'">
-                        📥 CSV
+                        <i data-lucide="download" class="inline-block w-3.5 h-3.5"></i> CSV
                     </button>
                 </div>
             </div>
@@ -109,7 +109,7 @@
             <div x-show="$store.eventsViewer.isLoading" 
                  class="flex items-center justify-center h-full text-gray-400 p-4">
                 <div class="text-center">
-                    <div class="animate-spin text-4xl mb-4">🔄</div>
+                    <div class="mb-4"><i data-lucide="refresh-cw" class="inline-block w-10 h-10 animate-spin"></i></div>
                     <div>Loading events...</div>
                 </div>
             </div>
@@ -134,7 +134,7 @@
                 <div x-show="$store.eventsViewer.filteredEvents.length === 0" 
                      class="flex items-center justify-center h-full text-gray-400">
                     <div class="text-center">
-                        <div class="text-4xl mb-4">📊</div>
+                        <div class="mb-4"><i data-lucide="activity" class="inline-block w-12 h-12 text-gray-500"></i></div>
                         <div>No events found</div>
                     </div>
                 </div>

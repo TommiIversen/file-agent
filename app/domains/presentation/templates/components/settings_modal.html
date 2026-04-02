@@ -12,12 +12,12 @@
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-bold text-white">⚙️ Application Settings</h2>
+            <h2 class="text-2xl font-bold text-white"><i data-lucide="settings" class="inline-block w-6 h-6"></i> Application Settings</h2>
             <div class="flex items-center space-x-3">
         <button @click="$store.settings.loadSettings()"
             :disabled="$store.settings.settingsLoading"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
-                    🔄 Refresh
+                    <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
                 </button>
                 <button @click="$store.settings.closeSettingsModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
@@ -31,7 +31,7 @@
 
             <!-- Path Settings -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">📁 Path Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Path Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Source Directory:</span>
@@ -48,7 +48,7 @@
 
             <!-- Copy Settings -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">🚀 Copy Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="rocket" class="inline-block w-5 h-5"></i> Copy Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Chunk Size:</span>
@@ -64,7 +64,7 @@
                         <span class="text-gray-300">Use Temp File:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              :class="$store.settings?.settingsData?.use_temporary_file ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.use_temporary_file ? '✅ Yes' : '❌ No'"></div>
+                             x-text="$store.settings?.settingsData?.use_temporary_file ? 'Yes' : 'No'"></div>
                     </div>
                     <div>
                         <span class="text-gray-300">Progress Update Interval:</span>
@@ -76,7 +76,7 @@
 
             <!-- Growing File Settings -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">📈 Growing File Support</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="trending-up" class="inline-block w-5 h-5"></i> Growing File Support</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Min File Size:</span>
@@ -113,7 +113,7 @@
 
             <!-- Storage Monitoring & Thresholds -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">💾 Storage Monitoring & Thresholds</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="hard-drive" class="inline-block w-5 h-5"></i> Storage Monitoring & Thresholds</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Check Interval:</span>
@@ -150,13 +150,13 @@
 
             <!-- Space Management -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">🔄 Space Management</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="refresh-cw" class="inline-block w-5 h-5"></i> Space Management</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Pre-Copy Space Check:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              :class="$store.settings?.settingsData?.enable_pre_copy_space_check ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_pre_copy_space_check ? '✅ Yes' : '❌ No'"></div>
+                             x-text="$store.settings?.settingsData?.enable_pre_copy_space_check ? 'Yes' : 'No'"></div>
                     </div>
                     <div>
                         <span class="text-gray-300">Max Space Retries:</span>
@@ -183,7 +183,7 @@
 
             <!-- Network & Retry Settings -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">🌐 Network & Retry Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="globe" class="inline-block w-5 h-5"></i> Network & Retry Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Max Retry Attempts:</span>
@@ -209,14 +209,14 @@
                         <span class="text-gray-300">Enable Auto Mount:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              :class="$store.settings?.settingsData?.enable_auto_mount ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_auto_mount ? '✅ Yes' : '❌ No'"></div>
+                             x-text="$store.settings?.settingsData?.enable_auto_mount ? 'Yes' : 'No'"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Platform Specific -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">🖥️ Platform Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="monitor" class="inline-block w-5 h-5"></i> Platform Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">macOS Mount Point:</span>
@@ -233,7 +233,7 @@
 
             <!-- File Management -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">📋 File Management</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="clipboard-list" class="inline-block w-5 h-5"></i> File Management</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">File Stable Time:</span>
@@ -254,7 +254,7 @@
                         <span class="text-gray-300">Enable Secure Resume:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              :class="$store.settings?.settingsData?.enable_secure_resume ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_secure_resume ? '✅ Yes' : '❌ No'"></div>
+                             x-text="$store.settings?.settingsData?.enable_secure_resume ? 'Yes' : 'No'"></div>
                     </div>
                     <div>
                         <span class="text-gray-300">Storage Test File Prefix:</span>
@@ -266,13 +266,13 @@
 
             <!-- Output Folder Template -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">📂 Output Folder Template</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder-open" class="inline-block w-5 h-5"></i> Output Folder Template</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Template Enabled:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1"
                              :class="$store.settings?.settingsData?.output_folder_template_enabled ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.output_folder_template_enabled ? '✅ Yes' : '❌ No'"></div>
+                             x-text="$store.settings?.settingsData?.output_folder_template_enabled ? 'Yes' : 'No'"></div>
                     </div>
                     <div>
                         <span class="text-gray-300">Date Format:</span>
@@ -294,7 +294,7 @@
 
             <!-- Logging -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3">📝 Logging Configuration</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="file-text" class="inline-block w-5 h-5"></i> Logging Configuration</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Log Level:</span>
@@ -317,22 +317,22 @@
 
             <!-- Administrative Actions -->
             <div class="bg-gradient-to-r from-purple-700 to-blue-700 bg-opacity-60 rounded-lg p-4 border border-purple-500">
-                <h3 class="text-lg font-semibold text-white mb-3">⚡ Administrative Actions</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="zap" class="inline-block w-5 h-5"></i> Administrative Actions</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <!-- Pause/Resume Scanner -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2">⏸️ Scanner Control</h4>
+                        <h4 class="text-white font-semibold mb-2"><i data-lucide="pause" class="inline-block w-4 h-4"></i> Scanner Control</h4>
                         <p class="text-gray-300 text-sm mb-3">Pause or resume file scanning for new jobs</p>
                         <button @click="$store.settings.toggleScanner()"
                                 :disabled="$store.settings?.scannerToggling"
                                 class="w-full disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200"
                                 :class="$store.ui?.scanner?.paused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
                             <span x-show="!$store.settings?.scannerToggling">
-                                <span x-show="$store.ui?.scanner?.paused">▶️ Resume Scanner</span>
-                                <span x-show="!$store.ui?.scanner?.paused">⏸️ Pause Scanner</span>
+                                <span x-show="$store.ui?.scanner?.paused"><i data-lucide="play" class="inline-block w-4 h-4"></i> Resume Scanner</span>
+                                <span x-show="!$store.ui?.scanner?.paused"><i data-lucide="pause" class="inline-block w-4 h-4"></i> Pause Scanner</span>
                             </span>
                             <span x-show="$store.settings?.scannerToggling">
-                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
                                 <span x-show="$store.ui?.scanner?.paused">Resuming...</span>
                                 <span x-show="!$store.ui?.scanner?.paused">Pausing...</span>
                             </span>
@@ -341,14 +341,14 @@
 
                     <!-- Reload Config -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2">🔄 Reload Configuration</h4>
+                        <h4 class="text-white font-semibold mb-2"><i data-lucide="refresh-cw" class="inline-block w-4 h-4"></i> Reload Configuration</h4>
                         <p class="text-gray-300 text-sm mb-3">Reload settings from config file without restarting the application</p>
                         <button @click="$store.settings.reloadConfig()"
                                 :disabled="$store.settings?.reloadingConfig"
                                 class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
-                            <span x-show="!$store.settings?.reloadingConfig">🔄 Reload Config</span>
+                            <span x-show="!$store.settings?.reloadingConfig"><i data-lucide="refresh-cw" class="inline-block w-4 h-4"></i> Reload Config</span>
                             <span x-show="$store.settings?.reloadingConfig">
-                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
                                 Reloading...
                             </span>
                         </button>
@@ -356,14 +356,14 @@
 
                     <!-- Restart Application -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2">🚀 Restart Application</h4>
+                        <h4 class="text-white font-semibold mb-2"><i data-lucide="rocket" class="inline-block w-4 h-4"></i> Restart Application</h4>
                         <p class="text-gray-300 text-sm mb-3">Gracefully restart the entire application (2 second delay)</p>
                         <button @click="$store.settings.restartApplication()"
                                 :disabled="$store.settings?.restartingApp"
                                 class="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
-                            <span x-show="!$store.settings?.restartingApp">🚀 Restart App</span>
+                            <span x-show="!$store.settings?.restartingApp"><i data-lucide="rocket" class="inline-block w-4 h-4"></i> Restart App</span>
                             <span x-show="$store.settings?.restartingApp">
-                                <span class="inline-block animate-spin mr-2">⟳</span>
+                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
                                 Restarting in <span x-text="$store.settings?.restartCountdown || 2"></span>s...
                             </span>
                         </button>
@@ -375,8 +375,8 @@
                      class="mt-4 p-3 rounded-lg border"
                      :class="$store.settings?.actionSuccess ? 'bg-green-900 bg-opacity-50 border-green-500 text-green-300' : 'bg-red-900 bg-opacity-50 border-red-500 text-red-300'">
                     <div class="flex items-center">
-                        <span x-show="$store.settings?.actionSuccess" class="mr-2">✅</span>
-                        <span x-show="!$store.settings?.actionSuccess" class="mr-2">❌</span>
+                        <span x-show="$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-check" class="inline-block w-5 h-5"></i></span>
+                        <span x-show="!$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-x" class="inline-block w-5 h-5"></i></span>
                         <span x-text="$store.settings?.actionMessage"></span>
                     </div>
                 </div>
@@ -394,7 +394,7 @@
         <!-- Error State -->
         <div x-show="!$store.settings?.settingsLoading && $store.settings?.settingsError" class="text-center py-8">
             <div class="text-red-400">
-                <div class="text-4xl mb-2">⚠️</div>
+                <div class="mb-2"><i data-lucide="triangle-alert" class="inline-block w-10 h-10"></i></div>
                 <div>Failed to load settings</div>
                 <div class="text-sm text-gray-400 mt-2" x-text="$store.settings?.settingsError"></div>
                 <button @click="$store.settings.loadSettings()"
