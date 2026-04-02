@@ -143,7 +143,7 @@ def main() -> int:
 
     print()
     print("=" * 80)
-    print(f"  CRAP Factor Analysis — threshold: {args.threshold}")
+    print(f"  CRAP Factor Analysis - threshold: {args.threshold}")
     print(f"  Functions analyzed: {len(results)}")
     print(f"  Functions above threshold: {len(failures)}")
     print("=" * 80)
@@ -153,9 +153,9 @@ def main() -> int:
         shown = results[:args.top]
         print(f"  Top {len(shown)} worst CRAP scores:")
         print(f"  {'CRAP':>8}  {'CC':>3}  {'Cov%':>5}  Function")
-        print(f"  {'─' * 8}  {'─' * 3}  {'─' * 5}  {'─' * 50}")
+        print(f"  {'-' * 8}  {'-' * 3}  {'-' * 5}  {'-' * 50}")
         for score, filepath, name, cc, cov_pct in shown:
-            flag = " ⚠" if score > args.threshold else ""
+            flag = " !" if score > args.threshold else ""
             short_path = filepath.replace("\\", "/")
             print(f"  {score:8.1f}  {cc:3d}  {cov_pct:5.1f}  {short_path}::{name}{flag}")
 

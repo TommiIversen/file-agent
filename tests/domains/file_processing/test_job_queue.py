@@ -236,3 +236,65 @@ class TestProducerLifecycle:
     def test_get_queue_returns_none_when_uninitialized(self, deps):
         s = JobQueueService(**deps)
         assert s.get_queue() is None
+
+
+# ── start_producer ───────────────────────────────────────────────
+
+class TestStartProducer:
+    @pytest.mark.asyncio
+    async def test_already_running_returns_immediately(self, svc):
+        svc._running = True
+        # Should return quickly without entering the loop
+        await svc.start_producer()
+        # _running was already True, nothing changed
+        assert svc._running is True
+
+    @pytest.mark.asyncio
+    async def test_creates_queue_if_none(self, deps):
+        s = JobQueueService(**deps)
+        assert s.job_queue is None
+
+        # Run producer briefly then cancel it
+        task = asyncio.create_task(s.start_producer())
+        await asyncio.sleep(0.05)
+        s._running = False
+        await task
+
+        assert s.job_queue is not None
+
+    @pytest.mark.asyncio
+    async def test_sets_running_true(self, deps):
+        s = JobQueueService(**deps)
+        task = asyncio.create_task(s.start_producer())
+        await asyncio.sleep(0.05)
+        assert s._running is True
+        s._running = False
+        await task
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagated(self, deps):
+        s = JobQueueService(**deps)
+        task = asyncio.create_task(s.start_producer())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert s._running is False
+
+    @pytest.mark.asyncio
+    async def test_running_false_after_normal_stop(self, deps):
+        s = JobQueueService(**deps)
+        task = asyncio.create_task(s.start_producer())
+        await asyncio.sleep(0.05)
+        s._running = False
+        await task
+        assert s._running is False
+
+    @pytest.mark.asyncio
+    async def test_does_not_recreate_existing_queue(self, svc):
+        original_queue = svc.job_queue
+        task = asyncio.create_task(svc.start_producer())
+        await asyncio.sleep(0.05)
+        svc._running = False
+        await task
+        assert svc.job_queue is original_queue
