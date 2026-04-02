@@ -83,7 +83,9 @@ class SqliteFileRepository:
                 Set to False in tests to use create_schema() instead.
         """
         # Ensure the parent directory exists
-        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            Path(self._db_path).parent.mkdir, parents=True, exist_ok=True
+        )
 
         # isolation_level=None disables implicit transactions so we can
         # use explicit BEGIN IMMEDIATE for write serialization.

@@ -2,6 +2,7 @@
 Query handlers for log file management operations.
 Handles read-only operations for system log files.
 """
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
 import logging
@@ -34,7 +35,49 @@ class LogFileQueryHandler:
                 detail="Access denied"
             )
         return file_path
-    
+
+    async def _assert_file_exists(
+        self, file_path: Path, filename: str, *, check_is_file: bool = True
+    ) -> None:
+        """Non-blocking existence / is-file check using aiofiles.os."""
+        if not await aiofiles.os.path.exists(str(file_path)):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Log file '{filename}' not found",
+            )
+        if check_is_file and not await aiofiles.os.path.isfile(str(file_path)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{filename}' is not a file",
+            )
+
+    @staticmethod
+    def _list_log_files_sync(logs_dir: Path) -> list[dict[str, Any]]:
+        """Synchronous helper — meant to run inside asyncio.to_thread."""
+        if not logs_dir.exists():
+            return []
+
+        log_files: list[dict[str, Any]] = []
+        for file_path in logs_dir.iterdir():
+            if file_path.is_file() and file_path.name.startswith('file_agent.log'):
+                stat = file_path.stat()
+                size_bytes = stat.st_size
+                size_mb = round(size_bytes / (1024 * 1024), 2)
+                modified_time_ms = int(stat.st_mtime * 1000)
+
+                log_files.append({
+                    "filename": file_path.name,
+                    "size": size_bytes,
+                    "size_mb": size_mb,
+                    "modified": stat.st_mtime,
+                    "modified_time": modified_time_ms,
+                    "path": str(file_path),
+                    "is_current": file_path.name == "file_agent.log"
+                })
+
+        log_files.sort(key=lambda x: float(x.get("modified", 0)), reverse=True)
+        return log_files
+
     async def handle_list_log_files(self, query: ListLogFilesQuery) -> List[Dict[str, Any]]:
         """
         List all available log files in the logs directory.
@@ -43,34 +86,7 @@ class LogFileQueryHandler:
             List of log file information dictionaries
         """
         logs_dir = Path(self.settings.log_directory)
-        
-        if not logs_dir.exists():
-            return []
-        
-        log_files: list[dict[str, Any]] = []
-        for file_path in logs_dir.iterdir():
-            # Match files that start with log file prefix and are actual log files
-            if file_path.is_file() and (file_path.name.startswith('file_agent.log')):
-                stat = file_path.stat()
-                size_bytes = stat.st_size
-                size_mb = round(size_bytes / (1024 * 1024), 2)
-                
-                # Convert timestamp to milliseconds for JavaScript Date
-                modified_time_ms = int(stat.st_mtime * 1000)
-                
-                log_files.append({
-                    "filename": file_path.name,
-                    "size": size_bytes,
-                    "size_mb": size_mb,
-                    "modified": stat.st_mtime,
-                    "modified_time": modified_time_ms, # JavaScript expects milliseconds
-                    "path": str(file_path),
-                    "is_current": file_path.name == "file_agent.log" # Current log has no date suffix
-                })
-        
-        # Sort by modification time, newest first
-        log_files.sort(key=lambda x: float(x.get("modified", 0)), reverse=True)
-        return log_files
+        return await asyncio.to_thread(self._list_log_files_sync, logs_dir)
     
     async def handle_get_log_content(self, query: GetLogContentQuery) -> Dict[str, Any]:
         """
@@ -84,18 +100,7 @@ class LogFileQueryHandler:
             Dictionary with file content and metadata
         """
         file_path = self._safe_log_path(query.filename)
-        
-        if not file_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Log file '{query.filename}' not found"
-            )
-        
-        if not file_path.is_file():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"'{query.filename}' is not a file"
-            )
+        await self._assert_file_exists(file_path, query.filename)
         
         try:
             async with aiofiles.open(file_path, mode='r', encoding='utf-8', errors='replace') as f:
@@ -133,12 +138,7 @@ class LogFileQueryHandler:
             Dictionary with chunk content and pagination metadata
         """
         file_path = self._safe_log_path(query.filename)
-        
-        if not file_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Log file '{query.filename}' not found"
-            )
+        await self._assert_file_exists(file_path, query.filename, check_is_file=False)
         
         try:
             async with aiofiles.open(file_path, mode='r', encoding='utf-8', errors='replace') as f:
@@ -186,18 +186,7 @@ class LogFileQueryHandler:
             FileResponse for file download
         """
         file_path = self._safe_log_path(query.filename)
-        
-        if not file_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Log file '{query.filename}' not found"
-            )
-        
-        if not file_path.is_file():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"'{query.filename}' is not a file"
-            )
+        await self._assert_file_exists(file_path, query.filename)
         
         try:
             # For growing/active log files, we read content into memory
