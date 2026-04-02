@@ -1,13 +1,25 @@
-"""Tests for WindowsMounter.verify_mount_accessible — all branches."""
+"""Tests for WindowsMounter — verify_mount_accessible + attempt_mount."""
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.domains.network_mount.windows_mounter import WindowsMounter
+
+
+def _make_process(returncode: int = 0, stderr: bytes = b""):
+    proc = AsyncMock()
+    proc.returncode = returncode
+    proc.communicate = AsyncMock(return_value=(b"", stderr))
+    return proc
 
 
 @pytest.fixture
 def mounter():
     return WindowsMounter(drive_letter="Z")
+
+
+@pytest.fixture
+def mounter_no_drive():
+    return WindowsMounter(drive_letter=None)
 
 
 class TestVerifyMountAccessible:
@@ -49,3 +61,50 @@ class TestVerifyMountAccessible:
         ):
             result = await mounter.verify_mount_accessible("Z:\\")
         assert result == (False, False)
+
+
+class TestAttemptMount:
+
+    SHARE = "smb://server.local/share/VOL"
+
+    async def test_success_with_drive_letter(self, mounter):
+        proc = _make_process(returncode=0)
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            result = await mounter.attempt_mount(self.SHARE)
+
+        assert result is True
+        # Should include drive letter in command
+        cmd = mock_exec.call_args[0]
+        assert "Z:" in cmd
+
+    async def test_success_without_drive_letter(self, mounter_no_drive):
+        proc = _make_process(returncode=0)
+        with patch("asyncio.create_subprocess_exec", return_value=proc) as mock_exec:
+            result = await mounter_no_drive.attempt_mount(self.SHARE)
+
+        assert result is True
+        cmd = mock_exec.call_args[0]
+        assert "Z:" not in cmd
+
+    async def test_mount_failure(self, mounter):
+        proc = _make_process(returncode=1, stderr=b"access denied")
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await mounter.attempt_mount(self.SHARE)
+
+        assert result is False
+
+    async def test_mount_failure_empty_stderr(self, mounter):
+        proc = _make_process(returncode=1, stderr=b"")
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await mounter.attempt_mount(self.SHARE)
+
+        assert result is False
+
+    async def test_exception_returns_false(self, mounter):
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=OSError("no such file"),
+        ):
+            result = await mounter.attempt_mount(self.SHARE)
+
+        assert result is False
