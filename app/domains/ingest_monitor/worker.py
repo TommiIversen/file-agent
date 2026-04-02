@@ -156,48 +156,53 @@ class IngestMonitorWorker:
                 # Wait a bit before retrying on error
                 await asyncio.sleep(5)
 
+    async def _discover_all_recording_paths(self, channel_names: list[str]) -> None:
+        """Discover recording paths for each active channel."""
+        for ch_name in channel_names:
+            try:
+                result = await self._api_client.discover_recording_paths(ch_name)
+                if result is not None:
+                    paths, preset_name = result
+                    await self._state_service.update_recording_paths(
+                        channel_name=ch_name,
+                        paths=paths,
+                        preset_name=preset_name,
+                    )
+            except Exception as e:
+                logging.debug(
+                    "Could not discover recording paths for %s: %s",
+                    ch_name,
+                    e,
+                )
+
     async def _slow_polling_loop(self) -> None:
         """Slow polling loop - orchestrates active channels and error checking."""
         while self._running:
             try:
                 await asyncio.sleep(self._slow_poll_interval) # Wait first, then check
-                if self._running: # Check if still running after sleep
-                    # Update active channels via API client and StateService
-                    active_channels = await self._api_client.get_active_channels()
-                    
-                    # Set connection status based on API success
-                    if active_channels is not None: # Empty list is valid, None indicates failure
-                        await self._state_service.set_connection_status(True)
-                        await self._state_service.update_active_channels(active_channels)
-                    else:
-                        await self._state_service.set_connection_status(False)
+                if not self._running:
+                    break
 
-                    # Get current channel names for error checking
-                    channel_names = list(self._state_service.get_status_cache().keys())
-                    if channel_names:
-                        # Fetch errors for all channels
-                        all_errors = await self._api_client.get_all_channel_errors(channel_names)
-                        
-                        # Update error states via StateService
-                        await self._state_service.update_channel_errors(all_errors)
+                # Update active channels via API client and StateService
+                active_channels = await self._api_client.get_active_channels()
 
-                    # Discover recording paths for each active channel
-                    for ch_name in channel_names:
-                        try:
-                            result = await self._api_client.discover_recording_paths(ch_name)
-                            if result is not None:
-                                paths, preset_name = result
-                                await self._state_service.update_recording_paths(
-                                    channel_name=ch_name,
-                                    paths=paths,
-                                    preset_name=preset_name,
-                                )
-                        except Exception as e:
-                            logging.debug(
-                                "Could not discover recording paths for %s: %s",
-                                ch_name,
-                                e,
-                            )
+                # Set connection status based on API success
+                if active_channels is not None:  # Empty list is valid, None indicates failure
+                    await self._state_service.set_connection_status(True)
+                    await self._state_service.update_active_channels(active_channels)
+                else:
+                    await self._state_service.set_connection_status(False)
+
+                # Get current channel names for error checking
+                channel_names = list(self._state_service.get_status_cache().keys())
+                if channel_names:
+                    # Fetch errors for all channels
+                    all_errors = await self._api_client.get_all_channel_errors(channel_names)
+                    await self._state_service.update_channel_errors(all_errors)
+
+                # Discover recording paths (extracted for testability)
+                await self._discover_all_recording_paths(channel_names)
+
             except asyncio.CancelledError:
                 logging.info("Slow polling loop cancelled")
                 break
