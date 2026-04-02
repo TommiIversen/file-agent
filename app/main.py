@@ -66,28 +66,42 @@ _background_tasks = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    # Startup
     setup_logging(settings)
 
-    # === DATABASE INITIALIZATION ===
+    event_bus = get_event_bus()
+    event_store = get_event_store()
+    global_event_logger = get_global_event_logger()
+
+    await _init_database()
+    await _init_event_logging(event_bus, event_store, global_event_logger)
+    tally_handler = await _register_domains(event_bus)
+    _log_config_info()
+    await _startup_cleanup()
+    await _start_background_services()
+    await _mount_static_files(app)
+
+    yield
+
+    await _shutdown(tally_handler, event_store, global_event_logger)
+
+
+# ---------------------------------------------------------------------------
+# Startup helpers
+# ---------------------------------------------------------------------------
+
+async def _init_database() -> None:
     file_repo = get_file_repository()
     await file_repo.init_db()
     logging.info("Database initialized")
 
-    # === START: NYT REGISTRERINGSTRIN ===
-    logging.info("Registrerer CQRS handlers...")
-    query_bus = get_query_bus()
-    command_bus = get_command_bus()
-    event_bus = get_event_bus()
-    
-    # Register GlobalEventLogger to capture all domain events for UI visibility
-    global_event_logger = get_global_event_logger()
-    event_store = get_event_store()
+
+async def _init_event_logging(
+    event_bus, event_store, global_event_logger  # type: ignore[no-untyped-def]
+) -> None:
     global_event_logger.set_event_store(event_store)
     await global_event_logger.register_with_event_bus(event_bus)
     logging.info("GlobalEventLogger registered with SQLite persistence")
 
-    # Log application startup event (visible in UI event log)
     startup_event = LoggedEvent(
         timestamp=datetime.now(timezone.utc),
         event_type="ApplicationStarted",
@@ -96,34 +110,37 @@ async def lifespan(app: FastAPI):
         context={"hostname": settings.config_file_info["hostname"]},
     )
     await event_store.add_event(startup_event)
-    
-    # Kald registrerings-funktionerne for hvert domæne
+
+
+async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def]
+    """Register all CQRS handlers and domain event subscriptions."""
+    logging.info("Registrerer CQRS handlers...")
+    query_bus = get_query_bus()
+    command_bus = get_command_bus()
+
     register_directory_browsing_handlers(query_bus, command_bus)
-    register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice()) # New registration call
-    register_shared_domain(command_bus, query_bus) # Register shared domain handlers
-    register_lifecycle_domain(command_bus) # Register lifecycle domain handlers
-    
-    # IMPORTANT: Register NetworkCoordinator FIRST before other domains that depend on it!
-    network_services = await register_network_mount_domain(event_bus) # NetworkCoordinator registration!
-    
-    # Store NetworkCoordinator for dependency injection
+    register_file_discovery_handlers(command_bus, query_bus, get_file_discovery_slice())
+    register_shared_domain(command_bus, query_bus)
+    register_lifecycle_domain(command_bus)
+
+    # NetworkCoordinator FIRST — other domains depend on it
+    network_services = await register_network_mount_domain(event_bus)
     register_network_coordinator(network_services["network_coordinator"])
-    
-    # Now register domains that depend on NetworkCoordinator
-    await register_file_processing_domain(command_bus, event_bus) # File processing CQRS registration
-    await register_presentation_domain(query_bus, event_bus) # <-- OPDATERET KALD
-    
-    # Register IngestMonitor domain (enables API queries)
+
+    await register_file_processing_domain(command_bus, event_bus)
+    await register_presentation_domain(query_bus, event_bus)
+
     ingest_monitor_worker = get_ingest_monitor_worker()
     await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_worker)
-    
-    # Register TallyLight domain (depends on IngestMonitor events)
+
     tally_handler = get_tally_light_event_handler()
     await register_tally_light_domain(command_bus, event_bus, tally_handler)
-    
-    logging.info("Handler-registrering fuldført.")
 
-    # Log configuration file information
+    logging.info("Handler-registrering fuldført.")
+    return tally_handler
+
+
+def _log_config_info() -> None:
     config_info = settings.config_file_info
     logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
     logging.info(f"Running on hostname: {config_info['hostname']}")
@@ -131,13 +148,13 @@ async def lifespan(app: FastAPI):
         logging.info(
             f"Available config files: {', '.join(config_info['all_available_configs'])}"
         )
-
     logging.info("File Transfer Agent starting up...")
     logging.info(f"Source directory: {settings.source_directory}")
     logging.info(f"Destination directory: {settings.destination_directory}")
     logging.info("CQRS arkitektur klar til brug")
 
-    # Cleanup old test files at startup
+
+async def _startup_cleanup() -> None:
     storage_checker = get_storage_checker()
     try:
         cleaned_count = await storage_checker.cleanup_all_test_files(
@@ -148,64 +165,48 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.warning(f"Startup cleanup failed (non-critical): {e}")
 
-    # Start CQRS File Scanner Service som background task
+
+async def _start_background_services() -> None:
+    """Start all long-running background tasks."""
     file_scanner = get_file_scanner()
-    scanner_task = asyncio.create_task(file_scanner.start_scanning())
-    _background_tasks.append(scanner_task)
+    _background_tasks.append(asyncio.create_task(file_scanner.start_scanning()))
     logging.info("CQRS FileScannerService startet som background task")
 
-    # Start JobQueueService producer som background task
     job_queue_service = get_job_queue_service()
-    queue_task = asyncio.create_task(job_queue_service.start_producer())
-    _background_tasks.append(queue_task)
+    _background_tasks.append(asyncio.create_task(job_queue_service.start_producer()))
     logging.info("JobQueueService producer startet som background task")
 
-    # Start FileCopierService workers som background task
     file_copier = get_file_copier()
-    copier_task = asyncio.create_task(file_copier.start_workers())
-    _background_tasks.append(copier_task)
+    _background_tasks.append(asyncio.create_task(file_copier.start_workers()))
     logging.info("FileCopierService workers startet som background task")
 
-    # Initialize WebSocketManager (subscription happens automatically)
-    ws_manager = get_websocket_manager() # Initialize singleton
+    ws_manager = get_websocket_manager()
     ws_manager.start_sender_task()
     logging.info("WebSocketManager initialiseret")
 
-    # Start StorageMonitorService som background task
     storage_monitor = get_storage_monitor()
-    
-    # Subscribe StorageMonitor to network events for immediate response
     await storage_monitor.subscribe_to_events()
-    
-    storage_task = asyncio.create_task(storage_monitor.start_monitoring())
-    _background_tasks.append(storage_task)
+    _background_tasks.append(asyncio.create_task(storage_monitor.start_monitoring()))
 
-    # Start LifecycleService som background task for periodic cleanup
     lifecycle_service = get_lifecycle_service()
-    lifecycle_task = asyncio.create_task(lifecycle_service.start_pruning_loop())
-    _background_tasks.append(lifecycle_task)
+    _background_tasks.append(asyncio.create_task(lifecycle_service.start_pruning_loop()))
     logging.info("LifecycleService startet som background task for periodic file cleanup")
 
-    # Start IngestMonitorWorker som background task for Just In Engine monitoring
     ingest_monitor_worker = get_ingest_monitor_worker()
-    ingest_monitor_task = asyncio.create_task(ingest_monitor_worker.start_monitoring())
-    _background_tasks.append(ingest_monitor_task)
+    _background_tasks.append(asyncio.create_task(ingest_monitor_worker.start_monitoring()))
     logging.info("IngestMonitorWorker startet som background task for Just In Engine monitoring")
 
-    # Start TallySwitchMonitorService som background task for IP switch status monitoring
     tally_switch_monitor = get_tally_switch_monitor()
-    tally_switch_task = asyncio.create_task(tally_switch_monitor.start_monitoring())
-    _background_tasks.append(tally_switch_task)
-    logging.info("TallySwitchMonitorService startet som background task for IP switch connectivity monitoring")
-    logging.info("IngestMonitorWorker startet som background task for Just In Engine monitoring")
+    _background_tasks.append(asyncio.create_task(tally_switch_monitor.start_monitoring()))
+    logging.info("TallySwitchMonitorService startet som background task")
 
-    # Mount static files
+
+async def _mount_static_files(app: FastAPI) -> None:
     static_path = Path(__file__).parent / "domains" / "presentation" / "static"
     if await asyncio.to_thread(static_path.exists):
         app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
         logging.info(f"Static files mounted at /static from {static_path}")
 
-    # Mount logs directory for log file access
     logs_path = settings.log_directory
     if await asyncio.to_thread(logs_path.exists):
         app.mount("/logs", StaticFiles(directory=str(logs_path)), name="logs")
@@ -213,36 +214,37 @@ async def lifespan(app: FastAPI):
     else:
         logging.warning(f"Log directory does not exist: {logs_path}")
 
-    yield
 
-    # Shutdown
+# ---------------------------------------------------------------------------
+# Shutdown helper
+# ---------------------------------------------------------------------------
+
+async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  # type: ignore[no-untyped-def]
     logging.info("File Transfer Agent shutting down...")
 
-    # Stop alle background tasks gracefully
+    # Stop services gracefully
     get_websocket_manager().stop_sender_task()
-    await file_scanner.stop_scanning()
-    job_queue_service.stop_producer()
-    await file_copier.stop_workers()
-    await storage_monitor.stop_monitoring()
-    get_lifecycle_service().stop_pruning_loop() # Stop lifecycle service
-    
-    # Stop Just In Engine monitoring and tally light services
+    await get_file_scanner().stop_scanning()
+    get_job_queue_service().stop_producer()
+    await get_file_copier().stop_workers()
+    await get_storage_monitor().stop_monitoring()
+    get_lifecycle_service().stop_pruning_loop()
+
     ingest_monitor_worker = get_ingest_monitor_worker()
     await ingest_monitor_worker.stop_monitoring()
     logging.info("IngestMonitorWorker stopped")
 
-    # Close IngestApiClient HTTP connection
     try:
         await get_ingest_api_client().close()
         logging.info("IngestApiClient HTTP client closed")
     except Exception as e:
         logging.warning(f"Error closing IngestApiClient: {e}")
-    
+
     if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
         await tally_handler.shutdown()
         logging.info("TallyLight domain shutdown completed")
 
-    # Log shutdown event while DB is still in a clean state
+    # Log shutdown event while DB is still clean
     try:
         shutdown_event = LoggedEvent(
             timestamp=datetime.now(timezone.utc),
@@ -254,24 +256,21 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.warning("Failed to write shutdown event", exc_info=True)
 
-    # Detach event store to prevent write-after-close from cancelled tasks
     global_event_logger.set_event_store(None)
 
-    # Cancel alle background tasks
+    # Cancel background tasks
     for task in _background_tasks:
         task.cancel()
 
-    # Vent på at tasks bliver cancelled — med timeout
     if _background_tasks:
         try:
             await asyncio.wait_for(
                 asyncio.gather(*_background_tasks, return_exceptions=True),
-                timeout=30.0
+                timeout=30.0,
             )
         except asyncio.TimeoutError:
-            logging.error("Shutdown timeout after 30s — forcing exit")
+            logging.error("Shutdown timeout after 30s -- forcing exit")
 
-    # Close database connection
     try:
         file_repo = get_file_repository()
         await file_repo.close()
