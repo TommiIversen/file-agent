@@ -138,16 +138,12 @@ class IngestMonitorWorker:
                 # Fetch all channel statuses via API client
                 all_statuses = await self._api_client.get_all_channel_statuses(channel_names)
                 
-                # Set connection status based on API success (not empty, but actual success)
-                # If we got a list (even if empty), API is working
+                # Set connection status and update state in one block
                 if all_statuses is not None:
                     await self._state_service.set_connection_status(True)
+                    await self._state_service.update_channel_statuses(all_statuses)
                 else:
                     await self._state_service.set_connection_status(False)
-                
-                # Update state via StateService - it handles change detection and events
-                if all_statuses is not None:
-                    await self._state_service.update_channel_statuses(all_statuses)
 
                 await asyncio.sleep(self._fast_poll_interval)
             except asyncio.CancelledError:
