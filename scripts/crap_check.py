@@ -82,8 +82,8 @@ def normalize_path(path: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="CRAP factor analysis")
     parser.add_argument(
-        "--threshold", type=float, default=30.0,
-        help="CRAP score threshold — functions above this fail (default: 30)",
+        "--threshold", type=float, default=25.0,
+        help="CRAP score threshold — functions above this fail (default: 25)",
     )
     parser.add_argument(
         "--coverage-json", default="coverage.json",

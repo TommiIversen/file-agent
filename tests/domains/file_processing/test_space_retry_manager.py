@@ -279,6 +279,68 @@ class TestExecuteRetryTask:
         await mgr.schedule_retry("f1", 0, "test")  # Will fail at schedule since file is None
         # schedule_retry returns False for unknown file — no task to worry about
 
+    @pytest.mark.asyncio
+    async def test_transition_failure_still_pops_task(self, mgr, repo, sm):
+        """If transition raises InvalidTransitionError, task is still cleaned up."""
+        tf = _tf(
+            retry_info=RetryInfo(
+                scheduled_at=datetime.now(), retry_at=datetime.now(), reason="test"
+            )
+        )
+        repo.get_by_id.return_value = tf
+        sm.transition.side_effect = InvalidTransitionError(
+            from_status=FileStatus.WAITING_FOR_SPACE,
+            to_status=FileStatus.READY,
+            file_path="/src/test.mxf",
+        )
+
+        await mgr.schedule_retry("f1", 0, "test")
+        await asyncio.sleep(0.1)
+
+        # Task should have been popped despite the error
+        assert "f1" not in mgr._retry_tasks
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_cleans_retry_info(self, mgr, repo, sm):
+        """CancelledError during sleep clears retry_info and re-raises."""
+        tf = _tf(
+            retry_info=RetryInfo(
+                scheduled_at=datetime.now(), retry_at=datetime.now(), reason="test"
+            )
+        )
+        repo.get_by_id.return_value = tf
+
+        await mgr.schedule_retry("f1", 9999, "test")  # Long delay
+        await asyncio.sleep(0.05)
+
+        # Cancel the task
+        task = mgr._retry_tasks["f1"]
+        task.cancel()
+
+        # Wait for cancellation
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        # retry_info should be cleared
+        repo.update.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_generic_exception_cleans_up(self, mgr, repo, sm):
+        """Unexpected exception during retry clears retry_info."""
+        tf = _tf(
+            retry_info=RetryInfo(
+                scheduled_at=datetime.now(), retry_at=datetime.now(), reason="test"
+            )
+        )
+        repo.get_by_id.return_value = tf
+        sm.transition.side_effect = RuntimeError("unexpected")
+
+        await mgr.schedule_retry("f1", 0, "test")
+        await asyncio.sleep(0.1)
+
+        # Should have cleaned up retry_info
+        assert "f1" not in mgr._retry_tasks
+
 
 # ── _should_give_up_retry ───────────────────────────────────────
 
