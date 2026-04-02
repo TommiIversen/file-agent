@@ -129,28 +129,29 @@ class MacOSMountValidator:
         except Exception:
             return False
     
-    async def find_ghost_mounts(self, base_mount_path: str) -> list:
+    @staticmethod
+    def _find_ghost_dirs(base_mount_path: str) -> list[str]:
+        """Synchronous scan for numbered mount variants like /Volumes/SK6402_1."""
+        base_path = Path(base_mount_path)
+        base_name = base_path.name
+        volumes_dir = base_path.parent
+
+        if not volumes_dir.exists():
+            return []
+
+        prefix = base_name + "_"
+        return [
+            str(item)
+            for item in volumes_dir.iterdir()
+            if item.is_dir()
+            and item.name.startswith(prefix)
+            and item.name[len(prefix):].isdigit()
+        ]
+
+    async def find_ghost_mounts(self, base_mount_path: str) -> list[str]:
         """Find numbered variants like /Volumes/SK6402_1."""
         try:
-            base_path = Path(base_mount_path)
-            base_name = base_path.name
-            volumes_dir = base_path.parent
-            
-            if not await asyncio.to_thread(volumes_dir.exists):
-                return []
-            
-            ghost_mounts = []
-            
-            # Look for numbered variants
-            for item in await asyncio.to_thread(list, volumes_dir.iterdir()):
-                if await asyncio.to_thread(item.is_dir):
-                    item_name = item.name
-                    # Simple check for _1, _2, etc.
-                    if item_name.startswith(base_name + "_") and item_name[len(base_name)+1:].isdigit():
-                        ghost_mounts.append(str(item))
-            
-            return ghost_mounts
-            
+            return await asyncio.to_thread(self._find_ghost_dirs, base_mount_path)
         except Exception as e:
             logging.debug(f"Error finding ghost mounts: {e}")
             return []
