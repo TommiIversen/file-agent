@@ -11,7 +11,8 @@ from app.core.cqrs.query_bus import QueryBus
 from app.core.events.event_bus import DomainEventBus
 from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
-from .handlers import GetIngestStatusQueryHandler, GetRecordingPathsQueryHandler, ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
+from .query_handlers import GetIngestStatusQueryHandler, GetRecordingPathsQueryHandler
+from .command_handlers import ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
 from .events import AutoStopTriggeredEvent
 from .auto_stop_handler import AutoStopHandler
 
