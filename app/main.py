@@ -68,11 +68,12 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     setup_logging(settings)
 
+    await _init_database()
+
     event_bus = get_event_bus()
     event_store = get_event_store()
     global_event_logger = get_global_event_logger()
 
-    await _init_database()
     await _init_event_logging(event_bus, event_store, global_event_logger)
     tally_handler = await _register_domains(event_bus)
     _log_config_info()
