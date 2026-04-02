@@ -198,6 +198,282 @@ class TestCopyIoLoop:
         assert bytes_copied == 0
         dst.write.assert_not_called()
 
+
+# ── _initial_seek ───────────────────────────────────────────────────────────
+
+class TestInitialSeek:
+
+    @pytest.fixture
+    def loop(self):
+        settings = MagicMock()
+        settings.file_operation_timeout_seconds = 1.0
+        return CopyIoLoop(settings, AsyncMock(), AsyncMock())
+
+    async def test_successful_seek(self, loop):
+        src = AsyncMock()
+        detector = MagicMock()
+
+        await loop._initial_seek(src, "/test.mxf", 1024, detector)
+
+        src.seek.assert_awaited_once_with(1024)
+
+    async def test_timeout_raises_file_copy_timeout(self, loop):
+        src = AsyncMock()
+        src.seek = AsyncMock(side_effect=asyncio.TimeoutError())
+        detector = MagicMock()
+
+        with pytest.raises(FileCopyTimeoutError, match="seek timeout"):
+            await loop._initial_seek(src, "/test.mxf", 0, detector)
+
+    async def test_os_error_triggers_network_check(self, loop):
+        src = AsyncMock()
+        err = OSError("I/O error")
+        src.seek = AsyncMock(side_effect=err)
+        detector = MagicMock()
+        detector.check_write_error = MagicMock(side_effect=NetworkError("net"))
+
+        with pytest.raises(NetworkError):
+            await loop._initial_seek(src, "/test.mxf", 0, detector)
+
+        detector.check_write_error.assert_called_once_with(err, "file seek operation")
+
+    async def test_generic_error_triggers_network_check_then_reraises(self, loop):
+        """Non-network OSError: check_write_error doesn't raise, original re-raised."""
+        src = AsyncMock()
+        err = OSError("disk full")
+        src.seek = AsyncMock(side_effect=err)
+        detector = MagicMock()
+        detector.check_write_error = MagicMock()  # doesn't raise
+
+        with pytest.raises(OSError, match="disk full"):
+            await loop._initial_seek(src, "/test.mxf", 0, detector)
+
+
+# ── _write_chunk_with_retry ─────────────────────────────────────────────────
+
+class TestWriteChunkWithRetry:
+
+    @pytest.fixture
+    def loop(self):
+        settings = MagicMock()
+        settings.file_operation_timeout_seconds = 1.0
+        return CopyIoLoop(settings, AsyncMock(), AsyncMock())
+
+    async def test_successful_read_write(self, loop):
+        src = AsyncMock()
+        src.read = AsyncMock(return_value=b"ABCD")
+        dst = AsyncMock()
+        detector = MagicMock()
+
+        chunk = await loop._write_chunk_with_retry(
+            src, dst, "/test.mxf", 0, 4, 3, detector
+        )
+
+        assert chunk == b"ABCD"
+        dst.write.assert_awaited_once_with(b"ABCD")
+
+    async def test_eof_returns_empty_bytes(self, loop):
+        src = AsyncMock()
+        src.read = AsyncMock(return_value=b"")
+        dst = AsyncMock()
+        detector = MagicMock()
+
+        chunk = await loop._write_chunk_with_retry(
+            src, dst, "/test.mxf", 100, 50, 3, detector
+        )
+
+        assert chunk == b""
+        dst.write.assert_not_awaited()
+
+    async def test_retry_on_timeout_then_succeeds(self, loop):
+        src = AsyncMock()
+        src.read = AsyncMock(side_effect=[asyncio.TimeoutError(), b"OK"])
+        dst = AsyncMock()
+        detector = MagicMock()
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            chunk = await loop._write_chunk_with_retry(
+                src, dst, "/test.mxf", 0, 2, 3, detector
+            )
+
+        assert chunk == b"OK"
+        # Should have re-seeked before retry
+        assert src.seek.await_count >= 1
+
+    async def test_max_retries_timeout_raises_copy_timeout(self, loop):
+        src = AsyncMock()
+        src.read = AsyncMock(side_effect=asyncio.TimeoutError())
+        dst = AsyncMock()
+        detector = MagicMock()
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(FileCopyTimeoutError):
+                await loop._write_chunk_with_retry(
+                    src, dst, "/test.mxf", 0, 10, 1, detector  # max_retries=1
+                )
+
+    async def test_max_retries_os_error_triggers_network_check(self, loop):
+        src = AsyncMock()
+        err = OSError("connection refused")
+        src.read = AsyncMock(side_effect=err)
+        dst = AsyncMock()
+        detector = MagicMock()
+        detector.check_write_error = MagicMock(side_effect=NetworkError("net"))
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(NetworkError):
+                await loop._write_chunk_with_retry(
+                    src, dst, "/test.mxf", 0, 10, 1, detector
+                )
+
+    async def test_generic_exception_triggers_network_check(self, loop):
+        src = AsyncMock()
+        err = ValueError("unexpected")
+        src.read = AsyncMock(side_effect=err)
+        dst = AsyncMock()
+        detector = MagicMock()
+        detector.check_write_error = MagicMock()  # doesn't raise
+
+        with pytest.raises(ValueError, match="unexpected"):
+            await loop._write_chunk_with_retry(
+                src, dst, "/test.mxf", 0, 10, 3, detector
+            )
+
+    async def test_exponential_backoff_timing(self, loop):
+        src = AsyncMock()
+        src.read = AsyncMock(
+            side_effect=[asyncio.TimeoutError(), asyncio.TimeoutError(), b"OK"]
+        )
+        dst = AsyncMock()
+        detector = MagicMock()
+        sleep_calls = []
+
+        async def mock_sleep(seconds):
+            sleep_calls.append(seconds)
+
+        with patch("asyncio.sleep", side_effect=mock_sleep):
+            await loop._write_chunk_with_retry(
+                src, dst, "/test.mxf", 0, 2, 5, detector
+            )
+
+        assert sleep_calls == [2, 4]  # 2^1, 2^2
+
+
+# ── _report_progress ────────────────────────────────────────────────────────
+
+class TestReportProgress:
+
+    @pytest.fixture
+    def state_machine(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def event_bus(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def loop(self, state_machine, event_bus):
+        settings = MagicMock()
+        return CopyIoLoop(settings, state_machine, event_bus)
+
+    @pytest.fixture
+    def tracked_file(self):
+        return TrackedFile(file_path="/src/test.mxf", file_size=1000)
+
+    async def test_publishes_event_and_transitions(self, loop, state_machine, event_bus, tracked_file):
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=500, current_file_size=1000,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+        state_machine.transition.assert_awaited_once()
+        call_kw = state_machine.transition.call_args[1]
+        assert call_kw["file_id"] == tracked_file.id
+        assert call_kw["new_status"] == FileStatus.COPYING
+        assert 49.0 <= call_kw["copy_progress"] <= 51.0
+
+    async def test_zero_file_size_no_division_error(self, loop, state_machine, tracked_file):
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=0, current_file_size=0,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+        call_kw = state_machine.transition.call_args[1]
+        assert call_kw["copy_progress"] == 0
+
+    async def test_transition_invalid_error_logged(self, loop, state_machine, tracked_file):
+        from app.core.exceptions import InvalidTransitionError
+        state_machine.transition.side_effect = InvalidTransitionError("f", "A", "B")
+
+        # Should not raise
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=100, current_file_size=1000,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+    async def test_transition_unexpected_error_logged(self, loop, state_machine, tracked_file):
+        state_machine.transition.side_effect = RuntimeError("boom")
+
+        # Should not raise
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=100, current_file_size=1000,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+    async def test_no_event_bus(self, state_machine, tracked_file):
+        settings = MagicMock()
+        loop = CopyIoLoop(settings, state_machine, None)
+
+        # Should not raise even without event_bus
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=500, current_file_size=1000,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+        state_machine.transition.assert_awaited_once()
+
+    async def test_event_publish_error_logged(self, state_machine, tracked_file):
+        settings = MagicMock()
+        event_bus = MagicMock()  # Not AsyncMock — create_task will fail
+        event_bus.publish = MagicMock(side_effect=RuntimeError("pub fail"))
+        loop = CopyIoLoop(settings, state_machine, event_bus)
+
+        # Should not raise — event error is caught
+        await loop._report_progress(
+            tracked_file, FileStatus.COPYING,
+            bytes_copied=500, current_file_size=1000,
+            copy_start_time=datetime.now(), copy_start_bytes=0,
+        )
+
+
+# ── Chunk retry integration tests ──────────────────────────────────────────
+
+class TestChunkRetryIntegration:
+    """Integration tests for retry behavior through copy_chunk_range."""
+
+    @pytest.fixture
+    def settings(self):
+        s = Settings()
+        s.file_operation_timeout_seconds = 5.0
+        return s
+
+    @pytest.fixture
+    def loop(self, settings):
+        return CopyIoLoop(settings, AsyncMock(spec=FileStateMachine), AsyncMock(spec=DomainEventBus))
+
+    @pytest.fixture
+    def tracked_file(self):
+        return TrackedFile(file_path="/src/test.mxf", file_size=1024)
+
+    @pytest.fixture
+    def network_detector(self):
+        return NetworkErrorDetector()
+
     async def test_chunk_retry_on_transient_timeout(self, loop, tracked_file, network_detector, tmp_path):
         """A single timeout should be retried, not cause immediate failure."""
         source = tmp_path / "source.bin"
