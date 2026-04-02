@@ -30,7 +30,8 @@ class MacOSMounter(BaseMounter):
             expected_mount_point = self.get_mount_point_from_url(share_url)
             
             # Step 1: Quick check if already mounted
-            if await self.verify_mount_accessible(expected_mount_point):
+            is_mounted, is_accessible = await self.verify_mount_accessible(expected_mount_point)
+            if is_mounted and is_accessible:
                 logging.info(f"Share already mounted: {share_url} -> {expected_mount_point}")
                 return True
             
@@ -73,7 +74,8 @@ class MacOSMounter(BaseMounter):
                 await asyncio.sleep(2)
                 
                 # Simple check - does the mount point exist and work?
-                if await self.verify_mount_accessible(expected_mount_point):
+                is_mounted, is_accessible = await self.verify_mount_accessible(expected_mount_point)
+                if is_mounted and is_accessible:
                     logging.info(f"Successfully mounted and verified: {share_url} -> {expected_mount_point}")
                     return True
                 else:
