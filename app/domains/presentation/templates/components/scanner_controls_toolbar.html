@@ -1,35 +1,11 @@
 <!-- Scanner Status and Controls Toolbar -->
 <div class="flex items-center">
-    <!-- Scanner Status (venstre) -->
-    <div class="flex items-center flex-1">
-        <div class="status-indicator rounded-full mr-2"
-             :class="$store.ui?.scanner?.scanning ? 'bg-green-500' : ($store.ui?.scanner?.paused ? 'bg-orange-500' : 'bg-gray-500')"></div>
-        <span class="text-xs text-gray-300">
-            <span x-show="$store.ui?.scanner?.scanning">🔍 Scanner Active</span>
-            <span x-show="$store.ui?.scanner?.paused">⏸️ Scanner Paused</span>
-            <span x-show="!$store.ui?.scanner?.scanning && !$store.ui?.scanner?.paused">❓ Scanner Unknown</span>
-        </span>
-    </div>
+    <!-- Spacer (venstre) -->
+    <div class="flex-1"></div>
 
-    <!-- Action Buttons (midten) -->
-    <div class="flex items-center justify-center space-x-3 flex-1">
-        <!-- Logs Button -->
-        <button @click="$store.logViewer.openLogViewerModal()"
-                class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-            📋 Logs
-        </button>
-
-        <!-- Events Button -->
-        <button @click="$store.eventsViewer.openModal()"
-                class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-            📊 Events
-        </button>
-
-        <!-- Settings Button -->
-        <button @click="$store.settings.openSettingsModal()"
-                class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-            ⚙️ Settings
-        </button>
+    <!-- File Statistics (centreret) -->
+    <div class="flex items-center justify-center">
+        {% include "components/file_statistics_bar.html" %}
     </div>
 
     <!-- Sort Options (højre) -->

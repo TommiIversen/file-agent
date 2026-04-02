@@ -51,7 +51,7 @@
         <!-- Logo and Title -->
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4 relative">
             <!-- Titel (venstre) - Skjules på meget små skærme -->
-            <div class="hidden sm:flex flex-col flex-shrink-0">
+            <div class="hidden sm:flex flex-shrink-0" title="File Egress Transfer Agent">
                 <div class="flex items-center">
                     <h1 class="text-2xl lg:text-3xl font-bold flex items-center">
                         Dr. Feta
@@ -87,12 +87,24 @@
                         </svg>
                     </h1>
                 </div>
-                <p class="text-xs text-gray-300">File Egress Transfer Agent</p>
             </div>
 
-            <!-- File Statistics (absolut centreret til hele containeren) -->
+            <!-- Action Buttons (centreret) -->
             <div class="absolute left-1/2 transform -translate-x-1/2 top-0">
-                {% include "components/file_statistics_bar.html" %}
+                <div class="flex items-center space-x-3">
+                    <button @click="$store.logViewer.openLogViewerModal()"
+                            class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        📋 Logs
+                    </button>
+                    <button @click="$store.eventsViewer.openModal()"
+                            class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        📊 Events
+                    </button>
+                    <button @click="$store.settings.openSettingsModal()"
+                            class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
+                        ⚙️ Settings
+                    </button>
+                </div>
             </div>
 
             <!-- Connection Status og Settings (højre) -->

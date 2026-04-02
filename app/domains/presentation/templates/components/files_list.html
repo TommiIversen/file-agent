@@ -17,13 +17,13 @@
              @mouseleave="showTip = false">
             <div class="flex items-center space-x-4">
 
-                <!-- File Name -->
+                <!-- File Name (left) -->
                 <div class="flex-1 min-w-0">
                     <div class="text-white font-bold truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
                 </div>
 
-                <!-- Progress Bar -->
-                <div class="flex-1">
+                <!-- Progress Bar (center, fixed smaller width) -->
+                <div class="w-[28%] shrink-0 ml-[1%]">
                     <div class="w-full bg-gray-700 rounded overflow-hidden">
                         <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
                              :style="UIHelpers.getProgressWidth(file)"
@@ -33,24 +33,27 @@
                     </div>
                 </div>
 
-
-                <!-- Status -->
-                <div class="w-32 text-center">
-                    <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
-                         :class="UIHelpers.getStatusBadgeColor(file.status)"
-                         x-text="UIHelpers.getFriendlyStatus(file.status)">
+                <!-- Right side info (fixed-width grid columns to prevent jumping) -->
+                <div class="flex-1 grid grid-cols-3 items-center min-w-0">
+                    <!-- Status -->
+                    <div class="w-32 text-center">
+                        <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
+                             :class="UIHelpers.getStatusBadgeColor(file.status)"
+                             x-text="UIHelpers.getFriendlyStatus(file.status)">
+                        </div>
                     </div>
-                </div>
 
-                <div class="w-40 text-center text-xs">
-                    <div class="text-white text-xs"
-                         x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
-                </div>
+                    <!-- Date -->
+                    <div class="w-32 text-center text-xs">
+                        <div class="text-white"
+                             x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
+                    </div>
 
-                <!-- Bytes Copied -->
-                <div class="w-32 text-center text-xs">
-                    <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
-                        <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                    <!-- Bytes Copied -->
+                    <div class="w-32 text-right text-xs">
+                        <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
+                            <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
+                        </div>
                     </div>
                 </div>
             </div>

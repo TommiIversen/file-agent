@@ -1,166 +1,106 @@
 <!-- Storage Status Panel Component -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    <!-- Source Storage -->
-    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-base lg:text-lg font-semibold flex items-center">
-                📁 <span class="hidden sm:inline">Source Storage</span><span class="sm:hidden">Source</span>
-            </h3>
-            <div class="flex items-center space-x-1 lg:space-x-2">
-                <!-- Browse Button -->
-                <button @click="$store.directoryBrowser.openSourceBrowser()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
-                    <span class="hidden sm:inline">📂 Browse</span><span class="sm:hidden">📂</span>
-                </button>
-                <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full mr-1 lg:mr-2"
-                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'" x-cloak></div>
-                    <span class="text-xs lg:text-sm font-medium truncate max-w-20 lg:max-w-none"
-                          :class="$store.storage?.sourceStatusTextColor || 'text-gray-400'"
-                          x-text="$store.storage?.sourceStatus || 'Indlæser...'" x-cloak></span>
-                </div>
+
+{% macro storage_card(icon, label, browse_action, prefix, show_mount=false) %}
+<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
+    <div class="flex items-center justify-between mb-2">
+        <h3 class="text-base lg:text-lg font-semibold flex items-center">
+            {{ icon }} <span class="hidden sm:inline">{{ label }}</span><span class="sm:hidden">{{ label.split(' ')[0] }}</span>
+        </h3>
+        <div class="flex items-center gap-3 text-xs">
+            <!-- Status LEDs (uniform size) -->
+            <div class="flex items-center">
+                <div class="w-2 h-2 rounded-full mr-1"
+                     :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                <span :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                    <span x-text="($store.storage?.{{ prefix }}Accessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
+                </span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-2 h-2 rounded-full mr-1"
+                     :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
+                <span :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                    <span x-text="($store.storage?.{{ prefix }}Writable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
+                </span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-2 h-2 rounded-full mr-1"
+                     :class="$store.storage?.{{ prefix }}StatusColor || 'bg-gray-500'" x-cloak></div>
+                <span :class="$store.storage?.{{ prefix }}StatusTextColor || 'text-gray-400'"
+                      x-text="$store.storage?.{{ prefix }}Status || 'Indlæser...'" x-cloak></span>
             </div>
         </div>
-
-        <template x-if="$store.storage?.source">
-            <div class="space-y-2">
-                <!-- Storage Bar -->
-                <div class="w-full bg-gray-600 rounded-lg h-3 lg:h-4 overflow-hidden">
-                    <div class="h-full transition-all duration-500"
-                         :style="`width: ${$store.storage?.sourceUsagePercentage || 0}%`"
-                         :class="$store.storage?.sourceStatusColor || 'bg-gray-500'" x-cloak></div>
-                </div>
-
-                <!-- Storage Details -->
-                <div class="flex justify-between text-xs lg:text-sm">
-                    <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.sourceFreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                    <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.sourceTotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                </div>
-
-                <!-- Access Status -->
-                <div class="flex flex-wrap gap-2 lg:space-x-4 text-xs">
-                    <div class="flex items-center">
-                        <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.sourceAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                        <span :class="($store.storage?.sourceAccessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
-                                <span x-text="($store.storage?.sourceAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
-                            </span>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.sourceWritable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                        <span :class="($store.storage?.sourceWritable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
-                                <span x-text="($store.storage?.sourceWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
-                            </span>
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <template x-if="!$store.storage?.source">
-            <div class="text-gray-400 text-xs lg:text-sm">Indlæser storage information...</div>
-        </template>
     </div>
 
-    <!-- Destination Storage -->
-    <div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-base lg:text-lg font-semibold flex items-center">
-                🎯 <span class="hidden sm:inline">Destination Storage</span><span class="sm:hidden">Destination</span>
-            </h3>
-            <div class="flex items-center space-x-1 lg:space-x-2">
-                <!-- Browse Button -->
-                <button @click="$store.directoryBrowser.openDestinationBrowser()"
+    <template x-if="$store.storage?.{{ prefix }}">
+        <div class="space-y-2">
+            <!-- Storage Bar -->
+            <div class="w-full bg-gray-600 rounded-lg h-3 lg:h-4 overflow-hidden">
+                <div class="h-full transition-all duration-500"
+                     :style="`width: ${$store.storage?.{{ prefix }}UsagePercentage || 0}%`"
+                     :class="$store.storage?.{{ prefix }}StatusColor || 'bg-gray-500'" x-cloak></div>
+            </div>
+
+            <!-- Storage Details + Browse -->
+            <div class="flex items-center justify-between text-xs lg:text-sm">
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-300">Ledig: <strong class="text-white"
+                                                               x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
+                    <span class="text-gray-300">Total: <strong class="text-white"
+                                                               x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
+                </div>
+                <button @click="{{ browse_action }}"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
                     <span class="hidden sm:inline">📂 Browse</span><span class="sm:hidden">📂</span>
                 </button>
-                <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full mr-1 lg:mr-2"
-                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'" x-cloak></div>
-                    <span class="text-xs lg:text-sm font-medium truncate max-w-20 lg:max-w-none"
-                          :class="$store.storage?.destinationStatusTextColor || 'text-gray-400'"
-                          x-text="$store.storage?.destinationStatus || 'Indlæser...'" x-cloak></span>
-                </div>
             </div>
-        </div>
 
-        <template x-if="$store.storage?.destination">
-            <div class="space-y-2">
-                <!-- Storage Bar -->
-                <div class="w-full bg-gray-600 rounded-lg h-3 lg:h-4 overflow-hidden">
-                    <div class="h-full transition-all duration-500"
-                         :style="`width: ${$store.storage?.destinationUsagePercentage || 0}%`"
-                         :class="$store.storage?.destinationStatusColor || 'bg-gray-500'" x-cloak></div>
-                </div>
+            {% if show_mount %}
+            <!-- Mount Status -->
+            <template x-if="$store.storage?.{{ prefix }}MountStatus">
+                <div class="mt-2 p-2 bg-gray-800 bg-opacity-50 rounded-md">
+                    <div class="flex items-center space-x-2 text-xs">
+                        <div class="flex items-center">
+                            <template x-if="$store.storage?.{{ prefix }}MountStatus === 'ATTEMPTING'">
+                                <div class="w-3 h-3 mr-2">
+                                    <svg class="animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor"
+                                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </template>
+                            <template x-if="$store.storage?.{{ prefix }}MountStatus === 'SUCCESS'">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                            </template>
+                            <template x-if="$store.storage?.{{ prefix }}MountStatus === 'FAILED'">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                            </template>
+                            <template x-if="$store.storage?.{{ prefix }}MountStatus === 'NOT_CONFIGURED'">
+                                <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                            </template>
 
-                <!-- Storage Details -->
-                <div class="flex justify-between text-xs lg:text-sm">
-                    <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.destinationFreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                    <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.destinationTotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                </div>
-
-                <!-- Access Status -->
-                <div class="flex flex-wrap gap-2 lg:space-x-4 text-xs">
-                    <div class="flex items-center">
-                        <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.destinationAccessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                        <span :class="($store.storage?.destinationAccessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
-                                <span x-text="($store.storage?.destinationAccessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
+                            <span class="text-xs font-medium"
+                                  :class="$store.storage?.{{ prefix }}MountStatusColor" x-cloak>
+                                🔗 <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
                             </span>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="w-2 h-2 rounded-full mr-1"
-                             :class="($store.storage?.destinationWritable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                        <span :class="($store.storage?.destinationWritable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
-                                <span x-text="($store.storage?.destinationWritable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
-                            </span>
-                    </div>
-                </div>
-
-                <!-- Mount Status -->
-                <template x-if="$store.storage?.destinationMountStatus">
-                    <div class="mt-2 p-2 bg-gray-800 bg-opacity-50 rounded-md">
-                        <div class="flex items-center space-x-2 text-xs">
-                            <div class="flex items-center">
-                                <template x-if="$store.storage?.destinationMountStatus === 'ATTEMPTING'">
-                                    <div class="w-3 h-3 mr-2">
-                                        <svg class="animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10"
-                                                    stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor"
-                                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                    </div>
-                                </template>
-                                <template x-if="$store.storage?.destinationMountStatus === 'SUCCESS'">
-                                    <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                </template>
-                                <template x-if="$store.storage?.destinationMountStatus === 'FAILED'">
-                                    <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                                </template>
-                                <template x-if="$store.storage?.destinationMountStatus === 'NOT_CONFIGURED'">
-                                    <div class="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
-                                </template>
-
-                                <span class="text-xs font-medium"
-                                      :class="$store.storage?.destinationMountStatusColor" x-cloak>
-                                        🔗 <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
-                                    </span>
-                            </div>
-                            <span class="text-gray-300 text-xs truncate"
-                                  x-text="$store.storage?.destinationMountMessage" x-cloak></span>
                         </div>
+                        <span class="text-gray-300 text-xs truncate"
+                              x-text="$store.storage?.{{ prefix }}MountMessage" x-cloak></span>
                     </div>
-                </template>
-            </div>
-        </template>
+                </div>
+            </template>
+            {% endif %}
+        </div>
+    </template>
 
-        <template x-if="!$store.storage?.destination">
-            <div class="text-gray-400 text-xs lg:text-sm">Indlæser storage information...</div>
-        </template>
-    </div>
+    <template x-if="!$store.storage?.{{ prefix }}">
+        <div class="text-gray-400 text-xs lg:text-sm">Indlæser storage information...</div>
+    </template>
+</div>
+{% endmacro %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    {{ storage_card('📁', 'Source Storage', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
+    {{ storage_card('🎯', 'Destination Storage', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
 </div>
