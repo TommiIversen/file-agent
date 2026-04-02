@@ -4,6 +4,7 @@ Handles read-only operations for system log files.
 """
 from pathlib import Path
 from typing import List, Dict, Any
+import logging
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, Response
 import aiofiles
