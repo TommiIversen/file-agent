@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -61,38 +62,24 @@ class WindowsMounter(BaseMounter):
             path_obj = Path(local_path)
 
             # Check if mount point exists
-            if not path_obj.exists():
+            if not await asyncio.to_thread(path_obj.exists):
                 logging.debug(f"Mount point does not exist: {local_path}")
                 return False, False
 
             # Check if it's a directory
-            if not path_obj.is_dir():
+            if not await asyncio.to_thread(path_obj.is_dir):
                 logging.debug(f"Mount point is not a directory: {local_path}")
                 return True, False
 
-            # Test accessibility by trying to list directory
+            # Test accessibility by listing directory contents
             try:
-                # Use dir command for Windows
-                process = await asyncio.create_subprocess_shell(
-                    f"dir {local_path}",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                await asyncio.to_thread(os.listdir, local_path)
+                logging.debug(f"Mount point accessible: {local_path}")
+                return True, True
+            except (OSError, PermissionError) as e:
+                logging.debug(
+                    f"Mount point not accessible: {local_path} - {e}"
                 )
-
-                _, stderr = await process.communicate()
-
-                if process.returncode == 0:
-                    logging.debug(f"Mount point accessible: {local_path}")
-                    return True, True
-                else:
-                    error_msg = stderr.decode() if stderr else "Unknown error"
-                    logging.debug(
-                        f"Mount point not accessible: {local_path} - {error_msg}"
-                    )
-                    return True, False
-
-            except Exception as e:
-                logging.debug(f"Error testing mount accessibility: {e}")
                 return True, False
 
         except Exception as e:

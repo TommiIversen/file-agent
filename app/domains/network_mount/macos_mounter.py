@@ -97,12 +97,12 @@ class MacOSMounter(BaseMounter):
         """
         try:
             # Check if it exists and is a directory
-            if not os.path.exists(local_path) or not os.path.isdir(local_path):
+            if not await asyncio.to_thread(os.path.exists, local_path) or not await asyncio.to_thread(os.path.isdir, local_path):
                 return False, False
             
             # Simple access test - try to list contents
             try:
-                os.listdir(local_path)
+                await asyncio.to_thread(os.listdir, local_path)
                 return True, True
             except (OSError, PermissionError):
                 return True, False
