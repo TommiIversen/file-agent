@@ -10,7 +10,21 @@ class MacOSNetworkChecker:
     
     def __init__(self):
         pass
-    
+
+    @staticmethod
+    def _extract_hostname(share_url: str) -> str | None:
+        """Extract hostname from an SMB share URL.
+
+        Returns the hostname or *None* when the URL cannot be parsed.
+        """
+        if "://" in share_url and "@" in share_url:
+            # Format: smb://user@hostname/path
+            return share_url.split("@")[1].split("/")[0]
+        if "://" in share_url:
+            # Format: smb://hostname/path
+            return share_url.split("://")[1].split("/")[0]
+        return None
+
     async def is_network_available(self, share_url: str | None = None) -> bool:
         """
         Check if network is available by testing the specific share host.
@@ -21,17 +35,10 @@ class MacOSNetworkChecker:
             return True
             
         try:
-            # Extract hostname from SMB URL
-            # smb://svcsk6402@net.dr.dk/nas/videopodcast/SK6402 -> net.dr.dk
-            if "://" in share_url and "@" in share_url:
-                # Format: smb://user@hostname/path
-                hostname = share_url.split("@")[1].split("/")[0]
-            elif "://" in share_url:
-                # Format: smb://hostname/path
-                hostname = share_url.split("://")[1].split("/")[0]
-            else:
+            hostname = self._extract_hostname(share_url)
+            if hostname is None:
                 logging.warning(f"Cannot extract hostname from share URL: {share_url}")
-                return True # Don't block if we can't parse
+                return True  # Don't block if we can't parse
             
             logging.debug(f"Testing network connectivity to: {hostname}")
             
