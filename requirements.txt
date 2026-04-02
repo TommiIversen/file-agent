@@ -14,3 +14,4 @@ sqlalchemy==2.0.48
 pytest==9.0.2
 pytest-asyncio==1.3.0
 pytest-cov==7.0.0
+import-linter

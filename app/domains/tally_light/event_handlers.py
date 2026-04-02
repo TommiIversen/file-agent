@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Optional
 
 from app.config import Settings
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, AutoStopWarningEvent
+from app.core.events.ingest_events import IngestStatusUpdatedEvent, AutoStopWarningEvent
 from .protocols import PowerSwitchError
 from .factory import create_power_switch
 

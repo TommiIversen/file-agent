@@ -98,6 +98,18 @@ This application uses a clean, domain-driven architecture with CQRS and an event
 
 Domains communicate via the EventBus (async, loose coupling) and QueryBus (sync queries across domains). Direct imports between domains are forbidden.
 
+### Quality Gate
+
+All code must pass these three checks — no workarounds, no `# type: ignore`, no `# noqa` hacks:
+
+```bash
+pytest --ignore=scripts          # All tests green
+mypy app/                         # No type errors
+lint-imports                      # All architecture contracts held
+```
+
+`lint-imports` automatically enforces the domain boundary rules defined in `pyproject.toml`. If you add a new domain, add a corresponding contract.
+
 ### Just In Engine API
 
 File Agent communicates with Just In Engine via these endpoints (base URL configured in `JUSTIN_API_BASE_URL`, default `http://localhost:8080`):

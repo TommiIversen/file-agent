@@ -7,7 +7,7 @@ import logging
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.cqrs.command_bus import CommandBus
-from app.domains.ingest_monitor.events import IngestStatusUpdatedEvent, AutoStopWarningEvent
+from app.core.events.ingest_events import IngestStatusUpdatedEvent, AutoStopWarningEvent
 from .event_handlers import TallyLightEventHandler
 
 

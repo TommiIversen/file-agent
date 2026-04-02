@@ -17,7 +17,7 @@ from app.domains.presentation.query_handlers import GetStatisticsQueryHandler, G
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
-from app.domains.ingest_monitor.events import (
+from app.core.events.ingest_events import (
     IngestStatusUpdatedEvent, 
     ChannelErrorDetectedEvent,
     IngestOnlineEvent,
@@ -26,7 +26,7 @@ from app.domains.ingest_monitor.events import (
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
 )
-from app.domains.tally_light.events import (
+from app.core.events.tally_events import (
     TallySwitchStatusUpdatedEvent,
     TallySwitchOnlineEvent,
     TallySwitchOfflineEvent,

@@ -7,7 +7,7 @@ Domæner er Loven: Al forretningslogik skal bo i et specifikt domæne (f.eks. ap
 
 Ingen "God Objects": En klasse skal have én grund til at ændre sig. FileRepository gemmer data. FileStateMachine validerer status. En CommandHandler udfører én handling.
 
-Størrelsesgrænse: Vær proaktiv. Hvis en klasse (især en Handler) vokser over 150-200 linjer, skal du foreslå at opdele den.
+Størrelsesgrænse: Vær proaktiv. Hvis en klasse (især en Handler) vokser over 2-300 linjer, skal du foreslå at opdele den.
 
 2. Ensrettet Afhængighed (VIGTIGST!)
 
@@ -123,5 +123,18 @@ Forkert: from app.domains.network_mount.handlers import ... (direkte import).
 
 Hvornår: "Jeg kan ikke fortsætte, før jeg får et svar fra et andet domæne."
 
-4. Gamle "Code Smells"
+4. Quality Gate (ALLE skal bestå)
+Al kode SKAL bestå disse tre tjek uden workarounds, `# type: ignore`, `# noqa`-hacks eller andre former for snyd:
+
+```bash
+pytest --ignore=scripts          # Alle tests skal være grønne
+mypy app/                         # Ingen type-fejl
+lint-imports                      # Alle arkitektur-kontrakter skal holde
+```
+
+Hvis en ændring bryder et af disse tjek, SKAL det fikses i samme ændring — ikke "vi tager det senere".
+
+lint-imports håndhæver automatisk regel 2 (ensrettet afhængighed) via kontrakter defineret i pyproject.toml. Hvis du tilføjer et nyt domæne, skal du også tilføje en ny kontrakt.
+
+5. Gamle "Code Smells"
 Den gamle instruktionsfil indeholdt en lang liste af generiske "code smells". De er stadig gyldige, men vi stoler på, at du følger de 4 regler ovenfor, som er designet til at forhindre dem.

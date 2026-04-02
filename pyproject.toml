@@ -12,3 +12,90 @@ omit = ["tests/*", "scripts/*"]
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
+
+# ── Import Linter ─────────────────────────────────────────────────
+# Enforces the unidirectional dependency rules from our architecture.
+# Run with: lint-imports
+
+[tool.importlinter]
+root_packages = ["app"]
+
+# Rule 1: Core must NEVER import from domains
+[[tool.importlinter.contracts]]
+name = "Core independence"
+type = "forbidden"
+source_modules = ["app.core"]
+forbidden_modules = ["app.domains"]
+
+# Rule 2: Domains must not import from each other (except via core events)
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between file_discovery and file_processing"
+type = "independence"
+modules = [
+    "app.domains.file_discovery",
+    "app.domains.file_processing",
+]
+
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between ingest_monitor and tally_light"
+type = "independence"
+modules = [
+    "app.domains.ingest_monitor",
+    "app.domains.tally_light",
+]
+
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between ingest_monitor and presentation"
+type = "independence"
+modules = [
+    "app.domains.ingest_monitor",
+    "app.domains.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between tally_light and presentation"
+type = "independence"
+modules = [
+    "app.domains.tally_light",
+    "app.domains.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between storage and file_discovery"
+type = "independence"
+modules = [
+    "app.domains.storage",
+    "app.domains.file_discovery",
+]
+# TYPE_CHECKING-only imports for type hints (not runtime dependencies)
+ignore_imports = [
+    "app.domains.file_discovery.file_scanner -> app.domains.storage.storage_monitor",
+    "app.domains.file_discovery.file_scanner_service -> app.domains.storage.storage_monitor",
+]
+
+# Rule 3: Nothing may import from presentation (it's the outermost layer)
+[[tool.importlinter.contracts]]
+name = "Presentation is not imported by other domains"
+type = "forbidden"
+source_modules = [
+    "app.domains.file_discovery",
+    "app.domains.file_processing",
+    "app.domains.ingest_monitor",
+    "app.domains.tally_light",
+    "app.domains.storage",
+    "app.domains.network_mount",
+    "app.domains.lifecycle",
+    "app.domains.cleanup",
+    "app.domains.shared",
+    "app.core",
+]
+forbidden_modules = ["app.domains.presentation"]
+
+# Rule 4: Layered architecture - domains depend on core, not the other way
+[[tool.importlinter.contracts]]
+name = "Domains depend on core (not reverse)"
+type = "layers"
+layers = [
+    "app.domains",
+    "app.core",
+]
