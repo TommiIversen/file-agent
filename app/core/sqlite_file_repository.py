@@ -155,10 +155,18 @@ class SqliteFileRepository:
     async def _run_migrations(self) -> None:
         """Run pending Alembic migrations against the open connection."""
         import asyncio
+        import sys
+        from pathlib import Path
         from alembic.config import Config
         from alembic import command
 
-        alembic_cfg = Config("alembic.ini")
+        # PyInstaller sets sys._MEIPASS to the temp extraction dir;
+        # in normal dev mode we fall back to the project root.
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+        alembic_ini = base / "alembic.ini"
+
+        alembic_cfg = Config(str(alembic_ini))
+        alembic_cfg.set_main_option("script_location", str(base / "alembic"))
         alembic_cfg.set_main_option(
             "sqlalchemy.url",
             f"sqlite+aiosqlite:///{self._db_path}",

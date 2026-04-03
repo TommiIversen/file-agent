@@ -45,6 +45,15 @@ datas = rich_datas + [
         os.path.join(PROJECT_ROOT, "settings.env"),
         ".",
     ),
+    # Alembic config + migration scripts
+    (
+        os.path.join(PROJECT_ROOT, "alembic.ini"),
+        ".",
+    ),
+    (
+        os.path.join(PROJECT_ROOT, "alembic"),
+        "alembic",
+    ),
 ]
 
 # Hidden imports that PyInstaller can't discover via static analysis
