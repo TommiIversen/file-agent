@@ -1,8 +1,24 @@
 from pathlib import Path
+import sys
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files
+
+
+def _read_build_time() -> str:
+    """Read BUILD_TIME file from app root (created by CI). Returns 'n/a' if missing."""
+    # PyInstaller sets sys._MEIPASS; otherwise use cwd
+    base = Path(getattr(sys, '_MEIPASS', '.'))
+    build_file = base / 'BUILD_TIME'
+    try:
+        return build_file.read_text().strip()
+    except FileNotFoundError:
+        return 'n/a'
+
+
+BUILD_TIME: str = _read_build_time()
+APP_DIRECTORY: str = str(Path(getattr(sys, '_MEIPASS', '.')).resolve())
 
 
 class Settings(BaseSettings):

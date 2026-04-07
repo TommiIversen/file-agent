@@ -29,6 +29,23 @@
         <!-- Settings Content -->
     <div x-show="$store.settings?.settingsData" class="space-y-6">
 
+            <!-- Build & Runtime Info -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="info" class="inline-block w-5 h-5"></i> Build & Runtime</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-300">Build Time:</span>
+                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
+                             x-text="$store.settings?.settingsData?.build_time || 'n/a'"></div>
+                    </div>
+                    <div>
+                        <span class="text-gray-300">App Directory:</span>
+                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
+                             x-text="$store.settings?.settingsData?.app_directory || 'n/a'"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Path Settings -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Path Configuration</h3>

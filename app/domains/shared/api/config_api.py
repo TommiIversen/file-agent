@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
+from app.config import BUILD_TIME, APP_DIRECTORY
 from app.dependencies import get_command_bus, get_query_bus
 from ..commands import ReloadConfigCommand, RestartApplicationCommand
 from ..queries import GetSettingsQuery, GetConfigInfoQuery
@@ -17,6 +18,8 @@ from ..queries import GetSettingsQuery, GetConfigInfoQuery
 
 class PublicSettings(BaseModel):
     """Subset of settings safe to expose via API."""
+    build_time: str = "n/a"
+    app_directory: str = "n/a"
     source_directory: str
     destination_directory: str
     file_stable_time_seconds: int
@@ -52,7 +55,10 @@ _RESTART_COOLDOWN_SECONDS: float = 300.0  # 5 minutes
 async def read_settings(query_bus: QueryBus = Depends(get_query_bus)):
     """Get current application settings (filtered for safety)."""
     full_settings = await query_bus.execute(GetSettingsQuery())
-    return PublicSettings(**full_settings.model_dump())
+    data = full_settings.model_dump()
+    data["build_time"] = BUILD_TIME
+    data["app_directory"] = APP_DIRECTORY
+    return PublicSettings(**data)
 
 
 @router.get("/config-info")

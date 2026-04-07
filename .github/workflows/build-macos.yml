@@ -50,6 +50,10 @@ jobs:
           rm -rf build/ dist/ __pycache__/
           pyinstaller --clean --noconfirm file-agent.spec 2>/dev/null || true
 
+      - name: Write build timestamp
+        run: |
+          TZ=Europe/Copenhagen date '+%Y-%m-%d %H:%M:%S' > BUILD_TIME
+
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT

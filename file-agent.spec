@@ -56,6 +56,11 @@ datas = rich_datas + [
     ),
 ]
 
+# Optional: build timestamp (created by CI, may not exist locally)
+build_time_file = os.path.join(PROJECT_ROOT, "BUILD_TIME")
+if os.path.exists(build_time_file):
+    datas.append((build_time_file, "."))
+
 # Hidden imports that PyInstaller can't discover via static analysis
 hiddenimports = app_hiddenimports + rich_hiddenimports + [
     "uvicorn.logging",
