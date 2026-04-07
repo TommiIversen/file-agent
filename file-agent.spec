@@ -85,7 +85,6 @@ hiddenimports = app_hiddenimports + rich_hiddenimports + [
     "httpx",
     "httpx._transports",
     "httpx._transports.default",
-    "greenlet",
     "aiosqlite",
     "alembic",
     "alembic.command",
