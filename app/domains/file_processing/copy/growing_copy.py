@@ -164,6 +164,7 @@ class GrowingFileCopyStrategy():
                                 copy_progress=100.0,
                                 destination_path=dest_path,
                                 bytes_copied=actual_bytes_copied, # Opdater med faktiske bytes
+                                file_size=actual_bytes_copied, # Opdater file_size til den faktiske størrelse
                                 error_message=f"Could not delete source file: {delete_error}"
                             )
                         except (InvalidTransitionError, ValueError) as e:
@@ -178,6 +179,7 @@ class GrowingFileCopyStrategy():
                             copy_progress=100.0,
                             destination_path=dest_path,
                             bytes_copied=actual_bytes_copied, # Opdater med faktiske bytes
+                            file_size=actual_bytes_copied, # Opdater file_size til den faktiske størrelse
                             error_message=None # Ryd fejl
                         )
 

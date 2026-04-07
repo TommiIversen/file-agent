@@ -108,6 +108,18 @@ class TestFinalizeSuccess:
         event_bus.publish.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_success_skips_if_already_completed(self):
+        """Copy strategy already transitioned to COMPLETED — finalize must not re-publish."""
+        svc, repo, event_bus, sm = _make_service()
+        tracked = _make_tracked(status=FileStatus.COMPLETED)
+        repo.get_by_id.return_value = tracked
+
+        await svc.finalize_success(_make_job(), file_size=5000)
+
+        sm.transition.assert_not_awaited()
+        event_bus.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_success_skips_if_file_not_found(self):
         svc, repo, event_bus, sm = _make_service()
         repo.get_by_id.return_value = None

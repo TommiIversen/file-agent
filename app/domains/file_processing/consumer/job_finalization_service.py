@@ -30,14 +30,18 @@ class JobFinalizationService:
 
     async def finalize_success(self, job: QueueJob, file_size: int) -> None:
         """Finalize successful job completion."""
-        # Check the current status to avoid overwriting COMPLETED_DELETE_FAILED
+        # Check the current status to avoid overwriting COMPLETED or COMPLETED_DELETE_FAILED.
+        # The copy strategy (e.g. GrowingFileCopyStrategy) may have already transitioned
+        # the file to COMPLETED and published the FileCopyCompletedEvent with the correct
+        # actual bytes.  Re-publishing here with the stale job.file_size would overwrite
+        # the UI with the wrong (queue-time) file size.
         tracked_file = await self.file_repository.get_by_id(job.file_id)
         if not tracked_file:
             logging.warning(f"Tracked file not found for job {job.file_path} in finalize_success")
             return
-        if tracked_file.status == FileStatus.COMPLETED_DELETE_FAILED:
+        if tracked_file.status in (FileStatus.COMPLETED, FileStatus.COMPLETED_DELETE_FAILED):
             logging.debug(
-                f"Skipping finalization for {job.file_path} as it already has delete error status"
+                f"Skipping finalization for {job.file_path} as it is already {tracked_file.status.value}"
             )
             return
 
