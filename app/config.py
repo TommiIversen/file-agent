@@ -1,24 +1,52 @@
 from pathlib import Path
+import logging
 import sys
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files
 
+_log = logging.getLogger(__name__)
+
+
+def _get_app_directory() -> str:
+    """Return the directory where the application lives."""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller frozen build — use the executable's directory
+        return str(Path(sys.executable).parent.resolve())
+    return str(Path('.').resolve())
+
 
 def _read_build_time() -> str:
-    """Read BUILD_TIME file from app root (created by CI). Returns 'n/a' if missing."""
-    # PyInstaller sets sys._MEIPASS; otherwise use cwd
-    base = Path(getattr(sys, '_MEIPASS', '.'))
-    build_file = base / 'BUILD_TIME'
-    try:
-        return build_file.read_text().strip()
-    except FileNotFoundError:
-        return 'n/a'
+    """Read BUILD_TIME file created by CI. Returns 'n/a' if missing."""
+    search_paths = []
+
+    # 1. PyInstaller _MEIPASS (bundled data files)
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        search_paths.append(Path(meipass) / 'BUILD_TIME')
+
+    # 2. Executable's directory (for onedir builds)
+    if getattr(sys, 'frozen', False):
+        search_paths.append(Path(sys.executable).parent / 'BUILD_TIME')
+
+    # 3. Current working directory (development)
+    search_paths.append(Path('.') / 'BUILD_TIME')
+
+    for path in search_paths:
+        try:
+            value = path.read_text().strip()
+            _log.debug(f"BUILD_TIME found at: {path.resolve()} → '{value}'")
+            return value
+        except FileNotFoundError:
+            _log.debug(f"BUILD_TIME not found at: {path.resolve()}")
+
+    _log.debug("BUILD_TIME file not found in any search path")
+    return 'n/a'
 
 
 BUILD_TIME: str = _read_build_time()
-APP_DIRECTORY: str = str(Path(getattr(sys, '_MEIPASS', '.')).resolve())
+APP_DIRECTORY: str = _get_app_directory()
 
 
 class Settings(BaseSettings):

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,7 @@ from .domains.directory_browsing import api as directory
 
 
 from .config import Settings
+from .config import BUILD_TIME, APP_DIRECTORY
 from .dependencies import (
     get_event_bus,
     get_event_store,
@@ -142,6 +144,13 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
 
 
 def _log_config_info() -> None:
+    logging.info("=" * 60)
+    logging.info("  FILE TRANSFER AGENT — STARTING UP")
+    logging.info("=" * 60)
+    logging.info(f"  Build time:    {BUILD_TIME}")
+    logging.info(f"  App directory: {APP_DIRECTORY}")
+    logging.info(f"  Frozen:        {getattr(sys, 'frozen', False)}")
+
     config_info = settings.config_file_info
     logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
     logging.info(f"Running on hostname: {config_info['hostname']}")

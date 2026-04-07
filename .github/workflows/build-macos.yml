@@ -63,6 +63,14 @@ jobs:
           pyinstaller --noconfirm file-agent.spec
           echo "Build complete. Contents of dist/file-agent/:"
           ls -la dist/file-agent/
+          echo ""
+          echo "--- Verifying BUILD_TIME is bundled ---"
+          if [ -f dist/file-agent/BUILD_TIME ]; then
+            echo "✅ BUILD_TIME found: $(cat dist/file-agent/BUILD_TIME)"
+          else
+            echo "❌ BUILD_TIME NOT found in dist/file-agent/"
+            ls -la BUILD_TIME || echo "BUILD_TIME doesn't exist in project root either!"
+          fi
 
       - name: Package artifact
         run: |
