@@ -489,8 +489,8 @@ class TestGrowingCopyLoop:
         tf = _make_tracked_file(status=FileStatus.GROWING, growth_rate_mbps=5.0, file_size=20000)
         dst = AsyncMock()
 
-        # Simulate file growing: 10000 → 15000 → 15000 → 15000 (stops)
-        size_sequence = [10000, 15000, 15000, 15000]
+        # Simulate file growing: 10000 → 15000 → 15000 → 15000 (stops) + re-read
+        size_sequence = [10000, 15000, 15000, 15000, 15000]
         strategy._get_file_size = AsyncMock(side_effect=size_sequence)
 
         # io_loop returns the safe_copy_to each time
@@ -526,8 +526,8 @@ class TestGrowingCopyLoop:
 
         safety_margin = 5000
 
-        # File keeps growing: 50000 → 50000 (no growth → cycle 1) → 50000 (cycle 2 → finished)
-        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000])
+        # File keeps growing: 50000 → 50000 (no growth → cycle 1) → 50000 (cycle 2 → finished) + re-read
+        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000, 50000])
 
         captured_ranges = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
@@ -565,8 +565,8 @@ class TestGrowingCopyLoop:
         # File: 50000, safety=20000, safe_copy_to=30000
         # Start bytes_copied at 25000 so distance = 50000 - 25000 = 25000
         # buffer_zone = 2*20000 = 40000. 25000 < 40000 → throttled
-        # Then growth stops → full speed
-        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000])
+        # Then growth stops → full speed (+ re-read after exit)
+        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000, 50000])
 
         captured_pause = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
@@ -605,8 +605,8 @@ class TestGrowingCopyLoop:
         # safe_copy_to = 99000
         # distance_from_write_head = 100000 - 0 = 100000
         # buffer_zone = 2000. 100000 > 2000 → full speed
-        # Then file stops growing after 2 cycles
-        strategy._get_file_size = AsyncMock(side_effect=[100000, 100000, 100000])
+        # Then file stops growing after 2 cycles (+ re-read after exit)
+        strategy._get_file_size = AsyncMock(side_effect=[100000, 100000, 100000, 100000])
 
         captured_pause = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
@@ -638,8 +638,8 @@ class TestGrowingCopyLoop:
         tf = _make_tracked_file(status=FileStatus.GROWING, growth_rate_mbps=5.0, file_size=50000)
         dst = AsyncMock()
 
-        # File grows, then stops
-        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000])
+        # File grows, then stops (+ re-read after exit)
+        strategy._get_file_size = AsyncMock(side_effect=[50000, 50000, 50000, 50000])
 
         captured_status = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
@@ -763,7 +763,7 @@ class TestEventPublishing:
         tf = _make_tracked_file(file_path=str(source), file_size=5000)
 
         strategy._copy_growing_file = AsyncMock(return_value=True)
-        verification_service.verify_integrity.return_value = (True, 5000, 4800)
+        verification_service.verify_integrity.return_value = (True, 5000, 5000)
         verification_service.delete_source_file.return_value = (True, None)
 
         await strategy.copy_file(str(source), str(dest), tf)
@@ -771,9 +771,9 @@ class TestEventPublishing:
         event_bus.publish.assert_called_once()
         event = event_bus.publish.call_args[0][0]
         assert isinstance(event, FileCopyCompletedEvent)
-        assert event.bytes_copied == 4800
+        assert event.bytes_copied == 5000
         assert event.source_size == 5000
-        assert event.dest_size == 4800
+        assert event.dest_size == 5000
 
     async def test_no_event_published_when_delete_fails(
         self, strategy, tmp_path, event_bus, verification_service
@@ -791,3 +791,143 @@ class TestEventPublishing:
 
         # When delete fails → COMPLETED_DELETE_FAILED, no event published
         event_bus.publish.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestSourceDeletionSafety — CRITICAL: source must NEVER be deleted for partial copies
+# Incident 2026-03-27: source was deleted when dest < source (growing file)
+# ---------------------------------------------------------------------------
+
+class TestSourceDeletionSafety:
+    """Gate 2: delete_source_file must only be called when dest == source size."""
+
+    async def test_source_grew_after_copy_raises_integrity_error(
+        self, strategy, tmp_path, verification_service
+    ):
+        """If source grew during copy (dest < source), raise integrity error — never delete."""
+        source = tmp_path / "source" / "test.mxf"
+        source.parent.mkdir()
+        source.write_bytes(b"x" * 10000)
+        dest = tmp_path / "dest" / "test.mxf"
+        tf = _make_tracked_file(file_path=str(source), file_size=10000)
+
+        strategy._copy_growing_file = AsyncMock(return_value=True)
+        # Simulate: source grew to 10000 but only 7000 was copied
+        verification_service.verify_integrity.return_value = (False, 10000, 7000)
+
+        with pytest.raises(FileCopyIntegrityError):
+            await strategy.copy_file(str(source), str(dest), tf)
+
+        # Source must NOT have been deleted
+        verification_service.delete_source_file.assert_not_awaited()
+
+    async def test_exact_match_allows_deletion(
+        self, strategy, tmp_path, state_machine, verification_service, event_bus
+    ):
+        """When source and dest sizes match exactly, deletion is allowed."""
+        source = tmp_path / "source" / "test.mxf"
+        source.parent.mkdir()
+        source.write_bytes(b"x" * 7000)
+        dest = tmp_path / "dest" / "test.mxf"
+        tf = _make_tracked_file(file_path=str(source), file_size=7000)
+
+        strategy._copy_growing_file = AsyncMock(return_value=True)
+        verification_service.verify_integrity.return_value = (True, 7000, 7000)
+        verification_service.delete_source_file.return_value = (True, None)
+
+        result = await strategy.copy_file(str(source), str(dest), tf)
+
+        assert result is True
+        verification_service.delete_source_file.assert_awaited_once()
+        call_kwargs = state_machine.transition.call_args.kwargs
+        assert call_kwargs["new_status"] == FileStatus.COMPLETED
+
+    async def test_delete_never_called_on_verification_failure(
+        self, strategy, tmp_path, verification_service
+    ):
+        """Verification failure must prevent any source deletion attempt."""
+        source = tmp_path / "source" / "test.mxf"
+        source.parent.mkdir()
+        source.write_bytes(b"x" * 5000)
+        dest = tmp_path / "dest" / "test.mxf"
+        tf = _make_tracked_file(file_path=str(source), file_size=5000)
+
+        strategy._copy_growing_file = AsyncMock(return_value=True)
+        verification_service.verify_integrity.return_value = (False, 5000, 3000)
+
+        with pytest.raises(FileCopyIntegrityError):
+            await strategy.copy_file(str(source), str(dest), tf)
+
+        verification_service.delete_source_file.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# TestCopyLoopPostExitRecheck — loop must re-verify size before exiting
+# Incident 2026-03-27: loop exited with stale current_file_size while source grew
+# ---------------------------------------------------------------------------
+
+class TestCopyLoopPostExitRecheck:
+
+    def _make_network_detector(self):
+        return MagicMock(spec=NetworkErrorDetector)
+
+    async def test_loop_continues_when_file_grew_after_growth_stopped(self, strategy, io_loop):
+        """After declaring GROWTH STOPPED, if source grew during catch-up, loop must continue."""
+        tf = _make_tracked_file(status=FileStatus.GROWING, growth_rate_mbps=5.0, file_size=20000)
+        dst = AsyncMock()
+
+        # Sequence: 10000 → 10000 → 10000 (growth stops) → re-read: 12000 (grew!) → 12000 (copy) → re-read: 12000 (done)
+        strategy._get_file_size = AsyncMock(side_effect=[10000, 10000, 10000, 12000, 12000, 12000])
+
+        async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
+            return (end, 100, datetime.now())
+
+        io_loop.copy_chunk_range = mock_copy_chunk_range
+
+        result = await strategy._growing_copy_loop(
+            source_path="/fake/test.mxf",
+            dst=dst,
+            initial_tracked_file=tf,
+            bytes_copied=0,
+            last_file_size=0,
+            no_growth_cycles=0,
+            max_no_growth_cycles=2,
+            safety_margin_bytes=1000,
+            chunk_size=4096,
+            poll_interval=0,
+            pause_ms=0,
+            network_detector=self._make_network_detector(),
+        )
+
+        # Must have copied ALL 12000 bytes, not just the 10000 from first detection
+        assert result == 12000
+
+    async def test_loop_exits_when_final_recheck_confirms_no_growth(self, strategy, io_loop):
+        """After growth stopped and catch-up, re-read confirms same size → safe to exit."""
+        tf = _make_tracked_file(status=FileStatus.GROWING, growth_rate_mbps=5.0, file_size=10000)
+        dst = AsyncMock()
+
+        # Sequence: 10000 → 10000 → 10000 (stops) → re-read 10000 (same → exit)
+        strategy._get_file_size = AsyncMock(side_effect=[10000, 10000, 10000, 10000])
+
+        async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
+            return (end, 100, datetime.now())
+
+        io_loop.copy_chunk_range = mock_copy_chunk_range
+
+        result = await strategy._growing_copy_loop(
+            source_path="/fake/test.mxf",
+            dst=dst,
+            initial_tracked_file=tf,
+            bytes_copied=0,
+            last_file_size=0,
+            no_growth_cycles=0,
+            max_no_growth_cycles=2,
+            safety_margin_bytes=1000,
+            chunk_size=4096,
+            poll_interval=0,
+            pause_ms=0,
+            network_detector=self._make_network_detector(),
+        )
+
+        assert result == 10000

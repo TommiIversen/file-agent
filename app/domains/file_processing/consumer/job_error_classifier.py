@@ -97,7 +97,7 @@ class JobErrorClassifier:
             # This is already handled by _is_source_error, but good to be explicit
             return FileStatus.REMOVED, "Source file no longer exists (FileNotFoundError)"
         elif isinstance(error, FileCopyTimeoutError):
-            return FileStatus.FAILED, f"File operation timed out: {str(error)}"
+            return FileStatus.WAITING_FOR_NETWORK, f"File operation timed out (awaiting network recovery): {str(error)}"
         elif isinstance(error, FileCopyIOError):
             return FileStatus.FAILED, f"File I/O error: {str(error)}"
         elif isinstance(error, FileCopyIntegrityError):

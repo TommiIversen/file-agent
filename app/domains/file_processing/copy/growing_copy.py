@@ -139,7 +139,18 @@ class GrowingFileCopyStrategy():
                 if verification_success:
                     # For growing files bruger vi destination størrelsen som det faktiske antal bytes kopieret
                     actual_bytes_copied = dest_bytes
-                    
+
+                    # Gate 2: Defense-in-depth — NEVER delete source unless sizes match exactly
+                    if source_bytes != dest_bytes:
+                        logging.error(
+                            f"SAFETY GATE: Refusing to delete source — size mismatch "
+                            f"(source={source_bytes}, dest={dest_bytes}): {os.path.basename(source_path)}"
+                        )
+                        raise FileCopyIntegrityError(
+                            f"Source/dest size mismatch after verification: "
+                            f"source={source_bytes}, dest={dest_bytes}"
+                        )
+
                     delete_success, delete_error = await self._verification_service.delete_source_file(source_path)
                     if not delete_success:
                         logging.warning(
@@ -400,6 +411,18 @@ class GrowingFileCopyStrategy():
                     last_progress_update_time = current_time # Opdater tiden
 
             if file_finished_growing and bytes_copied >= current_file_size:
+                # Post-exit safety re-read: check if file grew since we last read the size.
+                # This prevents exiting with a stale current_file_size (incident 2026-03-27).
+                final_size = await self._get_file_size(source_path)
+                if final_size > bytes_copied:
+                    logging.info(
+                        f" FILE GREW AFTER GROWTH STOPPED: {os.path.basename(source_path)} "
+                        f"(was {current_file_size}, now {final_size}) - continuing copy"
+                    )
+                    current_file_size = final_size
+                    last_file_size = final_size
+                    continue
+
                 logging.info(
                     f" COPY COMPLETE: {os.path.basename(source_path)} ({bytes_copied} bytes)"
                 )

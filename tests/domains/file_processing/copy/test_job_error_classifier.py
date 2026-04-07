@@ -49,10 +49,10 @@ class TestTypedExceptions:
         assert status == FileStatus.REMOVED
         assert "FileNotFoundError" in reason
 
-    def test_timeout_error_returns_failed(self, classifier):
+    def test_timeout_error_returns_waiting_for_network(self, classifier):
         err = FileCopyTimeoutError("Read timeout")
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
-        assert status == FileStatus.FAILED
+        assert status == FileStatus.WAITING_FOR_NETWORK
         assert "timed out" in reason
 
     def test_io_error_returns_failed(self, classifier):
@@ -197,6 +197,25 @@ class TestHelpers:
 
     def test_is_source_error_string_match(self, classifier):
         assert classifier._is_source_error("no such file or directory: test.mxf", "/src/test.mxf") is True
+
+
+# ── Timeout errors should enable network recovery ──────────────────────────
+# Incident 2026-03-27: FileCopyTimeoutError was classified as FAILED, preventing
+# automatic retry on network recovery. It should be WAITING_FOR_NETWORK.
+
+class TestTimeoutNetworkRecovery:
+
+    def test_timeout_error_classified_as_waiting_for_network(self, classifier):
+        """FileCopyTimeoutError during copy should allow network recovery retry."""
+        err = FileCopyTimeoutError("Read timeout after 30s")
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.WAITING_FOR_NETWORK
+
+    def test_io_error_stays_failed(self, classifier):
+        """Non-timeout I/O errors should still be FAILED (no change)."""
+        err = FileCopyIOError("Disk read error")
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.FAILED
 
     def test_is_source_error_file_not_found(self, classifier, tmp_path):
         nonexistent = str(tmp_path / "ghost.mxf")

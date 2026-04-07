@@ -31,15 +31,15 @@ class TestVerifyIntegrity:
         assert src_size == 4096
         assert dst_size == 4096
 
-    async def test_different_sizes_still_returns_true(self, svc, tmp_path):
-        """For growing files, dest < source is normal - still returns True."""
+    async def test_dest_smaller_than_source_returns_false(self, svc, tmp_path):
+        """Incomplete copy (dest < source) must fail — source must never be deleted."""
         src = tmp_path / "source.mxf"
         dst = tmp_path / "dest.mxf"
         src.write_bytes(b"x" * 8000)
         dst.write_bytes(b"x" * 4000)
 
         success, src_size, dst_size = await svc.verify_integrity(str(src), str(dst))
-        assert success is True
+        assert success is False
         assert src_size == 8000
         assert dst_size == 4000
 

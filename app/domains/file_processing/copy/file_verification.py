@@ -34,22 +34,20 @@ class FileVerificationService:
                 logging.error(f"Verification FAILED: destination file is empty (0 bytes): {dest_path}")
                 return False, source_size, dest_size
 
-            # For growing files, dest < source is normal (source kept growing during copy).
-            # But dest should never be larger than source.
             if dest_size > source_size:
                 logging.error(
                     f"Verification FAILED: destination ({dest_size}) larger than source ({source_size}): {dest_path}"
                 )
                 return False, source_size, dest_size
 
-            if source_size != dest_size:
-                logging.warning(
-                    f"Size difference: source={source_size}, dest={dest_size} "
-                    f"(normal for growing files, {dest_size/source_size*100:.1f}% copied)"
+            if dest_size < source_size:
+                logging.error(
+                    f"Verification FAILED: INCOMPLETE COPY — destination ({dest_size}) smaller than "
+                    f"source ({source_size}), {dest_size/source_size*100:.1f}% copied: {dest_path}"
                 )
-            else:
-                logging.debug(f"File integrity verified: {dest_size} bytes")
-            
+                return False, source_size, dest_size
+
+            logging.debug(f"File integrity verified: {dest_size} bytes")
             return True, source_size, dest_size
             
         except Exception as e:
