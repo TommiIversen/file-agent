@@ -44,10 +44,16 @@ class JobFinalizationService:
         # Use state machine for atomic status transition + field updates
         # State machine handles: repository update, event publishing,
         # auto-clearing error_message, and auto-setting completed_at.
+        # IMPORTANT: Set file_size and bytes_copied so the database has the
+        # definitive final values.  Without this the UI shows the stale
+        # intermediate size from the last progress-update until the user
+        # refreshes the page.
         await self.state_machine.transition(
             file_id=tracked_file.id,
             new_status=FileStatus.COMPLETED,
             copy_progress=100.0,
+            bytes_copied=file_size,
+            file_size=file_size,
         )
         
         await self.event_bus.publish(FileCopyCompletedEvent(
@@ -55,8 +61,8 @@ class JobFinalizationService:
             file_path=tracked_file.file_path,
             destination_path=getattr(tracked_file, "destination_path", None) or "",
             bytes_copied=file_size, # Use the actual copied bytes from parameter
-            source_size=tracked_file.file_size, # Original source size
-            dest_size=file_size # Destination size (should be same for normal copies)
+            source_size=file_size,  # Use actual size (tracked_file may be stale)
+            dest_size=file_size     # Destination size (should be same for normal copies)
         ))
         logging.info(f"Job completed successfully: {job.file_path}")
 

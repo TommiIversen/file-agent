@@ -60,6 +60,8 @@ class TestFinalizeSuccess:
             file_id="test-id",
             new_status=FileStatus.COMPLETED,
             copy_progress=100.0,
+            bytes_copied=5000,
+            file_size=5000,
         )
 
     @pytest.mark.asyncio
@@ -75,6 +77,8 @@ class TestFinalizeSuccess:
         assert isinstance(event, FileCopyCompletedEvent)
         assert event.file_id == "test-id"
         assert event.bytes_copied == 5000
+        assert event.source_size == 5000
+        assert event.dest_size == 5000
 
     @pytest.mark.asyncio
     async def test_success_passes_fields_via_kwargs_not_mutation(self):
@@ -88,6 +92,8 @@ class TestFinalizeSuccess:
         # Verify copy_progress is passed via kwargs
         call_kwargs = sm.transition.call_args[1]
         assert call_kwargs["copy_progress"] == 100.0
+        assert call_kwargs["bytes_copied"] == 5000
+        assert call_kwargs["file_size"] == 5000
         # completed_at and error_message are handled automatically by state machine
 
     @pytest.mark.asyncio
