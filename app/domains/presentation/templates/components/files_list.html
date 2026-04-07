@@ -2,19 +2,9 @@
 <div class="h-full overflow-y-auto space-y-2" @scroll="$store.files.handleFilesScroll($event)">
 
     <template x-for="file in $store.files.filteredFiles" :key="file.id">
-        <!-- Simple File Row with Hover Tooltip -->
-        <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative cursor-pointer"
-             x-data="{ showTip: false, tipStyle: {} }"
-             @mouseenter="
-                showTip = true;
-                const rect = $el.getBoundingClientRect();
-                tipStyle = {
-                    position: 'fixed',
-                    bottom: (window.innerHeight - rect.top + 8) + 'px',
-                    left: rect.left + 'px'
-                };
-             "
-             @mouseleave="showTip = false">
+        <!-- Simple File Row with Click-Toggle Tooltip -->
+        <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg relative"
+             x-data="{ showTip: false, tipStyle: {} }">
             <div class="flex items-center space-x-4">
 
                 <!-- File Name (left) -->
@@ -56,13 +46,32 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Info toggle button -->
+                <button class="ml-2 p-1 rounded-full transition-colors duration-200 flex-shrink-0"
+                        :class="showTip ? 'text-blue-400 bg-gray-700' : 'text-gray-500 hover:text-gray-300'"
+                        @click.stop="
+                            showTip = !showTip;
+                            if (showTip) {
+                                const rect = $el.closest('.relative').getBoundingClientRect();
+                                tipStyle = {
+                                    position: 'fixed',
+                                    bottom: (window.innerHeight - rect.top + 8) + 'px',
+                                    left: rect.left + 'px'
+                                };
+                            }
+                        "
+                        title="Vis detaljer">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                </button>
             </div>
 
-            <!-- Hover Tooltip with Additional Info -->
+            <!-- Click-Toggle Tooltip with Additional Info -->
             <div x-show="showTip"
                  x-transition.opacity.duration.200ms
+                 @click.outside="showTip = false"
                  :style="tipStyle"
-                 class="w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50 pointer-events-none">
+                 class="w-[500px] bg-gray-900 text-white p-4 rounded-lg shadow-xl z-50">
                 <div class="grid grid-cols-2 gap-6 text-sm">
                     <!-- Left Column -->
                     <div class="space-y-2">
