@@ -303,7 +303,11 @@ class GrowingFileCopyStrategy():
             try:
                 network_detector.check_write_error(e, "growing file copy")
             except NetworkError:
-                logging.error(f"Network error detected in growing file copy for {source_path}: {e}", exc_info=True)
+                logging.error(
+                    f"Network destination lost during copy of {os.path.basename(source_path)}: {e}. "
+                    f"File will be retried automatically when network recovers.",
+                    exc_info=True,
+                )
                 raise
             logging.error(f"Error in growing file copy for {source_path}: {type(e).__name__}: {e}", exc_info=True)
             raise FileCopyError(f"Error in growing file copy: {type(e).__name__}: {e}") from e

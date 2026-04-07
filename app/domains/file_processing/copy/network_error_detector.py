@@ -23,6 +23,8 @@ class NetworkErrorDetector:
     NETWORK_ERROR_STRINGS = {
         "input/output error",
         "errno 5",
+        "bad file descriptor",
+        "errno 9",
         "connection refused",
         "network is unreachable",
         "no route to host",
@@ -51,6 +53,7 @@ class NetworkErrorDetector:
     # Network-related errno codes (including Windows-specific)
     NETWORK_ERRNO_CODES = {
         errno.EIO,
+        errno.EBADF,        # Bad file descriptor — network mount dropped
         errno.ECONNREFUSED,
         errno.ETIMEDOUT,
         errno.ENETUNREACH,
