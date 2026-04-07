@@ -48,15 +48,17 @@ class JobFinalizationService:
             file_id=tracked_file.id,
             new_status=FileStatus.COMPLETED,
             copy_progress=100.0,
+            bytes_copied=file_size,
+            file_size=file_size,
         )
         
         await self.event_bus.publish(FileCopyCompletedEvent(
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
             destination_path=getattr(tracked_file, "destination_path", None) or "",
-            bytes_copied=file_size, # Use the actual copied bytes from parameter
-            source_size=tracked_file.file_size, # Original source size
-            dest_size=file_size # Destination size (should be same for normal copies)
+            bytes_copied=file_size,
+            source_size=file_size,
+            dest_size=file_size,
         ))
         logging.info(f"Job completed successfully: {job.file_path}")
 

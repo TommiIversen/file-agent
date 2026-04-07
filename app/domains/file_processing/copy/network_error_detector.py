@@ -1,5 +1,6 @@
 import errno
 import asyncio
+import re
 from typing import Optional
 
 from app.core.events.event_bus import DomainEventBus
@@ -70,6 +71,21 @@ class NetworkErrorDetector:
         1231, # Windows-specific network error codes
     }
 
+    # Compiled regex pattern for word-boundary matching of error indicators
+    _NETWORK_ERROR_PATTERN = re.compile(
+        "|".join(re.escape(s) for s in NETWORK_ERROR_STRINGS)
+        .replace(r"errno\ 5", r"errno 5\b")
+        .replace(r"errno\ 9", r"errno 9\b")
+        .replace(r"errno\ 13", r"errno 13\b")
+        .replace(r"errno\ 22", r"errno 22\b")
+        .replace(r"errno\ 32", r"errno 32\b")
+        .replace(r"errno\ 110", r"errno 110\b")
+        .replace(r"errno\ 111", r"errno 111\b")
+        .replace(r"winerror\ 53", r"winerror 53\b")
+        .replace(r"winerror\ 67", r"winerror 67\b")
+        .replace(r"winerror\ 1231", r"winerror 1231\b")
+    )
+
     def __init__(self, event_bus: Optional[DomainEventBus] = None, current_file_id: Optional[str] = None):
         """
         Initialiserer den reaktive netværksfejl-detektor.
@@ -82,7 +98,7 @@ class NetworkErrorDetector:
         self._current_file_id = current_file_id
 
     def _is_network_error_string(self, error_str: str) -> bool:
-        return any(indicator in error_str for indicator in self.NETWORK_ERROR_STRINGS)
+        return bool(self._NETWORK_ERROR_PATTERN.search(error_str))
 
     def _is_network_errno(self, error: Exception) -> bool:
         return hasattr(error, "errno") and error.errno in self.NETWORK_ERRNO_CODES
