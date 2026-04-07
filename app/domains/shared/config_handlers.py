@@ -16,7 +16,6 @@ from .queries import GetSettingsQuery, GetConfigInfoQuery
 REQUIRES_RESTART_FIELDS: set[str] = {
     "source_directory",
     "destination_directory",
-    "log_file_path",
     "log_level",
     "max_concurrent_copies",
 }

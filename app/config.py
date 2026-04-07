@@ -4,7 +4,7 @@ import sys
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files
+from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files, get_data_dir, get_logs_dir, get_database_path
 
 _log = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ APP_DIRECTORY: str = _get_app_directory()
 class Settings(BaseSettings):
     # Database
     database_path: str = Field(
-        default="data/file-agent.db",
+        default_factory=get_database_path,
         description="Path to SQLite database file"
     )
 
@@ -85,7 +85,10 @@ class Settings(BaseSettings):
 
     # Logging konfiguration
     log_level: str = "INFO"
-    log_file_path: str = "logs/file_agent.log"
+    log_file_path: str = Field(
+        default_factory=lambda: str(get_logs_dir() / "file_agent.log"),
+        description="Path to log file"
+    )
     log_retention_days: int = 30
 
     # Storage monitoring

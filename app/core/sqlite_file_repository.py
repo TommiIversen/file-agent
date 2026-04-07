@@ -169,7 +169,7 @@ class SqliteFileRepository:
         alembic_cfg.set_main_option("script_location", str(base / "alembic"))
         alembic_cfg.set_main_option(
             "sqlalchemy.url",
-            f"sqlite+aiosqlite:///{self._db_path}",
+            f"sqlite:///{self._db_path}",
         )
         # Alembic's command API is synchronous — run in a thread
         await asyncio.to_thread(command.upgrade, alembic_cfg, "head")

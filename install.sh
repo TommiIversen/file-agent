@@ -22,9 +22,17 @@ BIN_LINK="/usr/local/bin/file-agent"
 SERVICE_NAME="com.fileagent.service"
 PLIST_NAME="${SERVICE_NAME}.plist"
 PLIST_DIR="$HOME/Library/LaunchAgents"
-LOG_DIR="$HOME/Library/Logs/file-agent"
-CONFIG_DIR="$HOME/.config/file-agent"
 BROWSER_PLIST="com.fileagent.openbrowser.plist"
+
+# New unified data directory (macOS best practice)
+DATA_DIR="$HOME/Library/Application Support/FileAgent"
+LOG_DIR="$DATA_DIR/logs"
+CONFIG_DIR="$DATA_DIR/config"
+DB_DIR="$DATA_DIR/data"
+
+# Legacy locations (for migration)
+LEGACY_LOG_DIR="$HOME/Library/Logs/file-agent"
+LEGACY_CONFIG_DIR="$HOME/.config/file-agent"
 
 # ── Colors ───────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -76,7 +84,11 @@ do_uninstall() {
     sudo rm -f "$BIN_LINK"
     log_success "Binary removed"
 
-    log_success "File Agent uninstalled. Config ($CONFIG_DIR) and logs ($LOG_DIR) were kept."
+    log_success "File Agent uninstalled. Data ($DATA_DIR) was kept."
+    log_info "To remove all data: rm -rf \"$DATA_DIR\""
+    # Also mention legacy dirs if they exist
+    [[ -d "$LEGACY_CONFIG_DIR" ]] && log_info "Legacy config still at: $LEGACY_CONFIG_DIR"
+    [[ -d "$LEGACY_LOG_DIR" ]]    && log_info "Legacy logs still at: $LEGACY_LOG_DIR"
     exit 0
 }
 
@@ -146,7 +158,60 @@ sudo ln -sf "$INSTALL_DIR/file-agent" "$BIN_LINK"
 log_success "Binary installed"
 
 # ── Create directories ───────────────────────────────────────────────
-mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$PLIST_DIR"
+mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$DB_DIR" "$PLIST_DIR"
+log_success "Data directory: $DATA_DIR"
+
+# ── Migrate from legacy locations ────────────────────────────────────
+MIGRATED=false
+
+# Migrate config files from ~/.config/file-agent/ → DATA_DIR/config/
+if [[ -d "$LEGACY_CONFIG_DIR" ]]; then
+    for f in "$LEGACY_CONFIG_DIR"/*-settings.env; do
+        [[ -f "$f" ]] || continue
+        fname=$(basename "$f")
+        if [[ ! -f "$CONFIG_DIR/$fname" ]]; then
+            cp "$f" "$CONFIG_DIR/$fname"
+            log_success "Migrated config: $fname"
+            MIGRATED=true
+        fi
+    done
+fi
+
+# Migrate logs from ~/Library/Logs/file-agent/ → DATA_DIR/logs/
+if [[ -d "$LEGACY_LOG_DIR" ]]; then
+    for f in "$LEGACY_LOG_DIR"/file_agent.log*; do
+        [[ -f "$f" ]] || continue
+        fname=$(basename "$f")
+        if [[ ! -f "$LOG_DIR/$fname" ]]; then
+            cp "$f" "$LOG_DIR/$fname"
+            MIGRATED=true
+        fi
+    done
+    if [[ "$MIGRATED" == true ]]; then
+        log_success "Migrated logs to $LOG_DIR"
+    fi
+fi
+
+# Migrate database from various legacy locations
+for legacy_db in \
+    "$HOME/data/file-agent.db" \
+    "$HOME/file-agent.db" \
+    "$LEGACY_CONFIG_DIR/file-agent.db" \
+    ; do
+    if [[ -f "$legacy_db" ]] && [[ ! -f "$DB_DIR/file-agent.db" ]]; then
+        cp "$legacy_db" "$DB_DIR/file-agent.db"
+        log_success "Migrated database from $legacy_db"
+        MIGRATED=true
+        break
+    fi
+done
+
+# Clean up legacy directories if migration happened
+if [[ "$MIGRATED" == true ]]; then
+    log_info "Legacy data migrated. Old locations can be removed manually:"
+    [[ -d "$LEGACY_CONFIG_DIR" ]] && log_info "  rm -rf $LEGACY_CONFIG_DIR"
+    [[ -d "$LEGACY_LOG_DIR" ]]    && log_info "  rm -rf $LEGACY_LOG_DIR"
+fi
 
 # ── Config note ──────────────────────────────────────────────────────
 # The app auto-generates a host-specific <hostname>-settings.env on
@@ -262,8 +327,10 @@ echo -e "${GREEN}  File Agent $VERSION installed successfully!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
 echo
 echo "  Web UI:     http://localhost:8000"
-echo "  Config:     $CONFIG_DIR/settings.env"
-echo "  Logs:       $LOG_DIR/"
+echo "  Data:       $DATA_DIR/"
+echo "    Config:   $CONFIG_DIR/"
+echo "    Logs:     $LOG_DIR/"
+echo "    Database: $DB_DIR/"
 echo "  Binary:     $INSTALL_DIR/"
 echo
 echo "  Commands:"
