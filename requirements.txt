@@ -8,6 +8,7 @@ rich==14.3.3
 httpx==0.28.1
 aiosqlite==0.22.1
 alembic==1.18.4
+greenlet>=3.0.0
 sqlalchemy==2.0.48
 
 # Dev / Test

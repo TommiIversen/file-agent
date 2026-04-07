@@ -1,11 +1,15 @@
-"""Alembic environment configuration for async SQLite migrations."""
+"""Alembic environment configuration for SQLite migrations.
 
-import asyncio
+Uses a synchronous SQLite engine for migrations to avoid the greenlet
+dependency that SQLAlchemy's async engine requires.  This is safe because
+Alembic is always invoked from a worker thread (via asyncio.to_thread)
+in our application.
+"""
+
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool, text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine, pool
 
 config = context.config
 
@@ -16,35 +20,33 @@ config = context.config
 target_metadata = None
 
 
+def _sync_url() -> str:
+    """Convert an async ``sqlite+aiosqlite:///…`` URL to plain ``sqlite:///…``."""
+    url = config.get_main_option("sqlalchemy.url")
+    if url and "+aiosqlite" in url:
+        url = url.replace("+aiosqlite", "")
+    return url
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode — generates SQL without connecting."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = _sync_url()
     context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
 
 
-def do_run_migrations(connection) -> None:
-    """Run migrations with a live connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_async_migrations() -> None:
-    """Run migrations in async mode using aiosqlite."""
-    connectable = create_async_engine(
-        config.get_main_option("sqlalchemy.url"),
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode using a synchronous SQLite connection."""
+    connectable = create_engine(
+        _sync_url(),
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode — connects to the database."""
-    asyncio.run(run_async_migrations())
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+    connectable.dispose()
 
 
 if context.is_offline_mode():

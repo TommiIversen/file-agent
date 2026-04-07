@@ -85,6 +85,15 @@ hiddenimports = app_hiddenimports + rich_hiddenimports + [
     "httpx",
     "httpx._transports",
     "httpx._transports.default",
+    "greenlet",
+    "aiosqlite",
+    "alembic",
+    "alembic.command",
+    "alembic.config",
+    "alembic.script",
+    "alembic.runtime",
+    "alembic.runtime.migration",
+    "alembic.autogenerate",
 ]
 
 a = Analysis(
