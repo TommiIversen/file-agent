@@ -4,8 +4,8 @@ from unittest.mock import patch, MagicMock
 
 from app.domains.shared.config_handlers import (
     ReloadConfigCommandHandler,
-    REQUIRES_RESTART_FIELDS,
 )
+from app.domains.shared.settings_service import REQUIRES_RESTART
 from app.domains.shared.commands import ReloadConfigCommand
 
 
@@ -66,8 +66,8 @@ class TestReloadConfigSuccess:
         assert result["requires_restart"] == []
 
     async def test_restart_field_changed(self, handler):
-        current = _make_settings(log_level="INFO")
-        fresh = _make_settings(log_level="DEBUG")
+        current = _make_settings(source_directory="/old")
+        fresh = _make_settings(source_directory="/new")
 
         with (
             patch("app.domains.shared.config_handlers.get_settings", return_value=current),
@@ -76,8 +76,8 @@ class TestReloadConfigSuccess:
             result = await handler.handle(ReloadConfigCommand())
 
         assert result["success"] is True
-        assert "log_level" in result["changed_fields"]
-        assert "log_level" in result["requires_restart"]
+        assert "source_directory" in result["changed_fields"]
+        assert "source_directory" in result["requires_restart"]
 
     async def test_multiple_changed_fields(self, handler):
         current = _make_settings(source_directory="/old", api_port=8080)

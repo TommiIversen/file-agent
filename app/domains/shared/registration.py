@@ -7,15 +7,17 @@ query handlers) for the shared domain with the command bus and query bus.
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.dependencies import get_settings
-from .commands import ReloadConfigCommand, RestartApplicationCommand
-from .queries import GetSettingsQuery, GetConfigInfoQuery
+from app.dependencies.core import get_user_settings_service
+from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
+from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery
 from .queries.log_queries import (
     ListLogFilesQuery, GetLogContentQuery, GetLogContentChunkQuery, DownloadLogFileQuery
 )
 from .queries.storage_queries import GetSourceStorageQuery, GetDestinationStorageQuery
 from .config_handlers import (
     ReloadConfigCommandHandler, RestartApplicationCommandHandler,
-    GetSettingsQueryHandler, GetConfigInfoQueryHandler
+    GetSettingsQueryHandler, GetConfigInfoQueryHandler,
+    GetUserSettingsQueryHandler, UpdateUserSettingsCommandHandler
 )
 from .handlers.log_query_handlers import LogFileQueryHandler
 from .handlers.storage_query_handlers import StorageQueryHandler
@@ -56,3 +58,8 @@ def register_shared_domain(command_bus: CommandBus, query_bus: QueryBus):
     # Register Command Handlers  
     command_bus.register(ReloadConfigCommand, ReloadConfigCommandHandler().handle)
     command_bus.register(RestartApplicationCommand, RestartApplicationCommandHandler().handle)
+
+    # Register User Settings Handlers
+    user_settings_service = get_user_settings_service()
+    query_bus.register(GetUserSettingsQuery, GetUserSettingsQueryHandler(user_settings_service).handle)
+    command_bus.register(UpdateUserSettingsCommand, UpdateUserSettingsCommandHandler(user_settings_service).handle)

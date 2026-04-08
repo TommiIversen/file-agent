@@ -16,6 +16,7 @@ from app.dependencies.core import (  # noqa: F401
     get_file_state_machine,
     get_global_event_logger,
     get_event_store,
+    get_user_settings_service,
     reset_singletons,
 )
 

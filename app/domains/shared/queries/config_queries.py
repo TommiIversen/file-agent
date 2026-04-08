@@ -17,3 +17,9 @@ class GetSettingsQuery(Query):
 class GetConfigInfoQuery(Query):
     """Query to get information about the loaded configuration file."""
     pass
+
+
+@dataclass
+class GetUserSettingsQuery(Query):
+    """Query to get all user-editable settings with metadata."""
+    pass

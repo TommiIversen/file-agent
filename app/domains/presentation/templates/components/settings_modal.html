@@ -14,7 +14,7 @@
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-bold text-white"><i data-lucide="settings" class="inline-block w-6 h-6"></i> Application Settings</h2>
             <div class="flex items-center space-x-3">
-        <button @click="$store.settings.loadSettings()"
+        <button @click="$store.settings.loadSettings(); $store.settings.loadUserSettings()"
             :disabled="$store.settings.settingsLoading"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
                     <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
@@ -29,313 +29,188 @@
         <!-- Settings Content -->
     <div x-show="$store.settings?.settingsData" class="space-y-6">
 
-            <!-- Build & Runtime Info -->
+            <!-- Restart Required Banner -->
+            <div x-show="$store.settings?.pendingRestart"
+                 class="bg-amber-900 bg-opacity-60 border border-amber-500 rounded-lg p-3 flex items-center justify-between">
+                <div class="flex items-center text-amber-300 text-sm">
+                    <i data-lucide="alert-triangle" class="inline-block w-5 h-5 mr-2 flex-shrink-0"></i>
+                    <span>Some changes require a restart to take effect.</span>
+                </div>
+                <button @click="$store.settings.restartApplication()"
+                        :disabled="$store.settings?.restartingApp"
+                        class="ml-3 px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded transition-colors whitespace-nowrap">
+                    Restart Now
+                </button>
+            </div>
+
+            <!-- Save Status Message -->
+            <div x-show="$store.settings?.saveMessage"
+                 x-transition
+                 class="p-3 rounded-lg border text-sm"
+                 :class="$store.settings?.saveSuccess ? 'bg-green-900/50 border-green-500 text-green-300' : 'bg-red-900/50 border-red-500 text-red-300'">
+                <span x-text="$store.settings?.saveMessage"></span>
+            </div>
+
+            <!-- Path Configuration -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="info" class="inline-block w-5 h-5"></i> Build & Runtime</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Paths</h3>
+                <div class="grid grid-cols-1 gap-4 text-sm">
+                    <div>
+                        <label for="setting-source-dir" class="text-gray-300 block mb-1">Source Directory</label>
+                        <input type="text"
+                               id="setting-source-dir"
+                               x-model="$store.settings.editForm.source_directory"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="/path/to/source">
+                    </div>
+                    <div>
+                        <label for="setting-dest-dir" class="text-gray-300 block mb-1">Destination Directory</label>
+                        <input type="text"
+                               id="setting-dest-dir"
+                               x-model="$store.settings.editForm.destination_directory"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="/path/to/destination">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Mount -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="globe" class="inline-block w-5 h-5"></i> Network</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div class="md:col-span-2">
+                        <label for="setting-network-url" class="text-gray-300 block mb-1">Network Share URL</label>
+                        <input type="text"
+                               id="setting-network-url"
+                               x-model="$store.settings.editForm.network_share_url"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="smb://server/share">
+                    </div>
+                    <div>
+                        <label for="setting-mount-point" class="text-gray-300 block mb-1">Mount Point</label>
+                        <input type="text"
+                               id="setting-mount-point"
+                               x-model="$store.settings.editForm.macos_mount_point"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="/Volumes/share">
+                    </div>
+                    <div class="flex items-center">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                   id="setting-auto-mount"
+                                   x-model="$store.settings.editForm.enable_auto_mount"
+                                   @change="$store.settings.markDirty()"
+                                   class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span class="ml-2 text-gray-300">Auto Mount</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="cpu" class="inline-block w-5 h-5"></i> Hardware</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                        <span class="text-gray-300">Build Time:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
-                             x-text="$store.settings?.settingsData?.build_time || 'n/a'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">App Directory:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.app_directory || 'n/a'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Path Settings -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Path Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Source Directory:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.source_directory"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Destination Directory:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.destination_directory"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Copy Settings -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="rocket" class="inline-block w-5 h-5"></i> Copy Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Chunk Size:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.chunk_size_kb || 0).toLocaleString() + ' KB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Max Concurrent:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="$store.settings?.settingsData?.max_concurrent_copies || 0"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Use Temp File:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.use_temporary_file ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.use_temporary_file ? 'Yes' : 'No'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Progress Update Interval:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.copy_progress_update_interval || 0) + ' sec'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Growing File Settings -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="trending-up" class="inline-block w-5 h-5"></i> Growing File Support</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Min File Size:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_file_min_size_mb || 0) + ' MB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Chunk Size:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_file_chunk_size_kb || 0).toLocaleString() + ' KB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Poll Interval:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_file_poll_interval_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Growth Timeout:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_file_growth_timeout_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Safety Margin:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_file_safety_margin_mb || 0) + ' MB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Copy Pause:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.growing_copy_pause_ms || 0) + ' ms'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Storage Monitoring & Thresholds -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="hard-drive" class="inline-block w-5 h-5"></i> Storage Monitoring & Thresholds</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Check Interval:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.storage_check_interval_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Source Critical:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 text-red-300"
-                             x-text="($store.settings?.settingsData?.source_critical_threshold_gb || 0) + ' GB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Source Warning:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 text-yellow-300"
-                             x-text="($store.settings?.settingsData?.source_warning_threshold_gb || 0) + ' GB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Dest Critical:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 text-red-300"
-                             x-text="($store.settings?.settingsData?.destination_critical_threshold_gb || 0) + ' GB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Dest Warning:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 text-yellow-300"
-                             x-text="($store.settings?.settingsData?.destination_warning_threshold_gb || 0) + ' GB'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Min Free After Copy:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.minimum_free_space_after_copy_gb || 0) + ' GB'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Space Management -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="refresh-cw" class="inline-block w-5 h-5"></i> Space Management</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Pre-Copy Space Check:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.enable_pre_copy_space_check ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_pre_copy_space_check ? 'Yes' : 'No'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Max Space Retries:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="$store.settings?.settingsData?.max_space_retries || 0"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Space Retry Delay:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.space_retry_delay_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Space Error Cooldown:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.space_error_cooldown_minutes || 0) + ' min'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Copy Safety Margin:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.copy_safety_margin_gb || 0) + ' GB'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Network & Retry Settings -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="globe" class="inline-block w-5 h-5"></i> Network & Retry Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Max Retry Attempts:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="$store.settings?.settingsData?.max_retry_attempts || 0"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Retry Delay:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.retry_delay_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Global Retry Delay:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.global_retry_delay_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Network Share URL:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.network_share_url || 'N/A'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Enable Auto Mount:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.enable_auto_mount ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_auto_mount ? 'Yes' : 'No'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Platform Specific -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="monitor" class="inline-block w-5 h-5"></i> Platform Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">macOS Mount Point:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
-                             x-text="$store.settings?.settingsData?.macos_mount_point || 'N/A'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Windows Drive Letter:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
-                             x-text="$store.settings?.settingsData?.windows_drive_letter || 'N/A'"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- File Management -->
-            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="clipboard-list" class="inline-block w-5 h-5"></i> File Management</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">File Stable Time:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.file_stable_time_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Polling Interval:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.polling_interval_seconds || 0) + ' sec'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Keep Files:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.keep_files_hours || 0) + ' hours'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Enable Secure Resume:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.enable_secure_resume ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.enable_secure_resume ? 'Yes' : 'No'"></div>
-                    </div>
-                    <div>
-                        <span class="text-gray-300">Storage Test File Prefix:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
-                             x-text="$store.settings?.settingsData?.storage_test_file_prefix || 'N/A'"></div>
+                        <label for="setting-tally-ip" class="text-gray-300 block mb-1">Tally Light IP</label>
+                        <input type="text"
+                               id="setting-tally-ip"
+                               x-model="$store.settings.editForm.tally_light_switch_ip"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="10.65.77.9">
                     </div>
                 </div>
             </div>
 
             <!-- Output Folder Template -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder-open" class="inline-block w-5 h-5"></i> Output Folder Template</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder-open" class="inline-block w-5 h-5"></i> Output Folders</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-300">Template Enabled:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             :class="$store.settings?.settingsData?.output_folder_template_enabled ? 'text-green-300' : 'text-red-300'"
-                             x-text="$store.settings?.settingsData?.output_folder_template_enabled ? 'Yes' : 'No'"></div>
+                    <div class="flex items-center md:col-span-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                   id="setting-output-enabled"
+                                   x-model="$store.settings.editForm.output_folder_template_enabled"
+                                   @change="$store.settings.markDirty()"
+                                   class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span class="ml-2 text-gray-300">Enable Output Folders</span>
+                        </label>
                     </div>
                     <div>
-                        <span class="text-gray-300">Date Format:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
-                             x-text="$store.settings?.settingsData?.output_folder_date_format || 'N/A'"></div>
+                        <label for="setting-default-cat" class="text-gray-300 block mb-1">Default Category</label>
+                        <input type="text"
+                               id="setting-default-cat"
+                               x-model="$store.settings.editForm.output_folder_default_category"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
                     </div>
                     <div>
-                        <span class="text-gray-300">Default Category:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="$store.settings?.settingsData?.output_folder_default_category || 'N/A'"></div>
+                        <label for="setting-date-format" class="text-gray-300 block mb-1">Date Format</label>
+                        <input type="text"
+                               id="setting-date-format"
+                               x-model="$store.settings.editForm.output_folder_date_format"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="filename[0:6]">
                     </div>
                     <div class="md:col-span-2">
-                        <span class="text-gray-300">Template Rules:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.output_folder_rules || 'N/A'"></div>
+                        <label for="setting-folder-rules" class="text-gray-300 block mb-1">Folder Rules</label>
+                        <textarea id="setting-folder-rules"
+                                  x-model="$store.settings.editForm.output_folder_rules"
+                                  @input="$store.settings.markDirty()"
+                                  rows="3"
+                                  class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs resize-y"
+                                  placeholder="Folder routing rules..."></textarea>
                     </div>
                 </div>
             </div>
 
-            <!-- Logging -->
+            <!-- Performance & Automation -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="file-text" class="inline-block w-5 h-5"></i> Logging Configuration</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="gauge" class="inline-block w-5 h-5"></i> Performance & Automation</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                        <span class="text-gray-300">Log Level:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-bold"
-                             :class="{'text-red-300': $store.settings?.settingsData?.log_level === 'ERROR', 'text-yellow-300': $store.settings?.settingsData?.log_level === 'WARNING', 'text-blue-300': $store.settings?.settingsData?.log_level === 'INFO', 'text-gray-300': $store.settings?.settingsData?.log_level === 'DEBUG'}"
-                             x-text="$store.settings?.settingsData?.log_level || 'N/A'"></div>
+                        <label for="setting-max-copies" class="text-gray-300 block mb-1">Max Concurrent Copies</label>
+                        <input type="number" min="1" max="32"
+                               id="setting-max-copies"
+                               x-model.number="$store.settings.editForm.max_concurrent_copies"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
                     </div>
                     <div>
-                        <span class="text-gray-300">Log Retention:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1"
-                             x-text="($store.settings?.settingsData?.log_retention_days || 0) + ' days'"></div>
-                    </div>
-                    <div class="md:col-span-1">
-                        <span class="text-gray-300">Log File Path:</span>
-                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
-                             x-text="$store.settings?.settingsData?.log_file_path || 'N/A'"></div>
+                        <label for="setting-auto-stop" class="text-gray-300 block mb-1">Auto-stop After (minutes, 0 = disabled)</label>
+                        <input type="number" min="0"
+                               id="setting-auto-stop"
+                               x-model.number="$store.settings.editForm.justin_auto_stop_minutes"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
                     </div>
                 </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex justify-end">
+                <button @click="$store.settings.saveUserSettings()"
+                        :disabled="!$store.settings?.isDirty || $store.settings?.saving"
+                        class="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white rounded transition-colors duration-200 font-medium">
+                    <span x-show="!$store.settings?.saving"><i data-lucide="save" class="inline-block w-4 h-4 mr-1"></i> Save Settings</span>
+                    <span x-show="$store.settings?.saving">
+                        <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-1"></i> Saving...
+                    </span>
+                </button>
             </div>
 
             <!-- Administrative Actions -->
             <div class="bg-gradient-to-r from-purple-700 to-blue-700 bg-opacity-60 rounded-lg p-4 border border-purple-500">
                 <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="zap" class="inline-block w-5 h-5"></i> Administrative Actions</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Pause/Resume Scanner -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
                         <h4 class="text-white font-semibold mb-2"><i data-lucide="pause" class="inline-block w-4 h-4"></i> Scanner Control</h4>
@@ -352,21 +227,6 @@
                                 <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
                                 <span x-show="$store.ui?.scanner?.paused">Resuming...</span>
                                 <span x-show="!$store.ui?.scanner?.paused">Pausing...</span>
-                            </span>
-                        </button>
-                    </div>
-
-                    <!-- Reload Config -->
-                    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2"><i data-lucide="refresh-cw" class="inline-block w-4 h-4"></i> Reload Configuration</h4>
-                        <p class="text-gray-300 text-sm mb-3">Reload settings from config file without restarting the application</p>
-                        <button @click="$store.settings.reloadConfig()"
-                                :disabled="$store.settings?.reloadingConfig"
-                                class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
-                            <span x-show="!$store.settings?.reloadingConfig"><i data-lucide="refresh-cw" class="inline-block w-4 h-4"></i> Reload Config</span>
-                            <span x-show="$store.settings?.reloadingConfig">
-                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
-                                Reloading...
                             </span>
                         </button>
                     </div>
@@ -395,6 +255,23 @@
                         <span x-show="$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-check" class="inline-block w-5 h-5"></i></span>
                         <span x-show="!$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-x" class="inline-block w-5 h-5"></i></span>
                         <span x-text="$store.settings?.actionMessage"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Build & Runtime Info -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="info" class="inline-block w-5 h-5"></i> Build & Runtime</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-300">Build Time:</span>
+                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
+                             x-text="$store.settings?.settingsData?.build_time || 'n/a'"></div>
+                    </div>
+                    <div>
+                        <span class="text-gray-300">App Directory:</span>
+                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs break-all"
+                             x-text="$store.settings?.settingsData?.app_directory || 'n/a'"></div>
                     </div>
                 </div>
             </div>

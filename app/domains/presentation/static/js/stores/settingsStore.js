@@ -13,13 +13,20 @@ document.addEventListener('alpine:init', () => {
         // Modal state
         showSettingsModal: false,
 
-        // Settings data
+        // System info (build time, app dir)
         settingsData: null,
         settingsLoading: false,
         settingsError: null,
 
+        // User-editable settings form
+        editForm: {},
+        isDirty: false,
+        saving: false,
+        saveMessage: null,
+        saveSuccess: false,
+        pendingRestart: false,
+
         // Administrative actions
-        reloadingConfig: false,
         restartingApp: false,
         restartCountdown: null,
         scannerToggling: false,
@@ -33,8 +40,13 @@ document.addEventListener('alpine:init', () => {
         async openSettingsModal() {
             this.showSettingsModal = true;
             await this.loadSettings();
+            await this.loadUserSettings();
         },
         closeSettingsModal() {
+            if (this.isDirty && !confirm('You have unsaved changes. Discard them?')) {
+                return;
+            }
+            this.isDirty = false;
             this.showSettingsModal = false;
         },
         async loadSettings() {
@@ -42,16 +54,12 @@ document.addEventListener('alpine:init', () => {
             this.settingsLoading = true;
             this.settingsError = null;
             try {
-                console.log('📡 Loading settings from API...');
                 const response = await fetch('/api/system/settings');
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                /** @type {SettingsData} */
-                const settingsData = await response.json();
-                this.settingsData = settingsData;
+                this.settingsData = await response.json();
                 this.settingsError = null;
-                console.log('✅ Settings loaded successfully', settingsData);
             } catch (error) {
                 console.error('❌ Failed to load settings:', error);
                 this.settingsError = error instanceof Error ? error.message : String(error);
@@ -60,44 +68,80 @@ document.addEventListener('alpine:init', () => {
                 this.settingsLoading = false;
             }
         },
+
+        async loadUserSettings() {
+            try {
+                const response = await fetch('/api/system/user-settings');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                const form = {};
+                for (const s of data.settings) {
+                    form[s.key] = s.value;
+                }
+                this.editForm = form;
+                this.isDirty = false;
+            } catch (error) {
+                console.error('❌ Failed to load user settings:', error);
+                this.settingsError = error instanceof Error ? error.message : String(error);
+            }
+        },
+
+        markDirty() {
+            this.isDirty = true;
+        },
+
+        async saveUserSettings() {
+            if (!this.isDirty || this.saving) return;
+            this.saving = true;
+            this.saveMessage = null;
+            try {
+                const response = await fetch('/api/system/user-settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.editForm),
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.saveSuccess = true;
+                    const changedCount = result.changed?.length || 0;
+                    this.saveMessage = changedCount > 0
+                        ? `Saved ${changedCount} setting(s) successfully.`
+                        : 'No changes to save.';
+                    this.isDirty = false;
+
+                    if (result.requires_restart?.length > 0) {
+                        this.pendingRestart = true;
+                        this.saveMessage += ' Restart required for some changes.';
+                    }
+
+                    // Update editForm with returned values
+                    if (result.settings) {
+                        const form = {};
+                        for (const s of result.settings) {
+                            form[s.key] = s.value;
+                        }
+                        this.editForm = form;
+                    }
+                } else {
+                    this.saveSuccess = false;
+                    this.saveMessage = result.detail || result.message || 'Failed to save settings';
+                }
+            } catch (error) {
+                console.error('❌ Failed to save settings:', error);
+                this.saveSuccess = false;
+                this.saveMessage = 'Network error: ' + (error instanceof Error ? error.message : String(error));
+            } finally {
+                this.saving = false;
+                setTimeout(() => { this.saveMessage = null; }, 8000);
+            }
+        },
+
         /** @param {string} message */
         showErrorMessage(message) {
             console.error('Settings Error:', message);
             alert('Error: ' + message);
-        },
-        async reloadConfig() {
-            if (this.reloadingConfig) return;
-            this.reloadingConfig = true;
-            this.actionMessage = null;
-            try {
-                console.log('🔄 Reloading configuration...');
-                const response = await fetch('/api/system/reload-config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const result = await response.json();
-                if (result.success) {
-                    this.actionSuccess = true;
-                    this.actionMessage = result.message;
-                    await this.loadSettings();
-                    console.log('✅ Configuration reloaded successfully');
-                } else {
-                    this.actionSuccess = false;
-                    this.actionMessage = result.message || 'Failed to reload configuration';
-                    console.error('❌ Failed to reload configuration:', result.message);
-                }
-            } catch (error) {
-                console.error('❌ Failed to reload configuration:', error);
-                this.actionSuccess = false;
-                this.actionMessage = 'Network error: ' + (error instanceof Error ? error.message : String(error));
-            } finally {
-                this.reloadingConfig = false;
-                setTimeout(() => {
-                    this.actionMessage = null;
-                }, 5000);
-            }
         },
         async restartApplication() {
             if (this.restartingApp) return;

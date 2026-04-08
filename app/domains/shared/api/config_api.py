@@ -12,36 +12,14 @@ from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.config import BUILD_TIME, APP_DIRECTORY
 from app.dependencies import get_command_bus, get_query_bus
-from ..commands import ReloadConfigCommand, RestartApplicationCommand
-from ..queries import GetSettingsQuery, GetConfigInfoQuery
+from ..commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
+from ..queries import GetConfigInfoQuery, GetUserSettingsQuery
 
 
 class PublicSettings(BaseModel):
-    """Subset of settings safe to expose via API."""
+    """Minimal system info exposed via API. User-editable settings will use a separate endpoint."""
     build_time: str = "n/a"
     app_directory: str = "n/a"
-    source_directory: str
-    destination_directory: str
-    file_stable_time_seconds: int
-    polling_interval_seconds: int
-    max_retry_attempts: int
-    max_concurrent_copies: int
-    storage_check_interval_seconds: int
-    source_warning_threshold_gb: float
-    source_critical_threshold_gb: float
-    destination_warning_threshold_gb: float
-    destination_critical_threshold_gb: float
-    growing_file_min_size_mb: int
-    growing_file_safety_margin_mb: int
-    growing_file_growth_timeout_seconds: int
-    chunk_size_kb: int
-    log_level: str
-    keep_files_hours: int
-    justin_auto_stop_minutes: int
-    justin_auto_stop_warning_minutes: int
-    tally_light_switch_type: str
-    enable_auto_mount: bool
-    output_folder_template_enabled: bool
 
 
 router = APIRouter(prefix="/api/system", tags=["System & Config"])
@@ -52,13 +30,12 @@ _RESTART_COOLDOWN_SECONDS: float = 300.0  # 5 minutes
 
 
 @router.get("/settings", response_model=PublicSettings)
-async def read_settings(query_bus: QueryBus = Depends(get_query_bus)):
-    """Get current application settings (filtered for safety)."""
-    full_settings = await query_bus.execute(GetSettingsQuery())
-    data = full_settings.model_dump()
-    data["build_time"] = BUILD_TIME
-    data["app_directory"] = APP_DIRECTORY
-    return PublicSettings(**data)
+async def read_settings():
+    """Get minimal system info (build time, app directory)."""
+    return PublicSettings(
+        build_time=BUILD_TIME,
+        app_directory=APP_DIRECTORY,
+    )
 
 
 @router.get("/config-info")
@@ -69,7 +46,10 @@ async def get_config_info(query_bus: QueryBus = Depends(get_query_bus)):
 
 @router.post("/reload-config")
 async def reload_config(command_bus: CommandBus = Depends(get_command_bus)):
-    """Reload configuration from file via CQRS Command."""
+    """Reload configuration from file via CQRS Command.
+
+    Deprecated: UI button removed in Fase 3. Will be removed in Step C3.
+    """
     return await command_bus.execute(ReloadConfigCommand())
 
 
@@ -86,3 +66,45 @@ async def restart_application(command_bus: CommandBus = Depends(get_command_bus)
         )
     _last_restart_time = now
     return await command_bus.execute(RestartApplicationCommand())
+
+
+# ---------------------------------------------------------------------------
+# User Settings (editable via UI, persisted in SQLite)
+# ---------------------------------------------------------------------------
+
+
+class UserSettingsUpdate(BaseModel):
+    """Request body for PUT /user-settings. Accepts any subset of the 12 user-editable keys."""
+    source_directory: str | None = None
+    destination_directory: str | None = None
+    network_share_url: str | None = None
+    enable_auto_mount: bool | None = None
+    macos_mount_point: str | None = None
+    tally_light_switch_ip: str | None = None
+    output_folder_template_enabled: bool | None = None
+    output_folder_rules: str | None = None
+    output_folder_default_category: str | None = None
+    output_folder_date_format: str | None = None
+    max_concurrent_copies: int | None = Field(default=None, ge=1, le=32)
+    justin_auto_stop_minutes: int | None = Field(default=None, ge=0, le=1440)
+
+
+@router.get("/user-settings")
+async def get_user_settings(query_bus: QueryBus = Depends(get_query_bus)):
+    """Get all user-editable settings with metadata (type, default, requires_restart)."""
+    return await query_bus.execute(GetUserSettingsQuery())
+
+
+@router.put("/user-settings")
+async def update_user_settings(
+    body: UserSettingsUpdate,
+    command_bus: CommandBus = Depends(get_command_bus),
+):
+    """Update one or more user-editable settings. Only non-null fields are applied."""
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Request body must contain at least one setting")
+    result = await command_bus.execute(UpdateUserSettingsCommand(updates=updates))
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Unknown error"))
+    return result

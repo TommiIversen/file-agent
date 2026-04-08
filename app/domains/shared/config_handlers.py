@@ -7,18 +7,12 @@ and application management operations.
 import logging
 import os
 import asyncio
+from typing import Any
 from app.config import Settings
 from app.dependencies import get_settings
-from .commands import ReloadConfigCommand, RestartApplicationCommand
-from .queries import GetSettingsQuery, GetConfigInfoQuery
-
-# Fields that are bound at startup and cannot take effect until restart.
-REQUIRES_RESTART_FIELDS: set[str] = {
-    "source_directory",
-    "destination_directory",
-    "log_level",
-    "max_concurrent_copies",
-}
+from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
+from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery
+from .settings_service import UserSettingsService, REQUIRES_RESTART
 
 
 class GetSettingsQueryHandler:
@@ -73,7 +67,7 @@ class ReloadConfigCommandHandler:
                     object.__setattr__(current, field_name, new_val)
                     changed.append(field_name)
 
-            needs_restart = [f for f in changed if f in REQUIRES_RESTART_FIELDS]
+            needs_restart = [f for f in changed if f in REQUIRES_RESTART]
 
             config_info = current.config_file_info
             logging.info(
@@ -128,3 +122,43 @@ class RestartApplicationCommandHandler:
         except Exception as e:
             logging.error(f"Failed to restart application: {e}", exc_info=True)
             return {"success": False, "message": f"Failed to restart application: {str(e)}"}
+
+
+class GetUserSettingsQueryHandler:
+    """Handler for retrieving all user-editable settings with metadata."""
+
+    def __init__(self, settings_service: UserSettingsService) -> None:
+        self._service = settings_service
+
+    async def handle(self, query: GetUserSettingsQuery) -> dict[str, Any]:
+        return {
+            "settings": self._service.get_all_with_metadata(),
+        }
+
+
+class UpdateUserSettingsCommandHandler:
+    """Handler for updating user-editable settings in the database."""
+
+    def __init__(self, settings_service: UserSettingsService) -> None:
+        self._service = settings_service
+
+    async def handle(self, command: UpdateUserSettingsCommand) -> dict[str, Any]:
+        try:
+            results = await self._service.set_many(command.updates)
+            changed = [k for k, v in results.items() if v]
+            needs_restart = [k for k in changed if k in REQUIRES_RESTART]
+
+            logging.info(
+                "User settings updated: %s changed, restart needed: %s",
+                ", ".join(changed) or "none",
+                ", ".join(needs_restart) or "none",
+            )
+
+            return {
+                "success": True,
+                "changed": changed,
+                "requires_restart": needs_restart,
+                "settings": self._service.get_all_with_metadata(),
+            }
+        except (KeyError, ValueError) as e:
+            return {"success": False, "message": str(e)}

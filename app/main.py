@@ -44,6 +44,7 @@ from .dependencies import (
     get_tally_light_event_handler,
     get_tally_switch_monitor,
     register_network_coordinator,
+    get_user_settings_service,
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -96,6 +97,11 @@ async def _init_database() -> None:
     file_repo = get_file_repository()
     await file_repo.init_db()
     logging.info("Database initialized")
+
+    # Initialize user settings service (env → DB migration runs here)
+    user_settings_service = get_user_settings_service()
+    await user_settings_service.init(env_settings=settings)
+    logging.info("User settings service initialized")
 
 
 async def _init_event_logging(

@@ -150,6 +150,12 @@ class SqliteFileRepository:
             CREATE INDEX IF NOT EXISTS ix_system_events_timestamp ON system_events(timestamp);
             CREATE INDEX IF NOT EXISTS ix_system_events_level ON system_events(level);
             CREATE INDEX IF NOT EXISTS ix_system_events_event_type ON system_events(event_type);
+
+            CREATE TABLE IF NOT EXISTS user_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         """)
 
     async def _run_migrations(self) -> None:

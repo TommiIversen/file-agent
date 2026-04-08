@@ -69,8 +69,6 @@ modules = [
 ]
 # TYPE_CHECKING-only imports for type hints (not runtime dependencies)
 ignore_imports = [
-    "app.domains.file_discovery.file_scanner -> app.domains.storage.storage_monitor",
-    "app.domains.file_discovery.file_scanner_service -> app.domains.storage.storage_monitor",
 ]
 
 # Rule 3: Nothing may import from presentation (it's the outermost layer)

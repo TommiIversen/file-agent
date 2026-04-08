@@ -533,14 +533,27 @@ interface LogViewerStore {
     downloadLogFile(filename: string): Promise<void>;
 }
 
-// New types for SettingsStore
+// Types for SettingsStore
+/** Matches PublicSettings from config_api.py — minimal system info */
 interface SettingsData {
-    general_settings?: any;
-    scanner_settings?: any;
-    storage_settings?: any;
-    ingest_settings?: any;
-    system_info?: any;
-    // Add more specific properties as they become known
+    build_time: string;
+    app_directory: string;
+}
+
+/** Form state for the 12 user-editable settings */
+interface UserSettingsForm {
+    source_directory: string;
+    destination_directory: string;
+    network_share_url: string;
+    enable_auto_mount: boolean;
+    macos_mount_point: string;
+    tally_light_switch_ip: string;
+    output_folder_template_enabled: boolean;
+    output_folder_rules: string;
+    output_folder_default_category: string;
+    output_folder_date_format: string;
+    max_concurrent_copies: number;
+    justin_auto_stop_minutes: number;
 }
 
 interface SettingsStore {
@@ -548,7 +561,12 @@ interface SettingsStore {
     settingsData: SettingsData | null;
     settingsLoading: boolean;
     settingsError: string | null;
-    reloadingConfig: boolean;
+    editForm: UserSettingsForm;
+    isDirty: boolean;
+    saving: boolean;
+    saveMessage: string | null;
+    saveSuccess: boolean;
+    pendingRestart: boolean;
     restartingApp: boolean;
     restartCountdown: number | null;
     scannerToggling: boolean;
@@ -558,8 +576,10 @@ interface SettingsStore {
     openSettingsModal(): Promise<void>;
     closeSettingsModal(): void;
     loadSettings(): Promise<void>;
+    loadUserSettings(): Promise<void>;
+    markDirty(): void;
+    saveUserSettings(): Promise<void>;
     showErrorMessage(message: string): void;
-    reloadConfig(): Promise<void>;
     restartApplication(): Promise<void>;
     toggleScanner(): Promise<void>;
 }

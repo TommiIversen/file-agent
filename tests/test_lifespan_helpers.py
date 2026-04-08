@@ -15,10 +15,14 @@ class TestInitDatabase:
 
     async def test_calls_init_db(self):
         mock_repo = AsyncMock()
-        with patch("app.main.get_file_repository", return_value=mock_repo):
+        mock_settings_service = AsyncMock()
+        with patch("app.main.get_file_repository", return_value=mock_repo), \
+             patch("app.main.get_user_settings_service", return_value=mock_settings_service), \
+             patch("app.main.settings"):
             from app.main import _init_database
             await _init_database()
         mock_repo.init_db.assert_awaited_once()
+        mock_settings_service.init.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

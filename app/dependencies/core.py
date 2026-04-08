@@ -5,7 +5,7 @@ Settings, buses, repository, state machine, event store.
 """
 import asyncio
 from functools import lru_cache
-from typing import Dict, Any, Optional
+from typing import Any
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_repository import FileRepository
@@ -15,10 +15,11 @@ from app.core.file_state_machine import FileStateMachine
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.core.global_event_logger import GlobalEventLogger
+from app.domains.shared.settings_service import UserSettingsService
 from app.config import Settings
 
 # Global singleton instances (shared across all dependency modules)
-_singletons: Dict[str, Any] = {}
+_singletons: dict[str, Any] = {}
 
 
 @lru_cache
@@ -77,6 +78,17 @@ def get_event_store() -> SqliteEventStore:
             write_lock=file_repo.write_lock,
         )
     return _singletons["event_store"]
+
+
+def get_user_settings_service() -> UserSettingsService:
+    """Get the UserSettingsService singleton, sharing the DB connection from FileRepository."""
+    if "user_settings_service" not in _singletons:
+        file_repo = get_file_repository()
+        _singletons["user_settings_service"] = UserSettingsService(
+            db=file_repo.connection,
+            write_lock=file_repo.write_lock,
+        )
+    return _singletons["user_settings_service"]
 
 
 def reset_singletons() -> None:
