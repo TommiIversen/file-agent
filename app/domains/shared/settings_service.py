@@ -38,9 +38,7 @@ USER_SETTINGS_SCHEMA: dict[str, tuple[type, Any]] = {
 }
 
 # Settings that require an app restart to take effect.
-REQUIRES_RESTART: frozenset[str] = frozenset({
-    "max_concurrent_copies",
-})
+REQUIRES_RESTART: frozenset[str] = frozenset()
 
 
 def _serialize(value: Any) -> str:

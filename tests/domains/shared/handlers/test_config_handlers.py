@@ -66,6 +66,7 @@ class TestReloadConfigSuccess:
         assert result["requires_restart"] == []
 
     async def test_restart_field_changed(self, handler):
+        """max_concurrent_copies is now hot-reloaded, so no restart needed."""
         current = _make_settings(max_concurrent_copies=4)
         fresh = _make_settings(max_concurrent_copies=8)
 
@@ -77,7 +78,7 @@ class TestReloadConfigSuccess:
 
         assert result["success"] is True
         assert "max_concurrent_copies" in result["changed_fields"]
-        assert "max_concurrent_copies" in result["requires_restart"]
+        assert result["requires_restart"] == []
 
     async def test_multiple_changed_fields(self, handler):
         current = _make_settings(max_concurrent_copies=4, api_port=8080)
@@ -90,7 +91,7 @@ class TestReloadConfigSuccess:
             result = await handler.handle(ReloadConfigCommand())
 
         assert len(result["changed_fields"]) == 2
-        assert "max_concurrent_copies" in result["requires_restart"]
+        assert result["requires_restart"] == []
 
     async def test_in_place_mutation(self, handler):
         """Verify the existing singleton is mutated, not replaced."""

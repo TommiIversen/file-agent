@@ -186,9 +186,9 @@ class TestGetAllWithMetadata:
     async def test_requires_restart_metadata(self, service):
         result = service.get_all_with_metadata()
         by_key = {s["key"]: s for s in result}
-        assert by_key["source_directory"]["requires_restart"] is False
-        assert by_key["max_concurrent_copies"]["requires_restart"] is True
-        assert by_key["output_folder_rules"]["requires_restart"] is False
+        # All settings are hot-reloaded now
+        for s in result:
+            assert s["requires_restart"] is False
 
 
 class TestEnvMigration:
@@ -252,10 +252,8 @@ class TestEnvMigration:
 
 class TestRequiresRestart:
 
-    def test_restart_settings_defined(self):
-        assert "max_concurrent_copies" in REQUIRES_RESTART
-        assert "output_folder_rules" not in REQUIRES_RESTART
-        assert "justin_auto_stop_minutes" not in REQUIRES_RESTART
-        # source_directory + destination_directory are hot-reloaded (not in REQUIRES_RESTART)
-        assert "source_directory" not in REQUIRES_RESTART
-        assert "destination_directory" not in REQUIRES_RESTART
+    def test_all_settings_are_hot_reloaded(self):
+        """All 12 user settings are now hot-reloaded — none require restart."""
+        assert len(REQUIRES_RESTART) == 0
+        for key in USER_SETTINGS_SCHEMA:
+            assert key not in REQUIRES_RESTART

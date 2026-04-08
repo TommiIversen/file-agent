@@ -14,6 +14,8 @@ from app.dependencies import (
     get_network_mount_service,
     get_tally_light_event_handler,
     get_tally_switch_monitor,
+    get_file_copier,
+    get_ingest_state_service,
 )
 from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery
@@ -21,6 +23,8 @@ from .settings_service import UserSettingsService, REQUIRES_RESTART
 
 _MOUNT_SETTINGS = {"network_share_url", "enable_auto_mount", "macos_mount_point"}
 _TALLY_SETTINGS = {"tally_light_switch_ip"}
+_COPY_POOL_SETTINGS = {"max_concurrent_copies"}
+_AUTO_STOP_SETTINGS = {"justin_auto_stop_minutes"}
 
 
 class GetSettingsQueryHandler:
@@ -210,3 +214,18 @@ class UpdateUserSettingsCommandHandler:
                 logging.info("Tally light IP hot-reloaded to %s", ip)
             except Exception:
                 logging.warning("Could not reinitialize tally services", exc_info=True)
+
+        if changed & _COPY_POOL_SETTINGS:
+            try:
+                new_count = get_settings().max_concurrent_copies
+                copier = get_file_copier()
+                asyncio.ensure_future(copier.resize_pool(new_count))
+            except Exception:
+                logging.warning("Could not resize copy worker pool", exc_info=True)
+
+        if changed & _AUTO_STOP_SETTINGS:
+            try:
+                minutes = get_settings().justin_auto_stop_minutes
+                get_ingest_state_service().update_auto_stop(minutes)
+            except Exception:
+                logging.warning("Could not update auto-stop config", exc_info=True)

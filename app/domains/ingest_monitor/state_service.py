@@ -54,6 +54,7 @@ class IngestStateService:
         self._recording_preset_names: Dict[str, str] = {}  # channel -> preset_name
 
         # Auto-stop configuration
+        self._auto_stop_warning_minutes_raw: int = auto_stop_warning_minutes
         self._auto_stop_limit_seconds: int = auto_stop_minutes * 60
         self._auto_stop_warning_seconds: int = (
             (auto_stop_minutes - auto_stop_warning_minutes) * 60
@@ -71,6 +72,20 @@ class IngestStateService:
                 auto_stop_warning_minutes,
             )
         logging.debug("IngestStateService initialized")
+
+    def update_auto_stop(self, auto_stop_minutes: int) -> None:
+        """Update auto-stop limit at runtime (0 = disabled)."""
+        warning = self._auto_stop_warning_minutes_raw
+        self._auto_stop_limit_seconds = auto_stop_minutes * 60
+        self._auto_stop_warning_seconds = (
+            (auto_stop_minutes - warning) * 60
+            if auto_stop_minutes > warning
+            else 0
+        )
+        # Reset guards so a new cycle can fire
+        self._auto_stop_warning_sent = False
+        self._auto_stop_triggered = False
+        logging.info("Auto-stop updated: limit=%dm", auto_stop_minutes)
 
     def get_status_cache(self) -> Dict[str, dict]:
         """
