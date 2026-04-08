@@ -271,6 +271,11 @@ chmod 644 "$PLIST_DIR/$PLIST_NAME"
 log_success "Service plist created"
 
 # ── Create browser launch agent ──────────────────────────────────────
+# Uses a wait-script that polls the server before opening the browser,
+# so we don't get "Safari can't connect" on boot.
+BROWSER_SCRIPT="$INSTALL_DIR/scripts/wait-and-open-browser.sh"
+chmod +x "$BROWSER_SCRIPT" 2>/dev/null || true
+
 cat > "$PLIST_DIR/$BROWSER_PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -280,15 +285,19 @@ cat > "$PLIST_DIR/$BROWSER_PLIST" << EOF
     <string>com.fileagent.openbrowser</string>
     <key>ProgramArguments</key>
     <array>
-        <string>open</string>
-        <string>http://localhost:8000</string>
+        <string>/bin/bash</string>
+        <string>${BROWSER_SCRIPT}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
+    <key>StandardOutPath</key>
+    <string>${LOG_DIR}/browser-open.log</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_DIR}/browser-open.log</string>
 </dict>
 </plist>
 EOF
-log_success "Browser launch agent created"
+log_success "Browser launch agent created (with server-readiness check)"
 
 # ── Start service ────────────────────────────────────────────────────
 log_info "Starting service..."

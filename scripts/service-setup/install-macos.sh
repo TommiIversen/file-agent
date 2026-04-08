@@ -419,11 +419,14 @@ create_browser_launch_agent() {
     log_info "Creating launch agent to open web UI on login..."
     PLIST_DIR="$HOME/Library/LaunchAgents"
     PLIST_FILE="$PLIST_DIR/com.fileagent.openbrowser.plist"
+    BROWSER_SCRIPT="$PROJECT_DIR/scripts/wait-and-open-browser.sh"
 
     # Create the directory if it doesn't exist
     mkdir -p "$PLIST_DIR"
+    chmod +x "$BROWSER_SCRIPT" 2>/dev/null || true
 
-    # Create the plist file
+    # Uses a wait-script that polls the server before opening the browser,
+    # so we don't get "Safari can't connect" on boot.
     cat > "$PLIST_FILE" << EOL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -433,16 +436,20 @@ create_browser_launch_agent() {
     <string>com.fileagent.openbrowser</string>
     <key>ProgramArguments</key>
     <array>
-        <string>open</string>
-        <string>http://localhost:8000</string>
+        <string>/bin/bash</string>
+        <string>${BROWSER_SCRIPT}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
+    <key>StandardOutPath</key>
+    <string>${PROJECT_DIR}/logs/browser-open.log</string>
+    <key>StandardErrorPath</key>
+    <string>${PROJECT_DIR}/logs/browser-open.log</string>
 </dict>
 </plist>
 EOL
 
-    log_success "Launch agent created: $PLIST_FILE"
+    log_success "Launch agent created: $PLIST_FILE (with server-readiness check)"
 }
 
 # Show status and next steps
