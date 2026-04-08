@@ -4,8 +4,7 @@ Implements the vertical slice for file discovery operations using CQRS pattern.
 Matches the original StateManager logic for file discovery and status management.
 """
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, List
+from datetime import datetime, timedelta, timezone
 
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent
@@ -27,7 +26,7 @@ class FileDiscoverySlice:
         self, 
         file_repository: FileRepository, 
         state_machine: FileStateMachine,
-        event_bus: Optional[DomainEventBus] = None,
+        event_bus: DomainEventBus | None = None,
         cooldown_minutes: int = 60
     ):
         self._file_repository = file_repository
@@ -36,14 +35,14 @@ class FileDiscoverySlice:
         self._cooldown_minutes = cooldown_minutes
         logging.info("FileDiscoverySlice initialized")
 
-    async def get_active_file_by_path(self, file_path: str) -> Optional[TrackedFile]:
+    async def get_active_file_by_path(self, file_path: str) -> TrackedFile | None:
         """
         Get the currently active file for a given path.
         """
         all_files = await self._file_repository.get_all()
         return FileSelectionLogic.select_active_for_path(all_files, file_path)
 
-    async def get_current_file_for_path(self, file_path: str) -> Optional[TrackedFile]:
+    async def get_current_file_for_path(self, file_path: str) -> TrackedFile | None:
         """
         Get the current file for a path, including inactive files.
         Matches original StateManager._get_current_file_for_path logic exactly.
@@ -57,7 +56,7 @@ class FileDiscoverySlice:
         Matches original StateManager._is_space_error_in_cooldown logic exactly.
         """
         should_skip, reason = CooldownChecker.should_skip_space_error(
-            tracked_file, self._cooldown_minutes, datetime.now()
+            tracked_file, self._cooldown_minutes, datetime.now(timezone.utc)
         )
         if should_skip:
             logging.debug(
@@ -86,8 +85,8 @@ class FileDiscoverySlice:
         self, 
         file_path: str, 
         file_size: int, 
-        last_write_time: Optional[datetime] = None,
-        creation_time: Optional[datetime] = None
+        last_write_time: datetime | None = None,
+        creation_time: datetime | None = None
     ) -> TrackedFile:
         """
         Add a newly discovered file to the system.
@@ -142,7 +141,7 @@ class FileDiscoverySlice:
             discovery_event = FileDiscoveredEvent(
                 file_path=file_path,
                 file_size=file_size,
-                last_write_time=last_write_time.timestamp() if last_write_time else datetime.now().timestamp()
+                last_write_time=last_write_time.timestamp() if last_write_time else datetime.now(timezone.utc).timestamp()
             )
             await self._event_bus.publish(discovery_event)
 
@@ -179,56 +178,17 @@ class FileDiscoverySlice:
             logging.error(f"Error in mark_file_ready (file missing?): {e}", exc_info=True)
             return False
 
-    async def get_files_by_status(self, status: FileStatus) -> List[TrackedFile]:
+    async def get_files_by_status(self, status: FileStatus) -> list[TrackedFile]:
         """
         Get all files with a specific status.
-        Matches original StateManager.get_files_by_status logic exactly.
         Returns only the most current file for each path.
         """
-        current_files: dict[str, TrackedFile] = {}
         all_files = await self._file_repository.get_all()
-        
-        for tracked_file in all_files:
-            if tracked_file.status == status:
-                current = current_files.get(tracked_file.file_path)
-                if not current or self._is_more_current(tracked_file, current):
-                    current_files[tracked_file.file_path] = tracked_file
-        
-        return list(current_files.values())
+        status_files = [f for f in all_files if f.status == status]
+        deduped = FileSelectionLogic.deduplicate_by_path(status_files)
+        return list(deduped.values())
 
-    def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
-        """
-        Determine if file1 is more current than file2.
-        Matches original StateManager._is_more_current logic exactly.
-        """
-        active_statuses = {
-            FileStatus.COPYING: 1,
-            FileStatus.IN_QUEUE: 2,
-            FileStatus.GROWING_COPY: 3,
-            FileStatus.READY_TO_START_GROWING: 4,
-            FileStatus.READY: 5,
-            FileStatus.GROWING: 6,
-            FileStatus.DISCOVERED: 7,
-            FileStatus.WAITING_FOR_SPACE: 8,
-            FileStatus.WAITING_FOR_NETWORK: 8,
-            FileStatus.COMPLETED: 9,
-            FileStatus.COMPLETED_DELETE_FAILED: 10,
-            FileStatus.FAILED: 11,
-            FileStatus.REMOVED: 12,
-            FileStatus.SPACE_ERROR: 13,
-        }
-        
-        priority1 = active_statuses.get(file1.status, 99)
-        priority2 = active_statuses.get(file2.status, 99)
-        
-        if priority1 != priority2:
-            return priority1 < priority2
-        
-        time1 = file1.discovered_at.timestamp() if file1.discovered_at else 0
-        time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
-        return time1 > time2
-
-    async def get_files_needing_growth_monitoring(self) -> List[TrackedFile]:
+    async def get_files_needing_growth_monitoring(self) -> list[TrackedFile]:
         """
         Get all files that need growth monitoring.
         Returns files that have last_growth_check set and are in growth-related states.
@@ -243,26 +203,16 @@ class FileDiscoverySlice:
         return [
             f for f in all_files
             if f.last_growth_check is not None and f.status in growth_statuses
-            and f.status not in {
-                FileStatus.IN_QUEUE,
-                FileStatus.COPYING,
-                FileStatus.GROWING_COPY,
-                FileStatus.COMPLETED,
-                FileStatus.FAILED,
-                FileStatus.REMOVED,
-                FileStatus.SPACE_ERROR,
-                FileStatus.WAITING_FOR_NETWORK,
-            }
         ]
 
     async def update_file_growth_info(
         self,
         file_id: str,
         file_size: int,
-        previous_file_size: Optional[int] = None,
-        growth_rate_mbps: Optional[float] = None,
-        growth_stable_since: Optional[datetime] = None,
-        last_growth_check: Optional[datetime] = None
+        previous_file_size: int | None = None,
+        growth_rate_mbps: float | None = None,
+        growth_stable_since: datetime | None = None,
+        last_growth_check: datetime | None = None
     ) -> bool:
         """
         Update file growth information.

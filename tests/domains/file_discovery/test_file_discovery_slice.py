@@ -1,6 +1,6 @@
 """Tests for FileDiscoverySlice — discovery, status, and growth management."""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 from app.domains.file_discovery.file_discovery_slice import FileDiscoverySlice
@@ -88,7 +88,7 @@ class TestShouldSkipFileProcessing:
     async def test_space_error_in_cooldown_returns_true(self, slice, repo):
         f = _tf(
             status=FileStatus.SPACE_ERROR,
-            space_error_at=datetime.now() - timedelta(minutes=30),
+            space_error_at=datetime.now(timezone.utc) - timedelta(minutes=30),
         )
         repo.get_all.return_value = [f]
         assert await slice.should_skip_file_processing("/src/test.mxf") is True
@@ -97,7 +97,7 @@ class TestShouldSkipFileProcessing:
     async def test_space_error_past_cooldown_returns_false(self, slice, repo):
         f = _tf(
             status=FileStatus.SPACE_ERROR,
-            space_error_at=datetime.now() - timedelta(minutes=120),
+            space_error_at=datetime.now(timezone.utc) - timedelta(minutes=120),
         )
         repo.get_all.return_value = [f]
         assert await slice.should_skip_file_processing("/src/test.mxf") is False
@@ -301,17 +301,14 @@ class TestUpdateFileGrowthInfo:
         assert await slice.update_file_growth_info("unknown", file_size=1000) is False
 
 
-# ── _is_more_current ────────────────────────────────────────────
+# ── Deduplication (via FileSelectionLogic) ──────────────────────
 
-class TestIsMoreCurrent:
-    def test_active_status_beats_terminal(self, slice):
-        copying = _tf(status=FileStatus.COPYING)
-        completed = _tf(status=FileStatus.COMPLETED)
-        assert slice._is_more_current(copying, completed) is True
-        assert slice._is_more_current(completed, copying) is False
-
-    def test_same_status_newer_discovered_wins(self, slice):
+class TestDeduplication:
+    @pytest.mark.asyncio
+    async def test_get_files_by_status_deduplicates(self, slice, repo):
         old = _tf(status=FileStatus.READY, discovered_at=datetime(2026, 1, 1))
         new = _tf(status=FileStatus.READY, discovered_at=datetime(2026, 3, 1))
-        assert slice._is_more_current(new, old) is True
-        assert slice._is_more_current(old, new) is False
+        repo.get_all.return_value = [old, new]
+        result = await slice.get_files_by_status(FileStatus.READY)
+        assert len(result) == 1
+        assert result[0].discovered_at == datetime(2026, 3, 1)

@@ -1,15 +1,13 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Set, Dict, Any
-from typing import TYPE_CHECKING
+from typing import Any
 
 import aiofiles.os
 
 from app.config import Settings
-from app.core.events.event_bus import DomainEventBus
 from app.models import FileStatus
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
@@ -18,11 +16,8 @@ from .commands import AddFileCommand, MarkFileStableCommand, MarkFileGrowingComm
 from .queries import ShouldSkipFileProcessingQuery, GetActiveFileByPathQuery, GetFilesByStatusQuery
 from .growing_file_detector import GrowingFileDetector
 
-if TYPE_CHECKING:
-    from app.domains.storage.storage_monitor import StorageMonitorService
 
-
-async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:
+async def get_file_metadata(file_path: str) -> dict[str, Any] | None:
     """Get file metadata including size and modification time."""
     try:
         path = Path(file_path)
@@ -33,8 +28,8 @@ async def get_file_metadata(file_path: str) -> Optional[Dict[str, Any]]:
         return {
             "path": path,
             "size": stat_result.st_size,
-            "last_write_time": datetime.fromtimestamp(stat_result.st_mtime),
-            "creation_time": datetime.fromtimestamp(getattr(stat_result, 'st_birthtime', stat_result.st_ctime)),
+            "last_write_time": datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc),
+            "creation_time": datetime.fromtimestamp(getattr(stat_result, 'st_birthtime', stat_result.st_ctime), tz=timezone.utc),
         }
     except (OSError, IOError):
         return None
@@ -56,19 +51,15 @@ class FileScanner:
         config: ScanConfiguration,
         command_bus: CommandBus,
         query_bus: QueryBus,
-        storage_monitor: Optional["StorageMonitorService"] = None,
-        settings: Optional[Settings] = None,
-        event_bus: Optional[DomainEventBus] = None,
+        settings: Settings | None = None,
     ):
         self.config = config
         self._command_bus = command_bus
         self._query_bus = query_bus
-        self.storage_monitor = storage_monitor
         self.settings = settings
-        self._event_bus = event_bus
         self._running = False
         self._paused = False
-        self._scan_task: Optional[asyncio.Task] = None
+        self._scan_task: asyncio.Task | None = None
 
         # Initialize GrowingFileDetector with CQRS
         self.growing_file_detector = GrowingFileDetector(
@@ -78,8 +69,6 @@ class FileScanner:
         )
 
         logging.info("FileScanner initialized with CQRS architecture")
-
-        logging.info("FileScanOrchestrator initialized")
         logging.info(f"Monitoring: {config.source_directory}")
         logging.info(f"File stability: {config.file_stable_time_seconds}s")
         logging.info(f"Polling interval: {config.polling_interval_seconds}s")
@@ -152,7 +141,7 @@ class FileScanner:
             logging.info("Scanner loop completed")
 
     async def _execute_scan_iteration(self) -> None:
-        scan_start = datetime.now()
+        scan_start = datetime.now(timezone.utc)
 
         current_files = await self._discover_all_files()
         await self._cleanup_missing_files(current_files)
@@ -162,10 +151,10 @@ class FileScanner:
         await self._process_discovered_files(current_files)
         await self._check_file_stability()
 
-        scan_duration = (datetime.now() - scan_start).total_seconds()
+        scan_duration = (datetime.now(timezone.utc) - scan_start).total_seconds()
         logging.debug(f"Scan iteration completed in {scan_duration:.2f}s")
 
-    async def _cleanup_missing_files(self, current_files: Set[Path]) -> int:
+    async def _cleanup_missing_files(self, current_files: set[Path]) -> int:
         """Clean up files that no longer exist in the source directory."""
         try:
             current_file_paths = {str(path) for path in current_files}
@@ -179,9 +168,9 @@ class FileScanner:
             logging.error(f"Error cleaning up missing files: {e}", exc_info=True)
             return 0
 
-    async def _discover_all_files(self) -> Set[Path]:
+    async def _discover_all_files(self) -> set[Path]:
         """Discover all MXF files in the source directory."""
-        discovered_files: Set[Path] = set()
+        discovered_files: set[Path] = set()
 
         try:
             source_path = Path(self.config.source_directory)
@@ -211,7 +200,7 @@ class FileScanner:
 
         return discovered_files
 
-    async def _process_discovered_files(self, current_files: Set[Path]) -> None:
+    async def _process_discovered_files(self, current_files: set[Path]) -> None:
         for path_obj in current_files:
             try:
                 file_path = str(path_obj)

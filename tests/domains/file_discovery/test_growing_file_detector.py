@@ -1,6 +1,6 @@
 """Tests for GrowingFileDetector — growth checking, status determination."""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domains.file_discovery.growing_file_detector import GrowingFileDetector
@@ -94,8 +94,8 @@ class TestSubsequentChecks:
         """File size changed since last check → GROWING."""
         tf = _tf(
             size=1000,
-            last_growth_check=datetime.now() - timedelta(seconds=5),
-            growth_stable_since=datetime.now(),
+            last_growth_check=datetime.now(timezone.utc) - timedelta(seconds=5),
+            growth_stable_since=datetime.now(timezone.utc),
         )
 
         with patch("aiofiles.os.path.getsize", return_value=2000):  # Grew
@@ -109,7 +109,7 @@ class TestSubsequentChecks:
         """File still growing and above min_size → READY_TO_START_GROWING."""
         tf = _tf(
             size=100 * 1024 * 1024,  # 100 MB > 50 MB min
-            last_growth_check=datetime.now() - timedelta(seconds=5),
+            last_growth_check=datetime.now(timezone.utc) - timedelta(seconds=5),
             growth_stable_since=None,
         )
 
@@ -124,8 +124,8 @@ class TestSubsequentChecks:
         """File unchanged and below min_size → READY (normal copy)."""
         tf = _tf(
             size=1000,
-            last_growth_check=datetime.now() - timedelta(seconds=5),
-            growth_stable_since=datetime.now() - timedelta(seconds=60),
+            last_growth_check=datetime.now(timezone.utc) - timedelta(seconds=5),
+            growth_stable_since=datetime.now(timezone.utc) - timedelta(seconds=60),
         )
 
         with patch("aiofiles.os.path.getsize", return_value=1000):
@@ -139,8 +139,8 @@ class TestSubsequentChecks:
         tf = _tf(
             status=FileStatus.WAITING_FOR_SPACE,
             size=1000,
-            last_growth_check=datetime.now() - timedelta(seconds=5),
-            growth_stable_since=datetime.now(),
+            last_growth_check=datetime.now(timezone.utc) - timedelta(seconds=5),
+            growth_stable_since=datetime.now(timezone.utc),
         )
 
         with patch("aiofiles.os.path.getsize", return_value=2000):
@@ -150,12 +150,12 @@ class TestSubsequentChecks:
         assert result == FileStatus.WAITING_FOR_SPACE
 
 
-# ── Error handling ──────────────────────────────────────────────
+# ── Error handling ──────────────────────────────────────────
 
 class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_file_not_found_returns_removed(self, detector):
-        tf = _tf(last_growth_check=datetime.now())
+        tf = _tf(last_growth_check=datetime.now(timezone.utc))
 
         with patch("aiofiles.os.path.getsize", side_effect=FileNotFoundError):
             result = await detector.check_file_growth_status(tf)
@@ -164,7 +164,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_generic_error_returns_failed(self, detector):
-        tf = _tf(last_growth_check=datetime.now())
+        tf = _tf(last_growth_check=datetime.now(timezone.utc))
 
         with patch("aiofiles.os.path.getsize", side_effect=OSError("disk error")):
             result = await detector.check_file_growth_status(tf)

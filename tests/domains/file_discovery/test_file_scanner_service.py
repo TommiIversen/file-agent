@@ -25,7 +25,6 @@ def deps():
         "settings": _make_settings(),
         "command_bus": MagicMock(),
         "query_bus": MagicMock(),
-        "storage_monitor": MagicMock(),
         "event_bus": AsyncMock(),
     }
 
@@ -97,10 +96,3 @@ class TestIsScanning:
     def test_delegates_to_file_scanner(self, service):
         service._file_scanner.is_scanning = MagicMock(return_value=True)
         assert service.is_scanning() is True
-
-    def test_returns_false_when_scanner_is_none(self, deps):
-        with patch("app.domains.file_discovery.file_scanner_service.FileScanner") as MockScanner:
-            MockScanner.return_value = None
-            svc = FileScannerService(**deps)
-            svc._file_scanner = None
-            assert svc.is_scanning() is False

@@ -3,7 +3,6 @@ File Scanner Service using CQRS for file discovery operations.
 Acts as a CQRS adapter around the core FileScanner logic.
 """
 import logging
-from typing import Optional, TYPE_CHECKING
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
@@ -13,9 +12,6 @@ from app.core.cqrs.query_bus import QueryBus
 from app.domains.file_discovery.file_scanner import FileScanner
 from app.domains.file_discovery.domain_objects import ScanConfiguration
 from app.domains.file_discovery.queries import GetActiveFileByPathQuery
-
-if TYPE_CHECKING:
-    from app.domains.storage.storage_monitor import StorageMonitorService
 
 
 class FileScannerService:
@@ -29,8 +25,7 @@ class FileScannerService:
         settings: Settings,
         command_bus: CommandBus,
         query_bus: QueryBus,
-        storage_monitor: "StorageMonitorService | None" = None,
-        event_bus: Optional[DomainEventBus] = None,
+        event_bus: DomainEventBus | None = None,
     ):
         self._command_bus = command_bus
         self._query_bus = query_bus
@@ -48,18 +43,12 @@ class FileScannerService:
             growing_file_chunk_size_kb=settings.growing_file_chunk_size_kb,
         )
         
-        # Import StateManager here to avoid circular import
-        # from app.dependencies import get_state_manager
-        # state_manager = get_state_manager()
-        
         # Create the core FileScanner with CQRS integration
         self._file_scanner = FileScanner(
             config=config,
             command_bus=command_bus,
             query_bus=query_bus,
-            storage_monitor=storage_monitor,
             settings=settings,
-            event_bus=event_bus,
         )
         
         logging.info("FileScannerService initialized as CQRS adapter around FileScanner")
@@ -97,11 +86,11 @@ class FileScannerService:
 
     def is_scanning(self) -> bool:
         """Check if the scanner is currently running."""
-        return self._file_scanner.is_scanning() if self._file_scanner else False
+        return self._file_scanner.is_scanning()
 
     def is_paused(self) -> bool:
         """Check if the scanner is currently paused."""
-        return self._file_scanner.is_paused() if self._file_scanner else True
+        return self._file_scanner.is_paused()
 
     async def get_active_file_by_path(self, file_path: str):
         """Get active file by path using CQRS query."""

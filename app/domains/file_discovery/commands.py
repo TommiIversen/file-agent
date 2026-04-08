@@ -4,7 +4,6 @@ Commands that modify state related to file discovery operations.
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from app.core.cqrs.command import Command
 
@@ -14,8 +13,8 @@ class AddFileCommand(Command):
     """Command to add a newly discovered file to the system."""
     file_path: str
     file_size: int
-    last_write_time: Optional[datetime] = None
-    creation_time: Optional[datetime] = None
+    last_write_time: datetime | None = None
+    creation_time: datetime | None = None
 
 
 @dataclass
@@ -35,10 +34,10 @@ class UpdateFileGrowthInfoCommand(Command):
     """Command to update file growth information."""
     file_id: str
     file_size: int
-    previous_file_size: Optional[int] = None
-    growth_rate_mbps: Optional[float] = None
-    growth_stable_since: Optional[datetime] = None
-    last_growth_check: Optional[datetime] = None
+    previous_file_size: int | None = None
+    growth_rate_mbps: float | None = None
+    growth_stable_since: datetime | None = None
+    last_growth_check: datetime | None = None
 
 
 @dataclass

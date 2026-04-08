@@ -4,7 +4,7 @@ Testing the refactored functions ensures our primitive obsession fixes work corr
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from app.domains.file_discovery.domain_objects import (
@@ -61,7 +61,7 @@ class TestFileMetadataFunction:
             assert metadata["size"] == 1024
             assert metadata["path"].name == "test.mxf"  # Platform-independent
             assert isinstance(metadata["path"], Path)
-            assert metadata["last_write_time"] == datetime.fromtimestamp(1609459200)
+            assert metadata["last_write_time"] == datetime.fromtimestamp(1609459200, tz=timezone.utc)
 
     @pytest.mark.asyncio
     async def test_get_file_metadata_file_not_exists(self):

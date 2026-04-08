@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiofiles.os
 
@@ -79,7 +79,7 @@ class GrowingFileDetector:
 
         try:
             current_size = await aiofiles.os.path.getsize(tracked_file.file_path)
-            current_time = datetime.now()
+            current_time = datetime.now(timezone.utc)
 
             if tracked_file.last_growth_check is None:
                 # First check
@@ -135,7 +135,7 @@ class GrowingFileDetector:
         self, tracked_file: TrackedFile, new_size: int
     ) -> None:
         """Update file growth information using CQRS instead of separate tracking."""
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
 
         # Calculate growth rate if we have previous data
         growth_rate = tracked_file.growth_rate_mbps

@@ -50,7 +50,6 @@ def get_file_scanner() -> FileScannerService:
             settings=get_settings(),
             command_bus=get_command_bus(),
             query_bus=get_query_bus(),
-            storage_monitor=get_storage_monitor(),
             event_bus=get_event_bus(),
         )
     return _singletons["file_scanner"]
