@@ -95,12 +95,12 @@ class TestInitializeCopyStatus:
         assert event.file_id == "test-id"
 
     @pytest.mark.asyncio
-    async def test_handles_invalid_transition_gracefully(self):
+    async def test_raises_on_invalid_transition(self):
         ex, _, _, sm, eb, _ = _make_executor()
         sm.transition.side_effect = InvalidTransitionError("/test/file.mxf", "Ready", "Copying")
 
-        await ex.initialize_copy_status(_make_prepared())
-        # Should not raise — logged as warning
+        with pytest.raises(FileCopyError, match="State transition failed"):
+            await ex.initialize_copy_status(_make_prepared())
         eb.publish.assert_not_awaited()
 
 
@@ -155,13 +155,12 @@ class TestExecuteCopy:
             await ex.execute_copy(_make_prepared())
 
     @pytest.mark.asyncio
-    async def test_tracked_file_not_found_returns_false(self):
+    async def test_tracked_file_not_found_raises(self):
         ex, repo, strategy, _, _, _ = _make_executor()
         repo.get_by_id.return_value = None
 
-        result = await ex.execute_copy(_make_prepared())
-
-        assert result is False
+        with pytest.raises(ValueError, match="TrackedFile not found"):
+            await ex.execute_copy(_make_prepared())
         strategy.copy_file.assert_not_awaited()
 
 
