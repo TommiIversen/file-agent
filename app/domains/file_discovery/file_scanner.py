@@ -294,7 +294,6 @@ class FileScanner:
                     if recommended_status == FileStatus.READY:
                         command = MarkFileStableCommand(
                             file_id=tracked_file.id,
-                            file_path=file_path
                         )
                         await self._command_bus.execute(command)
                         logging.info(
@@ -303,7 +302,6 @@ class FileScanner:
                     elif recommended_status == FileStatus.GROWING:
                         growing_cmd = MarkFileGrowingCommand(
                             file_id=tracked_file.id,
-                            file_path=tracked_file.file_path
                         )
                         await self._command_bus.execute(growing_cmd)
                         logging.info(
@@ -315,7 +313,6 @@ class FileScanner:
                             # First transition to GROWING
                             growing_command = MarkFileGrowingCommand(
                                 file_id=tracked_file.id,
-                                file_path=tracked_file.file_path
                             )
                             await self._command_bus.execute(growing_command)
                             logging.info(
@@ -325,7 +322,6 @@ class FileScanner:
                         # Then transition to READY_TO_START_GROWING
                         rtsg_command = MarkFileReadyToStartGrowingCommand(
                             file_id=tracked_file.id,
-                            file_path=tracked_file.file_path
                         )
                         await self._command_bus.execute(rtsg_command)
                         logging.info(

@@ -28,7 +28,6 @@ class MarkFileReadyCommand(Command):
 class MarkFileStableCommand(Command):
     """Command to mark a file as stable (no longer growing)."""
     file_id: str
-    file_path: str
 
 
 @dataclass
@@ -46,14 +45,12 @@ class UpdateFileGrowthInfoCommand(Command):
 class MarkFileGrowingCommand(Command):
     """Command to mark a file as growing."""
     file_id: str
-    file_path: str
 
 
 @dataclass
 class MarkFileReadyToStartGrowingCommand(Command):
     """Command to mark a file as ready to start growing copy."""
     file_id: str
-    file_path: str
 
 
 @dataclass
