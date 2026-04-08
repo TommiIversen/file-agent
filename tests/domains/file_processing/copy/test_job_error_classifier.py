@@ -185,18 +185,22 @@ class TestHelpers:
         err = Exception("nothing wrong")
         assert classifier._is_network_error(err, "disk quota exceeded") is False
 
-    def test_get_network_error_reason_string_match(self, classifier):
-        reason = classifier._get_network_error_reason(Exception("test"), "broken pipe here")
-        assert "broken pipe" in reason
-
-    def test_get_network_error_reason_errno_match(self, classifier):
-        err = OSError(errno.EIO, "I/O")
-        err.errno = errno.EIO
-        reason = classifier._get_network_error_reason(err, "something else")
-        assert "errno" in reason.lower()
+    def test_is_network_error_errno_match(self, classifier):
+        import errno as _errno
+        err = OSError(_errno.EIO, "I/O")
+        err.errno = _errno.EIO
+        assert classifier._is_network_error(err, "something else") is True
 
     def test_is_source_error_string_match(self, classifier):
-        assert classifier._is_source_error("no such file or directory: test.mxf", "/src/test.mxf") is True
+        assert classifier._is_source_error("no such file or directory: test.mxf") is True
+
+    def test_source_file_exists_true(self, classifier, tmp_path):
+        f = tmp_path / "exists.mxf"
+        f.write_bytes(b"data")
+        assert classifier._source_file_exists(str(f)) is True
+
+    def test_source_file_exists_false(self, classifier, tmp_path):
+        assert classifier._source_file_exists(str(tmp_path / "gone.mxf")) is False
 
 
 # ── Timeout errors should enable network recovery ──────────────────────────
@@ -218,12 +222,11 @@ class TestTimeoutNetworkRecovery:
         assert status == FileStatus.FAILED
 
     def test_is_source_error_file_not_found(self, classifier, tmp_path):
-        nonexistent = str(tmp_path / "ghost.mxf")
-        assert classifier._is_source_error("some error", nonexistent) is True
+        assert classifier._is_source_error("no such file or directory") is True
 
-    def test_get_source_error_reason_string_match(self, classifier):
-        reason = classifier._get_source_error_reason("file not found at path", "/src/a.mxf")
-        assert "file not found" in reason
+    def test_get_source_error_indicator_string_match(self, classifier):
+        indicator = classifier._get_source_error_indicator("file not found at path")
+        assert "file not found" in indicator
 
     def test_destination_status_string(self, classifier):
         status = classifier._get_destination_status()

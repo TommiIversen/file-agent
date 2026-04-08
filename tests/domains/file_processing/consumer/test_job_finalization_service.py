@@ -9,7 +9,8 @@ from datetime import datetime
 from app.domains.file_processing.consumer.job_finalization_service import JobFinalizationService
 from app.domains.file_processing.consumer.job_models import QueueJob
 from app.models import TrackedFile, FileStatus
-from app.core.events.file_events import FileCopyCompletedEvent
+from app.core.events.file_events import FileCopyCompletedEvent, FileCopyFailedEvent
+from app.core.exceptions import InvalidTransitionError
 
 
 def _make_job(file_id: str = "test-id", file_path: str = "/test/file.mxf", file_size: int = 1000) -> QueueJob:
@@ -120,13 +121,22 @@ class TestFinalizeSuccess:
         event_bus.publish.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_success_skips_if_file_not_found(self):
+    async def test_success_raises_if_file_not_found(self):
         svc, repo, event_bus, sm = _make_service()
         repo.get_by_id.return_value = None
 
+        with pytest.raises(ValueError, match="TrackedFile not found"):
+            await svc.finalize_success(_make_job(), file_size=5000)
+
+    @pytest.mark.asyncio
+    async def test_success_invalid_transition_skips_event(self):
+        svc, repo, event_bus, sm = _make_service()
+        repo.get_by_id.return_value = _make_tracked()
+        sm.transition.side_effect = InvalidTransitionError("f", "A", "B")
+
         await svc.finalize_success(_make_job(), file_size=5000)
 
-        sm.transition.assert_not_awaited()
+        event_bus.publish.assert_not_awaited()
 
 
 class TestFinalizeFailure:
@@ -139,34 +149,42 @@ class TestFinalizeFailure:
 
         await svc.finalize_failure(_make_job(), RuntimeError("disk error"))
 
-        sm.transition.assert_awaited_once_with(
-            file_id="test-id",
-            new_status=FileStatus.FAILED,
-            error_message="disk error",
-        )
+        call_kwargs = sm.transition.call_args[1]
+        assert call_kwargs["file_id"] == "test-id"
+        assert call_kwargs["new_status"] == FileStatus.FAILED
+        assert call_kwargs["error_message"] == "disk error"
+        assert "failed_at" in call_kwargs
 
     @pytest.mark.asyncio
-    async def test_failure_passes_error_via_kwargs(self):
+    async def test_failure_publishes_failed_event(self):
         svc, repo, event_bus, sm = _make_service()
-        tracked = _make_tracked()
-        repo.get_by_id.return_value = tracked
+        repo.get_by_id.return_value = _make_tracked()
 
         await svc.finalize_failure(_make_job(), RuntimeError("disk error"))
 
-        sm.transition.assert_awaited_once_with(
-            file_id="test-id",
-            new_status=FileStatus.FAILED,
-            error_message="disk error",
-        )
+        event_bus.publish.assert_awaited_once()
+        event = event_bus.publish.call_args[0][0]
+        assert isinstance(event, FileCopyFailedEvent)
+        assert event.file_id == "test-id"
+        assert event.error_message == "disk error"
 
     @pytest.mark.asyncio
-    async def test_failure_skips_if_file_not_found(self):
+    async def test_failure_raises_if_file_not_found(self):
         svc, repo, event_bus, sm = _make_service()
         repo.get_by_id.return_value = None
 
+        with pytest.raises(ValueError, match="TrackedFile not found"):
+            await svc.finalize_failure(_make_job(), RuntimeError("err"))
+
+    @pytest.mark.asyncio
+    async def test_failure_invalid_transition_skips_event(self):
+        svc, repo, event_bus, sm = _make_service()
+        repo.get_by_id.return_value = _make_tracked()
+        sm.transition.side_effect = InvalidTransitionError("f", "A", "B")
+
         await svc.finalize_failure(_make_job(), RuntimeError("err"))
 
-        sm.transition.assert_not_awaited()
+        event_bus.publish.assert_not_awaited()
 
 
 class TestFinalizeMaxRetries:
@@ -174,37 +192,33 @@ class TestFinalizeMaxRetries:
     @pytest.mark.asyncio
     async def test_max_retries_transitions_to_failed(self):
         svc, repo, event_bus, sm = _make_service()
-        tracked = _make_tracked()
-        repo.get_by_id.return_value = tracked
-
-        await svc.finalize_max_retries(_make_job())
-
-        sm.transition.assert_awaited_once_with(
-            file_id="test-id",
-            new_status=FileStatus.FAILED,
-            error_message="Failed after 3 retry attempts",
-        )
-
-    @pytest.mark.asyncio
-    async def test_max_retries_passes_error_via_kwargs(self):
-        svc, repo, event_bus, sm = _make_service()
-        tracked = _make_tracked()
-        repo.get_by_id.return_value = tracked
+        repo.get_by_id.return_value = _make_tracked()
 
         await svc.finalize_max_retries(_make_job())
 
         call_kwargs = sm.transition.call_args[1]
-        assert call_kwargs["error_message"] == "Failed after 3 retry attempts"
         assert call_kwargs["new_status"] == FileStatus.FAILED
+        assert "Failed after 3 retry attempts" in call_kwargs["error_message"]
 
     @pytest.mark.asyncio
-    async def test_max_retries_skips_if_file_not_found(self):
+    async def test_max_retries_publishes_failed_event(self):
         svc, repo, event_bus, sm = _make_service()
-        repo.get_by_id.return_value = None
+        repo.get_by_id.return_value = _make_tracked()
 
         await svc.finalize_max_retries(_make_job())
 
-        sm.transition.assert_not_awaited()
+        event_bus.publish.assert_awaited_once()
+        event = event_bus.publish.call_args[0][0]
+        assert isinstance(event, FileCopyFailedEvent)
+        assert "3 retry" in event.error_message
+
+    @pytest.mark.asyncio
+    async def test_max_retries_raises_if_file_not_found(self):
+        svc, repo, event_bus, sm = _make_service()
+        repo.get_by_id.return_value = None
+
+        with pytest.raises(ValueError, match="TrackedFile not found"):
+            await svc.finalize_max_retries(_make_job())
 
 
 class TestFinalizationInfo:

@@ -154,6 +154,8 @@ class TestHandleSpaceShortageActual:
         sm.transition.assert_awaited_once()
         call_kwargs = sm.transition.call_args[1]
         assert call_kwargs["new_status"] == FileStatus.FAILED
+        # Should publish FileCopyFailedEvent
+        mgr.event_bus.publish.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_retry_manager_error_falls_through_to_failed(self):
@@ -166,24 +168,23 @@ class TestHandleSpaceShortageActual:
 
         assert result.success is False
         assert result.space_shortage is True
-        # Should fall through and transition to FAILED
         sm.transition.assert_awaited_once()
+        # Should publish FileCopyFailedEvent
+        mgr.event_bus.publish.assert_awaited_once()
 
 
 class TestHandleSpaceShortageEdgeCases:
 
     @pytest.mark.asyncio
-    async def test_tracked_file_not_found(self):
+    async def test_tracked_file_not_found_raises(self):
         mgr, repo, _, _, _ = _make_manager()
         repo.get_by_id.return_value = None
 
-        result = await mgr.handle_space_shortage(
-            _make_job(),
-            _make_space_result(has_space=False, reason="Insufficient space"),
-        )
-
-        assert result.success is False
-        assert "not found" in result.error_message
+        with pytest.raises(ValueError, match="TrackedFile not found"):
+            await mgr.handle_space_shortage(
+                _make_job(),
+                _make_space_result(has_space=False, reason="Insufficient space"),
+            )
 
 
 class TestSpaceManagerInfo:

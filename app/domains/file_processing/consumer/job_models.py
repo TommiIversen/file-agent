@@ -3,7 +3,7 @@ Job Models for Consumer - typed data structures for job queue system.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -31,20 +31,20 @@ class QueueJob:
             return NotImplemented
         
         # Handle cases where creation_time might be None (though it should be set now)
-        self_creation_time = self.creation_time or datetime.min
-        other_creation_time = other.creation_time or datetime.min
+        self_creation_time = self.creation_time or datetime.min.replace(tzinfo=timezone.utc)
+        other_creation_time = other.creation_time or datetime.min.replace(tzinfo=timezone.utc)
 
         return self_creation_time < other_creation_time
 
     def mark_retry(self, error_message: str) -> None:
         """Mark this job for retry with error information."""
         self.retry_count += 1
-        self.last_retry_at = datetime.now()
+        self.last_retry_at = datetime.now(timezone.utc)
         self.last_error_message = error_message
 
     def mark_requeued(self) -> None:
         """Mark this job as requeued."""
-        self.requeued_at = datetime.now()
+        self.requeued_at = datetime.now(timezone.utc)
 
     def __str__(self) -> str:
         return (

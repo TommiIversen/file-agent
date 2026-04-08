@@ -3,14 +3,16 @@ Job Finalization Service - handles completion of copy jobs.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
 from app.core.file_state_machine import FileStateMachine
+from app.core.exceptions import InvalidTransitionError
 from app.models import FileStatus
 from app.domains.file_processing.consumer.job_models import QueueJob
 from app.core.file_repository import FileRepository
-from app.core.events.file_events import FileCopyCompletedEvent
+from app.core.events.file_events import FileCopyCompletedEvent, FileCopyFailedEvent
 
 
 class JobFinalizationService:
@@ -30,32 +32,30 @@ class JobFinalizationService:
 
     async def finalize_success(self, job: QueueJob, file_size: int) -> None:
         """Finalize successful job completion."""
-        # Check the current status to avoid overwriting COMPLETED or COMPLETED_DELETE_FAILED.
-        # The copy strategy (e.g. GrowingFileCopyStrategy) may have already transitioned
-        # the file to COMPLETED and published the FileCopyCompletedEvent with the correct
-        # actual bytes.  Re-publishing here with the stale job.file_size would overwrite
-        # the UI with the wrong (queue-time) file size.
         tracked_file = await self.file_repository.get_by_id(job.file_id)
         if not tracked_file:
-            logging.warning(f"Tracked file not found for job {job.file_path} in finalize_success")
-            return
+            raise ValueError(f"TrackedFile not found for job {job.file_path} in finalize_success")
+
+        # Copy strategy may have already transitioned to COMPLETED with correct bytes.
+        # Re-publishing here with stale job.file_size would overwrite the UI.
         if tracked_file.status in (FileStatus.COMPLETED, FileStatus.COMPLETED_DELETE_FAILED):
             logging.debug(
                 f"Skipping finalization for {job.file_path} as it is already {tracked_file.status.value}"
             )
             return
 
-        # Use state machine for atomic status transition + field updates
-        # State machine handles: repository update, event publishing,
-        # auto-clearing error_message, and auto-setting completed_at.
-        await self.state_machine.transition(
-            file_id=tracked_file.id,
-            new_status=FileStatus.COMPLETED,
-            copy_progress=100.0,
-            bytes_copied=file_size,
-            file_size=file_size,
-        )
-        
+        try:
+            await self.state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.COMPLETED,
+                copy_progress=100.0,
+                bytes_copied=file_size,
+                file_size=file_size,
+            )
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Could not finalize success for {tracked_file.id}: {e}")
+            return
+
         await self.event_bus.publish(FileCopyCompletedEvent(
             file_id=tracked_file.id,
             file_path=tracked_file.file_path,
@@ -68,42 +68,35 @@ class JobFinalizationService:
 
     async def finalize_failure(self, job: QueueJob, error: Exception) -> None:
         """Finalize failed job with error handling."""
-        error_message = str(error)
-        
-        # Note: Job queue management should be handled by calling JobProcessor
-        
         tracked_file = await self.file_repository.get_by_id(job.file_id)
         if not tracked_file:
-            logging.warning(f"Tracked file not found for job {job.file_path} in finalize_failure")
+            raise ValueError(f"TrackedFile not found for job {job.file_path} in finalize_failure")
+
+        error_message = str(error)
+
+        try:
+            await self.state_machine.transition(
+                file_id=tracked_file.id,
+                new_status=FileStatus.FAILED,
+                error_message=error_message,
+                failed_at=datetime.now(timezone.utc),
+            )
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(f"Could not finalize failure for {tracked_file.id}: {e}")
             return
-            
-        # Use state machine for atomic transition + error message
-        await self.state_machine.transition(
+
+        await self.event_bus.publish(FileCopyFailedEvent(
             file_id=tracked_file.id,
-            new_status=FileStatus.FAILED,
+            file_path=tracked_file.file_path,
             error_message=error_message,
-        )
+        ))
 
     async def finalize_max_retries(self, job: QueueJob) -> None:
         """Finalize job that failed after maximum retry attempts."""
-        error_message = (
+        error = RuntimeError(
             f"Failed after {self.settings.max_retry_attempts} retry attempts"
         )
-        
-        # Note: Job queue management should be handled by calling JobProcessor
-
-        tracked_file = await self.file_repository.get_by_id(job.file_id)
-        if not tracked_file:
-            logging.warning(f"Tracked file not found for job {job.file_path} in finalize_max_retries")
-            return
-
-        # Use state machine for atomic transition + error message
-        await self.state_machine.transition(
-            file_id=tracked_file.id,
-            new_status=FileStatus.FAILED,
-            error_message=error_message,
-        )
-        
+        await self.finalize_failure(job, error)
         logging.error(f"Job failed after max retries: {job.file_path}")
 
     def get_finalization_info(self) -> dict:

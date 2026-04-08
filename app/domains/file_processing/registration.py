@@ -68,7 +68,6 @@ async def register_file_processing_domain(
     file_preparation_service = JobFilePreparationService(
         settings=settings,
         file_repository=get_file_repository(),
-        event_bus=event_bus,
         copy_strategy=get_copy_strategy(),
         template_engine=template_engine,
     )

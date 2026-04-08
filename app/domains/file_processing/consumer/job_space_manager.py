@@ -3,6 +3,8 @@ Job Space Manager - handles space checking and shortage workflows.
 """
 
 import logging
+from datetime import datetime, timezone
+from typing import Optional
 
 from app.config import Settings
 from app.models import FileStatus, SpaceCheckResult
@@ -10,6 +12,10 @@ from app.domains.file_processing.consumer.job_models import ProcessResult, Queue
 from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.events.event_bus import DomainEventBus
+from app.core.events.file_events import FileCopyFailedEvent
+from app.core.exceptions import InvalidTransitionError
+from app.domains.file_processing.space_checker import SpaceChecker
+from app.domains.file_processing.space_retry_manager import SpaceRetryManager
 
 
 class JobSpaceManager:
@@ -19,9 +25,9 @@ class JobSpaceManager:
         self,
         settings: Settings,
         file_repository: FileRepository,
-        space_checker, # This is the SpaceChecker for file size checks
+        space_checker: Optional[SpaceChecker],
         state_machine: FileStateMachine,
-        retry_manager,    # This replaces space_retry_manager param
+        retry_manager: Optional[SpaceRetryManager],
         event_bus: DomainEventBus,
     ):
         self.settings = settings
@@ -62,11 +68,8 @@ class JobSpaceManager:
 
         tracked_file = await self.file_repository.get_by_id(job.file_id)
         if not tracked_file:
-            logging.warning(f"Tracked file not found for job {job.file_path} in handle_space_shortage")
-            return ProcessResult(
-                success=False,
-                file_path=file_path,
-                error_message="Tracked file not found for space shortage handling",
+            raise ValueError(
+                f"TrackedFile not found for file_id={job.file_id} in handle_space_shortage"
             )
 
         # Check if this is a network accessibility issue vs actual space shortage
@@ -82,21 +85,20 @@ class JobSpaceManager:
                 },
             )
 
-            # Use state machine for atomic transition
             try:
                 await self.state_machine.transition(
                     file_id=job.file_id,
                     new_status=FileStatus.WAITING_FOR_NETWORK,
                     error_message=f"Network unavailable: {space_check.reason}"
                 )
-            except Exception as e:
-                logging.error(f"Failed to transition file {job.file_id} to WAITING_FOR_NETWORK: {e}", exc_info=True)
+            except InvalidTransitionError as e:
+                logging.warning(f"Could not transition {job.file_id} to WAITING_FOR_NETWORK: {e}")
 
             return ProcessResult(
                 success=False,
                 file_path=file_path,
                 error_message=f"Network unavailable: {space_check.reason}",
-                should_retry=True, # Should retry when network comes back
+                should_retry=True,
             )
         else:
             logging.warning(
@@ -125,23 +127,28 @@ class JobSpaceManager:
                 except Exception as e:
                     logging.error(f"Error scheduling space retry for {file_path}: {e}", exc_info=True)
 
-
+        error_msg = f"Insufficient space: {space_check.reason}"
         try:
-            # Use state machine for atomic transition
             await self.state_machine.transition(
                 file_id=tracked_file.id,
                 new_status=FileStatus.FAILED,
-                error_message=f"Insufficient space: {space_check.reason}"
+                error_message=error_msg,
+                failed_at=datetime.now(timezone.utc),
+            )
+            await self.event_bus.publish(FileCopyFailedEvent(
+                file_id=tracked_file.id,
+                file_path=file_path,
+                error_message=error_msg,
+            ))
+        except InvalidTransitionError as e:
+            logging.warning(
+                f"Could not transition {tracked_file.id} to FAILED: {e}"
             )
 
-        except Exception as e:
-            logging.error(
-                f"Error marking job as failed due to space shortage {file_path}: {e}"
-            )
         return ProcessResult(
             success=False,
             file_path=file_path,
-            error_message=f"Insufficient space: {space_check.reason}",
+            error_message=error_msg,
             space_shortage=True,
         )
 
