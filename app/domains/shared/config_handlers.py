@@ -9,10 +9,18 @@ import os
 import asyncio
 from typing import Any
 from app.config import Settings
-from app.dependencies import get_settings
+from app.dependencies import (
+    get_settings,
+    get_network_mount_service,
+    get_tally_light_event_handler,
+    get_tally_switch_monitor,
+)
 from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery
 from .settings_service import UserSettingsService, REQUIRES_RESTART
+
+_MOUNT_SETTINGS = {"network_share_url", "enable_auto_mount", "macos_mount_point"}
+_TALLY_SETTINGS = {"tally_light_switch_ip"}
 
 
 class GetSettingsQueryHandler:
@@ -151,6 +159,7 @@ class UpdateUserSettingsCommandHandler:
             # Sync all changed settings into the Settings singleton
             if changed:
                 self._service.sync_to_settings(get_settings())
+                self._hot_reload_services(set(changed))
 
             logging.info(
                 "User settings updated: %s changed, restart needed: %s",
@@ -166,3 +175,38 @@ class UpdateUserSettingsCommandHandler:
             }
         except (KeyError, ValueError) as e:
             return {"success": False, "message": str(e)}
+
+    @staticmethod
+    def _hot_reload_services(changed: set[str]) -> None:
+        """Reinitialize services whose baked config just changed."""
+        if changed & _MOUNT_SETTINGS:
+            try:
+                get_network_mount_service().reinitialize()
+            except Exception:
+                logging.warning("Could not reinitialize network mount service", exc_info=True)
+
+        if changed & _TALLY_SETTINGS:
+            try:
+                settings = get_settings()
+                ip = settings.tally_light_switch_ip
+
+                handler = get_tally_light_event_handler()
+                switch = handler._power_switch
+                if hasattr(switch, "update_connection"):
+                    switch.update_connection(
+                        ip_address=ip,
+                        username=settings.tally_light_switch_username,
+                        password=settings.tally_light_switch_password,
+                    )
+
+                monitor = get_tally_switch_monitor()
+                monitor.update_ip(ip)
+                if hasattr(monitor._switch_client, "update_connection"):
+                    monitor._switch_client.update_connection(
+                        ip_address=ip,
+                        username=settings.tally_light_switch_username,
+                        password=settings.tally_light_switch_password,
+                    )
+                logging.info("Tally light IP hot-reloaded to %s", ip)
+            except Exception:
+                logging.warning("Could not reinitialize tally services", exc_info=True)

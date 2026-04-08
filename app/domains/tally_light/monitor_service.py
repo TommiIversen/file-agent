@@ -51,6 +51,10 @@ class TallySwitchMonitorService:
         
         logging.info(f"TallySwitchMonitorService initialized for {ip_address} (check interval: {check_interval_seconds}s)")
 
+    def update_ip(self, ip_address: str) -> None:
+        """Update the monitored IP address (used for event metadata)."""
+        self._ip_address = ip_address
+
     @property
     def current_status(self) -> Optional[TallySwitchStatus]:
         """Get the current status of the tally switch."""

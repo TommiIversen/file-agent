@@ -186,7 +186,8 @@ class TestGetAllWithMetadata:
     async def test_requires_restart_metadata(self, service):
         result = service.get_all_with_metadata()
         by_key = {s["key"]: s for s in result}
-        assert by_key["source_directory"]["requires_restart"] is True
+        assert by_key["source_directory"]["requires_restart"] is False
+        assert by_key["max_concurrent_copies"]["requires_restart"] is True
         assert by_key["output_folder_rules"]["requires_restart"] is False
 
 
@@ -252,8 +253,9 @@ class TestEnvMigration:
 class TestRequiresRestart:
 
     def test_restart_settings_defined(self):
-        assert "source_directory" in REQUIRES_RESTART
-        assert "destination_directory" in REQUIRES_RESTART
         assert "max_concurrent_copies" in REQUIRES_RESTART
         assert "output_folder_rules" not in REQUIRES_RESTART
         assert "justin_auto_stop_minutes" not in REQUIRES_RESTART
+        # source_directory + destination_directory are hot-reloaded (not in REQUIRES_RESTART)
+        assert "source_directory" not in REQUIRES_RESTART
+        assert "destination_directory" not in REQUIRES_RESTART

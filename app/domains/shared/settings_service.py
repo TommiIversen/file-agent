@@ -39,12 +39,6 @@ USER_SETTINGS_SCHEMA: dict[str, tuple[type, Any]] = {
 
 # Settings that require an app restart to take effect.
 REQUIRES_RESTART: frozenset[str] = frozenset({
-    "source_directory",
-    "destination_directory",
-    "network_share_url",
-    "enable_auto_mount",
-    "macos_mount_point",
-    "tally_light_switch_ip",
     "max_concurrent_copies",
 })
 

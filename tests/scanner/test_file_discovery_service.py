@@ -36,6 +36,7 @@ class TestFileDiscovery:
     @pytest.fixture
     def orchestrator(self, config, mock_command_bus, mock_query_bus):
         settings = MagicMock(spec=Settings)
+        settings.source_directory = config.source_directory
         settings.growing_file_min_size_mb = 100
         settings.growing_file_poll_interval_seconds = 5
         settings.growing_file_safety_margin_mb = 50

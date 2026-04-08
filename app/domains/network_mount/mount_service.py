@@ -43,6 +43,15 @@ class NetworkMountService:
             logging.error(f"Error initializing network mounter: {e}", exc_info=True)
             self._mounter = None
 
+    def reinitialize(self) -> None:
+        """Re-create the platform mounter with current Settings values.
+
+        Call this after network mount settings have been synced into the
+        Settings singleton so the mounter picks up new mount_point / drive_letter.
+        """
+        logging.info("Reinitializing network mounter with updated settings")
+        self._initialize_mounter()
+
     async def ensure_mount_available(self, share_url: str, local_path: str) -> bool:
         """Ensure network mount is available and accessible."""
         if (

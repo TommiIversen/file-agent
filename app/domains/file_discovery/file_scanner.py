@@ -173,7 +173,7 @@ class FileScanner:
         discovered_files: set[Path] = set()
 
         try:
-            source_path = Path(self.config.source_directory)
+            source_path = Path(self.settings.source_directory if self.settings else self.config.source_directory)
 
             if not await aiofiles.os.path.exists(source_path):
                 logging.debug(f"Source directory does not exist: {source_path}")

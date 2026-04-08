@@ -66,8 +66,8 @@ class TestReloadConfigSuccess:
         assert result["requires_restart"] == []
 
     async def test_restart_field_changed(self, handler):
-        current = _make_settings(source_directory="/old")
-        fresh = _make_settings(source_directory="/new")
+        current = _make_settings(max_concurrent_copies=4)
+        fresh = _make_settings(max_concurrent_copies=8)
 
         with (
             patch("app.domains.shared.config_handlers.get_settings", return_value=current),
@@ -76,12 +76,12 @@ class TestReloadConfigSuccess:
             result = await handler.handle(ReloadConfigCommand())
 
         assert result["success"] is True
-        assert "source_directory" in result["changed_fields"]
-        assert "source_directory" in result["requires_restart"]
+        assert "max_concurrent_copies" in result["changed_fields"]
+        assert "max_concurrent_copies" in result["requires_restart"]
 
     async def test_multiple_changed_fields(self, handler):
-        current = _make_settings(source_directory="/old", api_port=8080)
-        fresh = _make_settings(source_directory="/new", api_port=9090)
+        current = _make_settings(max_concurrent_copies=4, api_port=8080)
+        fresh = _make_settings(max_concurrent_copies=8, api_port=9090)
 
         with (
             patch("app.domains.shared.config_handlers.get_settings", return_value=current),
@@ -90,7 +90,7 @@ class TestReloadConfigSuccess:
             result = await handler.handle(ReloadConfigCommand())
 
         assert len(result["changed_fields"]) == 2
-        assert "source_directory" in result["requires_restart"]
+        assert "max_concurrent_copies" in result["requires_restart"]
 
     async def test_in_place_mutation(self, handler):
         """Verify the existing singleton is mutated, not replaced."""

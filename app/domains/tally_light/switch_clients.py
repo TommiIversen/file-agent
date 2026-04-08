@@ -49,6 +49,14 @@ class IPPower9255Client(PowerSwitchProtocol):
         
         logging.info(f"IPPower9255Client initialized for {ip_address}")
 
+    def update_connection(self, ip_address: str, username: str = "admin", password: str = "") -> None:
+        """Update the connection parameters (IP, credentials) without recreating the client."""
+        self._ip_address = ip_address
+        self._base_url = f"http://{username}:{password}@{ip_address}"
+        # Force a new HTTP client on next request so stale connections are dropped
+        self._client = None
+        logging.info(f"IPPower9255Client connection updated to {ip_address}")
+
     @property
     def switch_type(self) -> PowerSwitchType:
         """Get the switch type identifier."""
