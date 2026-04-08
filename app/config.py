@@ -79,6 +79,7 @@ class Settings(BaseSettings):
         1 # Update progress every N percent (10 = every 10%)
     )
     file_operation_timeout_seconds: int = 30 # Timeout for individual file operations (open, read, write)
+    graceful_shutdown_timeout_seconds: float = 30.0 # Grace period for workers to finish before hard cancel
 
     # Simple, optimal chunk size for all file transfers
     chunk_size_kb: int = 2048 # 2MB chunks - optimal for network transfers

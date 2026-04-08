@@ -5,7 +5,6 @@ Uses real temp files for source, an in-memory mock for dst, and mocked
 state_machine / event_bus to avoid external dependencies.
 """
 import asyncio
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -90,7 +89,7 @@ class TestCopyIoLoop:
             network_detector=network_detector,
             status=FileStatus.COPYING,
             last_progress_percent=0,
-            last_progress_update_time=datetime.now(),
+            last_progress_mono=0.0,
         )
 
         assert bytes_copied == 4096
@@ -119,7 +118,7 @@ class TestCopyIoLoop:
             network_detector=network_detector,
             status=FileStatus.COPYING,
             last_progress_percent=0,
-            last_progress_update_time=datetime.now(),
+            last_progress_mono=0.0,
         )
 
         assert bytes_copied == 2000
@@ -150,7 +149,7 @@ class TestCopyIoLoop:
                     network_detector=detector,
                     status=FileStatus.COPYING,
                     last_progress_percent=0,
-                    last_progress_update_time=datetime.now(),
+                    last_progress_mono=0.0,
                 )
 
     async def test_nonexistent_source_raises(self, loop, tracked_file, network_detector):
@@ -170,7 +169,7 @@ class TestCopyIoLoop:
                 network_detector=network_detector,
                 status=FileStatus.COPYING,
                 last_progress_percent=0,
-                last_progress_update_time=datetime.now(),
+                last_progress_mono=0.0,
             )
 
     async def test_zero_range_copies_nothing(self, loop, tracked_file, network_detector, tmp_path):
@@ -192,7 +191,7 @@ class TestCopyIoLoop:
             network_detector=network_detector,
             status=FileStatus.COPYING,
             last_progress_percent=0,
-            last_progress_update_time=datetime.now(),
+            last_progress_mono=0.0,
         )
 
         assert bytes_copied == 0
@@ -384,7 +383,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=500, current_file_size=1000,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
         state_machine.transition.assert_awaited_once()
@@ -397,7 +396,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=0, current_file_size=0,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
         call_kw = state_machine.transition.call_args[1]
@@ -411,7 +410,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=100, current_file_size=1000,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
     async def test_transition_unexpected_error_logged(self, loop, state_machine, tracked_file):
@@ -421,7 +420,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=100, current_file_size=1000,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
     async def test_no_event_bus(self, state_machine, tracked_file):
@@ -432,7 +431,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=500, current_file_size=1000,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
         state_machine.transition.assert_awaited_once()
@@ -447,7 +446,7 @@ class TestReportProgress:
         await loop._report_progress(
             tracked_file, FileStatus.COPYING,
             bytes_copied=500, current_file_size=1000,
-            copy_start_time=datetime.now(), copy_start_bytes=0,
+            copy_start_mono=0.0, copy_start_bytes=0,
         )
 
 
@@ -507,7 +506,7 @@ class TestChunkRetryIntegration:
                 network_detector=network_detector,
                 status=FileStatus.COPYING,
                 last_progress_percent=0,
-                last_progress_update_time=datetime.now(),
+                last_progress_mono=0.0,
             )
 
         assert bytes_copied == 1024
@@ -536,7 +535,7 @@ class TestChunkRetryIntegration:
                     network_detector=network_detector,
                     status=FileStatus.COPYING,
                     last_progress_percent=0,
-                    last_progress_update_time=datetime.now(),
+                    last_progress_mono=0.0,
                 )
 
     async def test_chunk_retry_on_transient_oserror(self, loop, tracked_file, network_detector, tmp_path):
@@ -571,7 +570,7 @@ class TestChunkRetryIntegration:
                 network_detector=network_detector,
                 status=FileStatus.COPYING,
                 last_progress_percent=0,
-                last_progress_update_time=datetime.now(),
+                last_progress_mono=0.0,
             )
 
         assert bytes_copied == 512

@@ -8,7 +8,6 @@ Test strategy:
 - _growing_copy_loop: call directly with params, mock _get_file_size + io_loop
 """
 import asyncio
-from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -79,7 +78,7 @@ def verification_service():
 @pytest.fixture
 def io_loop():
     loop = AsyncMock(spec=CopyIoLoop)
-    loop.copy_chunk_range = AsyncMock(return_value=(1000, 100, datetime.now()))
+    loop.copy_chunk_range = AsyncMock(return_value=(1000, 100, 0.0))
     return loop
 
 
@@ -384,7 +383,7 @@ class TestCopyGrowingFile:
         dest = tmp_path / "output.mxf"
         tf = _make_tracked_file(file_size=4096)
 
-        io_loop.copy_chunk_range.return_value = (4096, 100, datetime.now())
+        io_loop.copy_chunk_range.return_value = (4096, 100, 0.0)
         network_detector = MagicMock(spec=NetworkErrorDetector)
 
         result = await strategy._copy_growing_file(
@@ -407,7 +406,7 @@ class TestCopyGrowingFile:
 
         # Simulate: first call returns partial, second call completes
         # The loop will see file not growing (same size over cycles) and switch to full speed
-        io_loop.copy_chunk_range.return_value = (4096, 100, datetime.now())
+        io_loop.copy_chunk_range.return_value = (4096, 100, 0.0)
         # Mock _get_file_size to return constant size (triggers growth stopped)
         strategy._get_file_size = AsyncMock(return_value=4096)
 
@@ -426,7 +425,7 @@ class TestCopyGrowingFile:
         dest = tmp_path / "output.mxf"
         tf = _make_tracked_file(file_size=4096)
 
-        io_loop.copy_chunk_range.return_value = (4096, 100, datetime.now())
+        io_loop.copy_chunk_range.return_value = (4096, 100, 0.0)
         network_detector = MagicMock(spec=NetworkErrorDetector)
 
         await strategy._copy_growing_file(str(source), str(dest), tf, network_detector)
@@ -464,7 +463,7 @@ class TestGrowingCopyLoop:
         dst = AsyncMock()
 
         strategy._get_file_size = AsyncMock(return_value=10000)
-        io_loop.copy_chunk_range.return_value = (10000, 100, datetime.now())
+        io_loop.copy_chunk_range.return_value = (10000, 100, 0.0)
 
         result = await strategy._growing_copy_loop(
             source_path="/fake/test.mxf",
@@ -497,7 +496,7 @@ class TestGrowingCopyLoop:
         call_count = [0]
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
             call_count[0] += 1
-            return (end, int((end / 15000) * 100), datetime.now())
+            return (end, int((end / 15000) * 100), 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -532,7 +531,7 @@ class TestGrowingCopyLoop:
         captured_ranges = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
             captured_ranges.append((start, end))
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -571,7 +570,7 @@ class TestGrowingCopyLoop:
         captured_pause = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
             captured_pause.append(pause)
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -611,7 +610,7 @@ class TestGrowingCopyLoop:
         captured_pause = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
             captured_pause.append(pause)
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -644,7 +643,7 @@ class TestGrowingCopyLoop:
         captured_status = []
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
             captured_status.append(status)
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -880,7 +879,7 @@ class TestCopyLoopPostExitRecheck:
         strategy._get_file_size = AsyncMock(side_effect=[10000, 10000, 10000, 12000, 12000, 12000])
 
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 
@@ -911,7 +910,7 @@ class TestCopyLoopPostExitRecheck:
         strategy._get_file_size = AsyncMock(side_effect=[10000, 10000, 10000, 10000])
 
         async def mock_copy_chunk_range(src, d, start, end, cs, tracked, fs, pause, nd, status, pp, pt):
-            return (end, 100, datetime.now())
+            return (end, 100, 0.0)
 
         io_loop.copy_chunk_range = mock_copy_chunk_range
 

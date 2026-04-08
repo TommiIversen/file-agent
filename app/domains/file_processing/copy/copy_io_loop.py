@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
+import time
 
 import aiofiles
 
@@ -28,8 +28,6 @@ class CopyIoLoop:
     Er ansvarlig for at kalde FileStateMachine for at opdatere progress.
     """
 
-    _pending_tasks: set[asyncio.Task] = set()
-
     def __init__(
         self,
         settings: Settings,
@@ -39,6 +37,7 @@ class CopyIoLoop:
         self.settings = settings
         self._state_machine = state_machine
         self._event_bus = event_bus
+        self._pending_tasks: set[asyncio.Task[None]] = set()
 
     async def _initial_seek(
         self,
@@ -156,12 +155,12 @@ class CopyIoLoop:
         status: FileStatus,
         bytes_copied: int,
         current_file_size: int,
-        copy_start_time: datetime,
+        copy_start_mono: float,
         copy_start_bytes: int,
     ) -> None:
         """Publish progress event and update state machine (called at most once per second)."""
         copy_ratio = (bytes_copied / current_file_size) * 100 if current_file_size > 0 else 0
-        elapsed_seconds = (datetime.now() - copy_start_time).total_seconds()
+        elapsed_seconds = time.monotonic() - copy_start_mono
         transfer_rate = calculate_transfer_rate(
             bytes_copied - copy_start_bytes,
             elapsed_seconds,
@@ -211,8 +210,8 @@ class CopyIoLoop:
         network_detector: NetworkErrorDetector,
         status: FileStatus,
         last_progress_percent: int,
-        last_progress_update_time: datetime,
-    ) -> tuple[int, int, datetime]:
+        last_progress_mono: float,
+    ) -> tuple[int, int, float]:
         """
         Kopiér en række bytes fra kilde til destination med network error detection.
 
@@ -228,21 +227,24 @@ class CopyIoLoop:
             network_detector: Network error detector
             status: FileStatus til progress updates (GROWING_COPY eller COPYING)
             last_progress_percent: Sidste progress procent
-            last_progress_update_time: Sidste gang progress blev opdateret
+            last_progress_mono: Monotonic timestamp for sidste progress opdatering
 
         Returns:
-            Tuple af (bytes_copied, last_progress_percent, last_progress_update_time)
+            Tuple af (bytes_copied, last_progress_percent, last_progress_mono)
         """
         bytes_copied = start_bytes
         bytes_to_copy = end_bytes - start_bytes
 
         # Track timing per invocation (NOT on self — this is a shared instance)
-        copy_start_time = datetime.now()
+        copy_start_mono = time.monotonic()
         copy_start_bytes = bytes_copied
 
         try:
             async with aiofiles.open(source_path, "rb") as src:
                 await self._initial_seek(src, source_path, bytes_copied, network_detector)
+
+                # Defensive: ensure dst is at the correct position (with timeout)
+                await self._initial_seek(dst, f"{source_path} (dst)", bytes_copied, network_detector)
 
                 max_chunk_retries = self.settings.max_retry_attempts  # default: 3
 
@@ -262,15 +264,15 @@ class CopyIoLoop:
                     bytes_to_copy -= chunk_len
 
                     # Opdater kun progress 1 gang i sekundet (som optimeret)
-                    current_time = datetime.now()
-                    if (current_time - last_progress_update_time).total_seconds() >= 1.0:
+                    now_mono = time.monotonic()
+                    if (now_mono - last_progress_mono) >= 1.0:
                         await self._report_progress(
                             tracked_file, status, bytes_copied,
-                            current_file_size, copy_start_time, copy_start_bytes,
+                            current_file_size, copy_start_mono, copy_start_bytes,
                         )
                         copy_ratio = (bytes_copied / current_file_size) * 100 if current_file_size > 0 else 0
                         last_progress_percent = int(copy_ratio)
-                        last_progress_update_time = current_time
+                        last_progress_mono = now_mono
 
                     if pause_ms > 0:
                         try:
@@ -283,4 +285,4 @@ class CopyIoLoop:
             # Re-raise so the calling code can handle it appropriately
             raise
 
-        return bytes_copied, last_progress_percent, last_progress_update_time
+        return bytes_copied, last_progress_percent, last_progress_mono

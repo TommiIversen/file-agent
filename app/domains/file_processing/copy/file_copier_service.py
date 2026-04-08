@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import List
 
 from app.config import Settings
 from app.core.cqrs.command_bus import CommandBus
@@ -21,7 +20,7 @@ class FileCopierService:
         self.command_bus = command_bus
 
         # Worker management
-        self._workers: List[asyncio.Task] = []
+        self._workers: list[asyncio.Task[None]] = []
         self._running = False
         self._worker_count = settings.max_concurrent_copies
 
@@ -49,14 +48,20 @@ class FileCopierService:
             return
 
         self._running = False
-        logging.info("Stopping copy workers...")
+        logging.info("Stopping copy workers — waiting for current jobs to finish...")
 
-        for worker in self._workers:
-            if not worker.done():
-                worker.cancel()
-
+        # Give workers up to N seconds to finish their current job gracefully
         if self._workers:
-            await asyncio.gather(*self._workers, return_exceptions=True)
+            _, pending = await asyncio.wait(
+                self._workers, timeout=self.settings.graceful_shutdown_timeout_seconds
+            )
+            if pending:
+                logging.warning(
+                    f"{len(pending)} workers still busy after grace period — cancelling"
+                )
+                for worker in pending:
+                    worker.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
 
         self._workers.clear()
         logging.info("All copy workers stopped")
@@ -69,13 +74,19 @@ class FileCopierService:
                     await asyncio.sleep(1)
                     continue
 
-                # Use CQRS CommandBus instead of direct JobProcessor call
-                command = ProcessJobCommand(job=job)
-                await self.command_bus.execute(command)
+                try:
+                    command = ProcessJobCommand(job=job)
+                    await self.command_bus.execute(command)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logging.error(
+                        f"Worker {worker_id} failed processing job {job.file_path}: "
+                        f"{type(e).__name__}: {e}",
+                        exc_info=True,
+                    )
 
         except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logging.error(f"Worker {worker_id} error: {e}", exc_info=True)
+            logging.debug(f"Worker {worker_id} cancelled")
             raise
 
