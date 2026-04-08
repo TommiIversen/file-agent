@@ -87,12 +87,14 @@ class UserSettingsService:
     async def init(self, env_settings: Settings | None = None) -> None:
         """
         Load settings from DB into cache.
-        If env_settings is provided, run one-time env → DB migration (B1b).
+        If env_settings is provided, run one-time env → DB migration (B1b),
+        then sync DB values back into the Settings singleton.
         """
         await self._load_cache()
 
         if env_settings is not None:
             await self._migrate_from_env(env_settings)
+            self.sync_to_settings(env_settings)
 
         logger.info("UserSettingsService initialized (%d settings loaded)", len(self._cache))
 
@@ -154,6 +156,21 @@ class UserSettingsService:
             key: self._cache.get(key, default)
             for key, (_, default) in USER_SETTINGS_SCHEMA.items()
         }
+
+    def sync_to_settings(self, target: Settings) -> list[str]:
+        """
+        Write all cached DB values into the Settings singleton so the rest of
+        the app sees DB-backed values.  Returns list of keys that were changed.
+        """
+        changed: list[str] = []
+        for key, value in self.get_all().items():
+            if hasattr(target, key) and getattr(target, key) != value:
+                object.__setattr__(target, key, value)
+                changed.append(key)
+        if changed:
+            logger.info("Synced %d DB settings into Settings: %s",
+                        len(changed), ", ".join(changed))
+        return changed
 
     def get_all_with_metadata(self) -> list[dict[str, Any]]:
         """Get all settings with type/default/restart metadata for the API."""

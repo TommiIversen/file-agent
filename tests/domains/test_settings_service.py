@@ -143,6 +143,14 @@ class TestGetAndSet:
         assert changed is True
         assert service.get("max_concurrent_copies") == 12
 
+    async def test_sync_to_settings_updates_target(self, service):
+        await service.set("source_directory", "/synced")
+        mock_settings = MagicMock()
+        mock_settings.source_directory = ""
+        changed = service.sync_to_settings(mock_settings)
+        assert "source_directory" in changed
+        assert mock_settings.source_directory == "/synced"
+
 
 class TestSetMany:
 

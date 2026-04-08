@@ -148,6 +148,10 @@ class UpdateUserSettingsCommandHandler:
             changed = [k for k, v in results.items() if v]
             needs_restart = [k for k in changed if k in REQUIRES_RESTART]
 
+            # Sync all changed settings into the Settings singleton
+            if changed:
+                self._service.sync_to_settings(get_settings())
+
             logging.info(
                 "User settings updated: %s changed, restart needed: %s",
                 ", ".join(changed) or "none",
