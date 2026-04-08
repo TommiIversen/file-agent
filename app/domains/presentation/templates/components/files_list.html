@@ -48,11 +48,11 @@
                 </div>
 
                 <!-- Info toggle button -->
-                <button class="ml-2 p-1 rounded-full transition-colors duration-200 flex-shrink-0"
+                <button class="ml-2 p-2 rounded-full transition-colors duration-200 flex-shrink-0"
                         :class="showTip ? 'text-blue-400 bg-gray-700' : 'text-gray-500 hover:text-gray-300'"
                         @click.stop="showTip = !showTip"
                         title="Vis detaljer">
-                    <i data-lucide="info" class="w-4 h-4"></i>
+                    <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
                 </button>
             </div>
 
