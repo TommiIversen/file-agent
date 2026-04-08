@@ -39,7 +39,6 @@ def deps():
     return dict(
         settings=_settings(),
         file_repository=AsyncMock(),
-        event_bus=AsyncMock(),
         state_machine=AsyncMock(),
     )
 
@@ -220,15 +219,20 @@ class TestHandleDestinationUnavailable:
         await svc.handle_destination_unavailable()
         assert deps["state_machine"].transition.await_count == 2
 
+    @pytest.mark.asyncio
+    async def test_drains_physical_queue(self, svc, deps):
+        # Put jobs in the physical queue
+        await svc.job_queue.put(_job(file_id="f1"))
+        await svc.job_queue.put(_job(file_id="f2"))
+        deps["file_repository"].get_all.return_value = []
+
+        await svc.handle_destination_unavailable()
+        assert svc.job_queue.empty()
+
 
 # ── Producer lifecycle ───────────────────────────────────────────
 
-class TestProducerLifecycle:
-    @pytest.mark.asyncio
-    async def test_stop_producer_sets_running_false(self, svc):
-        svc._running = True
-        svc.stop_producer()
-        assert svc._running is False
+class TestQueueLifecycle:
 
     def test_get_queue_returns_queue(self, svc):
         assert svc.get_queue() is svc.job_queue
@@ -238,63 +242,41 @@ class TestProducerLifecycle:
         assert s.get_queue() is None
 
 
-# ── start_producer ───────────────────────────────────────────────
+# ── initialize_queue ─────────────────────────────────────────────
 
-class TestStartProducer:
-    @pytest.mark.asyncio
-    async def test_already_running_returns_immediately(self, svc):
-        svc._running = True
-        # Should return quickly without entering the loop
-        await svc.start_producer()
-        # _running was already True, nothing changed
-        assert svc._running is True
+class TestInitializeQueue:
 
-    @pytest.mark.asyncio
-    async def test_creates_queue_if_none(self, deps):
+    def test_creates_queue_if_none(self, deps):
         s = JobQueueService(**deps)
         assert s.job_queue is None
-
-        # Run producer briefly then cancel it
-        task = asyncio.create_task(s.start_producer())
-        await asyncio.sleep(0.05)
-        s._running = False
-        await task
-
+        s.initialize_queue()
         assert s.job_queue is not None
 
-    @pytest.mark.asyncio
-    async def test_sets_running_true(self, deps):
-        s = JobQueueService(**deps)
-        task = asyncio.create_task(s.start_producer())
-        await asyncio.sleep(0.05)
-        assert s._running is True
-        s._running = False
-        await task
-
-    @pytest.mark.asyncio
-    async def test_cancelled_error_propagated(self, deps):
-        s = JobQueueService(**deps)
-        task = asyncio.create_task(s.start_producer())
-        await asyncio.sleep(0.05)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        assert s._running is False
-
-    @pytest.mark.asyncio
-    async def test_running_false_after_normal_stop(self, deps):
-        s = JobQueueService(**deps)
-        task = asyncio.create_task(s.start_producer())
-        await asyncio.sleep(0.05)
-        s._running = False
-        await task
-        assert s._running is False
-
-    @pytest.mark.asyncio
-    async def test_does_not_recreate_existing_queue(self, svc):
+    def test_idempotent(self, svc):
         original_queue = svc.job_queue
-        task = asyncio.create_task(svc.start_producer())
-        await asyncio.sleep(0.05)
-        svc._running = False
-        await task
+        svc.initialize_queue()
         assert svc.job_queue is original_queue
+
+
+# ── _drain_queue ─────────────────────────────────────────────────
+
+class TestDrainQueue:
+
+    @pytest.mark.asyncio
+    async def test_drains_all_jobs(self, svc):
+        await svc.job_queue.put(_job(file_id="f1"))
+        await svc.job_queue.put(_job(file_id="f2"))
+        await svc.job_queue.put(_job(file_id="f3"))
+
+        count = svc._drain_queue()
+        assert count == 3
+        assert svc.job_queue.empty()
+
+    def test_empty_queue_returns_zero(self, svc):
+        count = svc._drain_queue()
+        assert count == 0
+
+    def test_none_queue_returns_zero(self, deps):
+        s = JobQueueService(**deps)
+        count = s._drain_queue()
+        assert count == 0

@@ -17,7 +17,7 @@ class SpaceCalculator:
 
     def required_space(self, file_size_bytes: int) -> int:
         """Return minimum required free space in bytes."""
-        return file_size_bytes + self.safety_margin_bytes + self.min_free_after_bytes
+        return max(0, file_size_bytes) + self.safety_margin_bytes + self.min_free_after_bytes
 
     def has_sufficient_space(
         self, available_bytes: int, file_size_bytes: int
@@ -35,8 +35,8 @@ class SpaceCalculator:
         self,
         available_bytes: int,
         file_size_bytes: int,
-        has_space: bool,
     ) -> str:
+        has_space = self.has_sufficient_space(available_bytes, file_size_bytes)
         available_gb = available_bytes / (1024**3)
         required_gb = self.required_space(file_size_bytes) / (1024**3)
         file_gb = file_size_bytes / (1024**3)

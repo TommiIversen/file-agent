@@ -56,7 +56,7 @@ class TestQueueFileCommandHandler:
         network_coordinator = MagicMock()
         network_coordinator.is_network_available = True
         copy_strategy = MagicMock()
-        copy_strategy._is_file_currently_growing.return_value = False
+        copy_strategy.is_file_currently_growing.return_value = False
 
         handler = QueueFileCommandHandler(
             job_queue_service=job_queue_service,
@@ -136,7 +136,7 @@ class TestQueueFileCommandHandler:
 
     async def test_growing_file_detected(self, deps):
         handler, state_machine, _, queue, copy_strategy = deps
-        copy_strategy._is_file_currently_growing.return_value = True
+        copy_strategy.is_file_currently_growing.return_value = True
         tf = _make_tracked(status=FileStatus.READY)
 
         await handler.handle(QueueFileCommand(tracked_file=tf))
@@ -179,6 +179,7 @@ class TestProcessJobCommandHandler:
 
     async def test_successful_processing(self, deps):
         handler, _, _, copy_executor, finalization, job_queue, prepared = deps
+        copy_executor.execute_copy.return_value = True
         job = _make_job()
 
         await handler.handle(ProcessJobCommand(job=job))
@@ -189,16 +190,18 @@ class TestProcessJobCommandHandler:
         job_queue.mark_job_completed.assert_awaited_once_with(job)
 
     async def test_space_shortage_handled(self, deps):
-        handler, space_manager, _, copy_executor, _, _, _ = deps
+        handler, space_manager, _, copy_executor, _, job_queue, _ = deps
         space_manager.should_check_space.return_value = True
         space_check = MagicMock()
         space_check.has_space = False
+        space_check.reason = "Insufficient space"
         space_manager.check_space_for_job.return_value = space_check
 
         job = _make_job()
         await handler.handle(ProcessJobCommand(job=job))
 
         space_manager.handle_space_shortage.assert_awaited_once()
+        job_queue.mark_job_failed.assert_awaited_once()
         copy_executor.execute_copy.assert_not_awaited()
 
     async def test_space_ok_continues(self, deps):
@@ -213,15 +216,28 @@ class TestProcessJobCommandHandler:
 
         copy_executor.execute_copy.assert_awaited_once()
 
-    async def test_file_not_found_finalized_as_failure(self, deps):
-        handler, _, file_prep, copy_executor, finalization, _, _ = deps
-        file_prep.prepare_file_for_copy.return_value = None
+    async def test_file_not_found_raises_and_finalizes(self, deps):
+        handler, _, file_prep, copy_executor, finalization, job_queue, _ = deps
+        file_prep.prepare_file_for_copy.side_effect = ValueError("TrackedFile not found")
 
         job = _make_job()
         await handler.handle(ProcessJobCommand(job=job))
 
         finalization.finalize_failure.assert_awaited_once()
+        job_queue.mark_job_failed.assert_awaited_once()
         copy_executor.execute_copy.assert_not_awaited()
+
+    async def test_copy_returns_false_finalized_as_failure(self, deps):
+        handler, _, _, copy_executor, finalization, job_queue, prepared = deps
+        copy_executor.execute_copy.return_value = False
+
+        job = _make_job()
+        await handler.handle(ProcessJobCommand(job=job))
+
+        finalization.finalize_failure.assert_awaited_once()
+        job_queue.mark_job_failed.assert_awaited_once()
+        finalization.finalize_success.assert_not_awaited()
+        job_queue.mark_job_completed.assert_not_awaited()
 
     async def test_copy_error_handled(self, deps):
         handler, _, _, copy_executor, finalization, job_queue, prepared = deps
@@ -231,14 +247,16 @@ class TestProcessJobCommandHandler:
         await handler.handle(ProcessJobCommand(job=job))
 
         copy_executor.handle_copy_failure.assert_awaited_once()
+        job_queue.mark_job_failed.assert_awaited_once()
         finalization.finalize_success.assert_not_awaited()
         job_queue.mark_job_completed.assert_not_awaited()
 
     async def test_unexpected_error_finalized(self, deps):
-        handler, _, file_prep, _, finalization, _, _ = deps
+        handler, _, file_prep, _, finalization, job_queue, _ = deps
         file_prep.prepare_file_for_copy.side_effect = RuntimeError("unexpected")
 
         job = _make_job()
         await handler.handle(ProcessJobCommand(job=job))
 
         finalization.finalize_failure.assert_awaited_once()
+        job_queue.mark_job_failed.assert_awaited_once()

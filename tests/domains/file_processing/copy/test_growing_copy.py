@@ -2,7 +2,7 @@
 Tests for GrowingFileCopyStrategy — the main copy orchestrator.
 
 Test strategy:
-- _is_file_currently_growing: pure logic, zero mocks
+- is_file_currently_growing: pure logic, zero mocks
 - copy_file: mock _copy_growing_file for orchestration tests
 - _copy_growing_file: real tmp_path files, only mock io_loop
 - _growing_copy_loop: call directly with params, mock _get_file_size + io_loop
@@ -113,19 +113,19 @@ class TestIsFileCurrentlyGrowing:
 
     def test_growing_status_returns_true(self, strategy):
         tf = _make_tracked_file(status=FileStatus.GROWING)
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
     def test_ready_to_start_growing_returns_true(self, strategy):
         tf = _make_tracked_file(status=FileStatus.READY_TO_START_GROWING)
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
     def test_growing_copy_status_returns_true(self, strategy):
         tf = _make_tracked_file(status=FileStatus.GROWING_COPY)
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
     def test_ready_with_growth_rate_returns_true(self, strategy):
         tf = _make_tracked_file(status=FileStatus.READY, growth_rate_mbps=2.5)
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
     def test_ready_with_significant_size_increase_returns_true(self, strategy):
         tf = _make_tracked_file(
@@ -133,7 +133,7 @@ class TestIsFileCurrentlyGrowing:
             file_size=20_000_000,
             first_seen_size=10_000_000,  # 100% growth > 10%
         )
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
     def test_ready_with_small_size_increase_returns_false(self, strategy):
         tf = _make_tracked_file(
@@ -141,23 +141,23 @@ class TestIsFileCurrentlyGrowing:
             file_size=10_050_000,
             first_seen_size=10_000_000,  # 0.5% growth < 10%, and < 1MB
         )
-        assert strategy._is_file_currently_growing(tf) is False
+        assert strategy.is_file_currently_growing(tf) is False
 
     def test_ready_with_no_growth_returns_false(self, strategy):
         tf = _make_tracked_file(status=FileStatus.READY, growth_rate_mbps=0.0)
-        assert strategy._is_file_currently_growing(tf) is False
+        assert strategy.is_file_currently_growing(tf) is False
 
     def test_copying_status_returns_false(self, strategy):
         tf = _make_tracked_file(status=FileStatus.COPYING)
-        assert strategy._is_file_currently_growing(tf) is False
+        assert strategy.is_file_currently_growing(tf) is False
 
     def test_completed_status_returns_false(self, strategy):
         tf = _make_tracked_file(status=FileStatus.COMPLETED)
-        assert strategy._is_file_currently_growing(tf) is False
+        assert strategy.is_file_currently_growing(tf) is False
 
     def test_failed_status_returns_false(self, strategy):
         tf = _make_tracked_file(status=FileStatus.FAILED)
-        assert strategy._is_file_currently_growing(tf) is False
+        assert strategy.is_file_currently_growing(tf) is False
 
     def test_ready_over_1mb_increase_returns_true(self, strategy):
         """Even if % is small, >1MB absolute increase means growing."""
@@ -166,7 +166,7 @@ class TestIsFileCurrentlyGrowing:
             file_size=200_000_000,        # 200MB
             first_seen_size=198_500_000,  # 1.5MB growth, 0.75% → but >1MB
         )
-        assert strategy._is_file_currently_growing(tf) is True
+        assert strategy.is_file_currently_growing(tf) is True
 
 
 class TestSupportsFile:

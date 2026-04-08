@@ -61,7 +61,6 @@ def get_job_queue_service() -> JobQueueService:
         _singletons["job_queue_service"] = JobQueueService(
             settings=get_settings(),
             file_repository=get_file_repository(),
-            event_bus=get_event_bus(),
             state_machine=get_file_state_machine(),
         )
     return _singletons["job_queue_service"]
@@ -91,7 +90,6 @@ def get_space_retry_manager() -> SpaceRetryManager:
         _singletons["space_retry_manager"] = SpaceRetryManager(
             settings=get_settings(),
             file_repository=get_file_repository(),
-            event_bus=get_event_bus(),
             state_machine=get_file_state_machine(),
         )
     return _singletons["space_retry_manager"]

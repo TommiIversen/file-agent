@@ -63,20 +63,26 @@ class TestShortageBytes:
 class TestFormatReason:
     def test_sufficient_format(self):
         calc = SpaceCalculator(safety_margin_gb=1.0, min_free_after_copy_gb=1.0)
-        reason = calc.format_reason(100 * GB, 5 * GB, has_space=True)
+        reason = calc.format_reason(100 * GB, 5 * GB)
         assert "Sufficient" in reason
         assert "100.0" in reason
 
     def test_insufficient_format(self):
         calc = SpaceCalculator(safety_margin_gb=1.0, min_free_after_copy_gb=1.0)
-        reason = calc.format_reason(1 * GB, 5 * GB, has_space=False)
+        reason = calc.format_reason(1 * GB, 5 * GB)
         assert "Insufficient" in reason
         assert "shortage" in reason
 
     def test_zero_file_size_format(self):
         calc = SpaceCalculator(safety_margin_gb=0.0, min_free_after_copy_gb=0.0)
-        reason = calc.format_reason(10 * GB, 0, has_space=True)
+        reason = calc.format_reason(10 * GB, 0)
         assert "0.0GB file" in reason
+
+
+class TestNegativeFileSize:
+    def test_negative_file_size_treated_as_zero(self):
+        calc = SpaceCalculator(safety_margin_gb=1.0, min_free_after_copy_gb=2.0)
+        assert calc.required_space(-100) == 1 * GB + 2 * GB
 
 
 class TestLargeValues:

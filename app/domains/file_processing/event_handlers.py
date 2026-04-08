@@ -7,7 +7,7 @@ by sending appropriate commands via the command bus.
 import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.events.file_events import FileReadyEvent
-from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent, NetworkStatusChanged
+from app.core.events.storage_events import NetworkStatusChanged
 from app.core.file_repository import FileRepository
 from app.domains.file_processing.commands import QueueFileCommand
 from app.domains.file_processing.job_queue import JobQueueService
@@ -20,6 +20,11 @@ class FileProcessingEventHandler:
     This handler acts as the bridge between the event-driven file discovery
     and the command-driven file processing workflow. It maintains SRP by
     only handling event-to-command translation.
+    
+    Network status is handled exclusively via NetworkStatusChanged from
+    NetworkCoordinator (the single source of truth). The old
+    DestinationUnavailableEvent/DestinationRecoveredEvent are consumed
+    by NetworkCoordinator, which then publishes NetworkStatusChanged.
     """
     
     def __init__(
@@ -32,7 +37,7 @@ class FileProcessingEventHandler:
         self._file_repository = file_repository
         self._job_queue_service = job_queue_service
 
-    async def handle_file_ready(self, event: FileReadyEvent):
+    async def handle_file_ready(self, event: FileReadyEvent) -> None:
         """
         Handles FileReadyEvent and sends a command to queue the file.
         
@@ -51,57 +56,22 @@ class FileProcessingEventHandler:
         command = QueueFileCommand(tracked_file=tracked_file)
         await self._command_bus.execute(command)
 
-    async def handle_destination_unavailable(self, event: DestinationUnavailableEvent):
+    async def handle_network_status_changed(self, event: NetworkStatusChanged) -> None:
         """
-        Handles DestinationUnavailableEvent by pausing file processing operations.
-        
-        This method receives storage unavailable events and pauses the job queue
-        to prevent failed copy attempts.
-        """
-        logging.info(f"Handling destination unavailable: {event.reason}")
-        
-        try:
-            await self._job_queue_service.handle_destination_unavailable()
-            logging.info(" Operations paused successfully due to destination unavailable")
-        except Exception as e:
-            logging.error(f"Error pausing operations: {e}", exc_info=True)
-
-    async def handle_destination_recovered(self, event: DestinationRecoveredEvent):
-        """
-        Handles DestinationRecoveredEvent by resuming file processing operations.
-        
-        This method receives storage recovery events and resumes the job queue
-        to continue processing waiting files.
-        """
-        logging.info(f"Handling destination recovery: {event.reason}")
-        
-        try:
-            await self._job_queue_service.process_waiting_network_files()
-            logging.info(" Operations resumed successfully after destination recovery")
-        except Exception as e:
-            logging.error(f"Error resuming operations: {e}", exc_info=True)
-
-    async def handle_network_status_changed(self, event: NetworkStatusChanged):
-        """
-         Handles NetworkStatusChanged - The AUTHORITATIVE network status event!
-        
-        This is the main event handler that responds to NetworkCoordinator's
-        definitive network status changes. It replaces the old direct storage_monitor
-        coupling with clean event-based reactions.
+        Handles NetworkStatusChanged — the authoritative network status event
+        from NetworkCoordinator.
         """
         logging.info(
-            f" NETWORK STATUS CHANGED: {event.available} "
+            f"Network status changed: available={event.available} "
             f"(source: {event.source}, reason: {event.reason})"
         )
         
         try:
             if event.available:
-                # Network is available - process waiting files
                 await self._job_queue_service.process_waiting_network_files()
-                logging.info(" Network available - resumed file processing")
+                logging.info("Network available - resumed file processing")
             else:
-                # Network is unavailable - pause operations
                 await self._job_queue_service.handle_destination_unavailable()
-                logging.info(" Network unavailable - paused file processing")
+                logging.info("Network unavailable - paused file processing")
         except Exception as e:
             logging.error(f"Error handling network status change: {e}", exc_info=True)

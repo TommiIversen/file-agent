@@ -71,7 +71,7 @@ class GrowingFileCopyStrategy():
             current_size = await self._get_file_size(source_path)
 
             # Check if this is a growing file based on its status history
-            is_growing_file = self._is_file_currently_growing(tracked_file)
+            is_growing_file = self.is_file_currently_growing(tracked_file)
             min_size_bytes = self.settings.growing_file_min_size_mb * 1024 * 1024
 
             # Only wait for minimum size if this is actually a growing file AND it's not already approved to start
@@ -237,7 +237,7 @@ class GrowingFileCopyStrategy():
     ) -> bool:
         try:
             # Check if this is a static or growing file
-            is_growing_file = self._is_file_currently_growing(tracked_file)
+            is_growing_file = self.is_file_currently_growing(tracked_file)
 
             chunk_size = self.settings.growing_file_chunk_size_kb * 1024
             safety_margin_bytes = (
@@ -429,7 +429,7 @@ class GrowingFileCopyStrategy():
 
         return bytes_copied
 
-    def _is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
+    def is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
         Determine if a file is currently growing based on its status and growth history.
 

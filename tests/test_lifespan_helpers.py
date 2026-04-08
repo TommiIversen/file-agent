@@ -31,6 +31,7 @@ class TestInitEventLogging:
         event_bus = MagicMock()
         event_store = AsyncMock()
         global_logger = AsyncMock()
+        global_logger.set_event_store = MagicMock()
 
         with patch("app.main.settings") as mock_settings:
             mock_settings.config_file_info = {"hostname": "test-host"}

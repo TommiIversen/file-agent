@@ -6,7 +6,7 @@ Provides access to persisted events from SQLite via GlobalEventLogger.
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime, date, timezone
 import csv
 import io
@@ -22,14 +22,13 @@ PAGE_SIZE = 50
 
 class EventResponse(BaseModel):
     """API response model for logged events"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: Optional[int] = None
     timestamp: datetime
     level: str
     event_type: str
     details: Dict[str, Any]
-    
-    class Config:
-        from_attributes = True
 
 
 @router.get("/", response_model=List[EventResponse])

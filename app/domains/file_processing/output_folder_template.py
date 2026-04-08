@@ -4,9 +4,9 @@ import fnmatch
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from app.config import Settings
 
@@ -17,12 +17,24 @@ class TemplateRule:
     folder_template: str
     priority: int = 100
     is_regex: bool = False
+    _compiled_regex: Optional[re.Pattern[str]] = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.is_regex:
+            try:
+                self._compiled_regex = re.compile(self.pattern, re.IGNORECASE)
+            except re.error as e:
+                logging.warning(
+                    f"Invalid regex pattern '{self.pattern}': {e} — rule will never match"
+                )
+                self._compiled_regex = None
 
     def matches(self, filename: str) -> bool:
         if self.is_regex:
-            return bool(re.search(self.pattern, filename, re.IGNORECASE))
+            if self._compiled_regex is None:
+                return False
+            return bool(self._compiled_regex.search(filename))
         else:
-            # Simple wildcard matching
             return fnmatch.fnmatch(filename.lower(), self.pattern.lower())
 
 
@@ -98,7 +110,7 @@ class OutputFolderTemplateEngine:
         variables = self._extract_variables(filename)
         return self._substitute_template(folder_template, variables)
 
-    def _parse_template_rules(self) -> List[TemplateRule]:
+    def _parse_template_rules(self) -> list[TemplateRule]:
         rules: list[TemplateRule] = []
 
         if not self.settings.output_folder_rules:
@@ -118,6 +130,8 @@ class OutputFolderTemplateEngine:
                     rules.append(rule)
             else:
                 # Parse simple format: "pattern:*Cam*;folder:KAMERA\\{date}"
+                # NOTE: Patterns containing commas must use JSON format instead,
+                # since commas are used as rule delimiters in simple format.
                 rule_strings = [
                     r.strip() for r in self.settings.output_folder_rules.split(",")
                 ]
@@ -159,7 +173,7 @@ class OutputFolderTemplateEngine:
                 return rule
         return None
 
-    def _extract_variables(self, filename: str) -> Dict[str, str]:
+    def _extract_variables(self, filename: str) -> dict[str, str]:
         variables = {"filename": filename, "name_no_ext": Path(filename).stem}
 
         # Extract date based on format specification
@@ -188,7 +202,7 @@ class OutputFolderTemplateEngine:
 
         return variables
 
-    def _substitute_template(self, template: str, variables: Dict[str, str]) -> str:
+    def _substitute_template(self, template: str, variables: dict[str, str]) -> str:
         result = template
 
         for var_name, var_value in variables.items():
@@ -201,7 +215,7 @@ class OutputFolderTemplateEngine:
 
         return result
 
-    def get_template_info(self) -> Dict:
+    def get_template_info(self) -> dict:
         return {
             "enabled": self.is_enabled(),
             "rules_count": len(self.rules),

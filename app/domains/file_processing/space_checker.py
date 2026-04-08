@@ -3,19 +3,28 @@ from typing import Optional
 
 from app.config import Settings
 from app.models import SpaceCheckResult, StorageInfoProvider
+from app.domains.file_processing.space_calculator import SpaceCalculator
 
 
 class SpaceChecker:
     def __init__(self, settings: Settings, storage_monitor: StorageInfoProvider):
         self._settings = settings
         self._storage_monitor = storage_monitor
+        self._calculator = SpaceCalculator(
+            safety_margin_gb=settings.copy_safety_margin_gb,
+            min_free_after_copy_gb=settings.minimum_free_space_after_copy_gb,
+        )
 
         logging.debug("SpaceChecker initialized")
 
     def check_space_for_file(self, file_size_bytes: int) -> SpaceCheckResult:
         logging.debug(f"Checking space for file of {file_size_bytes} bytes")
 
-        storage_info = self._storage_monitor.get_destination_info()
+        try:
+            storage_info = self._storage_monitor.get_destination_info()
+        except Exception as e:
+            logging.error(f"Error getting storage info: {e}", exc_info=True)
+            return self._create_unavailable_result(file_size_bytes)
 
         if not storage_info:
             return self._create_unavailable_result(file_size_bytes)
@@ -26,32 +35,16 @@ class SpaceChecker:
             )
 
         available_bytes = int(storage_info.free_space_gb * (1024**3))
-        safety_margin_bytes = int(self._settings.copy_safety_margin_gb * (1024**3))
-        minimum_after_copy_bytes = int(
-            self._settings.minimum_free_space_after_copy_gb * (1024**3)
-        )
-
-        required_bytes = (
-            file_size_bytes + safety_margin_bytes + minimum_after_copy_bytes
-        )
-
-        has_space = available_bytes >= required_bytes
-
-        reason = self._create_space_reason(
-            has_space=has_space,
-            available_bytes=available_bytes,
-            required_bytes=required_bytes,
-            file_size_bytes=file_size_bytes,
-            safety_margin_bytes=safety_margin_bytes,
-            minimum_after_copy_bytes=minimum_after_copy_bytes,
-        )
+        required_bytes = self._calculator.required_space(file_size_bytes)
+        has_space = self._calculator.has_sufficient_space(available_bytes, file_size_bytes)
+        reason = self._calculator.format_reason(available_bytes, file_size_bytes)
 
         return SpaceCheckResult(
             has_space=has_space,
             available_bytes=available_bytes,
             required_bytes=required_bytes,
             file_size_bytes=file_size_bytes,
-            safety_margin_bytes=safety_margin_bytes,
+            safety_margin_bytes=self._calculator.safety_margin_bytes,
             reason=reason,
         )
 
@@ -78,32 +71,6 @@ class SpaceChecker:
             safety_margin_bytes=0,
             reason=reason,
         )
-
-    def _create_space_reason(
-        self,
-        has_space: bool,
-        available_bytes: int,
-        required_bytes: int,
-        file_size_bytes: int,
-        safety_margin_bytes: int,
-        minimum_after_copy_bytes: int,
-    ) -> str:
-        available_gb = available_bytes / (1024**3)
-        required_gb = required_bytes / (1024**3)
-        file_gb = file_size_bytes / (1024**3)
-
-        if has_space:
-            return (
-                f"Sufficient space: {available_gb:.1f}GB available, "
-                f"{required_gb:.1f}GB required for {file_gb:.1f}GB file"
-            )
-        else:
-            shortage_gb = (required_bytes - available_bytes) / (1024**3)
-            return (
-                f"Insufficient space: {available_gb:.1f}GB available, "
-                f"{required_gb:.1f}GB required (shortage: {shortage_gb:.1f}GB). "
-                f"File: {file_gb:.1f}GB + safety margins"
-            )
 
     def is_space_check_enabled(self) -> bool:
         return self._settings.enable_pre_copy_space_check

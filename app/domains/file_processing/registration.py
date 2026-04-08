@@ -14,7 +14,7 @@ from app.dependencies import (
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
 from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
-from app.core.events.storage_events import DestinationUnavailableEvent, DestinationRecoveredEvent, NetworkStatusChanged
+from app.core.events.storage_events import NetworkStatusChanged
 from .event_handlers import FileProcessingEventHandler
 from .command_handlers import QueueFileCommandHandler, ProcessJobCommandHandler
 from .commands import QueueFileCommand, ProcessJobCommand
@@ -43,11 +43,7 @@ async def register_file_processing_domain(
     # Subscribe to file events
     await event_bus.subscribe(FileReadyEvent, event_handler.handle_file_ready)
     
-    # Subscribe to storage events for destination availability
-    await event_bus.subscribe(DestinationUnavailableEvent, event_handler.handle_destination_unavailable)
-    await event_bus.subscribe(DestinationRecoveredEvent, event_handler.handle_destination_recovered)
-    
-    # Subscribe to NetworkCoordinator's authoritative network status events!
+    # Subscribe to NetworkCoordinator's authoritative network status events
     await event_bus.subscribe(NetworkStatusChanged, event_handler.handle_network_status_changed)
 
     # 2. Create Command Handlers

@@ -6,7 +6,7 @@ the file processing domain. Each handler has a single responsibility
 and maintains clean dependencies following the inward flow mandate.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
@@ -73,7 +73,7 @@ class QueueFileCommandHandler:
         try:
             is_growing = (
                 tracked_file.status == FileStatus.READY_TO_START_GROWING or 
-                self._copy_strategy._is_file_currently_growing(tracked_file)
+                self._copy_strategy.is_file_currently_growing(tracked_file)
             )
 
             job = QueueJob(
@@ -82,7 +82,7 @@ class QueueFileCommandHandler:
                 file_size=tracked_file.file_size,
                 creation_time=tracked_file.creation_time,
                 is_growing_at_queue_time=is_growing,
-                added_to_queue_at=datetime.now(),
+                added_to_queue_at=datetime.now(timezone.utc),
                 retry_count=0,
             )
 
@@ -151,47 +151,42 @@ class ProcessJobCommandHandler:
             if self._space_manager.should_check_space():
                 space_check = await self._space_manager.check_space_for_job(job)
                 if not space_check.has_space:
-                    # Handle space shortage and return early
                     await self._space_manager.handle_space_shortage(job, space_check)
-                    return # Space shortage handled, job processing complete
+                    await self._job_queue_service.mark_job_failed(job, f"Space shortage: {space_check.reason}")
+                    return
 
-            # Step 2: File preparation
+            # Step 2: File preparation (raises ValueError if file not found)
             prepared_file = await self._file_preparation_service.prepare_file_for_copy(job)
-            if not prepared_file:
-                # File not found - mark job as failed and return
-                await self._finalization_service.finalize_failure(
-                    job, Exception("File not found in state manager")
-                )
-                return
 
             # Step 3: Copy initialization
             await self._copy_executor.initialize_copy_status(prepared_file)
 
             try:
                 # Step 4: Copy execution
-                await self._copy_executor.execute_copy(prepared_file)
-                
-                # Step 5: Success finalization
-                await self._finalization_service.finalize_success(
-                    job, prepared_file.job.file_size
-                )
-                
-                # Mark job as completed in queue after successful finalization
-                await self._job_queue_service.mark_job_completed(job)
-                
-                logging.info(f"Job processing completed successfully: {file_path}")
+                copy_success = await self._copy_executor.execute_copy(prepared_file)
+
+                if copy_success:
+                    # Step 5: Success finalization
+                    await self._finalization_service.finalize_success(
+                        job, prepared_file.job.file_size
+                    )
+                    await self._job_queue_service.mark_job_completed(job)
+                    logging.info(f"Job processing completed successfully: {file_path}")
+                else:
+                    # Copy returned False without exception — controlled failure
+                    await self._finalization_service.finalize_failure(
+                        job, Exception("Copy returned failure")
+                    )
+                    await self._job_queue_service.mark_job_failed(job, "Copy returned failure")
+                    logging.warning(f"Job copy returned failure: {file_path}")
 
             except Exception as copy_error:
                 logging.warning(f"Copy exception for {file_path}: {copy_error}")
-
-                # Step 6: Failure handling
                 await self._copy_executor.handle_copy_failure(prepared_file, copy_error)
-                
-                # The JobErrorClassifier will have set the appropriate status
-                # Job processing complete (failure handled by copy executor)
+                await self._job_queue_service.mark_job_failed(job, str(copy_error))
                 logging.info(f"Job processing completed with copy failure: {file_path}")
 
         except Exception as e:
             logging.error(f"Unexpected error during ProcessJobCommand for {file_path}: {e}", exc_info=True)
-            # Call finalization service for unexpected errors
             await self._finalization_service.finalize_failure(job, e)
+            await self._job_queue_service.mark_job_failed(job, str(e))

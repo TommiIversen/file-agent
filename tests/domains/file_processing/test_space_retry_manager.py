@@ -46,16 +46,10 @@ def sm():
 
 
 @pytest.fixture
-def bus():
-    return AsyncMock()
-
-
-@pytest.fixture
-def mgr(repo, sm, bus):
+def mgr(repo, sm):
     return SpaceRetryManager(
         settings=_settings(),
         file_repository=repo,
-        event_bus=bus,
         state_machine=sm,
     )
 

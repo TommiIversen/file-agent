@@ -54,7 +54,6 @@ def job_queue(mock_settings, mock_file_repository, mock_storage_monitor, mock_ev
     queue = JobQueueService(
         settings=mock_settings,
         file_repository=mock_file_repository,
-        event_bus=mock_event_bus,
         state_machine=mock_state_machine
     )
     # Store reference to mock_state_machine for test access
@@ -194,7 +193,7 @@ async def test_network_recovery_logs_reactivation_messages(
     await job_queue.process_waiting_network_files()
 
     # Check for reactivation log message
-    assert "NETWORK RECOVERY:" in caplog.text
+    assert "Network recovery:" in caplog.text
     assert "c:/temp/test.mxf" in caplog.text
     assert "Discovered" in caplog.text
-    assert "NETWORK RECOVERY: Completed processing 1 files" in caplog.text
+    assert "Network recovery: completed processing 1 files" in caplog.text

@@ -8,7 +8,7 @@ for managing IP Power Switch states based on recording status.
 from enum import Enum
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # TallySwitchStatus is defined in core as part of the event contract
 from app.core.events.tally_events import TallySwitchStatus  # noqa: F401
@@ -34,14 +34,12 @@ class TallyLightStatus(BaseModel):
     
     Used for status reporting and monitoring.
     """
+    model_config = ConfigDict(use_enum_values=True)
+
     current_state: TallyState
     last_update: str # ISO timestamp
     error_message: Optional[str] = None
     blink_active: bool = False
-    
-    class Config:
-        """Pydantic configuration for the model"""
-        use_enum_values = True
 
 
 class TallyLightCommand(BaseModel):
@@ -50,9 +48,7 @@ class TallyLightCommand(BaseModel):
     
     Used when manual control is needed.
     """
+    model_config = ConfigDict(use_enum_values=True)
+
     target_state: TallyState
     duration_seconds: Optional[int] = None # For timed operations
-    
-    class Config:
-        """Pydantic configuration for the model"""
-        use_enum_values = True

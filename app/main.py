@@ -183,8 +183,8 @@ async def _start_background_services() -> None:
     logging.info("CQRS FileScannerService startet som background task")
 
     job_queue_service = get_job_queue_service()
-    _background_tasks.append(asyncio.create_task(job_queue_service.start_producer()))
-    logging.info("JobQueueService producer startet som background task")
+    job_queue_service.initialize_queue()
+    logging.info("JobQueueService queue initialized")
 
     file_copier = get_file_copier()
     _background_tasks.append(asyncio.create_task(file_copier.start_workers()))
@@ -235,7 +235,6 @@ async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  #
     # Stop services gracefully
     get_websocket_manager().stop_sender_task()
     await get_file_scanner().stop_scanning()
-    get_job_queue_service().stop_producer()
     await get_file_copier().stop_workers()
     await get_storage_monitor().stop_monitoring()
     get_lifecycle_service().stop_pruning_loop()
