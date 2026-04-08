@@ -43,21 +43,46 @@ class OutputFolderTemplateEngine:
         self.settings = settings
         self.logger = logging.getLogger("app.template_engine")
 
-        # Initialize defaults first
-        self.default_category = settings.output_folder_default_category
-        self.date_format = settings.output_folder_date_format
+        # Track which rules string we last parsed, so we re-parse on change
+        self._last_rules_str: str = ""
+        self._rules: list[TemplateRule] = []
 
-        # Parse template rules from settings
-        self.rules = self._parse_template_rules()
+        # Force initial parse
+        self._refresh_rules()
 
         self.logger.info(
-            f"OutputFolderTemplateEngine initialized with {len(self.rules)} rules"
+            f"OutputFolderTemplateEngine initialized with {len(self._rules)} rules"
         )
 
-        if self.rules:
-            for rule in self.rules:
+        if self._rules:
+            for rule in self._rules:
                 self.logger.debug(
                     f"Rule: pattern='{rule.pattern}' → folder='{rule.folder_template}'"
+                )
+
+    @property
+    def default_category(self) -> str:
+        return self.settings.output_folder_default_category
+
+    @property
+    def date_format(self) -> str:
+        return self.settings.output_folder_date_format
+
+    @property
+    def rules(self) -> list[TemplateRule]:
+        """Return parsed rules, re-parsing if the raw setting has changed."""
+        self._refresh_rules()
+        return self._rules
+
+    def _refresh_rules(self) -> None:
+        """Re-parse rules from settings if the raw string has changed."""
+        current = self.settings.output_folder_rules
+        if current != self._last_rules_str:
+            self._rules = self._parse_template_rules()
+            self._last_rules_str = current
+            if self._rules:
+                self.logger.info(
+                    f"OutputFolderTemplateEngine re-parsed rules: {len(self._rules)} rules"
                 )
 
     def is_enabled(self) -> bool:

@@ -99,8 +99,16 @@ async def _init_database() -> None:
     logging.info("Database initialized")
 
     # Initialize user settings service (env → DB migration runs here)
+    # IMPORTANT: use get_settings() — the singleton that all domain code uses —
+    # not the module-level `settings` variable, which is a separate instance.
+    from app.dependencies import get_settings
+    canonical_settings = get_settings()
     user_settings_service = get_user_settings_service()
-    await user_settings_service.init(env_settings=settings)
+    await user_settings_service.init(env_settings=canonical_settings)
+
+    # Also sync to the module-level `settings` so logging/config_info stays correct
+    user_settings_service.sync_to_settings(settings)
+
     logging.info("User settings service initialized")
 
 
