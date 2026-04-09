@@ -88,6 +88,7 @@ class UserSettingsUpdate(BaseModel):
     output_folder_time_format: str | None = None
     max_concurrent_copies: int | None = Field(default=None, ge=1, le=32)
     justin_auto_stop_minutes: int | None = Field(default=None, ge=0, le=1440)
+    brand_name: str | None = None
 
 
 @router.get("/user-settings")

@@ -51,6 +51,22 @@
                 <span x-text="$store.settings?.saveMessage"></span>
             </div>
 
+            <!-- Branding -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="tag" class="inline-block w-5 h-5"></i> Branding</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <label for="setting-brand-name" class="text-gray-300 block mb-1">Application Name</label>
+                        <input type="text"
+                               id="setting-brand-name"
+                               x-model="$store.settings.editForm.brand_name"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                               placeholder="Dr. Feta">
+                    </div>
+                </div>
+            </div>
+
             <!-- Path Configuration -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Paths</h3>

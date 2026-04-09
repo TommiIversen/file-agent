@@ -5,6 +5,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 
+from app.dependencies.core import get_settings
+
 router = APIRouter()
 _templates_dir = Path(__file__).parent / "templates"
 
@@ -23,4 +25,5 @@ async def dashboard_page(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
+        {"brand_name": get_settings().brand_name},
     )

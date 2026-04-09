@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     output_folder_date_format: str = "filename[0:6]" # Extract first 6 chars as date
     output_folder_time_format: str = "filename[7:13]" # Extract chars 7-13 as time
 
+    # Branding
+    brand_name: str = "Dr. Feta"
+
     # Timing konfiguration
     file_stable_time_seconds: int = 120
     polling_interval_seconds: int = 6
