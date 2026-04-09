@@ -173,7 +173,8 @@
                                     <div class="text-blue-300 mb-1">Rules <span class="text-gray-500">(one per line):</span></div>
                                     <div class="text-gray-300 ml-2">pattern:*Cam*;folder:KAMERA/{date}</div>
                                     <div class="text-gray-300 ml-2">pattern:*PGM*;folder:PROGRAM_CLEAN/{date}</div>
-                                    <div class="text-gray-300 ml-2 mb-1">pattern:*CLN*;folder:PROGRAM_CLEAN/{date}</div>
+                                    <div class="text-gray-300 ml-2">pattern:*CLN*;folder:PROGRAM_CLEAN/{date}</div>
+                                    <div class="text-gray-300 ml-2 mb-1">pattern:*;folder:OTHER/{date}</div>
                                     <div class="text-gray-500 mb-1">Result:</div>
                                     <div>251022_1400_Cam1.mxf → <span class="text-green-400">\\NAS\<span class="text-yellow-300">KAMERA</span>\251022\</span>251022_1400_Cam1.mxf</div>
                                     <div>251022_1500_PGM.mxf &nbsp;→ <span class="text-green-400">\\NAS\<span class="text-yellow-300">PROGRAM_CLEAN</span>\251022\</span>251022_1500_PGM.mxf</div>
@@ -196,11 +197,15 @@
                             <div>
                                 <p class="text-white font-semibold mb-1">Example 3 — Group by date + time</p>
                                 <div class="bg-gray-800 rounded p-2 font-mono text-[11px] leading-relaxed">
-                                    <div class="text-blue-300 mb-1">Rules: <span class="text-gray-300">pattern:*KAM*;folder:KAMERA/{date}/{time}</span></div>
+                                    <div class="text-blue-300 mb-1">Rules <span class="text-gray-500">(one per line):</span></div>
+                                    <div class="text-gray-300 ml-2">pattern:*KAM*;folder:KAMERA/{date}/{time}</div>
+                                    <div class="text-gray-300 ml-2">pattern:*PGM*;folder:PROGRAM/{date}/{time}</div>
+                                    <div class="text-gray-300 ml-2 mb-1">pattern:*;folder:OTHER/{date}/{time}</div>
                                     <div class="text-gray-500 mb-1">Result:</div>
                                     <div>260408_154246_KAM_3.mxf → <span class="text-green-400">\\NAS\<span class="text-yellow-300">KAMERA</span>\260408\<span class="text-yellow-300">154246</span>\</span>260408_154246_KAM_3.mxf</div>
                                     <div>260408_154246_KAM_5.mxf → <span class="text-green-400">\\NAS\<span class="text-yellow-300">KAMERA</span>\260408\<span class="text-yellow-300">154246</span>\</span>260408_154246_KAM_5.mxf</div>
-                                    <div>260408_162000_KAM_3.mxf → <span class="text-green-400">\\NAS\<span class="text-yellow-300">KAMERA</span>\260408\<span class="text-yellow-300">162000</span>\</span>260408_162000_KAM_3.mxf</div>
+                                    <div>260408_162000_PGM.mxf &nbsp;→ <span class="text-green-400">\\NAS\<span class="text-yellow-300">PROGRAM</span>\260408\<span class="text-yellow-300">162000</span>\</span>260408_162000_PGM.mxf</div>
+                                    <div>260408_170000_Misc.mxf → <span class="text-green-400">\\NAS\<span class="text-yellow-300">OTHER</span>\260408\<span class="text-yellow-300">170000</span>\</span>260408_170000_Misc.mxf</div>
                                 </div>
                             </div>
 
@@ -217,7 +222,7 @@
                             <div class="border-t border-gray-700 pt-2">
                                 <p><span class="text-white font-semibold">Date Format:</span> <code class="text-yellow-300">filename[0:6]</code> extracts the first 6 characters as date (YYMMDD).</p>
                                 <p><span class="text-white font-semibold">Time Format:</span> <code class="text-yellow-300">filename[7:13]</code> extracts characters 7–13 as time (HHMMSS).</p>
-                                <p><span class="text-white font-semibold">Default Category:</span> Folder used for files that don't match any pattern rule.</p>
+                                <p><span class="text-white font-semibold">Default Category:</span> Folder used for files that don't match any rule. <span class="text-gray-400">Tip: add <code class="text-yellow-300">pattern:*;folder:OTHER/{date}/{time}</code> as the last rule for full control over the fallback template.</span></p>
                             </div>
                         </div>
                     </div>
@@ -281,20 +286,17 @@
                             <div class="flex gap-2">
                                 <input type="text"
                                        x-model="testFilename"
-                                       @input="updatePreview()"
+                                       @keydown.enter.prevent="addTestFile()"
                                        class="flex-1 bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-emerald-500 focus:outline-none font-mono text-xs"
                                        placeholder="260408_154246_KAM_3.mxf">
                                 <button @click="addTestFile()" type="button"
-                                        class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors">
-                                    <i data-lucide="plus" class="inline-block w-3.5 h-3.5"></i>
-                                </button>
+                                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors font-bold">+</button>
                             </div>
                             <template x-for="(file, i) in testFiles" :key="i">
                                 <div class="flex items-center gap-2 group">
                                     <button @click="removeTestFile(i)" type="button"
-                                            class="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
-                                        <i data-lucide="x" class="inline-block w-3 h-3"></i>
-                                    </button>
+                                            class="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none"
+                                            title="Remove">×</button>
                                     <div class="font-mono text-[11px] leading-relaxed flex-1">
                                         <span class="text-gray-400" x-text="file.name"></span>
                                         <span class="text-gray-600 mx-1">→</span>
@@ -305,6 +307,10 @@
                             </template>
                             <div x-show="testFiles.length === 0" class="text-gray-500 text-xs italic">
                                 Type a filename above and press <span class="text-gray-400">+</span> to test your rules
+                            </div>
+                            <div x-show="testFiles.length > 0" class="flex gap-4 text-[10px] text-gray-500 mt-1 border-t border-gray-700 pt-1.5">
+                                <span><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1"></span>Matched a rule</span>
+                                <span><span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>No rule matched — uses default category</span>
                             </div>
                         </div>
                     </div>
