@@ -12,46 +12,16 @@ class GetStatisticsQueryHandler(QueryHandler[GetStatisticsQuery, Dict[str, Any]]
         self.file_repository = file_repository
         self._lock = asyncio.Lock()
 
-    def _is_more_current(self, file1: TrackedFile, file2: TrackedFile) -> bool:
-        active_statuses = {
-            FileStatus.COPYING: 1,
-            FileStatus.IN_QUEUE: 2,
-            FileStatus.GROWING_COPY: 3,
-            FileStatus.READY_TO_START_GROWING: 4,
-            FileStatus.READY: 5,
-            FileStatus.GROWING: 6,
-            FileStatus.DISCOVERED: 7,
-            FileStatus.WAITING_FOR_SPACE: 8,
-            FileStatus.WAITING_FOR_NETWORK: 8,
-            FileStatus.COMPLETED: 9,
-            FileStatus.FAILED: 10,
-            FileStatus.REMOVED: 11,
-            FileStatus.SPACE_ERROR: 12,
-        }
-        priority1 = active_statuses.get(file1.status, 99)
-        priority2 = active_statuses.get(file2.status, 99)
-        if priority1 != priority2:
-            return priority1 < priority2
-        time1 = file1.discovered_at.timestamp() if file1.discovered_at else 0
-        time2 = file2.discovered_at.timestamp() if file2.discovered_at else 0
-        return time1 > time2
-
     async def handle(self, query: GetStatisticsQuery) -> Dict[str, Any]:
         async with self._lock:
-            current_files: dict[str, TrackedFile] = {}
             all_files = await self.file_repository.get_all()
-            for tracked_file in all_files:
-                current = current_files.get(tracked_file.file_path)
-                if not current or self._is_more_current(tracked_file, current):
-                    current_files[tracked_file.file_path] = tracked_file
-            current_files_list = list(current_files.values())
-            total_files = len(current_files_list)
+            total_files = len(all_files)
             status_counts: dict[str, int] = {}
             for status in FileStatus:
                 status_counts[status.value] = len(
-                    [f for f in current_files_list if f.status == status]
+                    [f for f in all_files if f.status == status]
                 )
-            total_size = sum(f.file_size for f in current_files_list)
+            total_size = sum(f.file_size for f in all_files)
             completed_count = status_counts.get(FileStatus.COMPLETED.value, 0) + status_counts.get(FileStatus.COMPLETED_DELETE_FAILED.value, 0)
             failed_count = status_counts.get(FileStatus.FAILED.value, 0)
             growing_count = sum(

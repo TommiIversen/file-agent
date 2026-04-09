@@ -88,8 +88,8 @@ class TestGetStatisticsQueryHandler:
         result = await handler.handle(GetStatisticsQuery())
         assert result["total_size_bytes"] == 3000
 
-    async def test_deduplication_same_path_keeps_most_current(self, handler, mock_repo):
-        """When two entries share the same file_path, only the most current is counted."""
+    async def test_same_path_counts_all_records(self, handler, mock_repo):
+        """When two entries share the same file_path, both are counted."""
         older = _make_file(
             file_path="/dup.mxf",
             status=FileStatus.COMPLETED,
@@ -102,10 +102,9 @@ class TestGetStatisticsQueryHandler:
         )
         mock_repo.get_all.return_value = [older, newer]
         result = await handler.handle(GetStatisticsQuery())
-        assert result["total_files"] == 1
-        # COPYING has higher priority than COMPLETED
+        assert result["total_files"] == 2
         assert result["status_counts"]["Copying"] == 1
-        assert result["status_counts"]["Completed"] == 0
+        assert result["status_counts"]["Completed"] == 1
 
     async def test_status_counts_all_statuses_present(self, handler, mock_repo):
         """All FileStatus values should be present in status_counts, even if 0."""
