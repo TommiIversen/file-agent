@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Transfer Agent - Real-time Monitor</title>
     <!-- Tailwind CSS CDN -->
-    <link rel="stylesheet" href="/static/css/tailwind.css">
+    <link rel="stylesheet" href="/static/css/tailwind.css?v={{ v }}">
     
     <!-- Alpine.js x-cloak CSS + Lucide icon alignment -->
     <style>
@@ -15,26 +15,26 @@
 
     <!-- File Transfer Agent - Modular Architecture (Load BEFORE Alpine.js) -->
     <!-- Stores -->
-    <script src="/static/js/stores/connectionStore.js"></script>
-    <script src="/static/js/stores/fileStore.js"></script>
-    <script src="/static/js/stores/storageStore.js"></script>
-    <script src="/static/js/stores/uiStore.js"></script>
-    <script src="/static/js/stores/logViewerStore.js"></script>
-    <script src="/static/js/stores/eventsViewerStore.js"></script>
-    <script src="/static/js/stores/settingsStore.js"></script>
-    <script src="/static/js/stores/directoryBrowserStore.js"></script>
-    <script src="/static/js/stores/ingestStore.js"></script>
-    <script src="/static/js/stores/tallySwitchStore.js"></script>
+    <script src="/static/js/stores/connectionStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/fileStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/storageStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/uiStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/logViewerStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/eventsViewerStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/settingsStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/directoryBrowserStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/ingestStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/tallySwitchStore.js?v={{ v }}"></script>
 
     <!-- Services -->
-    <script src="/static/js/services/messageHandler.js"></script>
-    <script src="/static/js/services/uiHelpers.js"></script>
+    <script src="/static/js/services/messageHandler.js?v={{ v }}"></script>
+    <script src="/static/js/services/uiHelpers.js?v={{ v }}"></script>
 
     <!-- Main Application -->
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v={{ v }}"></script>
 
     <!-- Lucide Icons (bundled) -->
-    <script src="/static/js/lucide.min.js"></script>
+    <script src="/static/js/lucide.min.js?v={{ v }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -53,11 +53,11 @@
     </script>
 
     <!-- Alpine Plugins (Load BEFORE Alpine Core) -->
-    <script defer src="/static/js/jslib/intersect3-15-1.js"></script>
+    <script defer src="/static/js/jslib/intersect3-15-1.js?v={{ v }}"></script>
 
 
     <!-- Alpine.js CDN (Load LAST) -->
-    <script defer src="/static/js/jslib/alpinejs.js"></script>
+    <script defer src="/static/js/jslib/alpinejs.js?v={{ v }}"></script>
 
 </head>
 <body class="gradientHolder h-screen overflow-hidden"
