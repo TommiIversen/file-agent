@@ -763,3 +763,225 @@ async def test_zero_start_frames_with_rec_true_returns_zero_duration():
     ])
     # 65 seconds of recording ≥ 60s limit → trigger
     assert len(collector.triggers) == 1
+
+
+# ── Tests: Segment-split (Justin file-split resets StartTimecodeFrames) ──
+
+
+@pytest.mark.asyncio
+async def test_segment_split_accumulates_duration():
+    """When Justin splits a file, StartTimecodeFrames resets.
+
+    Auto-stop must track the *total* recording time across segments,
+    not just the current segment's duration.
+    """
+    # 3 min limit, 1 min warning → warning at 2 min
+    svc, _, collector = await _setup(auto_stop_minutes=3, auto_stop_warning_minutes=1)
+
+    # Segment 1 starts at 10:00:00
+    start1 = _tc_to_frames(10, 0, 0)
+
+    # 1 min into segment 1
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=1, seconds=0,
+                     start_frames=start1),
+    ])
+    assert len(collector.warnings) == 0
+    assert len(collector.triggers) == 0
+
+    # 1 min 30s into segment 1 (last poll before split)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=1, seconds=30,
+                     start_frames=start1),
+    ])
+    assert len(collector.warnings) == 0
+
+    # ── Justin splits at ~1:30 — new segment starts at 10:01:30 ──
+    start2 = _tc_to_frames(10, 1, 30)
+
+    # 30s into segment 2 → total = 90 + 30 = 120s → warning fires
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=2, seconds=0,
+                     start_frames=start2),
+    ])
+    assert len(collector.warnings) == 1
+    assert len(collector.triggers) == 0
+
+    # 1 min 30s into segment 2 → total = 90 + 90 = 180s → trigger
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=3, seconds=0,
+                     start_frames=start2),
+    ])
+    assert len(collector.triggers) == 1
+    assert collector.triggers[0].recording_seconds == 180
+
+
+@pytest.mark.asyncio
+async def test_multiple_segment_splits():
+    """Three segments of ~2 min each → total 6 min → triggers 5 min limit."""
+    svc, _, collector = await _setup(auto_stop_minutes=5, auto_stop_warning_minutes=1)
+
+    # Segment 1: 10:00:00 → 10:02:00 (2 min)
+    start1 = _tc_to_frames(10, 0, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=2, seconds=0,
+                     start_frames=start1),
+    ])
+    assert len(collector.triggers) == 0
+
+    # Segment 2 starts at 10:02:00 → records until 10:04:00 (2 more min, total 4)
+    start2 = _tc_to_frames(10, 2, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=4, seconds=0,
+                     start_frames=start2),
+    ])
+    assert len(collector.triggers) == 0
+    assert len(collector.warnings) == 1  # 4 min ≥ warning threshold (5-1=4)
+
+    # Segment 3 starts at 10:04:00 → 1 min in, total = 2 + 2 + 1 = 5 min
+    start3 = _tc_to_frames(10, 4, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=5, seconds=0,
+                     start_frames=start3),
+    ])
+    assert len(collector.triggers) == 1
+    assert collector.triggers[0].recording_seconds == 300  # 5 min total
+
+
+@pytest.mark.asyncio
+async def test_segment_split_resets_on_stop():
+    """When recording stops, cumulative counter resets for next session."""
+    svc, _, collector = await _setup(auto_stop_minutes=3, auto_stop_warning_minutes=0)
+
+    # Session 1: two segments of 1 min each, then a third triggers at 3 min total
+    start1 = _tc_to_frames(10, 0, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=1, seconds=0,
+                     start_frames=start1),
+    ])
+
+    start2 = _tc_to_frames(10, 1, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=2, seconds=0,
+                     start_frames=start2),
+    ])
+
+    start3 = _tc_to_frames(10, 2, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=3, seconds=0,
+                     start_frames=start3),
+    ])
+    assert len(collector.triggers) == 1
+
+    # Stop recording
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=False, start_frames=0),
+    ])
+
+    # Session 2: fresh start — cumulative must be 0
+    start_new = _tc_to_frames(11, 0, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=11, minutes=1, seconds=0,
+                     start_frames=start_new),
+    ])
+    # Only 1 min → should NOT trigger (limit is 3 min)
+    assert len(collector.triggers) == 1  # Still just the one from session 1
+
+
+@pytest.mark.asyncio
+async def test_segment_split_info_includes_cumulative():
+    """get_auto_stop_info reports total duration including accumulated segments."""
+    svc, _, _ = await _setup(auto_stop_minutes=10, auto_stop_warning_minutes=2)
+
+    # Segment 1: 3 min
+    start1 = _tc_to_frames(10, 0, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=3, seconds=0,
+                     start_frames=start1),
+    ])
+
+    info = svc.get_auto_stop_info()
+    assert info["max_recording_seconds"] == 180  # 3 min
+
+    # Segment 2 starts: 2 min into segment 2, total = 3 + 2 = 5 min
+    start2 = _tc_to_frames(10, 3, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=5, seconds=0,
+                     start_frames=start2),
+    ])
+
+    info = svc.get_auto_stop_info()
+    assert info["max_recording_seconds"] == 300  # 5 min total
+    assert info["remaining_seconds"] == 300  # 10 min limit - 5 min = 5 min
+
+
+@pytest.mark.asyncio
+async def test_segment_split_real_world_30min_split():
+    """Real-world scenario: Justin splits every 30 min, auto-stop at 2 hours.
+
+    Without segment tracking, auto-stop would never trigger because each
+    segment's duration maxes out at ~30 min.
+    """
+    svc, _, collector = await _setup(auto_stop_minutes=120, auto_stop_warning_minutes=5)
+
+    base_hour = 10
+    base_min = 40
+    segment_minutes = 30
+
+    # Simulate 4 segments of 30 min each = 2 hours total
+    for seg_idx in range(4):
+        seg_start_min = base_min + seg_idx * segment_minutes
+        seg_start_h = base_hour + seg_start_min // 60
+        seg_start_m = seg_start_min % 60
+        start_frames = _tc_to_frames(seg_start_h, seg_start_m, 0)
+
+        # End of segment (just before split or at limit)
+        end_min = seg_start_min + segment_minutes
+        end_h = base_hour + end_min // 60
+        end_m = end_min % 60
+
+        await svc.update_channel_statuses([
+            _make_status("KAM_1", rec=True, hours=end_h, minutes=end_m, seconds=0,
+                         start_frames=start_frames),
+        ])
+
+    # After 4 × 30 min = 120 min → auto-stop should have triggered
+    assert len(collector.triggers) == 1
+    assert collector.triggers[0].recording_seconds == 7200  # 2 hours
+
+
+@pytest.mark.asyncio
+async def test_segment_split_survives_transient_zero_start_frames():
+    """If Justin briefly reports start_frames=0 during a split transition,
+    the accumulator must not lose track of previous segments.
+
+    Sequence: normal → transient 0 → new segment with real start_frames.
+    """
+    svc, _, collector = await _setup(auto_stop_minutes=3, auto_stop_warning_minutes=0)
+
+    # Segment 1 starts at 10:00:00, records for 90s
+    start1 = _tc_to_frames(10, 0, 0)
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=1, seconds=30,
+                     start_frames=start1),
+    ])
+    assert len(collector.triggers) == 0
+
+    # Transient poll: Justin reports start_frames=0 during split
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=1, seconds=32,
+                     start_frames=0),
+    ])
+    # No trigger, no crash — transient 0 is ignored for tracking
+    assert len(collector.triggers) == 0
+
+    # New segment starts at 10:01:30 with real start_frames
+    start2 = _tc_to_frames(10, 1, 30)
+
+    # 90s into segment 2 → total = 90 + 90 = 180s → trigger
+    await svc.update_channel_statuses([
+        _make_status("KAM_1", rec=True, hours=10, minutes=3, seconds=0,
+                     start_frames=start2),
+    ])
+    assert len(collector.triggers) == 1
+    assert collector.triggers[0].recording_seconds == 180

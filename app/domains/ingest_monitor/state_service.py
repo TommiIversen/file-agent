@@ -54,6 +54,12 @@ class IngestStateService:
         self._recording_preset_names: Dict[str, str] = {}  # channel -> preset_name
         self._seen_error_dates: Dict[str, set] = {}  # channel -> set of error dates
 
+        # Segment-split tracking: accumulate duration across Justin file splits.
+        # When Justin splits a recording (e.g. every 30 min), it resets
+        # StartTimecodeFrames.  We detect this and accumulate previous segments.
+        self._cumulative_seconds: Dict[str, int] = {}  # channel -> accumulated seconds from completed segments
+        self._last_start_frames: Dict[str, Optional[int]] = {}  # channel -> last known start TC
+
         # Auto-stop configuration
         self._auto_stop_warning_minutes_raw: int = auto_stop_warning_minutes
         self._auto_stop_limit_seconds: int = auto_stop_minutes * 60
@@ -210,7 +216,12 @@ class IngestStateService:
 
             # Detect changes and generate events
             events_to_publish.extend(self._detect_changes(old_state, new_state))
-            
+
+            # Segment-split detection: if channel is still recording but
+            # StartTimecodeFrames changed, Justin has split to a new file.
+            # Accumulate the *previous* segment's duration before updating cache.
+            self._track_segment_split(channel_name, old_state, new_state)
+
             # Update cache
             self._status_cache[channel_name] = new_state
 
@@ -259,6 +270,84 @@ class IngestStateService:
                 logging.warning(f"Channel {new_state.name} signal lost")
 
         return events
+
+    # ── Segment-split tracking ───────────────────────────────────────────
+
+    def _track_segment_split(
+        self,
+        channel_name: str,
+        old_state: ChannelState,
+        new_state: ChannelState,
+    ) -> None:
+        """Detect Justin file-splits and accumulate previous segment duration.
+
+        When Justin splits a recording (e.g. every 30 min) it resets
+        ``StartTimecodeFrames``.  If a channel is still recording but its
+        start-TC changed, the old segment's duration is added to the
+        cumulative counter so auto-stop tracks total recording time.
+
+        When a channel stops recording, the accumulator is reset.
+        """
+        new_start = new_state.start_timecode_frames
+        was_recording = old_state.is_recording
+        is_recording = new_state.is_recording
+
+        if not is_recording:
+            # Recording stopped → reset accumulator for next session
+            self._cumulative_seconds.pop(channel_name, None)
+            self._last_start_frames.pop(channel_name, None)
+            return
+
+        last_known = self._last_start_frames.get(channel_name)
+
+        if not was_recording:
+            # Fresh recording start → initialise tracker, no accumulation
+            self._cumulative_seconds[channel_name] = 0
+            self._last_start_frames[channel_name] = new_start
+            return
+
+        # Still recording — check for segment split
+        if (
+            last_known is not None
+            and new_start is not None
+            and new_start > 0
+            and last_known > 0
+            and new_start != last_known
+        ):
+            # Start-TC changed while still recording → segment split.
+            # Compute previous segment duration from the two start-TCs:
+            # new_start is where Justin began the new file, i.e. the split
+            # point — so (new_start - last_known) = previous segment length.
+            # This is more robust than using old_state's TC, which could be
+            # stale (e.g. during a transient start_frames=0 transition).
+            fps = (new_state.framerate or 2500) / 100
+            split_frames = new_start - last_known
+            # Handle midnight wraparound
+            if split_frames < 0:
+                split_frames += int(24 * 3600 * fps)
+            prev_segment = int(split_frames / fps)
+            self._cumulative_seconds[channel_name] = (
+                self._cumulative_seconds.get(channel_name, 0) + prev_segment
+            )
+            logging.info(
+                "Segment split detected on %s: prev segment %ds, "
+                "cumulative %ds (new start_frames=%s)",
+                channel_name,
+                prev_segment,
+                self._cumulative_seconds[channel_name],
+                new_start,
+            )
+
+        # Only update last_start_frames with valid values to survive
+        # transient start_frames=0 that Justin may report during a split.
+        if new_start is not None and new_start > 0:
+            self._last_start_frames[channel_name] = new_start
+
+    def _total_recording_seconds(self, state: ChannelState) -> int:
+        """Current segment duration + accumulated previous segments."""
+        current = self._channel_recording_seconds(state)
+        cumulative = self._cumulative_seconds.get(state.name, 0)
+        return cumulative + current
 
     # ── Auto-stop detection ──────────────────────────────────────────────
 
@@ -330,9 +419,10 @@ class IngestStateService:
                 logging.debug("Auto-stop guards reset (no channels recording)")
             return
 
-        # Find channel with the longest recording time
-        longest = max(recording_channels, key=self._channel_recording_seconds)
-        longest_seconds = self._channel_recording_seconds(longest)
+        # Find channel with the longest recording time (including
+        # accumulated duration from previous Justin file-split segments).
+        longest = max(recording_channels, key=self._total_recording_seconds)
+        longest_seconds = self._total_recording_seconds(longest)
 
         # Check trigger (limit reached)
         if not self._auto_stop_triggered and longest_seconds >= self._auto_stop_limit_seconds:
@@ -389,7 +479,7 @@ class IngestStateService:
             s for s in self._status_cache.values() if s.is_recording
         ]
         max_rec = (
-            max(self._channel_recording_seconds(c) for c in recording_channels)
+            max(self._total_recording_seconds(c) for c in recording_channels)
             if recording_channels
             else 0
         )

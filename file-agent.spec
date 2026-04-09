@@ -6,7 +6,6 @@ Builds a single-directory macOS app that bundles:
   - The FastAPI/Uvicorn application
   - All Jinja2 templates
   - All static assets (CSS, JS)
-  - settings.env (default config)
 
 Usage (on a macOS machine or GitHub Actions macOS runner):
   pip install pyinstaller
@@ -39,11 +38,6 @@ datas = rich_datas + [
     (
         os.path.join(PROJECT_ROOT, "app", "domains", "presentation", "static"),
         os.path.join("app", "domains", "presentation", "static"),
-    ),
-    # Default settings file (user can override with host-specific file)
-    (
-        os.path.join(PROJECT_ROOT, "settings.env"),
-        ".",
     ),
     # Alembic config + migration scripts
     (
