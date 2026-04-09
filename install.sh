@@ -282,6 +282,9 @@ log_success "Service plist created"
 BROWSER_SCRIPT="$INSTALL_DIR/scripts/wait-and-open-browser.sh"
 chmod +x "$BROWSER_SCRIPT" 2>/dev/null || true
 
+# Remove stale plist from previous installs (avoids permission denied)
+rm -f "$PLIST_DIR/$BROWSER_PLIST" 2>/dev/null || true
+
 cat > "$PLIST_DIR/$BROWSER_PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
