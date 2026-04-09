@@ -270,13 +270,14 @@ async def _start_background_services() -> None:
 
     storage_monitor = get_storage_monitor()
     await storage_monitor.subscribe_to_events()
-    _background_tasks.append(asyncio.create_task(storage_monitor.start_monitoring()))
+
+    # Run the first storage check synchronously so that
+    # get_destination_info() is populated before startup recovery re-queues
+    # orphaned files (otherwise SpaceChecker sees "unavailable").
+    await storage_monitor.start_monitoring()  # awaits first _check_all_storage(), then spawns loop task
+    logging.info("StorageMonitor started and first check completed")
 
     # --- Startup recovery for orphaned WaitingForNetwork files ---
-    # Files persisted in SQLite with WaitingForNetwork status from a previous
-    # run will never be re-evaluated because NetworkCoordinator initializes as
-    # AVAILABLE without publishing a NetworkStatusChanged event.  Re-evaluate
-    # them now so they can re-enter the processing pipeline.
     await _recover_waiting_network_files(job_queue_service)
 
     lifecycle_service = get_lifecycle_service()
