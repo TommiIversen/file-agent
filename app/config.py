@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # Timing konfiguration
     file_stable_time_seconds: int = 120
-    polling_interval_seconds: int = 10
+    polling_interval_seconds: int = 6
 
     # Filkopiering
     use_temporary_file: bool = False
@@ -126,11 +126,6 @@ class Settings(BaseSettings):
     )
     growing_file_chunk_size_kb: int = 2048 # Chunk size for growing copy (2MB)
     growing_copy_pause_ms: int = 100 # Pause between growing copy cycles (throttling)
-
-    # Resume functionality
-    enable_secure_resume: bool = (
-        True # Enable secure resume functionality for interrupted copies
-    )
 
     # Parallel processing
     max_concurrent_copies: int = 7 # Maximum number of concurrent copy operations

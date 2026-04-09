@@ -15,7 +15,6 @@ This application is a robust file transfer agent for automated and reliable file
 
 ### Advanced Features
 
-- **Resumable Transfers:** Automatically resumes interrupted copies from the last verified byte, making it resilient to network failures.
 - **"Growing File" Mode:** Can start copying large files (like video recordings) *while* they are still being written, significantly reducing end-to-end transfer time.
 - **Destination Space Check:** Monitors available space on the destination to prevent failed transfers.
 - **Tally Light Integration:** Real-time recording status via IP Power 9255 switch (OFF/SOLID/BLINKING based on recording activity).
