@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from typing import List, Dict, Any
 
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_query_bus
+from app.dependencies.core import get_query_bus
 from app.domains.shared.queries.log_queries import (
     ListLogFilesQuery,
     GetLogContentQuery,

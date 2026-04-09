@@ -24,28 +24,38 @@ from .domains.directory_browsing import api as directory
 
 from .config import Settings
 from .config import BUILD_TIME, APP_DIRECTORY
-from .dependencies import (
+from .dependencies.core import (
     get_event_bus,
     get_event_store,
     get_file_repository,
     get_global_event_logger,
-    get_ingest_api_client,
-    get_job_queue_service,
-    get_file_copier,
-    get_websocket_manager,
-    get_storage_monitor,
-    get_storage_checker,
     get_query_bus,
     get_command_bus,
-    get_file_discovery_slice,
-    get_file_scanner,
-    get_lifecycle_service,
-    get_ingest_monitor_worker,
-    get_tally_light_event_handler,
-    get_tally_switch_monitor,
-    register_network_coordinator,
     get_user_settings_service,
     get_settings,
+)
+from .dependencies.file_processing import (
+    get_job_queue_service,
+    get_file_copier,
+)
+from .dependencies.file_discovery import (
+    get_file_discovery_slice,
+    get_file_scanner,
+)
+from .dependencies.storage import (
+    get_storage_monitor,
+    get_storage_checker,
+    register_network_coordinator,
+)
+from .dependencies.presentation import get_websocket_manager
+from .dependencies.lifecycle import get_lifecycle_service
+from .dependencies.ingest import (
+    get_ingest_api_client,
+    get_ingest_monitor_worker,
+)
+from .dependencies.tally import (
+    get_tally_light_event_handler,
+    get_tally_switch_monitor,
 )
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
@@ -151,7 +161,8 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
     await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_worker)
 
     tally_handler = get_tally_light_event_handler()
-    await register_tally_light_domain(command_bus, event_bus, tally_handler)
+    tally_monitor = get_tally_switch_monitor()
+    await register_tally_light_domain(command_bus, query_bus, event_bus, tally_handler, tally_monitor)
 
     logging.info("Handler-registrering fuldført.")
     return tally_handler

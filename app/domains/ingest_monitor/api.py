@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 from app.core.cqrs.query_bus import QueryBus
 from app.core.cqrs.command_bus import CommandBus
-from app.dependencies import get_query_bus, get_command_bus
+from app.dependencies.core import get_query_bus, get_command_bus
 from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 

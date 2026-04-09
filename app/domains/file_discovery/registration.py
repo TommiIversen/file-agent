@@ -1,6 +1,6 @@
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_file_scanner
+from app.dependencies.file_discovery import get_file_scanner
 from app.domains.file_discovery.command_handlers import (
     AddFileCommandHandler,
     MarkFileReadyCommandHandler,

@@ -6,6 +6,85 @@ This document describes the API endpoints available for interacting with the Jus
 
 http://10.65.79.29:8080/ingest/requestRecordingStatus
 
+http://10.65.79.29:8080/swagger-ui/index.html
+
+
+
+
+# get errors:
+
+curl -X 'POST' \
+  'http://10.65.79.29:8080/ingest/errors' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "channel": "KAM_2",
+  "clear": 0
+}'
+
+
+Outputs data:
+{
+  "channel": "KAM_2",
+  "name": "KAM_2",
+  "errors": [
+    {
+      "date": 797343102.915827,
+      "errorCode": -8998,
+      "errorDomain": "TOAErrorDomainIOKit",
+      "errorUIDescription": "Dropped frames",
+      "errorUserInfo": {
+        "NSLocalizedDescription": "The input dropped 1 frames at 13:11:50:22"
+      },
+      "errorType": 2
+    },
+    {
+      "date": 797344154.385531,
+      "errorCode": -8998,
+      "errorDomain": "TOAErrorDomainIOKit",
+      "errorUIDescription": "Dropped frames",
+      "errorUserInfo": {
+        "NSLocalizedDescription": "The input dropped 1 frames at 13:29:22:08"
+      },
+      "errorType": 2
+    },
+    {
+      "date": 797344154.475129,
+      "errorCode": -8998,
+      "errorDomain": "TOAErrorDomainIOKit",
+      "errorUIDescription": "Dropped frames",
+      "errorUserInfo": {
+        "NSLocalizedDescription": "The input dropped 1 frames at 13:29:22:11"
+      },
+      "errorType": 2
+    }
+  ]
+}
+
+
+
+{
+  "channel": "string",
+  "name": "string",
+  "errors": [
+    {
+      "errorCode": 0,
+      "errorDomain": "string",
+      "errorUIDescription": "string",
+      "errorUserInfo": {
+        "NSLocalizedDescription": "string"
+      },
+      "date": 0
+    }
+  ]
+}
+
+
+
+
+
+
+
 curl -X 'POST' \
   'http://10.65.79.29:8080/ingest/requestRecordingStatus' \
   -H 'accept: */*' \

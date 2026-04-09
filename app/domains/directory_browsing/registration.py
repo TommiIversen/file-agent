@@ -2,7 +2,7 @@
 import logging
 from app.core.cqrs.query_bus import QueryBus
 from app.core.cqrs.command_bus import CommandBus
-from app.dependencies import get_directory_scanner
+from app.dependencies.browsing import get_directory_scanner
 
 # Importer de queries og handlers, som dette domæne ejer
 from .queries import (

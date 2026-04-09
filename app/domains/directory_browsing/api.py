@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
 # Importer fra de nye, domæne-specifikke placeringer
-from app.dependencies import get_query_bus, get_settings
+from app.dependencies.core import get_query_bus, get_settings
 from app.core.cqrs.query_bus import QueryBus
 from app.domains.directory_browsing.models import DirectoryScanResult
 from app.domains.directory_browsing.queries import (

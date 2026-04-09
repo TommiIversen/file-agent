@@ -9,8 +9,9 @@ import logging
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, Response
 import aiofiles
+import aiofiles.os
 
-from app.dependencies import get_settings
+from app.dependencies.core import get_settings
 from app.domains.shared.queries.log_queries import (
     ListLogFilesQuery,
     GetLogContentQuery, 

@@ -6,7 +6,7 @@ query handlers) for the shared domain with the command bus and query bus.
 """
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_settings
+from app.dependencies.core import get_settings
 from app.dependencies.core import get_user_settings_service
 from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery

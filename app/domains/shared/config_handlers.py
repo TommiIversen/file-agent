@@ -9,14 +9,11 @@ import os
 import asyncio
 from typing import Any
 from app.config import Settings
-from app.dependencies import (
-    get_settings,
-    get_network_mount_service,
-    get_tally_light_event_handler,
-    get_tally_switch_monitor,
-    get_file_copier,
-    get_ingest_state_service,
-)
+from app.dependencies.core import get_settings
+from app.dependencies.storage import get_network_mount_service
+from app.dependencies.tally import get_tally_light_event_handler, get_tally_switch_monitor
+from app.dependencies.file_processing import get_file_copier
+from app.dependencies.ingest import get_ingest_state_service
 from .commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from .queries import GetSettingsQuery, GetConfigInfoQuery, GetUserSettingsQuery
 from .settings_service import UserSettingsService, REQUIRES_RESTART

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.models import StorageInfo
 from app.core.cqrs.query_bus import QueryBus
-from app.dependencies import get_query_bus
+from app.dependencies.core import get_query_bus
 from app.domains.shared.queries.storage_queries import (
     GetSourceStorageQuery,
     GetDestinationStorageQuery

@@ -5,7 +5,7 @@ Handles read-only operations for storage status information.
 from fastapi import HTTPException, status
 
 from app.models import StorageInfo, StorageStatus
-from app.dependencies import get_storage_monitor
+from app.dependencies.storage import get_storage_monitor
 from app.domains.shared.queries.storage_queries import (
     GetSourceStorageQuery,
     GetDestinationStorageQuery

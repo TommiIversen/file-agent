@@ -5,7 +5,7 @@ Register all commands and handlers for the lifecycle domain.
 import logging
 
 from app.core.cqrs.command_bus import CommandBus
-from app.dependencies import get_file_repository
+from app.dependencies.core import get_file_repository
 from .commands import PruneOldFilesCommand
 from .handlers import PruneOldFilesCommandHandler
 

@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from app.dependencies import reset_singletons
+from app.dependencies.core import reset_singletons
 
 
 @pytest.fixture(scope="session")

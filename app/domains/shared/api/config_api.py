@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.config import BUILD_TIME, APP_DIRECTORY
-from app.dependencies import get_command_bus, get_query_bus
+from app.dependencies.core import get_command_bus, get_query_bus
 from ..commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from ..queries import GetConfigInfoQuery, GetUserSettingsQuery
 

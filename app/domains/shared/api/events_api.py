@@ -11,7 +11,7 @@ from datetime import datetime, date, timezone
 import csv
 import io
 
-from app.dependencies import get_global_event_logger
+from app.dependencies.core import get_global_event_logger
 from app.core.global_event_logger import GlobalEventLogger
 
 

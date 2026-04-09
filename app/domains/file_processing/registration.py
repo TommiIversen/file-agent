@@ -6,11 +6,14 @@ command handlers) for the file processing domain with the command bus and event 
 """
 from app.core.cqrs.command_bus import CommandBus
 from app.core.events.event_bus import DomainEventBus
-from app.dependencies import (
-    get_job_queue_service, get_file_repository, get_file_state_machine, 
-    get_network_coordinator, get_copy_strategy, get_job_space_manager, # NetworkCoordinator!
-    get_job_copy_executor, get_job_finalization_service, get_settings
+from app.dependencies.core import (
+    get_file_repository, get_file_state_machine, get_settings
 )
+from app.dependencies.file_processing import (
+    get_job_queue_service, get_copy_strategy, get_job_space_manager,
+    get_job_copy_executor, get_job_finalization_service,
+)
+from app.dependencies.storage import get_network_coordinator
 from app.domains.file_processing.consumer.job_file_preparation_service import JobFilePreparationService
 from app.domains.file_processing.output_folder_template import OutputFolderTemplateEngine
 from app.core.events.file_events import FileReadyEvent
