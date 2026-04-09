@@ -103,8 +103,14 @@ fi
 # ── Resolve version ─────────────────────────────────────────────────
 if [[ -z "$VERSION" ]]; then
     log_info "Finding latest release..."
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" \
+    # Try GitHub API first, fall back to redirect-based detection (avoids 403 rate limits)
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
         | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -z "$VERSION" ]]; then
+        log_warn "GitHub API rate-limited, using redirect fallback..."
+        VERSION=$(curl -fsSIL "https://github.com/$GITHUB_REPO/releases/latest" 2>/dev/null \
+            | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \r]+).*|\1|')
+    fi
     if [[ -z "$VERSION" ]]; then
         log_error "Could not determine latest version. Use --version vX.Y.Z"
         exit 1
