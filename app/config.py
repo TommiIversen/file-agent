@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     output_folder_rules: str = "" # JSON string or simple rule format
     output_folder_default_category: str = "OTHER"
     output_folder_date_format: str = "filename[0:6]" # Extract first 6 chars as date
+    output_folder_time_format: str = "filename[7:13]" # Extract chars 7-13 as time
 
     # Timing konfiguration
     file_stable_time_seconds: int = 120

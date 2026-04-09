@@ -69,6 +69,10 @@ class OutputFolderTemplateEngine:
         return self.settings.output_folder_date_format
 
     @property
+    def time_format(self) -> str:
+        return self.settings.output_folder_time_format
+
+    @property
     def rules(self) -> list[TemplateRule]:
         """Return parsed rules, re-parsing if the raw setting has changed."""
         self._refresh_rules()
@@ -155,10 +159,12 @@ class OutputFolderTemplateEngine:
                     rules.append(rule)
             else:
                 # Parse simple format: "pattern:*Cam*;folder:KAMERA\\{date}"
+                # Rules can be separated by commas and/or newlines.
                 # NOTE: Patterns containing commas must use JSON format instead,
                 # since commas are used as rule delimiters in simple format.
                 rule_strings = [
-                    r.strip() for r in self.settings.output_folder_rules.split(",")
+                    r.strip()
+                    for r in re.split(r"[,\n]+", self.settings.output_folder_rules)
                 ]
 
                 for i, rule_string in enumerate(rule_strings):
@@ -202,30 +208,34 @@ class OutputFolderTemplateEngine:
         variables = {"filename": filename, "name_no_ext": Path(filename).stem}
 
         # Extract date based on format specification
-        if self.date_format.startswith("filename[") and self.date_format.endswith("]"):
-            # Extract slice notation: filename[0:6]
-            slice_part = self.date_format[9:-1] # Remove 'filename[' and ']'
+        variables["date"] = self._extract_slice(filename, self.date_format, fallback_end=6)
+
+        # Extract time based on format specification
+        variables["time"] = self._extract_slice(filename, self.time_format, fallback_end=13)
+
+        return variables
+
+    def _extract_slice(self, filename: str, fmt: str, fallback_end: int) -> str:
+        """Extract a substring from *filename* using a ``filename[start:end]`` spec."""
+        if fmt.startswith("filename[") and fmt.endswith("]"):
+            slice_part = fmt[9:-1]  # Remove 'filename[' and ']'
 
             try:
                 if ":" in slice_part:
                     start_s, end_s = slice_part.split(":")
                     start_idx = int(start_s) if start_s else 0
                     end_idx = int(end_s) if end_s else len(filename)
-                    variables["date"] = filename[start_idx:end_idx]
+                    return filename[start_idx:end_idx]
                 else:
-                    # Single index
                     index = int(slice_part)
-                    variables["date"] = filename[index] if index < len(filename) else ""
+                    return filename[index] if index < len(filename) else ""
             except (ValueError, IndexError) as e:
                 self.logger.warning(
-                    f"Error extracting date from filename '{filename}': {e}"
+                    f"Error extracting slice '{fmt}' from filename '{filename}': {e}"
                 )
-                variables["date"] = filename[:6] # Fallback to first 6 chars
+                return filename[:fallback_end]
         else:
-            # Default: first 6 characters
-            variables["date"] = filename[:6]
-
-        return variables
+            return filename[:fallback_end]
 
     def _substitute_template(self, template: str, variables: dict[str, str]) -> str:
         result = template

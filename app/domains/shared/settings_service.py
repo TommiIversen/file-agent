@@ -33,6 +33,7 @@ USER_SETTINGS_SCHEMA: dict[str, tuple[type, Any]] = {
     "output_folder_rules": (str, ""),
     "output_folder_default_category": (str, "OTHER"),
     "output_folder_date_format": (str, "filename[0:6]"),
+    "output_folder_time_format": (str, "filename[7:13]"),
     "max_concurrent_copies": (int, 7),
     "justin_auto_stop_minutes": (int, 0),
 }

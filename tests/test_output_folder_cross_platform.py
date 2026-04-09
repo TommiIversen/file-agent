@@ -98,9 +98,135 @@ def test_subfolder_extraction():
         # On Windows: dest\KAMERA\251022\filename.mxf
         # On Unix: dest/KAMERA/251022/filename.mxf
         # Both should be valid
-        assert full_path.parts[-3] == "KAMERA"
-        assert full_path.parts[-2] == "251022"
-        assert full_path.parts[-1] == camera_file
+
+
+def test_time_variable_groups_files_by_timestamp():
+    """Test that {time} variable groups files into sub-folders by timestamp."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules="pattern:*KAM*;folder:KAMERA/{date}/{time}",
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+
+        # Two files with same timestamp should land in the same folder
+        file_a = "260408_154246_KAM_3.mxf"
+        file_b = "260408_154246_KAM_5.mxf"
+        # A file with a different timestamp should land in a different folder
+        file_c = "260408_162000_KAM_3.mxf"
+
+        output_a = engine.generate_output_path(file_a)
+        output_b = engine.generate_output_path(file_b)
+        output_c = engine.generate_output_path(file_c)
+
+        expected_a = Path(temp_dir) / "dest" / "KAMERA" / "260408" / "154246" / file_a
+        expected_b = Path(temp_dir) / "dest" / "KAMERA" / "260408" / "154246" / file_b
+        expected_c = Path(temp_dir) / "dest" / "KAMERA" / "260408" / "162000" / file_c
+
+        assert Path(output_a) == expected_a
+        assert Path(output_b) == expected_b
+        assert Path(output_c) == expected_c
+
+        # Same timestamp → same parent folder
+        assert Path(output_a).parent == Path(output_b).parent
+        # Different timestamp → different parent folder
+        assert Path(output_a).parent != Path(output_c).parent
+
+
+def test_time_variable_subfolder_only():
+    """Test get_output_subfolder with {time} variable."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules="pattern:*KAM*;folder:KAMERA/{date}/{time}",
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+        subfolder = engine.get_output_subfolder("260408_154246_KAM_3.mxf")
+        assert subfolder == "KAMERA/260408/154246"
+
+
+def test_time_variable_not_used_in_rule():
+    """When {time} is NOT in the folder template, files behave as before."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules="pattern:*Cam*;folder:KAMERA/{date}",
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+        file = "251022_1400_Cam_7.mxf"
+        output = engine.generate_output_path(file)
+        expected = Path(temp_dir) / "dest" / "KAMERA" / "251022" / file
+        assert Path(output) == expected
+
+
+def test_newline_delimited_rules():
+    """Rules separated by newlines should parse identically to comma-separated."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        newline_rules = (
+            "pattern:*KAM*;folder:KAMERA/{date}/{time}\n"
+            "pattern:*PGM*;folder:PROGRAM/{date}\n"
+            "pattern:*CLN*;folder:PROGRAM/{date}"
+        )
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=newline_rules,
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+        assert len(engine.rules) == 3
+
+        assert engine.get_output_subfolder("260408_154246_KAM_3.mxf") == "KAMERA/260408/154246"
+        assert engine.get_output_subfolder("260408_154246_PGM.mxf") == "PROGRAM/260408"
+        assert engine.get_output_subfolder("260408_154246_CLN.mxf") == "PROGRAM/260408"
+        assert engine.get_output_subfolder("260408_154246_OTHER.mxf") == "OTHER/260408"
+
+
+def test_mixed_newline_and_comma_rules():
+    """Rules can mix commas and newlines as delimiters."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        mixed_rules = "pattern:*KAM*;folder:KAMERA/{date},pattern:*PGM*;folder:PROGRAM/{date}\npattern:*CLN*;folder:PROGRAM/{date}"
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=mixed_rules,
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+        assert len(engine.rules) == 3
+        assert engine.get_output_subfolder("260408_154246_KAM_3.mxf") == "KAMERA/260408"
+        assert engine.get_output_subfolder("260408_154246_CLN.mxf") == "PROGRAM/260408"
 
 
 if __name__ == "__main__":

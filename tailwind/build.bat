@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 REM Define paths and variables
-set TAILWIND_VERSION=v4.1.16
+set TAILWIND_VERSION=v4.2.2
 set TAILWIND_EXE=tailwindcss-windows-x64.exe
 set TAILWIND_URL=https://github.com/tailwindlabs/tailwindcss/releases/download/%TAILWIND_VERSION%/%TAILWIND_EXE%
 set TAILWIND_DIR=%~dp0
