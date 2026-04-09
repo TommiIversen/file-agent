@@ -201,6 +201,55 @@ async def _startup_cleanup() -> None:
         logging.warning(f"Startup cleanup failed (non-critical): {e}")
 
 
+async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ignore[no-untyped-def]
+    """
+    Re-evaluate files stuck in transient states from a previous run.
+
+    On startup NetworkCoordinator initialises as AVAILABLE but does *not*
+    publish a NetworkStatusChanged event, so persisted WaitingForNetwork
+    files would never be picked up again.
+
+    Files in COPYING / GROWING_COPY / IN_QUEUE are also orphaned because
+    the workers that were processing them no longer exist after a restart.
+    These are reset to DISCOVERED so the scanner can re-discover and
+    re-queue them.
+    """
+    from app.models import FileStatus
+
+    file_repo = get_file_repository()
+
+    # 1. Re-evaluate WaitingForNetwork files (uses existing recovery logic)
+    try:
+        await job_queue_service.process_waiting_network_files()
+        logging.info("Startup recovery: WaitingForNetwork files re-evaluated")
+    except Exception as e:
+        logging.warning(f"Startup recovery of WaitingForNetwork files failed (non-critical): {e}")
+
+    # 2. Reset orphaned in-progress files (workers died with the old process)
+    orphan_statuses = {
+        FileStatus.COPYING,
+        FileStatus.GROWING_COPY,
+        FileStatus.IN_QUEUE,
+    }
+    try:
+        all_files = await file_repo.get_all()
+        orphaned = [f for f in all_files if f.status in orphan_statuses]
+        for f in orphaned:
+            f.status = FileStatus.DISCOVERED
+            f.copy_progress = 0.0
+            f.bytes_copied = 0
+            f.error_message = None
+            await file_repo.update(f)
+            logging.info(
+                f"Startup recovery: reset orphaned file {f.file_path} "
+                f"({f.status.value} → Discovered)"
+            )
+        if orphaned:
+            logging.info(f"Startup recovery: reset {len(orphaned)} orphaned in-progress files")
+    except Exception as e:
+        logging.warning(f"Startup recovery of orphaned files failed (non-critical): {e}")
+
+
 async def _start_background_services() -> None:
     """Start all long-running background tasks."""
     file_scanner = get_file_scanner()
@@ -222,6 +271,13 @@ async def _start_background_services() -> None:
     storage_monitor = get_storage_monitor()
     await storage_monitor.subscribe_to_events()
     _background_tasks.append(asyncio.create_task(storage_monitor.start_monitoring()))
+
+    # --- Startup recovery for orphaned WaitingForNetwork files ---
+    # Files persisted in SQLite with WaitingForNetwork status from a previous
+    # run will never be re-evaluated because NetworkCoordinator initializes as
+    # AVAILABLE without publishing a NetworkStatusChanged event.  Re-evaluate
+    # them now so they can re-enter the processing pipeline.
+    await _recover_waiting_network_files(job_queue_service)
 
     lifecycle_service = get_lifecycle_service()
     _background_tasks.append(asyncio.create_task(lifecycle_service.start_pruning_loop()))
