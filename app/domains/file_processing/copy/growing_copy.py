@@ -268,7 +268,12 @@ class GrowingFileCopyStrategy():
                 pause_ms = 0
                 no_growth_cycles = max_no_growth_cycles # Skip growth detection
 
-            async with aiofiles.open(dest_path, "wb") as dst:
+            # Open destination file explicitly (not via `async with`) so that
+            # a transient OSError during close (e.g. Errno 9 Bad file descriptor
+            # on SMB/NFS) does not get misclassified as a network error after all
+            # data has already been written and flushed successfully.
+            dst = await aiofiles.open(dest_path, "wb")
+            try:
                 bytes_copied = await self._growing_copy_loop(
                     source_path,
                     dst,
@@ -290,6 +295,17 @@ class GrowingFileCopyStrategy():
                     await dst.flush()
                 except Exception as flush_err:
                     logging.warning(f"Flush failed for {os.path.basename(dest_path)}: {flush_err}")
+            finally:
+                # Close the file handle separately — a Bad file descriptor here
+                # does NOT mean the copy failed (data was already flushed).
+                try:
+                    await dst.close()
+                except OSError as close_err:
+                    logging.warning(
+                        f"Non-fatal error closing destination file handle for "
+                        f"{os.path.basename(dest_path)}: {close_err} — "
+                        f"data was already flushed, continuing with verification"
+                    )
 
             return True
 

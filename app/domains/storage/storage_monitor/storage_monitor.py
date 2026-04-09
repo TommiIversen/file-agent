@@ -77,6 +77,11 @@ class StorageMonitorService:
          Immediately check destination when network failure is detected from copy operations.
         
         This provides instant feedback to UI instead of waiting for next periodic check.
+        If the destination turns out to be healthy (OK), we publish a recovery event
+        so that NetworkCoordinator can flip back to AVAILABLE. This prevents the
+        dead-lock where a transient error (e.g. Bad file descriptor during close)
+        marks the network as unavailable but StorageMonitor never sees a state
+        *transition* from ERROR→OK because it was always OK.
         """
         logging.warning(
             f" IMMEDIATE network failure detected - checking destination accessibility: {event.error_message}"
@@ -84,6 +89,18 @@ class StorageMonitorService:
         
         # Immediately check destination storage with faster timeout
         await self._check_destination_immediate()
+
+        # --- NEW: force recovery if destination is actually healthy ---
+        dest_info = self.get_destination_info()
+        if dest_info and dest_info.is_accessible and dest_info.status == StorageStatus.OK:
+            logging.info(
+                " Destination is healthy after copy-failure check — "
+                "publishing recovery event to unblock WaitingForNetwork files"
+            )
+            await self._notification_handler.publish_destination_recovered(
+                reason=f"Immediate check OK after copy failure ({event.error_message})",
+                storage_info=dest_info,
+            )
         
         # Only broadcast NOT_CONFIGURED if network mount is not configured
         mount_configured = (
