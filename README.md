@@ -140,17 +140,17 @@ This will:
 
 **Install a specific version:**
 ```bash
-curl -fsSL .../install.sh | bash -s -- --version v1.2.0
+curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --version v1.2.0
 ```
 
 **Upgrade:**
 ```bash
-curl -fsSL .../install.sh | bash -s -- --upgrade
+curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --upgrade
 ```
 
 **Uninstall:**
 ```bash
-curl -fsSL .../install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --uninstall
 ```
 
 ### Releasing a New Version
