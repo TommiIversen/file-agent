@@ -57,6 +57,9 @@ from .dependencies.tally import (
     get_tally_light_event_handler,
     get_tally_switch_monitor,
 )
+from .models import FileStatus
+from .core.exceptions import InvalidTransitionError
+from .dependencies.core import get_file_state_machine
 
 from app.domains.directory_browsing.registration import register_directory_browsing_handlers
 from app.domains.file_discovery.registration import register_file_discovery_handlers # Import the new registration function
@@ -214,9 +217,8 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
     These are reset to DISCOVERED so the scanner can re-discover and
     re-queue them.
     """
-    from app.models import FileStatus
-
     file_repo = get_file_repository()
+    state_machine = get_file_state_machine()
 
     # 1. Re-evaluate WaitingForNetwork files (uses existing recovery logic)
     try:
@@ -226,6 +228,8 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
         logging.warning(f"Startup recovery of WaitingForNetwork files failed (non-critical): {e}")
 
     # 2. Reset orphaned in-progress files (workers died with the old process)
+    #    Two-step transition via state machine:
+    #    COPYING/GROWING_COPY/IN_QUEUE → WAITING_FOR_NETWORK → DISCOVERED
     orphan_statuses = {
         FileStatus.COPYING,
         FileStatus.GROWING_COPY,
@@ -235,15 +239,28 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
         all_files = await file_repo.get_all()
         orphaned = [f for f in all_files if f.status in orphan_statuses]
         for f in orphaned:
-            f.status = FileStatus.DISCOVERED
-            f.copy_progress = 0.0
-            f.bytes_copied = 0
-            f.error_message = None
-            await file_repo.update(f)
-            logging.info(
-                f"Startup recovery: reset orphaned file {f.file_path} "
-                f"({f.status.value} → Discovered)"
-            )
+            old_status = f.status
+            try:
+                await state_machine.transition(
+                    file_id=f.id,
+                    new_status=FileStatus.WAITING_FOR_NETWORK,
+                    error_message="Interrupted by application restart",
+                    copy_progress=0.0,
+                    bytes_copied=0,
+                )
+                await state_machine.transition(
+                    file_id=f.id,
+                    new_status=FileStatus.DISCOVERED,
+                )
+                logging.info(
+                    f"Startup recovery: reset orphaned file {f.file_path} "
+                    f"({old_status.value} → Discovered)"
+                )
+            except (InvalidTransitionError, ValueError) as e:
+                logging.warning(
+                    f"Startup recovery: could not reset {f.file_path} "
+                    f"from {old_status.value}: {e}"
+                )
         if orphaned:
             logging.info(f"Startup recovery: reset {len(orphaned)} orphaned in-progress files")
     except Exception as e:
@@ -274,7 +291,7 @@ async def _start_background_services() -> None:
     # Run the first storage check synchronously so that
     # get_destination_info() is populated before startup recovery re-queues
     # orphaned files (otherwise SpaceChecker sees "unavailable").
-    await storage_monitor.start_monitoring()  # awaits first _check_all_storage(), then spawns loop task
+    await storage_monitor.start_monitoring()  # spawns loop task, then awaits first _check_all_storage()
     logging.info("StorageMonitor started and first check completed")
 
     # --- Startup recovery for orphaned WaitingForNetwork files ---
