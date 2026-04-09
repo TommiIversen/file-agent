@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 
 from app.core.events.event_bus import DomainEventBus
 from app.domains.ingest_monitor.state_service import IngestStateService
-from app.domains.ingest_monitor.models import ChannelState, JustInRecordingStatus, JustInOptions, JustInError
+from app.domains.ingest_monitor.models import ChannelState, JustInRecordingStatus, JustInOptions, JustInError, JustInErrorInfo
 from app.domains.ingest_monitor.events import (
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
@@ -427,6 +427,62 @@ class TestUpdateChannelErrors:
         state = svc.get_channel_state("KAM_1")
         assert state.has_errors is True
         assert len(state.last_errors) == 1
+
+    @pytest.mark.asyncio
+    async def test_multiple_new_errors_in_batch(self):
+        """Each new error in a single batch publishes its own event."""
+        svc, collector = await _make_service()
+        svc.add_new_channels(["KAM_1"])
+
+        errors = [
+            JustInError(date=100.0, errorCode=-8998, errorUIDescription="Dropped frames"),
+            JustInError(date=200.0, errorCode=-8998, errorUIDescription="Dropped frames"),
+            JustInError(date=300.0, errorCode=-8995, errorUIDescription="No signal"),
+        ]
+        await svc.update_channel_errors([("KAM_1", errors)])
+
+        error_events = collector.of_type(ChannelErrorDetectedEvent)
+        assert len(error_events) == 3
+
+    @pytest.mark.asyncio
+    async def test_enriched_fields_propagated(self):
+        """Optional enriched fields from JustInError are passed to the event."""
+        svc, collector = await _make_service()
+        svc.add_new_channels(["KAM_1"])
+
+        error = JustInError(
+            date=100.0,
+            errorCode=-8998,
+            errorUIDescription="Dropped frames",
+            errorDomain="TOAErrorDomainIOKit",
+            errorUserInfo=JustInErrorInfo(
+                NSLocalizedDescription="The input dropped 1 frames at 13:11:50:22"
+            ),
+            errorType=2,
+        )
+        await svc.update_channel_errors([("KAM_1", [error])])
+
+        evt = collector.of_type(ChannelErrorDetectedEvent)[0]
+        assert evt.error_domain == "TOAErrorDomainIOKit"
+        assert evt.error_description == "The input dropped 1 frames at 13:11:50:22"
+        assert evt.error_type == 2
+
+    @pytest.mark.asyncio
+    async def test_clear_resets_seen_errors(self):
+        """After clear, the same error date triggers a new event."""
+        svc, collector = await _make_service()
+        svc.add_new_channels(["KAM_1"])
+
+        error = JustInError(date=100.0, errorCode=1, errorUIDescription="err")
+        await svc.update_channel_errors([("KAM_1", [error])])
+        assert len(collector.of_type(ChannelErrorDetectedEvent)) == 1
+
+        await svc.clear_all_errors()
+        collector.events.clear()
+
+        # Same error date re-appears after clear → should publish again
+        await svc.update_channel_errors([("KAM_1", [error])])
+        assert len(collector.of_type(ChannelErrorDetectedEvent)) == 1
 
 
 # ── clear_all_errors ────────────────────────────────────────────────

@@ -281,6 +281,34 @@ class TestGlobalEventLoggerIntegration:
         events = await logger.get_events(limit=3)
         assert len(events) == 3
 
+    @pytest.mark.asyncio
+    async def test_channel_error_persisted(self, store):
+        """ChannelErrorDetectedEvent is persisted to SQLite via GlobalEventLogger."""
+        from app.core.events.ingest_events import ChannelErrorDetectedEvent
+
+        logger = GlobalEventLogger()
+        logger.set_event_store(store)
+
+        event = ChannelErrorDetectedEvent(
+            channel_name="KAM_2",
+            error_message="Dropped frames",
+            error_code=-8998,
+            error_domain="TOAErrorDomainIOKit",
+            error_description="The input dropped 1 frames at 13:11:50:22",
+            error_type=2,
+        )
+        await logger.handle_channel_error_detected(event)
+
+        db_events = await store.get_events()
+        assert len(db_events) == 1
+        assert db_events[0].level == "WARNING"
+        assert "KAM_2" in db_events[0].message
+        assert "Dropped frames" in db_events[0].message
+        assert db_events[0].event_type == "ChannelErrorDetectedEvent"
+        assert db_events[0].context["error_domain"] == "TOAErrorDomainIOKit"
+        assert db_events[0].context["error_description"] == "The input dropped 1 frames at 13:11:50:22"
+        assert db_events[0].context["error_type"] == 2
+
 
 # ── Concurrent Access Tests ──────────────────────────────────────────────
 

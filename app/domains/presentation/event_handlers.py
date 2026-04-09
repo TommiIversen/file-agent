@@ -203,14 +203,22 @@ class PresentationEventHandlers:
         """Handle channel error events from Just In Engine monitoring."""
         logging.warning(f"Broadcasting channel error: {event.channel_name} - {event.error_message}")
         
+        data: dict = {
+            "channel_name": event.channel_name,
+            "error_message": event.error_message,
+            "error_code": event.error_code,
+            "timestamp": self._get_timestamp(),
+        }
+        if event.error_domain:
+            data["error_domain"] = event.error_domain
+        if event.error_description:
+            data["error_description"] = event.error_description
+        if event.error_type is not None:
+            data["error_type"] = event.error_type
+
         message_data = {
             "type": "channel_error",
-            "data": {
-                "channel_name": event.channel_name,
-                "error_message": event.error_message,
-                "error_code": event.error_code,
-                "timestamp": self._get_timestamp(),
-            },
+            "data": data,
         }
         self.websocket_manager.broadcast_message(message_data)
 

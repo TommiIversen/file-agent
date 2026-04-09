@@ -22,6 +22,7 @@ from app.core.events.storage_events import (
     MountStatusChangedEvent,
 )
 from app.core.events.scanner_events import ScannerStatusChangedEvent
+from app.core.events.ingest_events import ChannelErrorDetectedEvent
 from app.models import FileStatus, StorageStatus, MountStatus
 
 # TYPE_CHECKING avoids circular import — SqliteEventStore only used for type hints
@@ -87,6 +88,7 @@ class GlobalEventLogger:
         await event_bus.subscribe(StorageStatusChangedEvent, self.handle_storage_status_changed)
         await event_bus.subscribe(MountStatusChangedEvent, self.handle_mount_status_changed)
         await event_bus.subscribe(ScannerStatusChangedEvent, self.handle_scanner_status_changed)
+        await event_bus.subscribe(ChannelErrorDetectedEvent, self.handle_channel_error_detected)
         
         logging.info("GlobalEventLogger: Alle event handlers registreret med event bus")
 
@@ -254,6 +256,25 @@ class GlobalEventLogger:
             {
                 "is_active": event.is_scanning,
             }
+        )
+
+    async def handle_channel_error_detected(self, event: ChannelErrorDetectedEvent):
+        context: dict = {
+            "channel_name": event.channel_name,
+            "error_code": event.error_code,
+            "error_message": event.error_message,
+        }
+        if event.error_domain:
+            context["error_domain"] = event.error_domain
+        if event.error_description:
+            context["error_description"] = event.error_description
+        if event.error_type is not None:
+            context["error_type"] = event.error_type
+        await self._add_log(
+            event,
+            f"Ingest error on {event.channel_name}: {event.error_message}",
+            "WARNING",
+            context,
         )
 
     async def handle_generic_event(self, event: DomainEvent):

@@ -5,7 +5,7 @@ Events published by the ingest monitor service to communicate
 channel status changes to other domains (like tally lights).
 """
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.core.events.domain_event import DomainEvent
 
@@ -28,6 +28,9 @@ class ChannelErrorDetectedEvent(DomainEvent):
     channel_name: str
     error_message: str
     error_code: int
+    error_domain: Optional[str] = None
+    error_description: Optional[str] = None
+    error_type: Optional[int] = None
 
 
 @dataclass(frozen=True)

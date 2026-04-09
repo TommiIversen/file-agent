@@ -52,6 +52,7 @@ class IngestStateService:
         self._is_connected: bool = False # Track connection status
         self._recording_paths: Dict[str, List[str]] = {}  # channel -> [paths]
         self._recording_preset_names: Dict[str, str] = {}  # channel -> preset_name
+        self._seen_error_dates: Dict[str, set] = {}  # channel -> set of error dates
 
         # Auto-stop configuration
         self._auto_stop_warning_minutes_raw: int = auto_stop_warning_minutes
@@ -408,6 +409,9 @@ class IngestStateService:
         """
         Opdaterer cachen med nye fejl-lister og publicerer error events.
         
+        Tracks individual errors by their date field to avoid duplicate
+        event publishing across polling cycles.
+        
         Args:
             error_updates: Liste af (channel_name, errors) tuples
         """
@@ -417,12 +421,10 @@ class IngestStateService:
                 continue
 
             current_state = self._status_cache[channel_name]
-            old_errors = current_state.last_errors
 
-            # Check for NEW errors (simple comparison by date of first error)
-            has_new_error = False
-            if errors and (not old_errors or errors[0].date != old_errors[0].date):
-                has_new_error = True
+            # Identify genuinely new errors using per-channel seen set
+            seen = self._seen_error_dates.setdefault(channel_name, set())
+            new_errors = [e for e in errors if e.date not in seen]
 
             # Update state with new error information
             updated_state = ChannelState(
@@ -441,14 +443,21 @@ class IngestStateService:
             
             self._status_cache[channel_name] = updated_state
 
-            # Publish error event if there's a new error
-            if has_new_error and errors:
+            # Publish an event for each genuinely new error
+            for error in new_errors:
+                seen.add(error.date)
+                description = None
+                if error.errorUserInfo and error.errorUserInfo.NSLocalizedDescription:
+                    description = error.errorUserInfo.NSLocalizedDescription
                 await self._event_bus.publish(ChannelErrorDetectedEvent(
                     channel_name=channel_name,
-                    error_message=errors[0].errorUIDescription,
-                    error_code=errors[0].errorCode
+                    error_message=error.errorUIDescription,
+                    error_code=error.errorCode,
+                    error_domain=error.errorDomain,
+                    error_description=description,
+                    error_type=error.errorType,
                 ))
-                logging.warning(f"New error detected on {channel_name}: {errors[0].errorUIDescription}")
+                logging.warning(f"New error detected on {channel_name}: {error.errorUIDescription}")
 
     def get_channel_state(self, channel_name: str) -> Optional[ChannelState]:
         """
@@ -493,6 +502,9 @@ class IngestStateService:
                 cleared_count += 1
                 logging.info(f"Cleared error state for channel: {channel_name}")
         
+        # Reset seen-error tracking so re-appearing errors are detected
+        self._seen_error_dates.clear()
+
         if cleared_count > 0:
             # Publish updated status to UI
             await self._event_bus.publish(IngestStatusUpdatedEvent(
