@@ -69,8 +69,12 @@
                     <!-- Left Column -->
                     <div class="space-y-2">
                         <div>
-                            <span class="text-gray-400">Full Path:</span>
+                            <span class="text-gray-400">Source:</span>
                             <div class="text-white text-xs break-all" x-text="file.file_path"></div>
+                        </div>
+                        <div x-show="file.destination_path">
+                            <span class="text-gray-400">Destination:</span>
+                            <div class="text-green-300 text-xs break-all" x-text="file.destination_path"></div>
                         </div>
                         <div>
                             <span class="text-gray-400">Discovered:</span>
