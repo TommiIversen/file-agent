@@ -68,19 +68,19 @@ document.addEventListener('alpine:init', () => {
          * @returns {Promise<void>}
          */
         async initDashboard() {
+            // 1. Try to fetch initial data, but don't let failure prevent WebSocket
             try {
-                // 1. Fetch initial data FIRST
                 console.log('Fetching initial state...');
                 await this.fetchInitialState();
-
-                // 2. Once data is fetched, connect for real-time updates
-                console.log('Initial state loaded. Connecting to WebSocket...');
-                this.connect();
-
+                console.log('Initial state loaded.');
             } catch (error) {
-                console.error('Failed to initialize dashboard:', error);
-                this.updateStatus('disconnected', 'Backend: Fejl ved opstart');
+                // Non-fatal: WebSocket onConnected will retry fetchInitialState
+                console.warn('Could not fetch initial state (will retry on WS connect):', error);
             }
+
+            // 2. ALWAYS connect WebSocket — its reconnect loop will keep retrying
+            console.log('Connecting to WebSocket...');
+            this.connect();
         },
 
         /**
