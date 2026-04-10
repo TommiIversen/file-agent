@@ -329,6 +329,15 @@ else
     log_warn "Service may not have started. Check: launchctl list | grep fileagent"
 fi
 
+# ── Install shell shortcuts (update-feta, restart-feta) ──────────────
+SHORTCUT_SCRIPT="$INSTALL_DIR/scripts/setup-shortcuts.sh"
+if [[ -f "$SHORTCUT_SCRIPT" ]]; then
+    log_info "Setting up shell shortcuts..."
+    bash "$SHORTCUT_SCRIPT"
+else
+    log_warn "Shortcut script not found at $SHORTCUT_SCRIPT — skipping"
+fi
+
 # ── Health check ─────────────────────────────────────────────────────
 sleep 3
 if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
