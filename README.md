@@ -239,6 +239,21 @@ tail -f logs/file-agent-error.log
 ./uninstall-macos.sh
 ```
 
+#### Quick Shortcuts (macOS)
+
+After installation, run the setup script once to create convenient shell shortcuts:
+
+```bash
+bash scripts/setup-shortcuts.sh
+```
+
+This gives you two commands available from anywhere in the terminal:
+
+| Command | What it does |
+|---------|-------------|
+| `update-feta` | Pulls latest release + restarts the service |
+| `restart-feta` | Restarts the service only |
+
 #### Manual Application Control
 
 If you're running the app manually (not as a service):
