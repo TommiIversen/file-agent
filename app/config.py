@@ -205,7 +205,7 @@ class Settings(BaseSettings):
         description="Username for the power switch"
     )
     tally_light_switch_password: str = Field(
-        default="",
+        default="12345678",
         description="Password for the power switch"
     )
     tally_light_blink_interval_seconds: float = Field(
