@@ -18,19 +18,16 @@ BIN_DIR="/usr/local/bin"
 
 # ── update-feta ──────────────────────────────────────────────────────
 log_info "Creating update-feta..."
-sudo tee "$BIN_DIR/update-feta" > /dev/null << EOF
+sudo tee "$BIN_DIR/update-feta" > /dev/null << 'EOF'
 #!/bin/bash
-# Update File Agent to latest version and restart the service
+# Update File Agent to latest binary release and restart the service
 set -euo pipefail
-cd "$PROJECT_DIR"
 echo "🔄 Updating File Agent..."
-bash update.sh
-echo "♻️  Restarting service..."
-bash restart-feta.sh
+curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --upgrade
 echo "✅ File Agent updated and restarted!"
 EOF
 sudo chmod +x "$BIN_DIR/update-feta"
-log_success "update-feta → downloads latest code + restarts service"
+log_success "update-feta → downloads latest binary release + restarts service"
 
 # ── restart-feta ─────────────────────────────────────────────────────
 log_info "Creating restart-feta..."
