@@ -82,9 +82,7 @@ do_uninstall() {
     # Remove binary
     sudo rm -rf "$INSTALL_DIR"
     sudo rm -f "$BIN_LINK"
-    sudo rm -f /usr/local/bin/update-feta
-    sudo rm -f /usr/local/bin/restart-feta
-    log_success "Binary and CLI shortcuts removed"
+    log_success "Binary removed"
 
     log_success "File Agent uninstalled. Data ($DATA_DIR) was kept."
     log_info "To remove all data: rm -rf \"$DATA_DIR\""
@@ -164,36 +162,6 @@ sudo cp -R "$TMPDIR_DL/file-agent/"* "$INSTALL_DIR/"
 sudo chmod +x "$INSTALL_DIR/file-agent"
 sudo ln -sf "$INSTALL_DIR/file-agent" "$BIN_LINK"
 log_success "Binary installed"
-
-# ── Create convenience CLI scripts ───────────────────────────────────
-# update-feta  — one-command upgrade
-sudo tee "$INSTALL_DIR/update-feta" > /dev/null << 'UPDATESCRIPT'
-#!/bin/bash
-echo "🔄 Updating File Agent to latest release..."
-curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash
-UPDATESCRIPT
-sudo chmod +x "$INSTALL_DIR/update-feta"
-sudo ln -sf "$INSTALL_DIR/update-feta" /usr/local/bin/update-feta
-
-# restart-feta — one-command restart
-sudo tee "$INSTALL_DIR/restart-feta" > /dev/null << 'RESTARTSCRIPT'
-#!/bin/bash
-SERVICE_NAME="com.fileagent.service"
-PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
-if [[ ! -f "$PLIST" ]]; then
-    echo "❌ Service plist not found: $PLIST" >&2; exit 1
-fi
-echo "♻️  Restarting File Agent..."
-launchctl unload "$PLIST" 2>/dev/null || true
-sleep 2
-launchctl load "$PLIST"
-echo "✅ File Agent restarted."
-launchctl list 2>/dev/null | grep "$SERVICE_NAME" || echo "⚠️  Service not in process list"
-RESTARTSCRIPT
-sudo chmod +x "$INSTALL_DIR/restart-feta"
-sudo ln -sf "$INSTALL_DIR/restart-feta" /usr/local/bin/restart-feta
-
-log_success "CLI shortcuts installed: update-feta, restart-feta"
 
 # ── Create directories ───────────────────────────────────────────────
 mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$DB_DIR" "$PLIST_DIR"
@@ -385,13 +353,11 @@ echo "  Binary:     $INSTALL_DIR/"
 echo
 echo "  Commands:"
 echo "    file-agent              # Run manually"
-echo "    update-feta             # Upgrade to latest version"
-echo "    restart-feta            # Restart the service"
 echo "    launchctl list | grep fileagent"
 echo "    tail -f $LOG_DIR/file-agent.log"
 echo
-echo "  Upgrade:    update-feta"
-echo "              (or: curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash)"
+echo "  Upgrade:    curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash"
+echo "              (auto-detects existing installation)"
 echo "  Uninstall:  curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPO/main/install.sh | bash -s -- --uninstall"
 echo
 echo -e "${YELLOW}  NOTE: On first launch macOS will ask to allow local network access.${NC}"
