@@ -104,12 +104,14 @@ fi
 if [[ -z "$VERSION" ]]; then
     log_info "Finding latest release..."
     # Try GitHub API first, fall back to redirect-based detection (avoids 403 rate limits)
+    # Note: pipefail means a failing curl kills the whole pipeline, so we
+    # isolate it with `|| true` to let the empty-VERSION check handle failure.
     VERSION=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
-        | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d '\r')
+        | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d '\r') || true
     if [[ -z "$VERSION" ]]; then
         log_warn "GitHub API rate-limited, using redirect fallback..."
         VERSION=$(curl -fsSIL "https://github.com/$GITHUB_REPO/releases/latest" 2>/dev/null \
-            | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \t\r]+).*|\1|' | tr -d '\r')
+            | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \t\r]+).*|\1|' | tr -d '\r') || true
     fi
     if [[ -z "$VERSION" ]]; then
         log_error "Could not determine latest version. Use --version vX.Y.Z"
