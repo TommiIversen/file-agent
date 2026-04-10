@@ -52,7 +52,7 @@ rm -rf "$EXTRACT_DIR" # Slet den udpakkede mappe
 # 5. Opdater VERSION-filen med seneste git tag fra GitHub
 echo "Henter versionsnummer..."
 LATEST_TAG=$(curl -fsSIL "https://github.com/TommiIversen/file-agent/releases/latest" 2>/dev/null \
-    | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \r]+).*|\1|' | tr -d '\r\n')
+    | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \t\r]+).*|\1|' | tr -d '\r\n')
 if [ -n "$LATEST_TAG" ]; then
     echo "$LATEST_TAG" > VERSION
     echo "Version sat til: $LATEST_TAG"
