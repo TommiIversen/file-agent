@@ -49,5 +49,15 @@ echo "Rydder op efter opdatering..."
 rm "$ZIP_FILE"      # Slet zip-filen
 rm -rf "$EXTRACT_DIR" # Slet den udpakkede mappe
 
+# 5. Opdater VERSION-filen med seneste git tag fra GitHub
+echo "Henter versionsnummer..."
+LATEST_TAG=$(curl -fsSIL "https://github.com/TommiIversen/file-agent/releases/latest" 2>/dev/null \
+    | grep -i '^location:' | tail -1 | sed -E 's|.*/tag/([^ \r]+).*|\1|' | tr -d '\r\n')
+if [ -n "$LATEST_TAG" ]; then
+    echo "$LATEST_TAG" > VERSION
+    echo "Version sat til: $LATEST_TAG"
+else
+    echo "Kunne ikke hente versionsnummer (VERSION-filen forbliver uændret)"
+fi
+
 echo "Opdatering fuldført!"
-echo "Hvis dette script selv var en del af opdateringen, er det nu opdateret."

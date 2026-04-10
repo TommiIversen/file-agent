@@ -45,6 +45,32 @@ def _read_build_time() -> str:
     return 'n/a'
 
 
+def _read_version() -> str:
+    """Read VERSION file. Falls back to 'unknown'."""
+    search_paths = []
+
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        search_paths.append(Path(meipass) / 'VERSION')
+
+    if getattr(sys, 'frozen', False):
+        search_paths.append(Path(sys.executable).parent / 'VERSION')
+
+    search_paths.append(Path('.') / 'VERSION')
+
+    for path in search_paths:
+        try:
+            value = path.read_text().strip()
+            _log.debug(f"VERSION found at: {path.resolve()} → '{value}'")
+            return value
+        except FileNotFoundError:
+            _log.debug(f"VERSION not found at: {path.resolve()}")
+
+    _log.debug("VERSION file not found in any search path")
+    return 'unknown'
+
+
+APP_VERSION: str = _read_version()
 BUILD_TIME: str = _read_build_time()
 APP_DIRECTORY: str = _get_app_directory()
 

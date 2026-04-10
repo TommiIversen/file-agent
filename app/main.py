@@ -23,7 +23,7 @@ from .domains.directory_browsing import api as directory
 
 
 from .config import Settings
-from .config import BUILD_TIME, APP_DIRECTORY
+from .config import BUILD_TIME, APP_VERSION, APP_DIRECTORY
 from .dependencies.core import (
     get_event_bus,
     get_event_store,
@@ -175,6 +175,7 @@ def _log_config_info() -> None:
     logging.info("=" * 60)
     logging.info("  FILE TRANSFER AGENT — STARTING UP")
     logging.info("=" * 60)
+    logging.info(f"  Version:       {APP_VERSION}")
     logging.info(f"  Build time:    {BUILD_TIME}")
     logging.info(f"  App directory: {APP_DIRECTORY}")
     logging.info(f"  Frozen:        {getattr(sys, 'frozen', False)}")

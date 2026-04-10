@@ -55,6 +55,11 @@ build_time_file = os.path.join(PROJECT_ROOT, "BUILD_TIME")
 if os.path.exists(build_time_file):
     datas.append((build_time_file, "."))
 
+# Optional: version tag (created by CI or update.sh)
+version_file = os.path.join(PROJECT_ROOT, "VERSION")
+if os.path.exists(version_file):
+    datas.append((version_file, "."))
+
 # Hidden imports that PyInstaller can't discover via static analysis
 hiddenimports = app_hiddenimports + rich_hiddenimports + [
     "uvicorn.logging",

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from app.config import BUILD_TIME, APP_DIRECTORY
+from app.config import APP_VERSION, BUILD_TIME, APP_DIRECTORY
 from app.dependencies.core import get_command_bus, get_query_bus
 from ..commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from ..queries import GetConfigInfoQuery, GetUserSettingsQuery
@@ -18,6 +18,7 @@ from ..queries import GetConfigInfoQuery, GetUserSettingsQuery
 
 class PublicSettings(BaseModel):
     """Minimal system info exposed via API. User-editable settings will use a separate endpoint."""
+    app_version: str = "unknown"
     build_time: str = "n/a"
     app_directory: str = "n/a"
 
@@ -33,6 +34,7 @@ _RESTART_COOLDOWN_SECONDS: float = 300.0  # 5 minutes
 async def read_settings():
     """Get minimal system info (build time, app directory)."""
     return PublicSettings(
+        app_version=APP_VERSION,
         build_time=BUILD_TIME,
         app_directory=APP_DIRECTORY,
     )

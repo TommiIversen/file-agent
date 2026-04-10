@@ -56,7 +56,9 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          echo "${GITHUB_REF_NAME}" > VERSION
 
       - name: Build with PyInstaller
         run: |
