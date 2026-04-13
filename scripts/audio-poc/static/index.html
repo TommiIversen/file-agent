@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASIO Recorder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 20px;
+    }
+    .container {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 24px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h1 .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #555;
+      transition: background .3s;
+    }
+    h1 .dot.recording { background: #e74c3c; animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+    label {
+      display: block;
+      font-size: .85rem;
+      color: #8899aa;
+      margin-bottom: 6px;
+      margin-top: 16px;
+    }
+    select, input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f3460;
+      border: 1px solid #2a4a7f;
+      border-radius: 6px;
+      color: #fff;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    select:focus, input:focus { border-color: #e94560; }
+    select:disabled, input:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-start { background: #27ae60; color: #fff; }
+    .btn-start:hover:not(:disabled) { background: #2ecc71; }
+    .btn-stop { background: #e74c3c; color: #fff; }
+    .btn-stop:hover:not(:disabled) { background: #c0392b; }
+    .status-bar {
+      margin-top: 20px;
+      padding: 12px 16px;
+      background: #0f3460;
+      border-radius: 8px;
+      font-size: .85rem;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .status-bar.error { border-left: 3px solid #e74c3c; }
+    .status-bar.ok { border-left: 3px solid #27ae60; }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .info-card {
+      background: #0f3460;
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .info-card .label { font-size: .75rem; color: #8899aa; }
+    .info-card .value { font-size: 1.1rem; color: #fff; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1><span class="dot" id="recDot"></span> ASIO Recorder</h1>
+
+    <label for="device">Lydkort (ASIO)</label>
+    <select id="device"></select>
+
+    <label for="samplerate">Sample Rate</label>
+    <select id="samplerate">
+      <option value="44100">44 100 Hz</option>
+      <option value="48000" selected>48 000 Hz</option>
+      <option value="88200">88 200 Hz</option>
+      <option value="96000">96 000 Hz</option>
+      <option value="176400">176 400 Hz</option>
+      <option value="192000">192 000 Hz</option>
+    </select>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">Kanaler</div>
+        <div class="value">14</div>
+      </div>
+      <div class="info-card">
+        <div class="label">Format</div>
+        <div class="value">WAV 24-bit</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-start" id="btnStart" onclick="startRec()">Start optagelse</button>
+      <button class="btn-stop" id="btnStop" onclick="stopRec()" disabled>Stop</button>
+    </div>
+
+    <div class="status-bar" id="status">Klar</div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let pollTimer = null;
+
+    async function loadDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        const devices = await res.json();
+        const sel = $('device');
+        sel.innerHTML = '';
+        if (devices.length === 0) {
+          sel.innerHTML = '<option value="">Ingen ASIO-enheder fundet</option>';
+          return;
+        }
+        for (const d of devices) {
+          const opt = document.createElement('option');
+          opt.value = d.name;
+          opt.textContent = `${d.name} (${d.max_input_channels} in / ${d.max_output_channels} out)`;
+          sel.appendChild(opt);
+        }
+      } catch (e) {
+        setStatus('Kunne ikke hente enheder: ' + e.message, true);
+      }
+    }
+
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/record/status');
+        const data = await res.json();
+        if (data.recording) {
+          setRecording(true);
+          if (data.overflow_count > 0) {
+            setStatus(`Optager... (${data.overflow_count} overflows)`, true);
+          }
+        } else {
+          setRecording(false);
+        }
+      } catch (_) {}
+    }
+
+    async function startRec() {
+      const device = $('device').value;
+      const samplerate = parseInt($('samplerate').value);
+      if (!device) return;
+
+      $('btnStart').disabled = true;
+      setStatus('Starter optagelse...');
+
+      try {
+        const res = await fetch('/api/record/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device, samplerate, channels: 14 }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Ukendt fejl');
+        }
+
+        const data = await res.json();
+        setRecording(true);
+        setStatus(`Optager ${data.channels} kanaler @ ${data.samplerate} Hz`);
+        pollTimer = setInterval(checkStatus, 2000);
+      } catch (e) {
+        setStatus(e.message, true);
+        $('btnStart').disabled = false;
+      }
+    }
+
+    async function stopRec() {
+      $('btnStop').disabled = true;
+      setStatus('Stopper...');
+
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+      try {
+        const res = await fetch('/api/record/stop', { method: 'POST' });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Ukendt fejl');
+        }
+        const data = await res.json();
+        setRecording(false);
+        let msg = `Stoppet. ${data.files.length} filer gemt.`;
+        if (data.overflow_count > 0) msg += ` (${data.overflow_count} overflows)`;
+        if (data.writer_error) msg += ` Fejl: ${data.writer_error}`;
+        setStatus(msg, !!data.writer_error);
+      } catch (e) {
+        setStatus(e.message, true);
+        setRecording(false);
+      }
+    }
+
+    function setRecording(on) {
+      $('btnStart').disabled = on;
+      $('btnStop').disabled = !on;
+      $('device').disabled = on;
+      $('samplerate').disabled = on;
+      $('recDot').classList.toggle('recording', on);
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = $('status');
+      el.textContent = msg;
+      el.className = 'status-bar' + (isError ? ' error' : ' ok');
+    }
+
+    // Init
+    loadDevices();
+    checkStatus();
+  </script>
+</body>
+</html>
