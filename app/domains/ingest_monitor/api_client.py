@@ -59,6 +59,9 @@ class IngestApiClient:
             data = JustInActiveChannels.model_validate(response.json())
             logging.debug(f"Retrieved {len(data.channel_names)} active channels: {data.channel_names}")
             return data.channel_names
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} fetching activeChannels: {e}")
+            return None
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch activeChannels: {e}")
             return None # Return None on error to indicate API failure
@@ -83,6 +86,9 @@ class IngestApiClient:
             status_data = JustInRecordingStatus.model_validate(response.json())
             logging.debug(f"Retrieved status for {channel_name}: recording={status_data.rec}")
             return status_data
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} fetching status for {channel_name}: {e}")
+            return None
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch status for {channel_name}: {e}")
             return None
@@ -112,6 +118,9 @@ class IngestApiClient:
             else:
                 logging.debug(f"Retrieved {len(data.errors)} errors for {channel_name}")
             return data.errors
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} fetching errors for {channel_name}: {e}")
+            return []
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch errors for {channel_name}: {e}")
             return []
@@ -217,6 +226,9 @@ class IngestApiClient:
             response.raise_for_status()
             logging.info(f"Successfully started channel {channel_name}")
             return True
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} starting channel {channel_name}: {e}")
+            return False
         except httpx.RequestError as e:
             logging.warning(f"Could not start channel {channel_name}: {e}")
             return False
@@ -246,6 +258,9 @@ class IngestApiClient:
             response.raise_for_status()
             logging.info(f"Successfully stopped channel {channel_name}")
             return True
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} stopping channel {channel_name}: {e}")
+            return False
         except httpx.RequestError as e:
             logging.warning(f"Could not stop channel {channel_name}: {e}")
             return False
@@ -373,6 +388,9 @@ class IngestApiClient:
             data = JustInRecordingConfiguration.model_validate(response.json())
             logging.debug(f"Recording config for {channel_name}: {data.configurations}")
             return data
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} fetching recordingConfiguration for {channel_name}: {e}")
+            return None
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch recordingConfiguration for {channel_name}: {e}")
             return None
@@ -393,6 +411,9 @@ class IngestApiClient:
             data = JustInDestinationPresets.model_validate(response.json())
             logging.debug(f"Destination presets for {channel_name}: {data.preset}")
             return data
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} fetching destination presets for {channel_name}: {e}")
+            return None
         except httpx.RequestError as e:
             logging.warning(f"Could not fetch destination presets for {channel_name}: {e}")
             return None
@@ -420,6 +441,9 @@ class IngestApiClient:
             data = JustInLoadDestinationPresetResponse.model_validate(response.json())
             logging.debug(f"Loaded destination preset for {channel_name}: {data.justin_destination_preset.name}")
             return data
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"HTTP {e.response.status_code} loading destination preset for {channel_name}: {e}")
+            return None
         except httpx.RequestError as e:
             logging.warning(f"Could not load destination preset for {channel_name}: {e}")
             return None
