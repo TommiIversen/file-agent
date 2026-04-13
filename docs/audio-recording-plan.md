@@ -74,6 +74,11 @@ Resultat: 12 WAV-filer per optagelse (10 mono + 2 stereo), bruger 14 fysiske inp
 
 ### 1.3 — Robusthed
 
+- **WAV header auto-update**: Aktivér `SFC_SET_UPDATE_HEADER_AUTO` (libsndfile kommando `0x1061`) på hver WAV writer ved optagelsesstart.
+  Det sikrer at source-filens header altid er korrekt under optagelse.
+  ```python
+  sf._snd.sf_command(writer._file, 0x1061, sf._ffi.NULL, 1)  # SFC_SET_UPDATE_HEADER_AUTO
+  ```
 - **Device-disconnect**: Detect via `is_broken` Event + callback status → stop cleanly → vent kort → genstart med recovery-postfix.
 - **Disk-fejl / lav plads**: Stop cleanly, publicer `SystemEvent`, **ingen** genstart (ikke meningsfuldt).
 - **Writer overflow**: Log + tæl, publicer event ved grænseværdi.
@@ -170,6 +175,14 @@ Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
 ### 3.4 — Hot-reload
 
 - Ændring af audio settings → reinitialiser recorder (ny device, ny sample rate) uden restart.
+- **State-guard under optagelse**: Hvis `is_recording == True`, afvises ændringer til
+  `audio_device_name`, `audio_sample_rate` og `audio_tracks` med en fejlbesked i UI:
+  *"Kan ikke ændres mens optagelse er aktiv"*.
+  - Implementeres som validation i `UpdateUserSettingsCommandHandler` — tjekker recording-status
+    via `GetAudioRecordingStatusQuery` før accept.
+  - `audio_recording_enabled` → `false` er den **eneste** undtagelse: den fungerer som stop-kommando
+    og stopper optagelsen cleanly.
+  - UI'et disabler device/sample rate/tracks felterne visuelt under optagelse.
 
 ---
 
@@ -180,10 +193,52 @@ Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
 - `file_scanner.py`: `is_mxf_file()` → `is_accepted_file()` der også accepterer `.wav`.
 - Growing file detection og copy strategy er **allerede extension-agnostiske** — ingen ændring nødvendig.
 
-### 4.2 — WAV header-overvejelse
+### 4.2 — WAV header-refresh under growing copy
 
-- WAV-filer har total størrelse i headeren. Under growing copy er headeren "forkert" indtil filen lukkes.
-- Undersøg om downstream NLE-software kan håndtere dette, eller om en post-copy header-fix er nødvendig.
+**Problem**: Growing copy kopierer headeren (byte 0–44) én gang i starten og går aldrig tilbage.
+Source-headeren opdateres løbende (`SFC_SET_UPDATE_HEADER_AUTO`), men NAS-kopiens header
+forbliver forældet — NLE-software vil kun se den længde headeren angav da den blev kopieret.
+
+```
+Source (lokal disk):          NAS (destination):
+─────────────────────         ─────────────────────
+t=0   Header: size=0          Kopierer byte 0-44 → Header: size=0 ✗
+t=30  Header: size=1.5GB      RE-COPY header →     Header: size=1.5GB ✓
+t=60  Header: size=3.0GB      RE-COPY header →     Header: size=3.0GB ✓
+t=end Header: final           Last header copy →   Header: final ✓
+```
+
+**Løsning: Periodisk header-refresh i growing copy**
+
+- Kun for `.wav`-filer (MXF har ikke dette problem).
+- Hvert N sekunder (f.eks. 30s) under growing copy:
+  1. Seek til byte 0 på source og destination.
+  2. Re-kopier de første 80 bytes (WAV header inkl. evt. bext chunks).
+  3. Seek tilbage til copy-positionen og fortsæt normal kopiering.
+- Ved afslutning (static phase slut): Altid kopier headeren én allersidste gang.
+- **Triviel operation**: 80 bytes seek+write koster ingenting performancemæssigt.
+- **Validation før write** (race condition guard): Før headeren skrives til NAS, valideres den:
+  ```python
+  def _is_valid_wav_header(header: bytes, source_file_size: int) -> bool:
+      if header[:4] != b'RIFF':
+          return False
+      riff_size = int.from_bytes(header[4:8], 'little')
+      if riff_size > source_file_size or riff_size < 44:
+          return False
+      data_pos = header.find(b'data')
+      if data_pos < 0:
+          return False
+      data_size = int.from_bytes(header[data_pos+4:data_pos+8], 'little')
+      expected_riff = data_size + data_pos + 8 - 4
+      return abs(riff_size - expected_riff) < 1024
+  ```
+  Risikoen for korrupt header er ekstremt lav (4-byte aligned writes er atomiske på NTFS/APFS),
+  men validation er billig forsikring. Fejler den → skip denne refresh, prøv igen om 30s.
+  NAS-headeren forbliver "forældet men valid" — langt bedre end korrupt.
+- Implementeres i `GrowingFileCopyStrategy` som en WAV-specifik hook i copy-loopet.
+- **Windows file locking**: Testet og bekræftet — ingen problem. libsndfile bruger C `fopen()` som
+  åbner med `FILE_SHARE_READ` på Windows. Growing copy kan læse WAV-filer med standard `open('rb')`
+  mens recorder skriver til dem. Alle test bestået (header-read, chunk-read, concurrent read+write).
 
 ---
 
