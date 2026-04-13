@@ -81,7 +81,14 @@ Resultat: 12 WAV-filer per optagelse (10 mono + 2 stereo), bruger 14 fysiske inp
   ```
 - **Device-disconnect**: Detect via `is_broken` Event + callback status → stop cleanly → vent kort → genstart med recovery-postfix.
 - **Disk-fejl / lav plads**: Stop cleanly, publicer `SystemEvent`, **ingen** genstart (ikke meningsfuldt).
-- **Writer overflow**: Log + tæl, publicer event ved grænseværdi.
+- **Writer overflow** — to-trins strategi for at bevare audio/video-sync:
+  - **< 100 droppede blokke**: Writer-tråden zero-filler (skriver stilhed af samme størrelse som
+    den droppede blok). Bevarer tidslinje-sync med Justins video. Ved 48kHz/128 frames er
+    én blok ~2.7ms — uhørligt. Log + tæl, publicer warning event.
+  - **≥ 100 droppede blokke** (vedvarende I/O-problem): Afslut fil cleanly, genstart optagelse
+    som `_rec2` med recovery-postfix. Publicer `AudioRecordingErrorEvent(recoverable=True)`.
+    Det eksplicitte filbrud signalerer at der er et tidsgab.
+  - Bufferen er ~11 sekunder (4096 blokke). Overflow kræver ekstremt I/O-pres for at ske.
 
 ---
 
@@ -122,14 +129,19 @@ Nye events i `app/core/events/audio_events.py`:
 ### 2.3 — Slavet til Justin via events
 
 - `event_handlers.py` lytter på `ChannelRecordingStartedEvent` / `ChannelRecordingStoppedEvent`
+- **Kontekst**: Podcast-studie — alle kanaler starter/stopper nogenlunde samtidig som én session.
+  Kanaler opereres **ikke** asynkront. Ved fejl kan en enkelt kanal undlade at optage — det er OK.
 - **Start-flow**:
   1. `ChannelRecordingStartedEvent` fyrer (første kanal begynder at optage)
-  2. Audio domain tjekker `audio_recording_enabled` setting → no-op hvis `false`
-  3. Audio domain kalder `await query_bus.execute(GetCurrentFilenameQuery(channel=event.channel_name))`
-  4. Modtager filnavn-præfiks fra Justin API (fx `"260410_1056_10"`)
-  5. Kombinerer præfiks + track labels → starter optagelse: `260410_1056_10_PGM_LR.wav` (stereo), `260410_1056_10_Mic1.wav` (mono), ...
-- **Stop-flow**: Når **alle** kanaler stopper → stop audio.
+  2. Hvis audio allerede optager → **ignorer** (ingen split, ingen ny fil)
+  3. Audio domain tjekker `audio_recording_enabled` setting → no-op hvis `false`
+  4. Audio domain kalder `await query_bus.execute(GetCurrentFilenameQuery(channel=event.channel_name))`
+  5. Modtager filnavn-præfiks fra Justin API (fx `"260410_1056_10"`)
+  6. Kombinerer præfiks + track labels → starter optagelse: `260410_1056_10_PGM_LR.wav` (stereo), `260410_1056_10_Mic1.wav` (mono), ...
+- **Stop-flow**: Når **alle** kanaler stopper → stop audio. Nye WAV-filer oprettes ved næste start.
 - Alternativt: Brug `IngestStatusUpdatedEvent` snapshot og reager på `recording_count > 0 → 0` transition.
+- **Bevidst fravalg**: Krydsende start/stop (kanal A starter ny optagelse mens kanal B kører)
+  håndteres **ikke** — audio splitter ikke. Workflowet kræver det ikke for podcast-produktion.
 
 ### 2.4 — Wiring
 
@@ -213,10 +225,10 @@ t=end Header: final           Last header copy →   Header: final ✓
 - Kun for `.wav`-filer (MXF har ikke dette problem).
 - Hvert N sekunder (f.eks. 30s) under growing copy:
   1. Seek til byte 0 på source og destination.
-  2. Re-kopier de første 80 bytes (WAV header inkl. evt. bext chunks).
+  2. Re-kopier de første 4096 bytes (4 KB — dækker WAV header + evt. bext/PEAK/PAD chunks).
   3. Seek tilbage til copy-positionen og fortsæt normal kopiering.
 - Ved afslutning (static phase slut): Altid kopier headeren én allersidste gang.
-- **Triviel operation**: 80 bytes seek+write koster ingenting performancemæssigt.
+- **Triviel operation**: 4 KB seek+write koster ingenting performancemæssigt.
 - **Validation før write** (race condition guard): Før headeren skrives til NAS, valideres den:
   ```python
   def _is_valid_wav_header(header: bytes, source_file_size: int) -> bool:
@@ -279,7 +291,7 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 1. ~~**Justin dato+tid sync**~~ → **AFKLARET**: Vi bruger `POST /ingest/requestCurrentFilename` til at hente det præcise filnavn-præfiks fra Justin. Fallback til lokalt systemtidspunkt ved API-fejl.
 
-2. **Kanal start-logik**: Reagerer vi på *første* kanal-start, eller skal vi have en konfigurerbar trigger (f.eks. "start audio når KAM_1 starter")? *Anbefaling: Første kanal — matcher broadcast-workflow.*
+2. ~~**Kanal start-logik**~~ → **AFKLARET**: Første kanal-start trigger audio. Alle kanaler starter/stopper nogenlunde samtidig (podcast-workflow). Krydsende start/stop håndteres ikke.
 
 3. **macOS device enumeration**: På macOS viser `sounddevice` alle CoreAudio devices (built-in mic, aggregated devices, etc.). Skal vi filtrere, eller vise alle? *Anbefaling: Vis alle — brugeren vælger selv.*
 
