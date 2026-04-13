@@ -82,10 +82,23 @@ Resultat: 12 WAV-filer per optagelse (10 mono + 2 stereo), bruger 14 fysiske inp
 - **Device-disconnect**: Detect via `is_broken` Event + callback status → stop cleanly → vent kort → genstart med recovery-postfix.
 - **Disk-fejl / lav plads**: Stop cleanly, publicer `SystemEvent`, **ingen** genstart (ikke meningsfuldt).
 - **Writer overflow** — to-trins strategi for at bevare audio/video-sync:
-  - **< 100 droppede blokke**: Writer-tråden zero-filler (skriver stilhed af samme størrelse som
-    den droppede blok). Bevarer tidslinje-sync med Justins video. Ved 48kHz/128 frames er
+  - **Callback → writer kommunikation**: ASIO-callback lægger tuples i køen: `(data_block, dropped_count)`.
+    Når køen er fuld, tæller callbacket droppede blokke i en intern counter. Når køen får plads igen,
+    sendes næste blok med `dropped_count` sat til antallet af droppede blokke, og counteren nulstilles.
+    ```python
+    # I ASIO callback:
+    try:
+        self._audio_q.put_nowait((indata.copy(), self._dropped_since_last))
+        self._dropped_since_last = 0
+    except queue.Full:
+        self._dropped_since_last += 1
+        self._overflow_count += 1
+    ```
+  - **Writer-tråden**: Tjekker `dropped_count` på hver blok. Hvis > 0 → skriver zero-fill
+    (`np.zeros(frames * dropped_count, ...)`) før den faktiske data. Bevarer tidslinje-sync.
+  - **< 100 akkumulerede drops**: Zero-fill og fortsæt. Ved 48kHz/128 frames er
     én blok ~2.7ms — uhørligt. Log + tæl, publicer warning event.
-  - **≥ 100 droppede blokke** (vedvarende I/O-problem): Afslut fil cleanly, genstart optagelse
+  - **≥ 100 akkumulerede drops** (vedvarende I/O-problem): Afslut fil cleanly, genstart optagelse
     som `_rec2` med recovery-postfix. Publicer `AudioRecordingErrorEvent(recoverable=True)`.
     Det eksplicitte filbrud signalerer at der er et tidsgab.
   - Bufferen er ~11 sekunder (4096 blokke). Overflow kræver ekstremt I/O-pres for at ske.
@@ -140,6 +153,15 @@ Nye events i `app/core/events/audio_events.py`:
   6. Kombinerer præfiks + track labels → starter optagelse: `260410_1056_10_PGM_LR.wav` (stereo), `260410_1056_10_Mic1.wav` (mono), ...
 - **Stop-flow**: Når **alle** kanaler stopper → stop audio. Nye WAV-filer oprettes ved næste start.
 - Alternativt: Brug `IngestStatusUpdatedEvent` snapshot og reager på `recording_count > 0 → 0` transition.
+- **Justin-nedbrud → optag videre**:
+  Hvis Justin crasher eller forbindelsen ryger, mangler `ChannelRecordingStoppedEvent` —
+  men vi stopper **ikke** lydoptagelsen. Lyden er værdifuld, også uden Justin.
+  - `IngestOfflineEvent` → log warning, men **fortsæt optagelse**.
+  - **Auto-stop er sikkerhedsnettet**: Den eksisterende max-varighed (default 180 min)
+    forhindrer uendelig optagelse. Audio lytter på `AutoStopTriggeredEvent` →
+    kalder `stop()` cleanly med det samme.
+  - **Kill-switch** (`audio_recording_enabled` → `false`) forbliver operatørens manuelle nødbremse.
+  - Resultat: Justin ned i 45 min → vi har 45 min ekstra lyd. Auto-stop rammer 180 min → clean stop.
 - **Bevidst fravalg**: Krydsende start/stop (kanal A starter ny optagelse mens kanal B kører)
   håndteres **ikke** — audio splitter ikke. Workflowet kræver det ikke for podcast-produktion.
 
@@ -192,8 +214,9 @@ Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
   *"Kan ikke ændres mens optagelse er aktiv"*.
   - Implementeres som validation i `UpdateUserSettingsCommandHandler` — tjekker recording-status
     via `GetAudioRecordingStatusQuery` før accept.
-  - `audio_recording_enabled` → `false` er den **eneste** undtagelse: den fungerer som stop-kommando
-    og stopper optagelsen cleanly.
+  - `audio_recording_enabled` → `false` er den **eneste** undtagelse: den fungerer som **kill-switch**
+    og kalder `recorder.stop()` direkte (hård, ren stop). Dette er operatørens sikkerhedsnet
+    ved en "fastlåst" optagelse hvor stop-events udebliver.
   - UI'et disabler device/sample rate/tracks felterne visuelt under optagelse.
 
 ---
@@ -238,7 +261,7 @@ t=end Header: final           Last header copy →   Header: final ✓
       if riff_size > source_file_size or riff_size < 44:
           return False
       data_pos = header.find(b'data')
-      if data_pos < 0:
+      if data_pos < 0 or data_pos + 8 > len(header):
           return False
       data_size = int.from_bytes(header[data_pos+4:data_pos+8], 'little')
       expected_riff = data_size + data_pos + 8 - 4
