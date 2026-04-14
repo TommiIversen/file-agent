@@ -5,6 +5,14 @@ Starts the FastAPI app via uvicorn.
 import sys
 import os
 
+# Pre-load encodings that Jinja2 needs at template-parse time.
+# In a PyInstaller bundle these live in the PYZ archive; if they are
+# imported lazily (on first template render) a zlib decompression race
+# can surface as "LookupError: unknown encoding: unicode-escape".
+# Importing them eagerly from the intact base_library.zip prevents this.
+import encodings.unicode_escape  # noqa: F401
+import encodings.raw_unicode_escape  # noqa: F401
+
 # Ensure the _internal directory is on the path so 'app' package is found
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle

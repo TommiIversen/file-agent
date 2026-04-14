@@ -92,6 +92,10 @@ hiddenimports = app_hiddenimports + rich_hiddenimports + [
     "alembic.runtime",
     "alembic.runtime.migration",
     "alembic.autogenerate",
+    # Encodings needed by Jinja2 lexer — must be in the bundle so the
+    # eager import in run.py can resolve them before any template render.
+    "encodings.unicode_escape",
+    "encodings.raw_unicode_escape",
 ]
 
 a = Analysis(

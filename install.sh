@@ -323,8 +323,8 @@ else
     log_warn "Or run manually: file-agent"
 fi
 
-sleep 3
-
+# Wait for launchd to register the service (fast check)
+sleep 2
 if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
     log_success "Service is running"
 else
@@ -340,12 +340,21 @@ else
     log_warn "Shortcut script not found at $SHORTCUT_SCRIPT — skipping"
 fi
 
-# ── Health check ─────────────────────────────────────────────────────
-sleep 3
-if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+# ── Health check (poll until ready, up to 30s) ───────────────────────
+log_info "Waiting for Web UI to become ready..."
+HEALTH_OK=false
+for i in $(seq 1 15); do
+    if curl -sf --max-time 2 http://localhost:8000/health > /dev/null 2>&1; then
+        HEALTH_OK=true
+        break
+    fi
+    sleep 2
+done
+
+if [[ "$HEALTH_OK" == true ]]; then
     log_success "Web UI is live at http://localhost:8000"
 else
-    log_warn "Web UI not responding yet (may still be starting). Check logs:"
+    log_warn "Web UI not responding after 30s (may still be starting). Check logs:"
     log_warn "  tail -f $LOG_DIR/file-agent.log"
 fi
 
