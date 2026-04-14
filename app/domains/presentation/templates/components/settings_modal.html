@@ -274,33 +274,35 @@
                                             <option value="stereo">Stereo</option>
                                         </select>
 
-                                        <!-- Channel selectors -->
-                                        <template x-if="track.mode === 'mono'">
-                                            <select x-model.number="track.channels[0]" @change="syncTracksToForm(); $store.settings.markDirty()"
-                                                    class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
-                                                <template x-for="ch in maxChannels" :key="ch">
-                                                    <option :value="ch" x-text="'Ch ' + ch"></option>
-                                                </template>
-                                            </select>
-                                        </template>
-                                        <template x-if="track.mode === 'stereo'">
-                                            <div class="flex gap-1 items-center">
-                                                <span class="text-gray-500 text-xs">L</span>
+                                        <!-- Channel selectors — fixed-width container for alignment -->
+                                        <div class="w-44 flex items-center gap-1 shrink-0">
+                                            <template x-if="track.mode === 'mono'">
                                                 <select x-model.number="track.channels[0]" @change="syncTracksToForm(); $store.settings.markDirty()"
-                                                        class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
+                                                        class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-full">
                                                     <template x-for="ch in maxChannels" :key="ch">
                                                         <option :value="ch" x-text="'Ch ' + ch"></option>
                                                     </template>
                                                 </select>
-                                                <span class="text-gray-500 text-xs">R</span>
-                                                <select x-model.number="track.channels[1]" @change="syncTracksToForm(); $store.settings.markDirty()"
-                                                        class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
-                                                    <template x-for="ch in maxChannels" :key="ch">
-                                                        <option :value="ch" x-text="'Ch ' + ch"></option>
-                                                    </template>
-                                                </select>
-                                            </div>
-                                        </template>
+                                            </template>
+                                            <template x-if="track.mode === 'stereo'">
+                                                <div class="flex gap-1 items-center w-full">
+                                                    <span class="text-gray-500 text-xs">L</span>
+                                                    <select x-model.number="track.channels[0]" @change="syncTracksToForm(); $store.settings.markDirty()"
+                                                            class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs flex-1 min-w-0">
+                                                        <template x-for="ch in maxChannels" :key="ch">
+                                                            <option :value="ch" x-text="'Ch ' + ch"></option>
+                                                        </template>
+                                                    </select>
+                                                    <span class="text-gray-500 text-xs">R</span>
+                                                    <select x-model.number="track.channels[1]" @change="syncTracksToForm(); $store.settings.markDirty()"
+                                                            class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs flex-1 min-w-0">
+                                                        <template x-for="ch in maxChannels" :key="ch">
+                                                            <option :value="ch" x-text="'Ch ' + ch"></option>
+                                                        </template>
+                                                    </select>
+                                                </div>
+                                            </template>
+                                        </div>
 
                                         <input type="text" x-model="track.label"
                                                @input="syncTracksToForm(); $store.settings.markDirty()"

@@ -14,7 +14,7 @@ revision: str = "007_add_audio_track_presets"
 down_revision: Union[str, None] = "006_add_audio_settings"
 
 _STUDIE_6402_DEFAULT = (
-    '[{"name":"Studie 1","tracks":['
+    '[{"name":"6402","tracks":['
     '{"channels":[1,2],"label":"PGM_LR","mode":"stereo"},'
     '{"channels":[3],"label":"Mic1","mode":"mono"},'
     '{"channels":[4],"label":"Mic2","mode":"mono"},'
