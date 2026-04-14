@@ -442,7 +442,7 @@ class IngestApiClient:
             logging.debug(f"Loaded destination preset for {channel_name}: {data.justin_destination_preset.name}")
             return data
         except httpx.HTTPStatusError as e:
-            logging.warning(f"HTTP {e.response.status_code} loading destination preset for {channel_name}: {e}")
+            logging.debug(f"HTTP {e.response.status_code} loading destination preset for {channel_name}: {e}")
             return None
         except httpx.RequestError as e:
             logging.warning(f"Could not load destination preset for {channel_name}: {e}")
@@ -490,7 +490,7 @@ class IngestApiClient:
         # Step 3: Load the preset to get the actual paths
         loaded = await self.load_destination_preset(channel_name, preset_id, preset_name)
         if not loaded or not loaded.justin_destination_preset.destination_path:
-            logging.warning(f"No destination paths in preset '{preset_name}' for {channel_name}")
+            logging.debug(f"No destination paths in preset '{preset_name}' for {channel_name}")
             return None
 
         paths = [
