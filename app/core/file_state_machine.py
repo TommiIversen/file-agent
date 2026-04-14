@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Set, Optional
 
 from app.core.events.event_bus import DomainEventBus
@@ -179,9 +179,9 @@ class FileStateMachine:
             
             # 3c. Sæt automatiske timestamps
             if new_status == FileStatus.COMPLETED and not tracked_file.completed_at:
-                tracked_file.completed_at = datetime.now()
+                tracked_file.completed_at = datetime.now(timezone.utc)
             elif new_status == FileStatus.FAILED and not tracked_file.failed_at:
-                tracked_file.failed_at = datetime.now()
+                tracked_file.failed_at = datetime.now(timezone.utc)
 
             # 4. SAVE (Atomisk opdatering)
             await self._repository.update(tracked_file)
@@ -195,7 +195,7 @@ class FileStateMachine:
                     old_status=old_status,
                     new_status=new_status,
                     error_message=tracked_file.error_message,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now(timezone.utc)
                 )
             
             # --- SLUT AF KRITISK SEKTION ---

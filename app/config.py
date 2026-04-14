@@ -161,6 +161,8 @@ class Settings(BaseSettings):
     )
     growing_file_chunk_size_kb: int = 2048 # Chunk size for growing copy (2MB)
     growing_copy_pause_ms: int = 100 # Pause between growing copy cycles (throttling)
+    file_size_check_timeout_seconds: float = 5.0 # Timeout for individual file size checks (stat calls)
+    file_size_check_retries: int = 3 # Number of retries before failing on file size check timeout
 
     # Parallel processing
     max_concurrent_copies: int = 7 # Maximum number of concurrent copy operations

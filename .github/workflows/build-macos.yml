@@ -74,6 +74,16 @@ jobs:
             ls -la BUILD_TIME || echo "BUILD_TIME doesn't exist in project root either!"
           fi
 
+      - name: Bundle helper scripts
+        run: |
+          mkdir -p dist/file-agent/scripts
+          cp scripts/wait-and-open-browser.sh dist/file-agent/scripts/
+          cp scripts/setup-shortcuts.sh       dist/file-agent/scripts/
+          cp restart-feta.sh                  dist/file-agent/
+          chmod +x dist/file-agent/scripts/*.sh dist/file-agent/restart-feta.sh
+          echo "Helper scripts bundled:"
+          ls -la dist/file-agent/scripts/ dist/file-agent/restart-feta.sh
+
       - name: Package artifact
         run: |
           cd dist

@@ -33,6 +33,10 @@ document.addEventListener('alpine:init', () => {
         actionMessage: null,
         actionSuccess: false,
 
+        // Tally light test
+        tallyTestRunning: false,
+        tallyTestResult: null,
+
         init() {
             console.log('⚙️ Settings Store initialized');
         },
@@ -241,6 +245,36 @@ document.addEventListener('alpine:init', () => {
                 setTimeout(() => {
                     this.actionMessage = null;
                 }, 5000);
+            }
+        },
+
+        /**
+         * Test the tally light — turns it ON for 2 seconds, then OFF.
+         * Shows the result (or error) below the IP field.
+         */
+        async testTallyLight() {
+            this.tallyTestRunning = true;
+            this.tallyTestResult = null;
+
+            try {
+                const response = await fetch('/api/tally/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                this.tallyTestResult = await response.json();
+            } catch (error) {
+                this.tallyTestResult = {
+                    success: false,
+                    message: 'Netværksfejl — kunne ikke nå serveren.',
+                    error: error instanceof Error ? error.message : String(error)
+                };
+            } finally {
+                this.tallyTestRunning = false;
+                // Auto-hide success after 8 seconds
+                if (this.tallyTestResult?.success) {
+                    setTimeout(() => { this.tallyTestResult = null; }, 8000);
+                }
             }
         }
     };

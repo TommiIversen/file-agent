@@ -46,18 +46,36 @@ class GrowingFileCopyStrategy():
         return True
 
     async def _get_file_size(self, path: str) -> int:
-        """Get file size with timeout protection."""
-        try:
-            return await asyncio.wait_for(
-                aiofiles.os.path.getsize(path),
-                timeout=1.0,
-            )
-        except asyncio.TimeoutError as e:
-            logging.error(f"File size check timed out for {path}")
-            raise FileCopyTimeoutError(f"File size check timed out for {path}") from e
-        except OSError as e:
-            logging.error(f"Failed to access file for size check: {e}", exc_info=True)
-            raise FileCopyIOError(f"Failed to access file for size check {path}: {e}") from e
+        """Get file size with timeout protection and retry logic."""
+        timeout = self.settings.file_size_check_timeout_seconds
+        max_retries = self.settings.file_size_check_retries
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                return await asyncio.wait_for(
+                    aiofiles.os.path.getsize(path),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    logging.warning(
+                        f"File size check timed out for {path} "
+                        f"(attempt {attempt}/{max_retries}), retrying in 1s..."
+                    )
+                    await asyncio.sleep(1.0)
+                else:
+                    logging.error(
+                        f"File size check timed out for {path} "
+                        f"after {max_retries} attempts (timeout={timeout}s)"
+                    )
+                    raise FileCopyTimeoutError(
+                        f"File size check timed out for {path}"
+                    )
+            except OSError as e:
+                logging.error(f"Failed to access file for size check: {e}", exc_info=True)
+                raise FileCopyIOError(f"Failed to access file for size check {path}: {e}") from e
+        # Unreachable, but satisfies type checker
+        raise FileCopyTimeoutError(f"File size check timed out for {path}")
 
     async def copy_file(
         self, source_path: str, dest_path: str, tracked_file: TrackedFile
@@ -310,6 +328,8 @@ class GrowingFileCopyStrategy():
             return True
 
         except NetworkError:
+            raise
+        except (FileCopyTimeoutError, FileCopyIOError, FileCopyIntegrityError):
             raise
         except Exception as e:
             try:
