@@ -157,8 +157,16 @@ class IngestMonitorWorker:
                 await asyncio.sleep(5)
 
     async def _discover_all_recording_paths(self, channel_names: list[str]) -> None:
-        """Discover recording paths for each active channel."""
+        """Discover recording paths for each active channel.
+
+        Skips channels that already have cached paths — re-discovery
+        would require ``requestLoadDestinationPreset`` which Just In
+        Engine rejects (HTTP 400) while recording.
+        """
+        cached = self._state_service.get_recording_paths()
         for ch_name in channel_names:
+            if ch_name in cached:
+                continue
             try:
                 result = await self._api_client.discover_recording_paths(ch_name)
                 if result is not None:

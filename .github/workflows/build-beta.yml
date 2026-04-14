@@ -1,0 +1,138 @@
+# Build & Release: macOS beta binary
+#
+# Trigger: Push to the 'beta' branch
+#
+# Flow:
+#   1. Push to beta triggers workflow
+#   2. Builds PyInstaller binary on macOS (arm64 — Apple Silicon)
+#   3. Packages as .tar.gz
+#   4. Creates/updates a rolling GitHub pre-release tagged 'beta'
+#
+# Usage:
+#   git checkout beta
+#   git merge main   # or cherry-pick features
+#   git push origin beta
+#
+# Install beta on a mac:
+#   update-feta --beta
+
+name: Build macOS Beta
+
+on:
+  push:
+    branches:
+      - beta
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build macOS beta binary
+    runs-on: macos-14
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Clean PyInstaller cache
+        run: |
+          rm -rf build/ dist/ __pycache__/
+          pyinstaller --clean --noconfirm file-agent.spec 2>/dev/null || true
+
+      - name: Write build timestamp
+        run: |
+          TZ=Europe/Copenhagen date '+%Y-%m-%d %H:%M:%S' > BUILD_TIME
+
+      - name: Determine beta version
+        id: version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BETA_VERSION="beta-${SHORT_SHA}"
+          echo "VERSION=${BETA_VERSION}" >> $GITHUB_OUTPUT
+          echo "${BETA_VERSION}" > VERSION
+          echo "Beta version: ${BETA_VERSION}"
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --noconfirm file-agent.spec
+          echo "Build complete. Contents of dist/file-agent/:"
+          ls -la dist/file-agent/
+          echo ""
+          echo "--- Verifying BUILD_TIME is bundled ---"
+          if [ -f dist/file-agent/BUILD_TIME ]; then
+            echo "✅ BUILD_TIME found: $(cat dist/file-agent/BUILD_TIME)"
+          else
+            echo "❌ BUILD_TIME NOT found in dist/file-agent/"
+            ls -la BUILD_TIME || echo "BUILD_TIME doesn't exist in project root either!"
+          fi
+
+      - name: Bundle helper scripts
+        run: |
+          mkdir -p dist/file-agent/scripts
+          cp scripts/wait-and-open-browser.sh dist/file-agent/scripts/
+          cp scripts/setup-shortcuts.sh       dist/file-agent/scripts/
+          cp restart-feta.sh                  dist/file-agent/
+          chmod +x dist/file-agent/scripts/*.sh dist/file-agent/restart-feta.sh
+          echo "Helper scripts bundled:"
+          ls -la dist/file-agent/scripts/ dist/file-agent/restart-feta.sh
+
+      - name: Package artifact
+        run: |
+          cd dist
+          tar -czf file-agent-beta-macos-arm64.tar.gz file-agent/
+          ls -la *.tar.gz
+
+      - name: Delete existing beta release
+        run: |
+          gh release delete beta --yes 2>/dev/null || true
+          git push origin :refs/tags/beta 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create beta pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta
+          target_commitish: beta
+          name: "File Agent Beta (${{ steps.version.outputs.VERSION }})"
+          body: |
+            ## File Agent Beta (pre-release)
+
+            **Commit:** `${{ steps.version.outputs.VERSION }}`
+            **Branch:** `beta`
+
+            > ⚠️ This is a rolling pre-release. It is updated on every push to the `beta` branch.
+
+            ### Install / upgrade beta
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash -s -- --beta
+            ```
+
+            Or if you already have `update-feta`:
+            ```bash
+            update-feta --beta
+            ```
+
+            ### Switch back to stable
+            ```bash
+            update-feta
+            ```
+          files: |
+            dist/file-agent-beta-macos-arm64.tar.gz
+          draft: false
+          prerelease: true
