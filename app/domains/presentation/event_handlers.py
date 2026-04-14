@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
@@ -55,7 +55,7 @@ class PresentationEventHandlers:
         self._scanner_status = {"scanning": True, "paused": False} # Initial state
 
     def _get_timestamp(self) -> str:
-        return datetime.now().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     async def handle_file_discovered_event(self, event: FileDiscoveredEvent) -> None:
         """Handle when a new file is discovered by the scanner."""
