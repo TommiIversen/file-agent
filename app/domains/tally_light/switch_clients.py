@@ -86,7 +86,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             return True
             
         except httpx.RequestError as e:
-            logging.error(f"Network error turning ON IP Power 9255: {e}", exc_info=True)
+            logging.warning(f"Network error turning ON IP Power 9255: {e}")
             raise PowerSwitchConnectionError(f"Failed to connect to switch at {self._ip_address}: {e}")
         except httpx.HTTPStatusError as e:
             logging.error(f"HTTP error turning ON IP Power 9255: {e}", exc_info=True)
@@ -113,7 +113,7 @@ class IPPower9255Client(PowerSwitchProtocol):
             return True
             
         except httpx.RequestError as e:
-            logging.error(f"Network error turning OFF IP Power 9255: {e}", exc_info=True)
+            logging.warning(f"Network error turning OFF IP Power 9255: {e}")
             raise PowerSwitchConnectionError(f"Failed to connect to switch at {self._ip_address}: {e}")
         except httpx.HTTPStatusError as e:
             logging.error(f"HTTP error turning OFF IP Power 9255: {e}", exc_info=True)

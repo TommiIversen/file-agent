@@ -11,7 +11,7 @@ from typing import Optional
 
 from app.config import Settings
 from app.core.events.ingest_events import IngestStatusUpdatedEvent, AutoStopWarningEvent
-from .protocols import PowerSwitchError
+from .protocols import PowerSwitchError, PowerSwitchConnectionError
 from .factory import create_power_switch
 
 
@@ -148,6 +148,11 @@ class TallyLightEventHandler:
 
                 self._current_tally_state = new_state # Store the new state
 
+            except PowerSwitchConnectionError as e:
+                # Switch is offline/unreachable — expected when tally lamp is off
+                logging.warning(f"Tally switch unreachable (wanted {new_state_str}): {e}")
+                # We don't update _current_tally_state, so it will try again on next event
+
             except PowerSwitchError as e:
                 logging.error(f"Could not update tally light to {new_state_str}: {e}", exc_info=True)
                 # We don't update _current_tally_state, so it will try again on next event
@@ -160,9 +165,15 @@ class TallyLightEventHandler:
         """
         try:
             while True:
-                await self._power_switch.turn_on()
+                try:
+                    await self._power_switch.turn_on()
+                except PowerSwitchConnectionError:
+                    pass  # Switch offline — already logged as WARNING in client
                 await asyncio.sleep(self._blink_interval_sec)
-                await self._power_switch.turn_off()
+                try:
+                    await self._power_switch.turn_off()
+                except PowerSwitchConnectionError:
+                    pass  # Switch offline — already logged as WARNING in client
                 await asyncio.sleep(self._blink_interval_sec)
         except asyncio.CancelledError:
             # Important cleanup: Make sure to turn off the light when blink stops
@@ -170,7 +181,7 @@ class TallyLightEventHandler:
                 await self._power_switch.turn_off()
                 logging.info("Blinker task stopped, light turned off")
             except PowerSwitchError as e:
-                logging.error(f"Could not turn off tally light during blink stop: {e}", exc_info=True)
+                logging.warning(f"Could not turn off tally light during blink stop: {e}")
             raise # Re-raise CancelledError
         except Exception as e:
             logging.error(f"Error in blinker loop: {e}", exc_info=True)
