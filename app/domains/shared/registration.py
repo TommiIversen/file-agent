@@ -55,11 +55,11 @@ def register_shared_domain(command_bus: CommandBus, query_bus: QueryBus):
     query_bus.register(GetSourceStorageQuery, storage_handler.handle_get_source_storage)
     query_bus.register(GetDestinationStorageQuery, storage_handler.handle_get_destination_storage)
     
-    # Register Command Handlers  
-    command_bus.register(ReloadConfigCommand, ReloadConfigCommandHandler().handle)
+    # Register Command Handlers
+    user_settings_service = get_user_settings_service()
+    command_bus.register(ReloadConfigCommand, ReloadConfigCommandHandler(user_settings_service).handle)
     command_bus.register(RestartApplicationCommand, RestartApplicationCommandHandler().handle)
 
     # Register User Settings Handlers
-    user_settings_service = get_user_settings_service()
     query_bus.register(GetUserSettingsQuery, GetUserSettingsQueryHandler(user_settings_service).handle)
     command_bus.register(UpdateUserSettingsCommand, UpdateUserSettingsCommandHandler(user_settings_service).handle)

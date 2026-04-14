@@ -112,12 +112,10 @@ async def _init_database() -> None:
     await file_repo.init_db()
     logging.info("Database initialized")
 
-    # Initialize user settings service (env → DB migration runs here)
-    # IMPORTANT: use get_settings() — the singleton that all domain code uses —
-    # not the module-level `settings` variable, which is a separate instance.
+    # Initialize user settings service (loads DB → syncs into Settings singleton)
     canonical_settings = get_settings()
     user_settings_service = get_user_settings_service()
-    await user_settings_service.init(env_settings=canonical_settings)
+    await user_settings_service.init(target=canonical_settings)
 
     # Also sync to the module-level `settings` so logging/config_info stays correct
     user_settings_service.sync_to_settings(settings)
@@ -181,12 +179,7 @@ def _log_config_info() -> None:
     logging.info(f"  Frozen:        {getattr(sys, 'frozen', False)}")
 
     config_info = settings.config_file_info
-    logging.info(f"Configuration loaded from: {config_info['active_config_file']}")
     logging.info(f"Running on hostname: {config_info['hostname']}")
-    if len(config_info["all_available_configs"]) > 1:
-        logging.info(
-            f"Available config files: {', '.join(config_info['all_available_configs'])}"
-        )
     logging.info("File Transfer Agent starting up...")
     logging.info(f"Source directory: {settings.source_directory}")
     logging.info(f"Destination directory: {settings.destination_directory}")

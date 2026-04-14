@@ -49,50 +49,37 @@ class GetConfigInfoQueryHandler:
 
 
 class ReloadConfigCommandHandler:
-    """Handler for reloading application configuration.
+    """Handler for reloading application configuration from database.
 
-    Mutates the existing Settings singleton in-place so every service
-    that already holds a reference sees the updated values immediately.
+    Reloads DB-backed settings and syncs them into the Settings singleton
+    so every service that holds a reference sees the updated values.
     """
 
+    def __init__(self, settings_service: UserSettingsService) -> None:
+        self._settings_service = settings_service
+
     async def handle(self, command: ReloadConfigCommand) -> dict:
-        """Handle ReloadConfigCommand and reload configuration from file."""
+        """Handle ReloadConfigCommand and reload configuration from database."""
         try:
             logging.info("Config reload requested via CQRS Command", extra={"operation": "cqrs_reload_config"})
 
-            # Grab the existing singleton that all services reference
             current = get_settings()
 
-            # Parse a fresh Settings from the config file on disk
-            fresh = Settings()
-
-            # Overwrite every field on the existing instance in-place
-            # so all holders of the old reference see new values.
-            changed: list[str] = []
-            for field_name in fresh.model_fields:
-                old_val = getattr(current, field_name)
-                new_val = getattr(fresh, field_name)
-                if old_val != new_val:
-                    object.__setattr__(current, field_name, new_val)
-                    changed.append(field_name)
-
-            needs_restart = [f for f in changed if f in REQUIRES_RESTART]
+            # Reload from DB and sync into the singleton
+            changed = self._settings_service.sync_to_settings(current)
 
             config_info = current.config_file_info
             logging.info(
-                f"Configuration reloaded from: {config_info['active_config_file']} "
+                f"Configuration reloaded from database "
                 f"({len(changed)} field(s) changed: {', '.join(changed) or 'none'})"
             )
-            if needs_restart:
-                logging.info(f"Restart required for: {', '.join(needs_restart)}")
 
             return {
                 "success": True,
                 "message": "Configuration reloaded successfully",
-                "config_file": config_info["active_config_file"],
                 "hostname": config_info["hostname"],
                 "changed_fields": changed,
-                "requires_restart": needs_restart,
+                "requires_restart": [f for f in changed if f in REQUIRES_RESTART],
             }
 
         except Exception as e:
