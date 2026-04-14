@@ -35,6 +35,10 @@ USER_SETTINGS_SCHEMA: dict[str, tuple[type, Any]] = {
     "max_concurrent_copies": (int, 7),
     "justin_auto_stop_minutes": (int, 0),
     "brand_name": (str, "Dr. Feta"),
+    "audio_recording_enabled": (bool, False),
+    "audio_device_name": (str, ""),
+    "audio_sample_rate": (int, 48000),
+    "audio_tracks": (str, "[]"),
 }
 
 # Settings that require an app restart to take effect.

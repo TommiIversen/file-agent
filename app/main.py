@@ -16,6 +16,7 @@ from .domains.presentation import websockets_endpoint
 from app.domains.shared.api import config_api, logs_api, storage_api, events_api
 from app.domains.file_discovery.api import scanner_api
 from app.domains.ingest_monitor.api import router as ingest_monitor_api
+from app.domains.audio_recording.api import router as audio_recording_api
 
 from .domains.presentation.api_endpoints import presentation_router
 from .domains.directory_browsing import api as directory
@@ -169,8 +170,6 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
     # Audio recording — AFTER ingest_monitor (depends on filename query)
     from app.dependencies.audio_recording import get_audio_recording_service
     audio_service = get_audio_recording_service()
-    if audio_service.get_status().get("configured") is False:
-        logging.info("Audio recording available but no device configured yet")
     user_settings_service = get_user_settings_service()
 
     async def _get_user_setting(key: str):
@@ -180,6 +179,19 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
         command_bus, query_bus, event_bus, audio_service,
         get_user_setting=_get_user_setting,
     )
+
+    # Inject recorder if device already configured
+    device_name = settings.audio_device_name
+    if device_name:
+        try:
+            from app.domains.audio_recording.recorder.factory import create_recorder
+            recorder = create_recorder(device_name)
+            audio_service.set_recorder(recorder)
+            logging.info("Audio recorder initialized for device: %s", device_name)
+        except Exception:
+            logging.warning("Could not initialize audio recorder for '%s'", device_name, exc_info=True)
+    else:
+        logging.info("Audio recording available but no device configured yet")
 
     logging.info("Handler-registrering fuldført.")
     return tally_handler
@@ -453,6 +465,7 @@ app.include_router(storage_api.router) # New shared domain storage API
 app.include_router(events_api.router) # New shared domain events API
 app.include_router(scanner_api.router) # New file discovery scanner API
 app.include_router(ingest_monitor_api) # New ingest monitor API
+app.include_router(audio_recording_api) # Audio recording API
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)

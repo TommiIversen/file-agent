@@ -22,6 +22,8 @@ _MOUNT_SETTINGS = {"network_share_url", "enable_auto_mount", "macos_mount_point"
 _TALLY_SETTINGS = {"tally_light_switch_ip"}
 _COPY_POOL_SETTINGS = {"max_concurrent_copies"}
 _AUTO_STOP_SETTINGS = {"justin_auto_stop_minutes"}
+_AUDIO_SETTINGS = {"audio_device_name", "audio_sample_rate", "audio_tracks"}
+_AUDIO_LOCKED_WHILE_RECORDING = {"audio_device_name", "audio_sample_rate", "audio_tracks"}
 
 
 class GetSettingsQueryHandler:
@@ -140,6 +142,16 @@ class UpdateUserSettingsCommandHandler:
 
     async def handle(self, command: UpdateUserSettingsCommand) -> dict[str, Any]:
         try:
+            # State-guard: block audio device/rate/tracks changes while recording
+            locked = set(command.updates) & _AUDIO_LOCKED_WHILE_RECORDING
+            if locked:
+                from app.dependencies.audio_recording import get_audio_recording_service
+                if get_audio_recording_service().is_recording:
+                    return {
+                        "success": False,
+                        "message": f"Cannot change {', '.join(sorted(locked))} while recording is active",
+                    }
+
             results = await self._service.set_many(command.updates)
             changed = [k for k, v in results.items() if v]
             needs_restart = [k for k in changed if k in REQUIRES_RESTART]
@@ -213,3 +225,29 @@ class UpdateUserSettingsCommandHandler:
                 get_ingest_state_service().update_auto_stop(minutes)
             except Exception:
                 logging.warning("Could not update auto-stop config", exc_info=True)
+
+        if changed & (_AUDIO_SETTINGS | {"audio_recording_enabled"}):
+            try:
+                from app.dependencies.audio_recording import get_audio_recording_service
+                from app.domains.audio_recording.recorder.factory import create_recorder
+                service = get_audio_recording_service()
+                settings = get_settings()
+
+                # Kill-switch: disable → stop immediately
+                if "audio_recording_enabled" in changed and not settings.audio_recording_enabled:
+                    if service.is_recording:
+                        asyncio.ensure_future(service.stop())
+                    logging.info("Audio recording disabled via kill-switch")
+                    return
+
+                # Reinitialize recorder on device/rate change
+                if changed & _AUDIO_SETTINGS:
+                    device_name = settings.audio_device_name
+                    if device_name:
+                        recorder = create_recorder(device_name)
+                        asyncio.ensure_future(service.reinitialize(recorder))
+                        logging.info("Audio recorder reinitialized for device: %s", device_name)
+                    else:
+                        logging.info("Audio device cleared — recorder removed")
+            except Exception:
+                logging.warning("Could not reinitialize audio recorder", exc_info=True)

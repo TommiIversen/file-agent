@@ -91,6 +91,10 @@ class UserSettingsUpdate(BaseModel):
     max_concurrent_copies: int | None = Field(default=None, ge=1, le=32)
     justin_auto_stop_minutes: int | None = Field(default=None, ge=0, le=1440)
     brand_name: str | None = None
+    audio_recording_enabled: bool | None = None
+    audio_device_name: str | None = None
+    audio_sample_rate: int | None = Field(default=None, ge=44100, le=96000)
+    audio_tracks: str | None = None
 
 
 @router.get("/user-settings")

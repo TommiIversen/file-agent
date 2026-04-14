@@ -144,6 +144,127 @@
                 </div>
             </div>
 
+            <!-- Audio Recording -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4" x-data="audioSettings()">
+                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="mic" class="inline-block w-5 h-5"></i> Audio Recording</h3>
+                <div class="space-y-4 text-sm">
+
+                    <!-- Enable toggle -->
+                    <div class="flex items-center">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="$store.settings.editForm.audio_recording_enabled"
+                                   @change="$store.settings.markDirty()"
+                                   class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span class="ml-2 text-gray-300">Enable Audio Recording</span>
+                        </label>
+                    </div>
+
+                    <!-- Device & Sample Rate (shown when enabled) -->
+                    <div x-show="$store.settings.editForm.audio_recording_enabled" x-transition class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-gray-300 block mb-1">Audio Device</label>
+                                <div class="flex gap-2">
+                                    <select x-model="$store.settings.editForm.audio_device_name"
+                                            @change="$store.settings.markDirty()"
+                                            class="flex-1 bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
+                                        <option value="">Select device...</option>
+                                        <template x-for="dev in audioDevices" :key="dev.name">
+                                            <option :value="dev.name" x-text="`${dev.name} (${dev.max_input_channels}ch)`"></option>
+                                        </template>
+                                    </select>
+                                    <button @click="loadAudioDevices()"
+                                            type="button"
+                                            class="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded transition-colors text-xs"
+                                            title="Refresh devices">
+                                        <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-gray-300 block mb-1">Sample Rate</label>
+                                <select x-model.number="$store.settings.editForm.audio_sample_rate"
+                                        @change="$store.settings.markDirty()"
+                                        class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
+                                    <option :value="44100">44,100 Hz</option>
+                                    <option :value="48000">48,000 Hz</option>
+                                    <option :value="96000">96,000 Hz</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Tracks -->
+                        <div>
+                            <label class="text-gray-300 block mb-2">Audio Tracks</label>
+                            <div class="space-y-2">
+                                <template x-for="(track, i) in tracks" :key="i">
+                                    <div class="flex items-center gap-2 bg-gray-900 rounded p-2 border border-gray-600">
+                                        <select x-model="track.mode" @change="onTrackModeChange(i); $store.settings.markDirty()"
+                                                class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
+                                            <option value="mono">Mono</option>
+                                            <option value="stereo">Stereo</option>
+                                        </select>
+
+                                        <!-- Channel selectors -->
+                                        <template x-if="track.mode === 'mono'">
+                                            <select x-model.number="track.channels[0]" @change="syncTracksToForm(); $store.settings.markDirty()"
+                                                    class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
+                                                <template x-for="ch in maxChannels" :key="ch">
+                                                    <option :value="ch" x-text="'Ch ' + ch"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+                                        <template x-if="track.mode === 'stereo'">
+                                            <div class="flex gap-1 items-center">
+                                                <span class="text-gray-500 text-xs">L</span>
+                                                <select x-model.number="track.channels[0]" @change="syncTracksToForm(); $store.settings.markDirty()"
+                                                        class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
+                                                    <template x-for="ch in maxChannels" :key="ch">
+                                                        <option :value="ch" x-text="'Ch ' + ch"></option>
+                                                    </template>
+                                                </select>
+                                                <span class="text-gray-500 text-xs">R</span>
+                                                <select x-model.number="track.channels[1]" @change="syncTracksToForm(); $store.settings.markDirty()"
+                                                        class="bg-gray-800 text-white p-1.5 rounded border border-gray-600 text-xs w-20">
+                                                    <template x-for="ch in maxChannels" :key="ch">
+                                                        <option :value="ch" x-text="'Ch ' + ch"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
+                                        </template>
+
+                                        <input type="text" x-model="track.label"
+                                               @input="syncTracksToForm(); $store.settings.markDirty()"
+                                               placeholder="Label"
+                                               class="flex-1 bg-gray-800 text-white p-1.5 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs"
+                                               maxlength="32">
+
+                                        <button @click="removeTrack(i); $store.settings.markDirty()" type="button"
+                                                class="text-gray-500 hover:text-red-400 transition-colors px-1" title="Remove track">
+                                            <i data-lucide="x" class="inline-block w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                            <button @click="addTrack(); $store.settings.markDirty()" type="button"
+                                    class="mt-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-gray-300 text-xs rounded transition-colors">
+                                <i data-lucide="plus" class="inline-block w-3.5 h-3.5 mr-1"></i> Add Track
+                            </button>
+                        </div>
+
+                        <!-- Validation warnings -->
+                        <template x-if="validationError">
+                            <div class="text-amber-400 text-xs flex items-center gap-1">
+                                <i data-lucide="alert-triangle" class="inline-block w-3.5 h-3.5"></i>
+                                <span x-text="validationError"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
             <!-- Output Folder Template -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder-open" class="inline-block w-5 h-5"></i> Output Folders</h3>
@@ -595,6 +716,117 @@ function templatePreview() {
             }
             return result.replace(/\\/g, '/');
         },
+    };
+}
+
+/**
+ * Alpine.js component for the Audio Recording settings section.
+ * Handles device loading, track editing, and validation.
+ */
+function audioSettings() {
+    return {
+        audioDevices: [],
+        tracks: [],
+        validationError: null,
+
+        /** Maximum channel count from the selected device (fallback 32). */
+        get maxChannels() {
+            const name = this.$store.settings.editForm.audio_device_name;
+            const dev = this.audioDevices.find(d => d.name === name);
+            const max = dev ? dev.max_input_channels : 32;
+            return Array.from({ length: max }, (_, i) => i + 1);
+        },
+
+        init() {
+            // Parse existing track JSON from form into local state
+            this.$watch('$store.settings.editForm.audio_tracks', (val) => {
+                if (!this._syncing) this._parseTracksFromForm(val);
+            });
+            this.$nextTick(() => {
+                this._parseTracksFromForm(this.$store.settings.editForm.audio_tracks);
+                this.loadAudioDevices();
+            });
+        },
+
+        async loadAudioDevices() {
+            try {
+                const resp = await fetch('/api/audio/devices');
+                if (resp.ok) this.audioDevices = await resp.json();
+            } catch (e) {
+                console.error('Failed to load audio devices:', e);
+            }
+        },
+
+        addTrack() {
+            this.tracks.push({ mode: 'mono', channels: [1], label: '' });
+            this.syncTracksToForm();
+        },
+
+        removeTrack(index) {
+            this.tracks.splice(index, 1);
+            this.syncTracksToForm();
+        },
+
+        onTrackModeChange(index) {
+            const t = this.tracks[index];
+            if (t.mode === 'stereo' && t.channels.length < 2) {
+                t.channels = [t.channels[0], t.channels[0] + 1];
+            } else if (t.mode === 'mono' && t.channels.length > 1) {
+                t.channels = [t.channels[0]];
+            }
+            this.syncTracksToForm();
+        },
+
+        /** Serialize tracks to JSON and put into the form. */
+        syncTracksToForm() {
+            this._syncing = true;
+            this._validate();
+            const data = this.tracks.map(t => ({
+                channels: t.channels.map(Number),
+                label: t.label,
+                mode: t.mode,
+            }));
+            this.$store.settings.editForm.audio_tracks = JSON.stringify(data);
+            this.$nextTick(() => { this._syncing = false; });
+        },
+
+        _parseTracksFromForm(json) {
+            try {
+                const arr = JSON.parse(json || '[]');
+                this.tracks = arr.map(t => ({
+                    mode: t.mode || 'mono',
+                    channels: [...(t.channels || [1])],
+                    label: t.label || '',
+                }));
+            } catch {
+                this.tracks = [];
+            }
+            this._validate();
+        },
+
+        _validate() {
+            this.validationError = null;
+            const labels = this.tracks.map(t => t.label).filter(Boolean);
+            const uniqueLabels = new Set(labels);
+            if (labels.length !== uniqueLabels.size) {
+                this.validationError = 'Duplicate track labels detected';
+                return;
+            }
+            const allCh = this.tracks.flatMap(t => t.channels.map(Number));
+            const uniqueCh = new Set(allCh);
+            if (allCh.length !== uniqueCh.size) {
+                this.validationError = 'Same input channel used in multiple tracks';
+                return;
+            }
+            for (const t of this.tracks) {
+                if (!t.label.trim()) {
+                    this.validationError = 'All tracks must have a label';
+                    return;
+                }
+            }
+        },
+
+        _syncing: false,
     };
 }
 </script>

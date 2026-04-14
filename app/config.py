@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # Branding
     brand_name: str = "Dr. Feta"
 
+    # Audio recording
+    audio_recording_enabled: bool = False
+    audio_device_name: str = ""
+    audio_sample_rate: int = 48000
+    audio_tracks: str = "[]"
+
     # Timing konfiguration
     file_stable_time_seconds: int = 120
     polling_interval_seconds: int = 6
