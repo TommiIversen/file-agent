@@ -312,11 +312,14 @@ log_success "Browser launch agent created (with server-readiness check)"
 
 # ── Start service ────────────────────────────────────────────────────
 log_info "Starting service..."
-# Try modern API first, fall back to legacy
-if launchctl bootstrap "gui/$(id -u)" "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
-    true  # success
+# On upgrade the service label is already registered with launchd.
+# Use kickstart to (re)start it; bootstrap is only needed on fresh install.
+if launchctl kickstart -k "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null; then
+    true  # restarted existing service
+elif launchctl bootstrap "gui/$(id -u)" "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
+    true  # fresh install — register + start
 elif launchctl load "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
-    true  # legacy success
+    true  # legacy fallback
 else
     log_warn "Could not start service automatically."
     log_warn "Try: launchctl load $PLIST_DIR/$PLIST_NAME"
@@ -348,12 +351,15 @@ for i in $(seq 1 15); do
         HEALTH_OK=true
         break
     fi
+    printf "."
     sleep 2
 done
+[[ "$HEALTH_OK" == true ]] && echo  # newline after dots
 
 if [[ "$HEALTH_OK" == true ]]; then
     log_success "Web UI is live at http://localhost:8000"
 else
+    echo  # newline after dots
     log_warn "Web UI not responding after 30s (may still be starting). Check logs:"
     log_warn "  tail -f $LOG_DIR/file-agent.log"
 fi
