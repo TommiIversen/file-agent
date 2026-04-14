@@ -439,6 +439,34 @@
                             </div>
 
                             <div class="border-t border-gray-700 pt-2">
+                                <p class="text-white font-semibold mb-1">Rule keys</p>
+                                <div class="grid grid-cols-3 gap-1 font-mono text-[11px]">
+                                    <span class="text-yellow-300">pattern:</span><span class="col-span-2">Glob pattern matching filename (e.g. <code>*KAM*</code>)</span>
+                                    <span class="text-yellow-300">ext:</span><span class="col-span-2">Match by file extension (e.g. <code>.wav</code>)</span>
+                                    <span class="text-yellow-300">folder:</span><span class="col-span-2">Destination subfolder template</span>
+                                </div>
+                                <p class="mt-1 text-gray-400">Combine keys: <code class="text-gray-300">pattern:*PGM*;ext:.wav;folder:AUDIO_PGM/{date}</code></p>
+                            </div>
+
+                            <div class="border-t border-gray-700 pt-2">
+                                <p class="text-orange-300 font-semibold"><i data-lucide="triangle-alert" class="inline-block w-3 h-3 mr-0.5"></i> Order matters!</p>
+                                <p>Rules are evaluated top-to-bottom — the first match wins. Place specific rules (e.g. <code class="text-gray-300">ext:.wav</code>) <em>before</em> catch-all rules like <code class="text-gray-300">pattern:*</code>.</p>
+                            </div>
+
+                            <div class="border-t border-gray-700 pt-2">
+                                <p class="text-white font-semibold mb-1">Example — WAV files in subfolder</p>
+                                <div class="bg-gray-800 rounded p-2 font-mono text-[11px] leading-relaxed">
+                                    <div class="text-blue-300 mb-1">Rules:</div>
+                                    <div class="text-gray-300 ml-2">pattern:*KAM*;folder:KAMERA/{date}/{time}</div>
+                                    <div class="text-gray-300 ml-2">ext:.wav;folder:KAMERA/{date}/{time}/AUDIO</div>
+                                    <div class="text-gray-300 ml-2 mb-1">pattern:*PGM*;folder:PROGRAM/{date}/{time}</div>
+                                    <div class="text-gray-500 mb-1">Result:</div>
+                                    <div>260408_154246_KAM_3.mxf → <span class="text-green-400">KAMERA{{"\\2604" + "08\\154246\\"}}</span></div>
+                                    <div>260408_154246_Mic1.wav &nbsp;→ <span class="text-green-400">KAMERA{{"\\2604" + "08\\154246\\"}}<span class="text-yellow-300">AUDIO</span>{{"\\" }}</span></div>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-gray-700 pt-2">
                                 <p><span class="text-white font-semibold">Date Format:</span> <code class="text-yellow-300">filename[0:6]</code> extracts the first 6 characters as date (YYMMDD).</p>
                                 <p><span class="text-white font-semibold">Time Format:</span> <code class="text-yellow-300">filename[7:13]</code> extracts characters 7–13 as time (HHMMSS).</p>
                                 <p><span class="text-white font-semibold">Default Category:</span> Folder used for files that don't match any rule. <span class="text-gray-400">Tip: add <code class="text-yellow-300">pattern:*;folder:OTHER/{date}/{time}</code> as the last rule for full control over the fallback template.</span></p>
