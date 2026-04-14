@@ -16,6 +16,7 @@ from app.core.events.event_bus import DomainEventBus
 
 from .callback_adapter import RecorderEventAdapter
 from .recorder.base import AudioRecorder
+from .recorder.factory import list_available_devices
 from .recorder.models import AudioTrack, DeviceInfo
 
 logger = logging.getLogger(__name__)
@@ -114,10 +115,10 @@ class AudioRecordingService:
         }
 
     async def list_devices(self) -> list[DeviceInfo]:
-        if self._recorder is None:
-            return []
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._recorder.list_devices)
+        if self._recorder is not None:
+            return await loop.run_in_executor(None, self._recorder.list_devices)
+        return await loop.run_in_executor(None, list_available_devices)
 
     # ── Recovery postfix ───────────────────────────────────────
 

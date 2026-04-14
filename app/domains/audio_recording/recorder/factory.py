@@ -9,6 +9,7 @@ from __future__ import annotations
 import sys
 
 from .base import AudioRecorder
+from .models import DeviceInfo
 
 
 def create_recorder(device_name: str) -> AudioRecorder:
@@ -28,3 +29,18 @@ def create_recorder(device_name: str) -> AudioRecorder:
         return CoreAudioRecorder(device_name)
 
     raise RuntimeError(f"Unsupported platform: {sys.platform}")
+
+
+def list_available_devices() -> list[DeviceInfo]:
+    """List audio input devices without requiring a configured recorder."""
+    if sys.platform == "win32":
+        from .asio_recorder import _query_asio_devices
+
+        return _query_asio_devices()
+
+    if sys.platform == "darwin":
+        from .coreaudio_recorder import _query_coreaudio_devices
+
+        return _query_coreaudio_devices()
+
+    return []
