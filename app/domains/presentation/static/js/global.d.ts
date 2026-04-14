@@ -572,6 +572,8 @@ interface SettingsStore {
     scannerToggling: boolean;
     actionMessage: string | null;
     actionSuccess: boolean;
+    tallyTestRunning: boolean;
+    tallyTestResult: { success: boolean; message: string; error?: string } | null;
     init(): void;
     openSettingsModal(): Promise<void>;
     closeSettingsModal(): void;
@@ -582,6 +584,7 @@ interface SettingsStore {
     showErrorMessage(message: string): void;
     restartApplication(): Promise<void>;
     toggleScanner(): Promise<void>;
+    testTallyLight(): Promise<void>;
 }
 
 interface TallySwitchStore {

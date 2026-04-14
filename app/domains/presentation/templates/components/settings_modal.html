@@ -134,12 +134,40 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <label for="setting-tally-ip" class="text-gray-300 block mb-1">Tally Light IP</label>
-                        <input type="text"
-                               id="setting-tally-ip"
-                               x-model="$store.settings.editForm.tally_light_switch_ip"
-                               @input="$store.settings.markDirty()"
-                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
-                               placeholder="10.65.77.9">
+                        <div class="flex gap-2">
+                            <input type="text"
+                                   id="setting-tally-ip"
+                                   x-model="$store.settings.editForm.tally_light_switch_ip"
+                                   @input="$store.settings.markDirty()"
+                                   class="flex-1 bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs"
+                                   placeholder="10.65.77.9">
+                            <button type="button"
+                                    @click="$store.settings.testTallyLight()"
+                                    :disabled="$store.settings.tallyTestRunning"
+                                    class="px-3 py-2 rounded text-xs font-medium transition-colors duration-200 whitespace-nowrap"
+                                    :class="$store.settings.tallyTestRunning
+                                        ? 'bg-gray-600 text-gray-400 cursor-wait'
+                                        : 'bg-yellow-600 hover:bg-yellow-500 text-white cursor-pointer'">
+                                <template x-if="$store.settings.tallyTestRunning">
+                                    <span>Tester…</span>
+                                </template>
+                                <template x-if="!$store.settings.tallyTestRunning">
+                                    <span><i data-lucide="zap" class="inline-block w-3 h-3 mr-0.5"></i> Test</span>
+                                </template>
+                            </button>
+                        </div>
+                        <!-- Test result message -->
+                        <div x-show="$store.settings.tallyTestResult"
+                             x-transition
+                             class="mt-2 text-xs p-2 rounded"
+                             :class="$store.settings.tallyTestResult?.success
+                                 ? 'bg-green-900 bg-opacity-50 text-green-300 border border-green-700'
+                                 : 'bg-red-900 bg-opacity-50 text-red-300 border border-red-700'">
+                            <span x-text="$store.settings.tallyTestResult?.message"></span>
+                            <template x-if="$store.settings.tallyTestResult?.error">
+                                <div class="mt-1 text-[10px] text-gray-400 font-mono break-all" x-text="$store.settings.tallyTestResult.error"></div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>

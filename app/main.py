@@ -16,6 +16,7 @@ from .domains.presentation import websockets_endpoint
 from app.domains.shared.api import config_api, logs_api, storage_api, events_api
 from app.domains.file_discovery.api import scanner_api
 from app.domains.ingest_monitor.api import router as ingest_monitor_api
+from app.domains.tally_light.api import router as tally_light_api
 
 from .domains.presentation.api_endpoints import presentation_router
 from .domains.directory_browsing import api as directory
@@ -428,6 +429,7 @@ app.include_router(storage_api.router) # New shared domain storage API
 app.include_router(events_api.router) # New shared domain events API
 app.include_router(scanner_api.router) # New file discovery scanner API
 app.include_router(ingest_monitor_api) # New ingest monitor API
+app.include_router(tally_light_api)    # Tally light test endpoint
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)
