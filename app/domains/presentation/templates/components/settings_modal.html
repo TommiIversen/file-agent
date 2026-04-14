@@ -223,6 +223,45 @@
                             </div>
                         </div>
 
+                        <!-- Track Presets -->
+                        <div>
+                            <label class="text-gray-300 block mb-2">Track Presets</label>
+                            <div class="flex items-center gap-2">
+                                <select x-model="selectedPreset"
+                                        class="flex-1 bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
+                                    <option value="">Load a preset...</option>
+                                    <template x-for="(preset, pi) in presets" :key="pi">
+                                        <option :value="pi" x-text="preset.name"></option>
+                                    </template>
+                                </select>
+                                <button @click="loadPreset()" type="button"
+                                        :disabled="selectedPreset === ''"
+                                        class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                                        title="Apply preset to tracks">
+                                    <i data-lucide="download" class="inline-block w-3.5 h-3.5 mr-1"></i> Load
+                                </button>
+                                <button @click="saveAsPreset()" type="button"
+                                        :disabled="tracks.length === 0"
+                                        class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                                        title="Save current tracks as a preset">
+                                    <i data-lucide="save" class="inline-block w-3.5 h-3.5 mr-1"></i> Save
+                                </button>
+                                <button @click="deletePreset()" type="button"
+                                        :disabled="selectedPreset === ''"
+                                        class="px-2 py-1.5 bg-red-700 hover:bg-red-600 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
+                                        title="Delete selected preset">
+                                    <i data-lucide="trash-2" class="inline-block w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                            <!-- Overflow warning when loading preset -->
+                            <template x-if="presetOverflowWarning">
+                                <div class="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                                    <i data-lucide="alert-triangle" class="inline-block w-3.5 h-3.5"></i>
+                                    <span x-text="presetOverflowWarning"></span>
+                                </div>
+                            </template>
+                        </div>
+
                         <!-- Tracks -->
                         <div>
                             <label class="text-gray-300 block mb-2">Audio Tracks</label>
@@ -756,6 +795,9 @@ function audioSettings() {
         audioDevices: [],
         tracks: [],
         validationError: null,
+        presets: [],
+        selectedPreset: '',
+        presetOverflowWarning: null,
 
         /** Maximum channel count from the selected device (fallback 32). */
         get maxChannels() {
@@ -765,13 +807,24 @@ function audioSettings() {
             return Array.from({ length: max }, (_, i) => i + 1);
         },
 
+        /** Max channel number available on the selected device. */
+        get _deviceMaxCh() {
+            const name = this.$store.settings.editForm.audio_device_name;
+            const dev = this.audioDevices.find(d => d.name === name);
+            return dev ? dev.max_input_channels : 32;
+        },
+
         init() {
             // Parse existing track JSON from form into local state
             this.$watch('$store.settings.editForm.audio_tracks', (val) => {
                 if (!this._syncing) this._parseTracksFromForm(val);
             });
+            this.$watch('$store.settings.editForm.audio_track_presets', (val) => {
+                if (!this._syncingPresets) this._parsePresetsFromForm(val);
+            });
             this.$nextTick(() => {
                 this._parseTracksFromForm(this.$store.settings.editForm.audio_tracks);
+                this._parsePresetsFromForm(this.$store.settings.editForm.audio_track_presets);
                 this.loadAudioDevices();
             });
         },
@@ -803,6 +856,84 @@ function audioSettings() {
                 t.channels = [t.channels[0]];
             }
             this.syncTracksToForm();
+        },
+
+        /** Load the selected preset into the track list, with overflow filtering. */
+        loadPreset() {
+            const idx = parseInt(this.selectedPreset);
+            if (isNaN(idx) || !this.presets[idx]) return;
+            const preset = this.presets[idx];
+            const maxCh = this._deviceMaxCh;
+            const kept = [];
+            const skipped = [];
+            for (const t of preset.tracks) {
+                const exceedsCh = t.channels.some(ch => ch > maxCh);
+                if (exceedsCh) {
+                    skipped.push(t.label || `Ch ${t.channels.join(',')}`);
+                } else {
+                    kept.push({ mode: t.mode, channels: [...t.channels], label: t.label });
+                }
+            }
+            this.tracks = kept;
+            if (skipped.length > 0) {
+                this.presetOverflowWarning =
+                    `${skipped.length} track(s) skipped (channels exceed device max ${maxCh}): ${skipped.join(', ')}`;
+            } else {
+                this.presetOverflowWarning = null;
+            }
+            this.syncTracksToForm();
+            this.$store.settings.markDirty();
+        },
+
+        /** Save current tracks as a new preset (prompts for name). */
+        saveAsPreset() {
+            if (this.tracks.length === 0) return;
+            const name = prompt('Preset name:');
+            if (!name || !name.trim()) return;
+            const trimmed = name.trim();
+            // Check for duplicate name
+            const existing = this.presets.findIndex(p => p.name === trimmed);
+            if (existing !== -1) {
+                if (!confirm(`Preset "${trimmed}" already exists. Overwrite?`)) return;
+                this.presets[existing].tracks = this._cloneTracks();
+            } else {
+                this.presets.push({ name: trimmed, tracks: this._cloneTracks() });
+            }
+            this._syncPresetsToForm();
+            this.$store.settings.markDirty();
+        },
+
+        /** Delete the currently selected preset. */
+        deletePreset() {
+            const idx = parseInt(this.selectedPreset);
+            if (isNaN(idx) || !this.presets[idx]) return;
+            if (!confirm(`Delete preset "${this.presets[idx].name}"?`)) return;
+            this.presets.splice(idx, 1);
+            this.selectedPreset = '';
+            this._syncPresetsToForm();
+            this.$store.settings.markDirty();
+        },
+
+        _cloneTracks() {
+            return this.tracks.map(t => ({
+                channels: [...t.channels],
+                label: t.label,
+                mode: t.mode,
+            }));
+        },
+
+        _parsePresetsFromForm(json) {
+            try {
+                this.presets = JSON.parse(json || '[]');
+            } catch {
+                this.presets = [];
+            }
+        },
+
+        _syncPresetsToForm() {
+            this._syncingPresets = true;
+            this.$store.settings.editForm.audio_track_presets = JSON.stringify(this.presets);
+            this.$nextTick(() => { this._syncingPresets = false; });
         },
 
         /** Serialize tracks to JSON and put into the form. */
@@ -855,6 +986,7 @@ function audioSettings() {
         },
 
         _syncing: false,
+        _syncingPresets: false,
     };
 }
 </script>

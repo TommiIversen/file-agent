@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     audio_device_name: str = ""
     audio_sample_rate: int = 48000
     audio_tracks: str = "[]"
+    audio_track_presets: str = "[]"
 
     # Timing konfiguration
     file_stable_time_seconds: int = 120
