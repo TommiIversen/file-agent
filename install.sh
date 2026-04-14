@@ -105,7 +105,7 @@ fi
 # ── Resolve version ─────────────────────────────────────────────────
 if [[ "$BETA" == true ]] && [[ -z "$VERSION" ]]; then
     log_info "Fetching latest beta release..."
-    VERSION="beta"
+    VERSION="beta-latest"
 fi
 
 if [[ -z "$VERSION" ]]; then
