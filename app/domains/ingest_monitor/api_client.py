@@ -504,3 +504,32 @@ class IngestApiClient:
             f"(preset='{preset_name}'): {paths}"
         )
         return paths, preset_name
+
+    async def get_current_filename(self, channel_name: str) -> Optional[str]:
+        """Get the current filename prefix from Just In Engine.
+
+        Calls ``POST /ingest/requestCurrentFilename`` which returns the
+        active filename prefix (e.g. ``"260410_1056_10"``).
+
+        Returns:
+            The prefix string, or None on error.
+        """
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post(
+                "/ingest/requestCurrentFilename", json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
+            value = data.get("value")
+            if value:
+                logging.debug("Got filename prefix '%s' for channel %s", value, channel_name)
+                return value
+            logging.warning("Empty filename value for channel %s", channel_name)
+            return None
+        except httpx.RequestError as e:
+            logging.warning("Could not fetch filename for %s: %s", channel_name, e)
+            return None
+        except Exception as e:
+            logging.error("Unexpected error fetching filename for %s: %s", channel_name, e, exc_info=True)
+            return None

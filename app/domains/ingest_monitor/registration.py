@@ -9,10 +9,15 @@ import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.core.events.event_bus import DomainEventBus
-from app.core.cqrs.shared_queries import GetIngestConnectionStatusQuery
+from app.core.cqrs.shared_queries import GetCurrentFilenameQuery, GetIngestConnectionStatusQuery
 from .queries import GetIngestStatusQuery, GetRecordingPathsQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
-from .query_handlers import GetIngestStatusQueryHandler, GetRecordingPathsQueryHandler, GetIngestConnectionStatusQueryHandler
+from .query_handlers import (
+    GetIngestStatusQueryHandler,
+    GetRecordingPathsQueryHandler,
+    GetIngestConnectionStatusQueryHandler,
+    GetCurrentFilenameQueryHandler,
+)
 from .command_handlers import ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
 from .events import AutoStopTriggeredEvent
 from .auto_stop_handler import AutoStopHandler
@@ -44,6 +49,9 @@ async def register_ingest_monitor_domain(
 
     connection_status_handler = GetIngestConnectionStatusQueryHandler(ingest_monitor_worker)
     query_bus.register(GetIngestConnectionStatusQuery, connection_status_handler.handle)
+
+    filename_handler = GetCurrentFilenameQueryHandler(ingest_monitor_worker._api_client)
+    query_bus.register(GetCurrentFilenameQuery, filename_handler.handle)
     
     # Register command handlers
     clear_command_handler = ClearAllChannelErrorsCommandHandler(ingest_monitor_worker)

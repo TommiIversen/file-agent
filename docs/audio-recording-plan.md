@@ -12,8 +12,8 @@ Growing copy udvides til `.wav`.
 | Fase | Navn | Status |
 |------|------|--------|
 | 1 | Platform-abstrakt Recorder Engine | ✅ Done |
-| 2 | Domæne-integration (EventBus + CQRS) | 🔶 ~90% — mangler `GetCurrentFilenameQuery` handler i ingest_monitor |
-| 3 | User Settings & UI | ⬜ Ikke startet |
+| 2 | Domæne-integration (EventBus + CQRS) | ✅ Done |
+| 3 | User Settings & UI | ✅ Done |
 | 4 | Growing Copy → WAV support | ⬜ Ikke startet |
 | 5 | Presentation & Status i UI | ⬜ Ikke startet |
 
@@ -241,9 +241,13 @@ Håndterer gracefully lukket event loop ved shutdown.
 
 ---
 
-## Fase 3: User Settings & UI ⬜
+## Fase 3: User Settings & UI ✅
 
-### 3.1 — Nye settings
+> **Implementeret**: Settings i schema + Alembic 006, API endpoints, Pydantic model,
+> hot-reload med state-guard, kill-switch, recorder injection ved startup,
+> UI sektion med device-dropdown, sample rate, dynamisk track-builder med validering.
+
+### 3.1 — Nye settings ✅
 
 Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
 

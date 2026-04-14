@@ -10,6 +10,29 @@ http://10.65.79.29:8080/swagger-ui/index.html
 
 
 
+# ingest/requestNamingConventions
+
+curl -X 'POST' \
+  'http://10.65.79.29:8080/ingest/requestNamingConventions' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "channel": "KAM_1"
+}'
+Request URL
+http://10.65.79.29:8080/ingest/requestNamingConventions
+
+
+Response body
+Download
+{
+  "channel": "KAM_1",
+  "name": "KAM_1",
+  "naming-convention-name": [
+    "Default"
+  ]
+}
+
 
 # get errors:
 
