@@ -96,6 +96,7 @@ class UserSettingsUpdate(BaseModel):
     audio_sample_rate: int | None = Field(default=None, ge=44100, le=96000)
     audio_tracks: str | None = None
     audio_track_presets: str | None = None
+    audio_filename_from_justin: bool | None = None
 
 
 @router.get("/user-settings")

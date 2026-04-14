@@ -11,8 +11,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
@@ -49,10 +50,12 @@ class AudioRecordingEventHandler:
         command_bus: CommandBus,
         query_bus: QueryBus,
         service: AudioRecordingService,
+        get_user_setting: Callable[[str], Awaitable[Any]],
     ) -> None:
         self._command_bus = command_bus
         self._query_bus = query_bus
         self._service = service
+        self._get_user_setting = get_user_setting
         self._lock = asyncio.Lock()
         self._active_channels: set[str] = set()
 
@@ -161,6 +164,12 @@ class AudioRecordingEventHandler:
             ``(local_timestamp, None)`` on fallback — e.g.
             ``("260414_151304", None)``.
         """
+        # Check if Justin naming is enabled
+        use_justin = await self._get_user_setting("audio_filename_from_justin")
+        if not use_justin:
+            logger.info("Justin filename disabled — using local timestamp")
+            return datetime.now().strftime("%y%m%d_%H%M%S"), None
+
         max_retries = 3
         retry_delay = 2.0  # seconds
 

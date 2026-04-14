@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     audio_sample_rate: int = 48000
     audio_tracks: str = "[]"
     audio_track_presets: str = "[]"
+    audio_filename_from_justin: bool = True
 
     # Timing konfiguration
     file_stable_time_seconds: int = 120

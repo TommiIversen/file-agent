@@ -191,6 +191,19 @@
 
                     <!-- Device & Sample Rate (shown when enabled) -->
                     <div x-show="$store.settings.editForm.audio_recording_enabled" x-transition class="space-y-4">
+
+                        <!-- Filename from Justin toggle -->
+                        <div class="flex items-center">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox"
+                                       x-model="$store.settings.editForm.audio_filename_from_justin"
+                                       @change="$store.settings.markDirty()"
+                                       class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span class="ml-2 text-gray-300">Get filename from Justin</span>
+                            </label>
+                            <span class="ml-2 text-gray-500 text-xs">(kan give op til ~1 sek forsinkelse)</span>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="text-gray-300 block mb-1">Audio Device</label>

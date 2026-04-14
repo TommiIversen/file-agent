@@ -73,7 +73,9 @@ async def register_audio_recording_domain(
     query_bus.register(GetAudioTrackConfigQuery, track_config_handler.handle)
 
     # ── Event subscriptions (slavet til Justin) ────────────────
-    event_handler = AudioRecordingEventHandler(command_bus, query_bus, service)
+    event_handler = AudioRecordingEventHandler(
+        command_bus, query_bus, service, get_user_setting
+    )
 
     await event_bus.subscribe(
         ChannelRecordingStartedEvent,
