@@ -144,17 +144,38 @@ class AudioRecordingEventHandler:
             self._active_channels.clear()
 
     async def _get_filename_prefix(self, channel_name: str) -> str:
-        """Get filename prefix from Justin API, with local fallback."""
-        try:
-            prefix = await self._query_bus.execute(
-                GetCurrentFilenameQuery(channel=channel_name)
-            )
-            if prefix:
-                return prefix
-        except Exception:
-            logger.warning(
-                "Could not get filename from Justin — using local timestamp",
-                exc_info=True,
-            )
+        """Get filename prefix from Justin API, with retry + local fallback.
 
-        return datetime.now().strftime("%y%m%d_%H%M_%S")
+        Justin may not have the filename ready immediately after recording
+        starts.  We retry a few times with a short delay before falling back
+        to a local timestamp.
+        """
+        max_retries = 3
+        retry_delay = 2.0  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                prefix = await self._query_bus.execute(
+                    GetCurrentFilenameQuery(channel=channel_name)
+                )
+                if prefix:
+                    return prefix
+            except Exception:
+                logger.warning(
+                    "Could not get filename from Justin (attempt %d/%d)",
+                    attempt + 1,
+                    max_retries,
+                    exc_info=True,
+                )
+
+            if attempt < max_retries - 1:
+                logger.debug(
+                    "Filename not ready yet — retrying in %.1fs (attempt %d/%d)",
+                    retry_delay,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(retry_delay)
+
+        logger.warning("All filename retries exhausted — using local timestamp")
+        return datetime.now().strftime("%y%m%d_%H%M%S")
