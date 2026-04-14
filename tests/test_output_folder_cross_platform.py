@@ -363,5 +363,54 @@ def test_mixed_newline_and_comma_rules():
         assert engine.get_output_subfolder("260408_154246_CLN.mxf") == "PROGRAM/260408"
 
 
+def test_ext_rule_must_be_before_catch_all():
+    """ext: rules placed AFTER a catch-all pattern:* are never reached.
+
+    This documents the real-world pitfall: if a user adds `pattern:*;folder:OTHER`
+    before `ext:.wav;folder:AUDIO`, the ext rule is shadowed.
+    """
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # BAD order: catch-all before ext rule
+        settings_bad = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=(
+                "pattern:*KAM*;folder:KAMERA/{date}\n"
+                "pattern:*;folder:OTHER/{date}\n"
+                "ext:.wav;folder:AUDIO/{date}"
+            ),
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine_bad = OutputFolderTemplateEngine(settings_bad)
+        # WAV goes to OTHER because pattern:* catches it first
+        assert engine_bad.get_output_subfolder("260408_Mic1.wav") == "OTHER/260408"
+
+        # GOOD order: ext rule before catch-all
+        settings_good = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=(
+                "pattern:*KAM*;folder:KAMERA/{date}\n"
+                "ext:.wav;folder:AUDIO/{date}\n"
+                "pattern:*;folder:OTHER/{date}"
+            ),
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine_good = OutputFolderTemplateEngine(settings_good)
+        # WAV now correctly matches the ext rule
+        assert engine_good.get_output_subfolder("260408_Mic1.wav") == "AUDIO/260408"
+        # MXF still falls through to catch-all
+        assert engine_good.get_output_subfolder("260408_RANDOM.mxf") == "OTHER/260408"
+        # KAM still matches its pattern rule
+        assert engine_good.get_output_subfolder("260408_KAM_3.mxf") == "KAMERA/260408"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
