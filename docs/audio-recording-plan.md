@@ -16,6 +16,7 @@ Growing copy udvides til `.wav`.
 | 3 | User Settings & UI | ✅ Done |
 | 4 | Growing Copy → WAV support | ⬜ Ikke startet |
 | 5 | Presentation & Status i UI | ⬜ Ikke startet |
+| 6 | VU / Peak Metering i UI | ⬜ Ikke startet |
 
 ---
 
@@ -376,9 +377,320 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 ## Scope exclusions
 
-- VU-meters / level monitoring (kan komme senere).
+- ~~VU-meters / level monitoring (kan komme senere).~~ → Planlagt som **Fase 6**.
 - Per-kanal audio recording slavet til individuelle Justin-kanaler (alle tracks starter/stopper sammen).
 - Audio format-valg (kun WAV PCM_24 for nu).
+
+---
+
+## Fase 6: VU / Peak Metering i UI ⬜
+
+Real-time peak-niveauer per track sendt til UI via WebSocket.
+14 kanaler → 12 tracks → ~480 bytes JSON, 8 gange/sek = **~3.8 KB/sek**.
+Al beregning sker i writer-tråden (ikke audio-callbacken) med numpy vectorized ops.
+
+### Overordnet arkitektur
+
+```
+Writer-tråd (base.py)                    Async verden
+─────────────────────                    ──────────────
+① np.abs(block).max(axis=0)              ④ AudioLevelsEvent
+② Akkumuler running-max over ~250ms      ⑤ PresentationEventHandlers
+③ callback.on_levels(track_peaks)  ──→   ⑥ WebSocketManager.broadcast
+   via call_soon_threadsafe                  ↓
+                                          ⑦ Browser: audioStore → DOM
+```
+
+### 6.1 — Backend: Peak-beregning i writer-tråden
+
+**Fil**: `app/domains/audio_recording/recorder/base.py`
+
+Ændringer i `_writer_loop()` — efter eksisterende demux-kode:
+
+```python
+# Konstant: ~125ms ved 48kHz/128 frames = 47 blokke → 8 Hz updates
+_LEVELS_INTERVAL_BLOCKS = 47
+```
+
+**Ny state i `__init__`**:
+```python
+self._peak_acc: Optional[np.ndarray] = None   # shape: (num_columns,)
+self._levels_block_count = 0
+```
+
+**I `start()`** — efter `_build_channel_map()`:
+```python
+self._peak_acc = np.zeros(len(self._channel_selectors), dtype=np.float32)
+self._levels_block_count = 0
+```
+
+**I `_writer_loop()`** — efter den eksisterende demux (`for tw, cols in zip(...)`):
+```python
+# ── Peak metering (hot path: ~2.5 µs per block) ──
+col_peaks = np.abs(block).max(axis=0)            # (num_cols,) float
+np.maximum(self._peak_acc, col_peaks, out=self._peak_acc)
+self._levels_block_count += 1
+
+if self._levels_block_count >= _LEVELS_INTERVAL_BLOCKS:
+    track_peaks: list[dict[str, Any]] = []
+    for tw, cols in zip(self._track_writers, self._track_cols):
+        track_peaks.append({
+            "label": tw.track.label,
+            "peaks": [round(float(self._peak_acc[c]), 4) for c in cols],
+        })
+    if self._callback:
+        self._callback.on_levels(track_peaks)
+    self._peak_acc[:] = 0.0
+    self._levels_block_count = 0
+```
+
+**Kostanalyse**:
+- `np.abs(block).max(axis=0)` på `(128, 14)`: ~1-2 µs
+- `np.maximum(acc, peaks)` på `(14,)`: ~0.5 µs
+- **Totalt**: ~2.5 µs/block × 375 blocks/sek = **< 1 ms/sek**. Ubetydeligt.
+- Callbacket `on_levels()` fyrer kun hvert 47. block (~8 Hz). Ingen målbar belastning.
+
+### 6.2 — RecorderCallback protokol
+
+**Fil**: `app/domains/audio_recording/recorder/callback.py`
+
+Tilføj ny metode til `RecorderCallback` protokollen:
+
+```python
+def on_levels(self, track_peaks: list[dict]) -> None:
+    """Peak levels per track.  Called ~4 Hz from writer thread.
+
+    Each dict: {"label": str, "peaks": list[float]}
+    Mono tracks have 1 peak, stereo tracks have 2 (L, R).
+    Values are 0.0–1.0 (PCM full-scale).  Called ~8 Hz.
+    """
+    ...
+```
+
+### 6.3 — RecorderEventAdapter bridge
+
+**Fil**: `app/domains/audio_recording/callback_adapter.py`
+
+Ny metode der bruger eksisterende `_fire()` mekanisme:
+
+```python
+def on_levels(self, track_peaks: list[dict]) -> None:
+    self._fire(
+        AudioLevelsEvent(
+            session_id=self._session_id or "",
+            track_peaks=track_peaks,
+        )
+    )
+```
+
+**Bemærk**: `_fire()` bruger allerede `loop.call_soon_threadsafe()` — nul ekstra
+synkroniseringskode. Ved 8 Hz er det 8 context-switches/sek, identisk mønster
+som eksisterende overflow-warnings.
+
+### 6.4 — Nyt domain event
+
+**Fil**: `app/core/events/audio_events.py`
+
+```python
+@dataclass(frozen=True)
+class AudioLevelsEvent:
+    """Peak levels per track, emitted ~4 Hz during recording."""
+    session_id: str
+    track_peaks: list[dict]   # [{"label": "PGM_LR", "peaks": [0.82, 0.79]}, ...]
+```
+
+Tilføj til `__all__` og import i `callback_adapter.py`.
+
+### 6.5 — Presentation event handler
+
+**Fil**: `app/domains/presentation/event_handlers.py`
+
+Ny subscription i `register()` + handler:
+
+```python
+async def handle_audio_levels_event(self, event: AudioLevelsEvent) -> None:
+    await self._ws_manager.broadcast_message({
+        "type": "audio_levels",
+        "data": {
+            "tracks": event.track_peaks,
+            "session_id": event.session_id,
+        }
+    })
+```
+
+**Registrering**: `event_bus.subscribe(AudioLevelsEvent, handler.handle_audio_levels_event)`
+i `registration.py`.
+
+### 6.6 — WebSocket payload
+
+```json
+{
+  "type": "audio_levels",
+  "data": {
+    "session_id": "abc-123",
+    "tracks": [
+      {"label": "PGM_LR", "peaks": [0.8234, 0.7891]},
+      {"label": "Mic1",   "peaks": [0.4512]},
+      {"label": "Mic2",   "peaks": [0.0023]},
+      {"label": "Mic3",   "peaks": [0.3301]},
+      {"label": "Mic4",   "peaks": [0.0]},
+      {"label": "USB_mono", "peaks": [0.1204]},
+      {"label": "Mic_prod", "peaks": [0.5512]},
+      {"label": "DALET_LR", "peaks": [0.6723, 0.6801]},
+      {"label": "Mic1_clean", "peaks": [0.4498]},
+      {"label": "Mic2_clean", "peaks": [0.0019]},
+      {"label": "Mic3_clean", "peaks": [0.3288]},
+      {"label": "Mic4_clean", "peaks": [0.0]}
+    ]
+  }
+}
+```
+
+12 tracks × ~40 bytes/track ≈ **480 bytes** per besked. Ved 8 Hz ≈ **3.8 KB/sek**.
+WebSocket-køen (5000 max) absorberer dette trivielt.
+
+### 6.7 — Frontend: Alpine.js audioStore
+
+**Ny fil**: `app/domains/presentation/static/js/stores/audioStore.js`
+
+```javascript
+document.addEventListener('alpine:init', () => {
+    Alpine.store('audio', {
+        recording: false,
+        tracks: [],          // [{label, peaks, clip}]
+        _decayTimer: null,
+
+        updateLevels(data) {
+            this.recording = true;
+            this.tracks = data.tracks.map(t => ({
+                label: t.label,
+                peaks: t.peaks,
+                clip: t.peaks.some(p => p >= 0.99),
+            }));
+        },
+
+        clearLevels() {
+            this.recording = false;
+            this.tracks = [];
+        },
+    });
+});
+```
+
+### 6.8 — Frontend: messageHandler.js
+
+Tilføj ny case i message-routeren:
+
+```javascript
+case 'audio_levels':
+    Alpine.store('audio').updateLevels(message.data);
+    break;
+
+case 'audio_recording_stopped':
+    Alpine.store('audio').clearLevels();
+    break;
+```
+
+### 6.9 — Frontend: Jinja2 component
+
+**Ny fil**: `app/domains/presentation/templates/components/audio_levels_panel.html`
+
+8 LED-segmenter per kanal — broadcast-standard dBFS-skala:
+
+| Segment | Tærskel | ~dBFS | Farve |
+|---------|---------|-------|-------|
+| 1 | > 0.02 | -34 | Grøn |
+| 2 | > 0.05 | -26 | Grøn |
+| 3 | > 0.10 | -20 | Grøn |
+| 4 | > 0.25 | -12 | Grøn |
+| 5 | > 0.45 | -7 | Gul |
+| 6 | > 0.65 | -3.7 | Gul |
+| 7 | > 0.85 | -1.4 | Rød |
+| 8 | > 0.95 | -0.4 | Rød (clip) |
+
+```html
+<div x-data x-show="$store.audio.recording" class="...">
+  <h3>Audio Levels</h3>
+  <template x-for="track in $store.audio.tracks" :key="track.label">
+    <div class="flex items-center gap-2">
+      <span class="w-20 text-xs truncate" x-text="track.label"></span>
+      <template x-for="(peak, i) in track.peaks" :key="i">
+        <div class="flex gap-0.5">
+          <!-- 8 LED segments: 4× green, 2× yellow, 2× red -->
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.02 ? 'bg-green-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.05 ? 'bg-green-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.10 ? 'bg-green-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.25 ? 'bg-green-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.45 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.65 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.85 ? 'bg-red-500' : 'bg-gray-700'"></div>
+          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+               :class="peak > 0.95 ? 'bg-red-600 brightness-125' : 'bg-gray-700'"></div>
+        </div>
+      </template>
+    </div>
+  </template>
+</div>
+```
+
+Stereo tracks viser L og R segmenter side om side (16 LEDs total).
+Clip-segment (8) bruger `brightness-125` for ekstra synlighed.
+Clip-hold (rød LED forbliver 2 sek) kan tilføjes med `clip` boolean + `setTimeout` clear.
+
+### 6.10 — Wiring & inkludering
+
+- `templates/index.html`: Inkluder `audio_levels_panel.html` component + load `audioStore.js`
+- `views.py`: Ingen ændring (Jinja2 include er nok)
+- `registration.py` (presentation): Tilføj event subscription
+- `registration.py` (audio_recording): Ingen ændring (callback adapter håndterer det)
+
+### 6.11 — Fil-ændringer oversigt
+
+| Fil | Ændring | Type |
+|-----|---------|------|
+| `recorder/base.py` | Peak-akk. + emit hvert 93. block i `_writer_loop` | Modify |
+| `recorder/callback.py` | Tilføj `on_levels()` til protocol | Modify |
+| `callback_adapter.py` | Implementér `on_levels()` → `AudioLevelsEvent` | Modify |
+| `core/events/audio_events.py` | Nyt `AudioLevelsEvent` | Modify |
+| `presentation/event_handlers.py` | Ny handler `handle_audio_levels_event` | Modify |
+| `presentation/registration.py` | Subscribe på `AudioLevelsEvent` | Modify |
+| `static/js/stores/audioStore.js` | **Ny fil** — Alpine store | Create |
+| `static/js/services/messageHandler.js` | Ny case `audio_levels` | Modify |
+| `templates/components/audio_levels_panel.html` | **Ny fil** — LED-meters | Create |
+| `templates/index.html` | Include component + load store | Modify |
+
+### 6.12 — Test-strategi
+
+- **Unit test** `_writer_loop` metering: Mock callback, feed N blokke, verificér
+  `on_levels` kaldes efter 47 blokke med korrekte peak-værdier.
+- **Unit test** `audioStore.js`: Verificér `updateLevels()` parser data korrekt.
+- **Integration**: Verificér at `AudioLevelsEvent` propagerer fra writer → EventBus → WebSocket.
+- **Mypy / lint-imports**: Ingen nye cross-domain imports. `AudioLevelsEvent` bor i `core/events/`.
+
+### 6.13 — Risici & mitigering
+
+| Risiko | Sandsynlighed | Mitigering |
+|--------|---------------|------------|
+| GIL-contention fra writer-tråd → event loop | Lav | `call_soon_threadsafe` er lock-free. 8 calls/sek er trivielt. |
+| WebSocket backpressure ved mange clients | Lav | Queue dropper ældste besked ved overflow. 8 msg/sek er ingenting vs. eksisterende file_progress traffic. |
+| Peak-beregning forsinker WAV writes | Negligibel | ~2.5 µs/block vs. ~2700 µs callback-budget. |
+| Clip false positives ved PCM_24→float mapping | Lav | `sounddevice` normaliserer til [-1.0, 1.0]. Threshold 0.99 giver margin. |
+
+### 6.14 — Mulige udvidelser (ikke i scope)
+
+- **Peak hold**: Rød LED forbliver 2 sek efter clip (frontend `setTimeout`).
+- **RMS metering**: `np.sqrt(np.mean(block**2, axis=0))` — dyrere, men stadig billigt.
+- **Grafisk VU**: Canvas/SVG bar-meters i stedet for LEDs. Kræver mere frontend-kode.
+- **Konfigurerbar opdateringsrate**: Setting for `_LEVELS_INTERVAL_BLOCKS`.
+
+---
 
 ## Åbne spørgsmål
 
