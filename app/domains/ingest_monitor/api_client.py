@@ -506,14 +506,48 @@ class IngestApiClient:
         return paths, preset_name
 
     async def get_current_filename(self, channel_name: str) -> Optional[str]:
-        """Get the current filename prefix from Just In Engine.
+        """Get the current filename stem from Just In Engine.
 
-        Calls ``POST /ingest/requestCurrentFilename`` which returns the
-        active filename prefix (e.g. ``"260410_1056_10"``).
+        Uses ``POST /ingest/recordingPaths`` which returns the active
+        recording file path (e.g. ``"/Volumes/.../260414_151304_KAM_1.mxf"``).
+        Returns the **full stem** including the channel portion so that the
+        audio layer can replace the channel name with each track label.
+        This is naming-convention-agnostic — it works regardless of where the
+        channel appears in the naming template.
+
+        Falls back to ``POST /ingest/requestCurrentFilename`` if recordingPaths
+        yields no result.
 
         Returns:
-            The prefix string, or None on error.
+            The full filename stem (e.g. ``"260414_151304_KAM_1"``), or None.
         """
+        # Primary: parse from recordingPaths (reliable during recording)
+        try:
+            payload = {"channel": channel_name}
+            response = await self._client.post(
+                "/ingest/recordingPaths", json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
+            paths = data.get("paths", [])
+            if paths:
+                from pathlib import PurePosixPath
+
+                full_path = paths[0].get("path", "")
+                stem = PurePosixPath(full_path).stem  # e.g. "260414_151304_KAM_1"
+                if stem:
+                    logging.debug(
+                        "Got filename stem '%s' from recordingPaths for %s",
+                        stem,
+                        channel_name,
+                    )
+                    return stem
+        except httpx.RequestError as e:
+            logging.debug("recordingPaths unavailable for %s: %s", channel_name, e)
+        except Exception as e:
+            logging.debug("recordingPaths parse error for %s: %s", channel_name, e)
+
+        # Fallback: requestCurrentFilename
         try:
             payload = {"channel": channel_name}
             response = await self._client.post(
@@ -523,7 +557,7 @@ class IngestApiClient:
             data = response.json()
             value = data.get("value")
             if value:
-                logging.debug("Got filename prefix '%s' for channel %s", value, channel_name)
+                logging.debug("Got filename stem '%s' for channel %s", value, channel_name)
                 return value
             logging.warning("Empty filename value for channel %s", channel_name)
             return None

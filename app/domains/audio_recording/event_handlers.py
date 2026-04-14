@@ -12,7 +12,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
@@ -70,13 +70,16 @@ class AudioRecordingEventHandler:
                 )
                 return
 
-            # Fetch filename prefix from Justin API via QueryBus
-            filename_prefix = await self._get_filename_prefix(event.channel_name)
+            # Fetch filename stem from Justin API via QueryBus
+            filename_stem, channel_name = await self._get_filename_stem(
+                event.channel_name
+            )
 
             session_id = str(uuid.uuid4())
             result = await self._command_bus.execute(
                 StartAudioRecordingCommand(
-                    filename_prefix=filename_prefix,
+                    filename_stem=filename_stem,
+                    channel_name=channel_name,
                     session_id=session_id,
                 )
             )
@@ -143,23 +146,31 @@ class AudioRecordingEventHandler:
             )
             self._active_channels.clear()
 
-    async def _get_filename_prefix(self, channel_name: str) -> str:
-        """Get filename prefix from Justin API, with retry + local fallback.
+    async def _get_filename_stem(
+        self, channel_name: str
+    ) -> Tuple[str, Optional[str]]:
+        """Get filename stem from Justin API, with retry + local fallback.
 
         Justin may not have the filename ready immediately after recording
         starts.  We retry a few times with a short delay before falling back
         to a local timestamp.
+
+        Returns:
+            ``(stem, channel_name)`` when Justin API succeeds — e.g.
+            ``("260414_151304_KAM_1", "KAM_1")``.
+            ``(local_timestamp, None)`` on fallback — e.g.
+            ``("260414_151304", None)``.
         """
         max_retries = 3
         retry_delay = 2.0  # seconds
 
         for attempt in range(max_retries):
             try:
-                prefix = await self._query_bus.execute(
+                stem = await self._query_bus.execute(
                     GetCurrentFilenameQuery(channel=channel_name)
                 )
-                if prefix:
-                    return prefix
+                if stem:
+                    return stem, channel_name
             except Exception:
                 logger.warning(
                     "Could not get filename from Justin (attempt %d/%d)",
@@ -178,4 +189,4 @@ class AudioRecordingEventHandler:
                 await asyncio.sleep(retry_delay)
 
         logger.warning("All filename retries exhausted — using local timestamp")
-        return datetime.now().strftime("%y%m%d_%H%M%S")
+        return datetime.now().strftime("%y%m%d_%H%M%S"), None

@@ -50,7 +50,8 @@ class AudioRecordingService:
     async def start(
         self,
         session_id: str,
-        filename_prefix: str,
+        filename_stem: str,
+        channel_name: Optional[str],
         tracks: list[AudioTrack],
         samplerate: int,
         output_dir: Path,
@@ -80,7 +81,8 @@ class AudioRecordingService:
                 tracks,
                 samplerate,
                 output_dir,
-                filename_prefix,
+                filename_stem,
+                channel_name,
             )
             self._current_files = files
             return files

@@ -51,11 +51,12 @@ class StartAudioRecordingCommandHandler(CommandHandler[StartAudioRecordingComman
             if not source_dir:
                 return {"success": False, "message": "No source directory configured"}
 
-            prefix = self._service.get_recovery_prefix(command.filename_prefix)
+            prefix = self._service.get_recovery_prefix(command.filename_stem)
 
             files = await self._service.start(
                 session_id=command.session_id,
-                filename_prefix=prefix,
+                filename_stem=prefix,
+                channel_name=command.channel_name,
                 tracks=tracks,
                 samplerate=samplerate,
                 output_dir=Path(source_dir),

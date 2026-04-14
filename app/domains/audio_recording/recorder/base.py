@@ -98,9 +98,16 @@ class AudioRecorder(ABC):
         tracks: list[AudioTrack],
         samplerate: int,
         output_dir: Path,
-        filename_prefix: str,
+        filename_stem: str,
+        channel_name: Optional[str] = None,
     ) -> list[Path]:
-        """Start recording.  Returns the list of WAV file paths created."""
+        """Start recording.  Returns the list of WAV file paths created.
+
+        When *channel_name* is provided and appears in *filename_stem*,
+        each track's filename is built by replacing the channel portion with
+        the track label (naming-convention-agnostic).  Otherwise, the label
+        is appended: ``{stem}_{label}.wav``.
+        """
         if self._recording:
             raise RuntimeError("Already recording")
 
@@ -125,7 +132,9 @@ class AudioRecorder(ABC):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create WAV files
-        created_files = self._create_wav_files(tracks, samplerate, output_dir, filename_prefix)
+        created_files = self._create_wav_files(
+            tracks, samplerate, output_dir, filename_stem, channel_name
+        )
 
         # Start writer thread
         self._writer_thread = threading.Thread(
@@ -325,7 +334,8 @@ class AudioRecorder(ABC):
         tracks: list[AudioTrack],
         samplerate: int,
         output_dir: Path,
-        filename_prefix: str,
+        filename_stem: str,
+        channel_name: Optional[str] = None,
     ) -> list[Path]:
         import soundfile as sf
 
@@ -334,7 +344,10 @@ class AudioRecorder(ABC):
         try:
             for track in tracks:
                 num_channels = len(track.channels)
-                path = output_dir / f"{filename_prefix}_{track.label}.wav"
+                name = self._build_track_filename(
+                    filename_stem, channel_name, track.label
+                )
+                path = output_dir / name
                 writer = sf.SoundFile(
                     str(path),
                     mode="w",
@@ -351,6 +364,19 @@ class AudioRecorder(ABC):
             self._remove_empty_files(created_files)
             raise
         return created_files
+
+    @staticmethod
+    def _build_track_filename(
+        stem: str, channel_name: Optional[str], track_label: str
+    ) -> str:
+        """Build a WAV filename for a track.
+
+        If *channel_name* appears in *stem*, replace it with *track_label*
+        (naming-convention-agnostic).  Otherwise, append the label.
+        """
+        if channel_name and channel_name in stem:
+            return stem.replace(channel_name, track_label, 1) + ".wav"
+        return f"{stem}_{track_label}.wav"
 
     # ── Helpers ──────────────────────────────────────────────────
 

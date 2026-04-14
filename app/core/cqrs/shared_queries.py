@@ -28,9 +28,11 @@ class GetIngestConnectionStatusQuery(Query):
 
 @dataclass
 class GetCurrentFilenameQuery(Query):
-    """Query for the current filename prefix from Just In Engine.
+    """Query for the current filename stem from Just In Engine.
 
     Dispatched by audio_recording, handled by ingest_monitor domain.
-    Returns the prefix string (e.g. "260410_1056_10") or None.
+    Returns the full filename stem (e.g. "260414_151304_KAM_1") or None.
+    The audio layer replaces the channel portion with its track label,
+    making the approach naming-convention-agnostic.
     """
     channel: str
