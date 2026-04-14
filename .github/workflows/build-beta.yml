@@ -93,6 +93,14 @@ jobs:
 
       - name: Package artifact
         run: |
+          # Ad-hoc codesign with a stable identifier so macOS TCC
+          # remembers permissions (mic, SMB, etc.) across updates.
+          codesign --force --deep --sign - \
+            --identifier "dk.dr.file-agent" \
+            dist/file-agent/file-agent
+          echo "Codesigned with identifier dk.dr.file-agent"
+          codesign -dv dist/file-agent/file-agent 2>&1 | head -5
+
           cd dist
           tar -czf file-agent-beta-macos-arm64.tar.gz file-agent/
           ls -la *.tar.gz
