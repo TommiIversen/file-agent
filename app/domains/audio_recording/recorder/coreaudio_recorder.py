@@ -66,8 +66,29 @@ class CoreAudioRecorder(AudioRecorder):
         self._device_index: Optional[int] = None
         # Number of HW channels to open (may be more than len(_channel_selectors))
         self._hw_channels: int = 0
+        self._request_mic_permission(device_name)
 
     # ── Subclass hooks ─────────────────────────────────────────
+
+    @staticmethod
+    def _request_mic_permission(device_name: str) -> None:
+        """Open and immediately close a stream to trigger macOS mic permission.
+
+        macOS shows the permission dialog the first time an input stream
+        is opened.  Doing it at init avoids a surprise prompt during a
+        live recording session.
+        """
+        try:
+            import sounddevice as sd
+
+            idx = _find_coreaudio_device(device_name)
+            stream = sd.InputStream(device=idx, channels=1)
+            stream.start()
+            stream.stop()
+            stream.close()
+            logger.debug("Microphone permission pre-requested for '%s'", device_name)
+        except Exception:
+            logger.debug("Mic permission probe skipped for '%s'", device_name, exc_info=True)
 
     def _resolve_device(self) -> None:
         self._device_index = _find_coreaudio_device(self._device_name)
