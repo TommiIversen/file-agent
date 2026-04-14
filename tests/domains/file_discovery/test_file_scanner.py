@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domains.file_discovery.file_scanner import (
     FileScanner,
-    is_mxf_file,
+    is_accepted_file,
     should_ignore_file,
     get_file_metadata,
 )
@@ -41,16 +41,22 @@ def _settings():
 
 class TestIsMxfFile:
     def test_mxf_extension(self):
-        assert is_mxf_file(Path("/src/test.mxf")) is True
+        assert is_accepted_file(Path("/src/test.mxf")) is True
 
     def test_mxf_uppercase(self):
-        assert is_mxf_file(Path("/src/test.MXF")) is True
+        assert is_accepted_file(Path("/src/test.MXF")) is True
+
+    def test_wav_extension(self):
+        assert is_accepted_file(Path("/src/test.wav")) is True
+
+    def test_wav_uppercase(self):
+        assert is_accepted_file(Path("/src/test.WAV")) is True
 
     def test_non_mxf(self):
-        assert is_mxf_file(Path("/src/test.mp4")) is False
+        assert is_accepted_file(Path("/src/test.mp4")) is False
 
     def test_no_extension(self):
-        assert is_mxf_file(Path("/src/testfile")) is False
+        assert is_accepted_file(Path("/src/testfile")) is False
 
 
 class TestShouldIgnoreFile:

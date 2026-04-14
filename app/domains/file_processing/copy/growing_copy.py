@@ -307,6 +307,14 @@ class GrowingFileCopyStrategy():
                     network_detector,
                 )
 
+                # WAV header patch: re-copy the first 4 KB so the destination
+                # header reflects the final file size.  The source header is
+                # kept up-to-date by libsndfile's SFC_SET_UPDATE_HEADER_AUTO,
+                # but the destination copy still has the (stale) header that
+                # was written when the first chunk was copied.
+                if source_path.lower().endswith(".wav"):
+                    await self._patch_wav_header(source_path, dst)
+
                 # Flush to ensure all data is written to the network destination
                 # before we close the file handle and verify integrity
                 try:
@@ -496,3 +504,55 @@ class GrowingFileCopyStrategy():
                     return True
 
         return False
+
+    # ── WAV header patch ─────────────────────────────────────────
+
+    _WAV_HEADER_SIZE = 4096  # 4 KB covers RIFF + fmt + bext/PEAK/PAD chunks
+
+    async def _patch_wav_header(self, source_path: str, dst) -> None:  # type: ignore[no-untyped-def]
+        """Re-copy the first 4 KB of *source_path* into *dst*.
+
+        After a growing copy the destination header still reflects the
+        file size at the moment the first chunk was written.  This patch
+        overwrites it with the final (correct) header from the source so
+        that NLE software can read the complete WAV file.
+        """
+        try:
+            async with aiofiles.open(source_path, "rb") as src:
+                header = await src.read(self._WAV_HEADER_SIZE)
+
+            if not self._is_valid_wav_header(header):
+                logging.warning(
+                    "WAV header validation failed for %s — skipping patch",
+                    os.path.basename(source_path),
+                )
+                return
+
+            await dst.seek(0)
+            await dst.write(header)
+            await dst.seek(0, 2)  # seek back to end
+            logging.info(
+                "WAV header patched for %s (%d bytes)",
+                os.path.basename(source_path),
+                len(header),
+            )
+        except Exception as e:
+            logging.warning(
+                "WAV header patch failed for %s: %s — file may have stale header",
+                os.path.basename(source_path),
+                e,
+            )
+
+    @staticmethod
+    def _is_valid_wav_header(header: bytes) -> bool:
+        """Validate that *header* looks like a plausible RIFF/WAV header."""
+        if len(header) < 44:
+            return False
+        if header[:4] != b"RIFF":
+            return False
+        if header[8:12] != b"WAVE":
+            return False
+        data_pos = header.find(b"data")
+        if data_pos < 0:
+            return False
+        return True
