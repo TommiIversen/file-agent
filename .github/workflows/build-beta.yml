@@ -99,15 +99,15 @@ jobs:
 
       - name: Delete existing beta release
         run: |
-          gh release delete beta --yes 2>/dev/null || true
-          git push origin :refs/tags/beta 2>/dev/null || true
+          gh release delete beta-latest --yes 2>/dev/null || true
+          git push origin :refs/tags/beta-latest 2>/dev/null || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create beta pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: beta
+          tag_name: beta-latest
           target_commitish: beta
           name: "File Agent Beta (${{ steps.version.outputs.VERSION }})"
           body: |
