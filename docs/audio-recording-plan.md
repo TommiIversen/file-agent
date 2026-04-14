@@ -7,28 +7,60 @@ Growing copy udvides til `.wav`.
 
 **5 store faser.**
 
+### Status-overblik
+
+| Fase | Navn | Status |
+|------|------|--------|
+| 1 | Platform-abstrakt Recorder Engine | ✅ Done |
+| 2 | Domæne-integration (EventBus + CQRS) | 🔶 ~90% — mangler `GetCurrentFilenameQuery` handler i ingest_monitor |
+| 3 | User Settings & UI | ⬜ Ikke startet |
+| 4 | Growing Copy → WAV support | ⬜ Ikke startet |
+| 5 | Presentation & Status i UI | ⬜ Ikke startet |
+
 ---
 
-## Fase 1: Platform-abstrakt Recorder Engine
+## Fase 1: Platform-abstrakt Recorder Engine ✅
 
 Byg recorder-motoren med base class og platform-backends.
 POC'en i `scripts/audio-poc/` er valideret på Windows og bruges som udgangspunkt.
 
-### 1.1 — Base class + backends
+> **Implementeret** i `app/domains/audio_recording/recorder/`:
+> `base.py`, `callback.py`, `models.py`, `asio_recorder.py`, `coreaudio_recorder.py`, `factory.py`
+
+### 1.1 — Base class + backends ✅
 
 - Opret `app/domains/audio_recording/recorder/`
 - Abstract base `AudioRecorder` med interface:
-  - `start(tracks, samplerate, output_dir)` → `list[Path]`
+  - `start(tracks, samplerate, output_dir, filename_prefix)` → `list[Path]`
   - `stop()` → status dict
   - `is_recording` property
+  - `duration_seconds` property
+  - `overflow_count` property
   - `list_devices()` → liste af device info
+  - `set_callback(cb: RecorderCallback)` → wire domain adapter
 - **Windows**: `AsioRecorder` baseret på POC'ens `AsioThread` + `sounddevice` ASIO backend + `soundfile` WAV writer.
   COM STA-krav bevares via dedikeret tråd.
 - **macOS**: `CoreAudioRecorder` — samme `sounddevice`/`soundfile` libs, men med CoreAudio som host API.
   `sounddevice` håndterer det automatisk. Ingen `AsioThread` nødvendig.
 - `factory.py`: `sys.platform` check → returnerer korrekt implementation.
 
-### 1.2 — Track-model & navngivning
+#### 1.1b — RecorderCallback protokol (tilføjet under review)
+
+Sync callback-interface som recorder-tråde kalder. Domain-laget implementerer det
+og bridger til async EventBus via `loop.call_soon_threadsafe()`.
+
+```python
+class RecorderCallback(Protocol):
+    def on_started(self, files: list[Path], actual_samplerate: float) -> None: ...
+    def on_stopped(self, files: list[Path], duration_seconds: float, overflow_count: int) -> None: ...
+    def on_error(self, error_message: str, recoverable: bool) -> None: ...
+    def on_overflow_warning(self, dropped_count: int, total_drops: int) -> None: ...
+    def on_device_lost(self) -> None: ...
+```
+
+Implementeret i `callback.py` (protokol) + `callback_adapter.py` (EventBus bridge).
+
+### 1.2 — Track-model & navngivning ✅
 
 - Track-model understøtter **mono** og **stereo**:
   ```python
@@ -72,15 +104,32 @@ POC'en i `scripts/audio-poc/` er valideret på Windows og bruges som udgangspunk
 
 Resultat: 12 WAV-filer per optagelse (10 mono + 2 stereo), bruger 14 fysiske input-kanaler.
 
-### 1.3 — Robusthed
+### 1.3 — Robusthed ✅
 
 - **WAV header auto-update**: Aktivér `SFC_SET_UPDATE_HEADER_AUTO` (libsndfile kommando `0x1061`) på hver WAV writer ved optagelsesstart.
   Det sikrer at source-filens header altid er korrekt under optagelse.
   ```python
   sf._snd.sf_command(writer._file, 0x1061, sf._ffi.NULL, 1)  # SFC_SET_UPDATE_HEADER_AUTO
   ```
-- **Device-disconnect**: Detect via `is_broken` Event + callback status → stop cleanly → vent kort → genstart med recovery-postfix.
-- **Disk-fejl / lav plads**: Stop cleanly, publicer `SystemEvent`, **ingen** genstart (ikke meningsfuldt).
+  Med `try/except` fallback hvis private API ændres (version-robusthed).
+- **Device-disconnect — Callback Watchdog** (tilføjet under review):
+  Base class tracker `_last_callback_time`. En daemon-tråd checker hvert 250ms:
+  hvis `now - _last_callback_time > 500ms` → device antages tabt → `on_device_lost()` callback.
+  Ved 48kHz/128 frames kommer callbacks hver ~2.7ms, så 500ms er ekstremt konservativt.
+  Implementeret i `base.py` (`_start_watchdog` / `_stop_watchdog` / `_touch_watchdog`).
+- **Disk-fejl / lav plads** (udvidet under review):
+  - **Pre-flight check**: Mindst 1 GB ledig plads kræves ved start. `OSError` kastes ellers.
+  - **Runtime**: Writer-tråd fanger `OSError` → sætter `_recording = False` → kalder `on_error(recoverable=False)`.
+  - **Ingen** genstart ved diskfejl (ikke meningsfuldt).
+- **Atomic start / rollback** (tilføjet under review):
+  Hvis ASIO-stream fejler efter WAV-filer er oprettet → writers lukkes → tomme filer slettes.
+  Ingen "orphaned" WAV-filer på disk ved fejl.
+- **Concurrent start/stop race** (tilføjet under review):
+  `asyncio.Lock` i `AudioRecordingService` og `AudioRecordingEventHandler` forhindrer
+  parallelle start/stop-kald fra at race.
+- **Applikations-shutdown** (tilføjet under review):
+  `AudioRecordingService.shutdown()` er wired i `main.py` `_shutdown()` — stopper
+  optagelse cleanly ved app-nedlukning.
 - **Writer overflow** — to-trins strategi for at bevare audio/video-sync:
   - **Callback → writer kommunikation**: ASIO-callback lægger tuples i køen: `(data_block, dropped_count)`.
     Når køen er fuld, tæller callbacket droppede blokke i en intern counter. Når køen får plads igen,
@@ -98,36 +147,43 @@ Resultat: 12 WAV-filer per optagelse (10 mono + 2 stereo), bruger 14 fysiske inp
     (`np.zeros(frames * dropped_count, ...)`) før den faktiske data. Bevarer tidslinje-sync.
   - **< 100 akkumulerede drops**: Zero-fill og fortsæt. Ved 48kHz/128 frames er
     én blok ~2.7ms — uhørligt. Log + tæl, publicer warning event.
-  - **≥ 100 akkumulerede drops** (vedvarende I/O-problem): Afslut fil cleanly, genstart optagelse
-    som `_rec2` med recovery-postfix. Publicer `AudioRecordingErrorEvent(recoverable=True)`.
-    Det eksplicitte filbrud signalerer at der er et tidsgab.
+  - **≥ 100 akkumulerede drops** (vedvarende I/O-problem): ⬜ **Ikke implementeret endnu** — planlagt
+    til Fase 4 (Growing Copy). Recovery-postfix mekanikken (`get_recovery_prefix`) eksisterer i
+    servicen, men resten (auto-restart ved overflow) bygges når growing-copy er på plads.
+    Indtil da: zero-fill + log fortsætter for alle overflow-niveauer.
   - Bufferen er ~11 sekunder (4096 blokke). Overflow kræver ekstremt I/O-pres for at ske.
 
 ---
 
-## Fase 2: Domæne-integration (EventBus + CQRS)
+## Fase 2: Domæne-integration (EventBus + CQRS) 🔶
 
 Wire `audio_recording` ind i arkitekturen som et selvstændigt domæne.
 
-### 2.1 — Events
+### 2.1 — Events ✅
 
 Nye events i `app/core/events/audio_events.py`:
 
-- `AudioRecordingStartedEvent(tracks, session_id)`
-- `AudioRecordingStoppedEvent(session_id, files)`
-- `AudioRecordingErrorEvent(error, recoverable)`
+- `AudioRecordingStartedEvent(session_id, tracks, samplerate, files)`
+- `AudioRecordingStoppedEvent(session_id, files, duration_seconds, overflow_count)`
+- `AudioRecordingErrorEvent(error, recoverable, session_id)`
 - `AudioDeviceDisconnectedEvent(device_name)`
+- `AudioOverflowWarningEvent(dropped_count, total_drops, session_id)` — tilføjet under review
 
-### 2.2 — Commands & Queries
+### 2.2 — Commands & Queries ✅
 
-- **Commands**: `StartAudioRecordingCommand`, `StopAudioRecordingCommand`
+- **Commands**: `StartAudioRecordingCommand(filename_prefix, session_id)`, `StopAudioRecordingCommand`
 - **Queries**: `GetAudioDevicesQuery`, `GetAudioRecordingStatusQuery`, `GetAudioTrackConfigQuery`
+- Handlers i `command_handlers.py` og `query_handlers.py`.
+- `AudioRecordingService` orkestrerer recorder-livscyklus med `asyncio.Lock`.
 
-### 2.2b — Ny Query i ingest_monitor domænet
+### 2.2b — Ny Query i ingest_monitor domænet ⬜ TODO
 
-- `GetCurrentFilenameQuery(channel: str)` → `str` (fx `"260410_1056_10"`)
-- Handler i `ingest_monitor/query_handlers.py` kalder `IngestApiClient.get_current_filename()`
-- Ny metode på `IngestApiClient`:
+- `GetCurrentFilenameQuery(channel: str)` er defineret i `app/core/cqrs/shared_queries.py` ✅
+- **Mangler**: Handler i `ingest_monitor/query_handlers.py` der kalder `IngestApiClient.get_current_filename()`
+- **Mangler**: Ny metode `get_current_filename()` på `IngestApiClient`
+- **Mangler**: Registrering i `ingest_monitor/registration.py`
+- Fallback i `event_handlers.py` bruger lokalt tidspunkt hvis query fejler ✅
+- Spec:
   ```python
   async def get_current_filename(self, channel_name: str) -> Optional[str]:
       response = await self._client.post(
@@ -139,7 +195,7 @@ Nye events i `app/core/events/audio_events.py`:
   ```
 - Audio domain bruger QueryBus til at hente filnavnet (ingen direkte import fra ingest_monitor)
 
-### 2.3 — Slavet til Justin via events
+### 2.3 — Slavet til Justin via events ✅
 
 - `event_handlers.py` lytter på `ChannelRecordingStartedEvent` / `ChannelRecordingStoppedEvent`
 - **Kontekst**: Podcast-studie — alle kanaler starter/stopper nogenlunde samtidig som én session.
@@ -156,7 +212,8 @@ Nye events i `app/core/events/audio_events.py`:
 - **Justin-nedbrud → optag videre**:
   Hvis Justin crasher eller forbindelsen ryger, mangler `ChannelRecordingStoppedEvent` —
   men vi stopper **ikke** lydoptagelsen. Lyden er værdifuld, også uden Justin.
-  - `IngestOfflineEvent` → log warning, men **fortsæt optagelse**.
+  - `IngestOfflineEvent` → optagelsen fortsætter uforstyrret (ingen handler nødvendig —
+    fraværet af stop-event er tilstrækkeligt).
   - **Auto-stop er sikkerhedsnettet**: Den eksisterende max-varighed (default 180 min)
     forhindrer uendelig optagelse. Audio lytter på `AutoStopTriggeredEvent` →
     kalder `stop()` cleanly med det samme.
@@ -165,17 +222,26 @@ Nye events i `app/core/events/audio_events.py`:
 - **Bevidst fravalg**: Krydsende start/stop (kanal A starter ny optagelse mens kanal B kører)
   håndteres **ikke** — audio splitter ikke. Workflowet kræver det ikke for podcast-produktion.
 
-### 2.4 — Wiring
+### 2.4 — Wiring ✅
 
 - `app/domains/audio_recording/registration.py` — registrer alle handlers + event subscriptions.
 - `app/dependencies/audio_recording.py` — DI factory.
-- Wire i `app/main.py` `_register_domains()` — **efter** ingest_monitor.
-- Tilføj lint-imports contracts i `pyproject.toml`:
+- Wired i `app/main.py` `_register_domains()` — **efter** ingest_monitor.
+- Shutdown wired i `app/main.py` `_shutdown()`.
+- lint-imports contracts tilføjet i `pyproject.toml`:
   - Independence med `file_discovery`, `file_processing`, `tally_light`, `presentation`.
+- **Alle 9 contracts KEPT**, mypy clean, 1077 tests pass.
+
+#### 2.5 — Thread→Async Bridge (tilføjet under review) ✅
+
+`RecorderEventAdapter` i `callback_adapter.py` implementerer `RecorderCallback`-protokollen
+og bruger `loop.call_soon_threadsafe(asyncio.ensure_future, event_bus.publish(event))`
+til at bridge sync recorder-tråd-callbacks ind i den async EventBus.
+Håndterer gracefully lukket event loop ved shutdown.
 
 ---
 
-## Fase 3: User Settings & UI
+## Fase 3: User Settings & UI ⬜
 
 ### 3.1 — Nye settings
 
@@ -221,7 +287,7 @@ Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
 
 ---
 
-## Fase 4: Growing Copy → WAV support
+## Fase 4: Growing Copy → WAV support ⬜
 
 ### 4.1 — Extension-filter
 
@@ -277,7 +343,7 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 ---
 
-## Fase 5: Presentation & Status i UI
+## Fase 5: Presentation & Status i UI ⬜
 
 ### 5.1 — WebSocket real-time
 
@@ -316,7 +382,11 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 2. ~~**Kanal start-logik**~~ → **AFKLARET**: Første kanal-start trigger audio. Alle kanaler starter/stopper nogenlunde samtidig (podcast-workflow). Krydsende start/stop håndteres ikke.
 
-3. **macOS device enumeration**: På macOS viser `sounddevice` alle CoreAudio devices (built-in mic, aggregated devices, etc.). Skal vi filtrere, eller vise alle? *Anbefaling: Vis alle — brugeren vælger selv.*
+3. ~~**macOS device enumeration**~~ → **AFKLARET**: Vis alle CoreAudio devices — brugeren vælger selv. Implementeret i `CoreAudioRecorder.list_devices()`.
+
+4. ~~**Callback/event bridge**~~ → **AFKLARET**: Sync `RecorderCallback` protokol + `RecorderEventAdapter` med `call_soon_threadsafe`. Se §1.1b og §2.5.
+
+5. ~~**Device disconnect detection**~~ → **AFKLARET**: Callback watchdog i base class (500ms timeout). Se §1.3.
 
 
 

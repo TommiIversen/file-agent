@@ -71,6 +71,17 @@ modules = [
 ignore_imports = [
 ]
 
+[[tool.importlinter.contracts]]
+name = "No cross-domain imports between audio_recording and other domains"
+type = "independence"
+modules = [
+    "app.domains.audio_recording",
+    "app.domains.file_discovery",
+    "app.domains.file_processing",
+    "app.domains.tally_light",
+    "app.domains.presentation",
+]
+
 # Rule 3: Nothing may import from presentation (it's the outermost layer)
 [[tool.importlinter.contracts]]
 name = "Presentation is not imported by other domains"
@@ -85,6 +96,7 @@ source_modules = [
     "app.domains.lifecycle",
     "app.domains.cleanup",
     "app.domains.shared",
+    "app.domains.audio_recording",
     "app.core",
 ]
 forbidden_modules = ["app.domains.presentation"]

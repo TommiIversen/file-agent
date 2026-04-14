@@ -69,6 +69,7 @@ from app.domains.network_mount.registration import register_network_mount_domain
 from app.domains.lifecycle.registration import register_lifecycle_domain # Import lifecycle domain registration
 from app.domains.tally_light.registration import register_tally_light_domain # Import tally light domain registration
 from app.domains.ingest_monitor.registration import register_ingest_monitor_domain # Import ingest monitor domain registration
+from app.domains.audio_recording.registration import register_audio_recording_domain
 
 from app.core.global_event_logger import LoggedEvent
 from .logging_config import setup_logging
@@ -164,6 +165,21 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
     tally_handler = get_tally_light_event_handler()
     tally_monitor = get_tally_switch_monitor()
     await register_tally_light_domain(command_bus, query_bus, event_bus, tally_handler, tally_monitor)
+
+    # Audio recording — AFTER ingest_monitor (depends on filename query)
+    from app.dependencies.audio_recording import get_audio_recording_service
+    audio_service = get_audio_recording_service()
+    if audio_service.get_status().get("configured") is False:
+        logging.info("Audio recording available but no device configured yet")
+    user_settings_service = get_user_settings_service()
+
+    async def _get_user_setting(key: str):
+        return user_settings_service.get(key)
+
+    await register_audio_recording_domain(
+        command_bus, query_bus, event_bus, audio_service,
+        get_user_setting=_get_user_setting,
+    )
 
     logging.info("Handler-registrering fuldført.")
     return tally_handler
@@ -345,6 +361,15 @@ async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  #
     if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
         await tally_handler.shutdown()
         logging.info("TallyLight domain shutdown completed")
+
+    # Shutdown audio recording (stop cleanly if active)
+    try:
+        from app.dependencies.audio_recording import get_audio_recording_service
+        audio_service = get_audio_recording_service()
+        await audio_service.shutdown()
+        logging.info("AudioRecording domain shutdown completed")
+    except Exception as e:
+        logging.warning(f"Error shutting down audio recording: {e}")
 
     # Log shutdown event while DB is still clean
     try:

@@ -24,3 +24,13 @@ class GetIngestConnectionStatusQuery(Query):
     Dispatched by presentation, handled by ingest_monitor domain.
     """
     pass
+
+
+@dataclass
+class GetCurrentFilenameQuery(Query):
+    """Query for the current filename prefix from Just In Engine.
+
+    Dispatched by audio_recording, handled by ingest_monitor domain.
+    Returns the prefix string (e.g. "260410_1056_10") or None.
+    """
+    channel: str
