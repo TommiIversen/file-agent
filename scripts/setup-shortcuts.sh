@@ -23,11 +23,12 @@ sudo tee "$BIN_DIR/update-feta" > /dev/null << 'EOF'
 # Update File Agent to latest binary release and restart the service
 # Usage: update-feta          # install latest stable
 #        update-feta --beta   # install latest beta
-set -euo pipefail
+set -eo pipefail
 EXTRA_ARGS=""
-for arg in "$@"; do
+for arg in "${@:-}"; do
     case "$arg" in
         --beta) EXTRA_ARGS="--beta" ;;
+        "")     ;;
         *)      echo "Unknown option: $arg"; exit 1 ;;
     esac
 done
