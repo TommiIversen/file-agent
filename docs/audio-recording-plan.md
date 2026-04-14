@@ -595,6 +595,10 @@ case 'audio_recording_stopped':
 
 **Ny fil**: `app/domains/presentation/templates/components/audio_levels_panel.html`
 
+**Layout-strategi (Option C)**: Alle kanaler vises som individuelle mono-meters med
+uniform bredde. Stereo-par grupperes visuelt med reduceret gap og shared label.
+Backend-data er uændret — frontend flattener stereo tracks til to rækker.
+
 8 LED-segmenter per kanal — broadcast-standard dBFS-skala:
 
 | Segment | Tærskel | ~dBFS | Farve |
@@ -608,39 +612,108 @@ case 'audio_recording_stopped':
 | 7 | > 0.85 | -1.4 | Rød |
 | 8 | > 0.95 | -0.4 | Rød (clip) |
 
+**Visuelt resultat**:
+```
+PGM_LR  L ████████
+        R ████████        ← tæt gap (gap-0.5), shared label
+                          ← normal gap (gap-2) til næste track
+Mic1      ████████
+Mic2      ████████
+Mic3      ████████
+DALET   L ████████
+        R ████████        ← tæt gap, shared label
+Mic1_c    ████████
+```
+
 ```html
-<div x-data x-show="$store.audio.recording" class="...">
-  <h3>Audio Levels</h3>
-  <template x-for="track in $store.audio.tracks" :key="track.label">
-    <div class="flex items-center gap-2">
-      <span class="w-20 text-xs truncate" x-text="track.label"></span>
-      <template x-for="(peak, i) in track.peaks" :key="i">
-        <div class="flex gap-0.5">
-          <!-- 8 LED segments: 4× green, 2× yellow, 2× red -->
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.02 ? 'bg-green-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.05 ? 'bg-green-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.10 ? 'bg-green-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.25 ? 'bg-green-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.45 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.65 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.85 ? 'bg-red-500' : 'bg-gray-700'"></div>
-          <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
-               :class="peak > 0.95 ? 'bg-red-600 brightness-125' : 'bg-gray-700'"></div>
-        </div>
-      </template>
-    </div>
-  </template>
+<div x-data x-show="$store.audio.recording" class="bg-gray-800 rounded-lg p-3">
+  <h3 class="text-xs font-medium text-gray-400 uppercase mb-2">Audio Levels</h3>
+  <div class="flex flex-col">
+    <template x-for="track in $store.audio.tracks" :key="track.label">
+      <div :class="track.peaks.length > 1 ? 'mb-2' : 'mb-2'">
+        <!-- Track label + rows -->
+        <template x-if="track.peaks.length === 1">
+          <!-- Mono: single row -->
+          <div class="flex items-center gap-2">
+            <span class="w-16 text-xs text-gray-300 truncate" x-text="track.label"></span>
+            <div class="flex gap-0.5">
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.02 ? 'bg-green-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.05 ? 'bg-green-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.10 ? 'bg-green-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.25 ? 'bg-green-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.45 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.65 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.85 ? 'bg-red-500' : 'bg-gray-700'"></div>
+              <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                   :class="track.peaks[0] > 0.95 ? 'bg-red-600 brightness-125' : 'bg-gray-700'"></div>
+            </div>
+          </div>
+        </template>
+        <template x-if="track.peaks.length > 1">
+          <!-- Stereo: two rows, tight gap, shared label -->
+          <div class="flex flex-col gap-0.5">
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-xs text-gray-300 truncate" x-text="track.label"></span>
+              <span class="w-3 text-[10px] text-gray-500">L</span>
+              <div class="flex gap-0.5">
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.02 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.05 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.10 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.25 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.45 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.65 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.85 ? 'bg-red-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[0] > 0.95 ? 'bg-red-600 brightness-125' : 'bg-gray-700'"></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-16"></span>
+              <span class="w-3 text-[10px] text-gray-500">R</span>
+              <div class="flex gap-0.5">
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.02 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.05 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.10 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.25 ? 'bg-green-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.45 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.65 ? 'bg-yellow-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.85 ? 'bg-red-500' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                     :class="track.peaks[1] > 0.95 ? 'bg-red-600 brightness-125' : 'bg-gray-700'"></div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
 </div>
 ```
 
-Stereo tracks viser L og R segmenter side om side (16 LEDs total).
+Stereo-par vises med `gap-0.5` (2px) mellem L/R vs `mb-2` (8px) mellem tracks.
+Label vises kun på L-rækken, R-rækken har tom placeholder for alignment.
+L/R indikatorer i `text-[10px] text-gray-500` for diskret stereo-markering.
 Clip-segment (8) bruger `brightness-125` for ekstra synlighed.
 Clip-hold (rød LED forbliver 2 sek) kan tilføjes med `clip` boolean + `setTimeout` clear.
 
