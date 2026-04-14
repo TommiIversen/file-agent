@@ -21,13 +21,28 @@ log_info "Creating update-feta..."
 sudo tee "$BIN_DIR/update-feta" > /dev/null << 'EOF'
 #!/bin/bash
 # Update File Agent to latest binary release and restart the service
+# Usage: update-feta          # install latest stable
+#        update-feta --beta   # install latest beta
 set -euo pipefail
-echo "🔄 Updating File Agent..."
-curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --upgrade
-echo "✅ File Agent updated and restarted!"
+EXTRA_ARGS=""
+for arg in "$@"; do
+    case "$arg" in
+        --beta) EXTRA_ARGS="--beta" ;;
+        *)      echo "Unknown option: $arg"; exit 1 ;;
+    esac
+done
+if [[ -n "$EXTRA_ARGS" ]]; then
+    echo "🔄 Updating File Agent (beta)..."
+    curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --upgrade $EXTRA_ARGS
+    echo "✅ File Agent updated to latest beta!"
+else
+    echo "🔄 Updating File Agent..."
+    curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --upgrade
+    echo "✅ File Agent updated and restarted!"
+fi
 EOF
 sudo chmod +x "$BIN_DIR/update-feta"
-log_success "update-feta → downloads latest binary release + restarts service"
+log_success "update-feta → downloads latest binary release + restarts service (supports --beta)"
 
 # ── restart-feta ─────────────────────────────────────────────────────
 log_info "Creating restart-feta..."

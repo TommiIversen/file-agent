@@ -45,12 +45,14 @@ log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 VERSION=""
 UPGRADE=false
 UNINSTALL=false
+BETA=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)  VERSION="$2"; shift 2 ;;
         --upgrade)  UPGRADE=true; shift ;;
         --uninstall) UNINSTALL=true; shift ;;
+        --beta)     BETA=true; shift ;;
         *) log_error "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -101,6 +103,11 @@ if [[ -d "$INSTALL_DIR" ]] && [[ "$UPGRADE" == false ]]; then
 fi
 
 # ── Resolve version ─────────────────────────────────────────────────
+if [[ "$BETA" == true ]] && [[ -z "$VERSION" ]]; then
+    log_info "Fetching latest beta release..."
+    VERSION="beta"
+fi
+
 if [[ -z "$VERSION" ]]; then
     log_info "Finding latest release..."
     # Try GitHub API first, fall back to redirect-based detection (avoids 403 rate limits)
@@ -128,6 +135,10 @@ case "$ARCH" in
     *)      log_error "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 ASSET_NAME="file-agent-${VERSION}-macos-${ASSET_ARCH}.tar.gz"
+# Beta uses a fixed asset name (rolling release)
+if [[ "$BETA" == true ]]; then
+    ASSET_NAME="file-agent-beta-macos-${ASSET_ARCH}.tar.gz"
+fi
 DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$ASSET_NAME"
 
 # ── Stop existing service (upgrade) ─────────────────────────────────
