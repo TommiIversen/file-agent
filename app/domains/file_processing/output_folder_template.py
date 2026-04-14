@@ -17,6 +17,7 @@ class TemplateRule:
     folder_template: str
     priority: int = 100
     is_regex: bool = False
+    ext: str = ""
     _compiled_regex: Optional[re.Pattern[str]] = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -30,12 +31,28 @@ class TemplateRule:
                 self._compiled_regex = None
 
     def matches(self, filename: str) -> bool:
+        pattern_ok = self._matches_pattern(filename)
+        ext_ok = self._matches_ext(filename)
+
+        if self.pattern and self.ext:
+            return pattern_ok and ext_ok
+        if self.ext:
+            return ext_ok
+        return pattern_ok
+
+    def _matches_pattern(self, filename: str) -> bool:
+        if not self.pattern:
+            return True
         if self.is_regex:
             if self._compiled_regex is None:
                 return False
             return bool(self._compiled_regex.search(filename))
-        else:
-            return fnmatch.fnmatch(filename.lower(), self.pattern.lower())
+        return fnmatch.fnmatch(filename.lower(), self.pattern.lower())
+
+    def _matches_ext(self, filename: str) -> bool:
+        if not self.ext:
+            return True
+        return Path(filename).suffix.lower() == self.ext.lower()
 
 
 class OutputFolderTemplateEngine:
@@ -151,10 +168,11 @@ class OutputFolderTemplateEngine:
                 json_rules = json.loads(self.settings.output_folder_rules)
                 for i, rule_data in enumerate(json_rules):
                     rule = TemplateRule(
-                        pattern=rule_data.get("pattern", "*"),
+                        pattern=rule_data.get("pattern", ""),
                         folder_template=rule_data.get("folder", self.default_category),
                         priority=rule_data.get("priority", i),
                         is_regex=rule_data.get("is_regex", False),
+                        ext=rule_data.get("ext", ""),
                     )
                     rules.append(rule)
             else:
@@ -175,6 +193,8 @@ class OutputFolderTemplateEngine:
                     pattern = ""
                     folder = self.default_category
 
+                    ext = ""
+
                     for part in parts:
                         if ":" in part:
                             key, value = part.split(":", 1)
@@ -182,10 +202,15 @@ class OutputFolderTemplateEngine:
                                 pattern = value.strip()
                             elif key.strip() == "folder":
                                 folder = value.strip()
+                            elif key.strip() == "ext":
+                                ext = value.strip()
 
-                    if pattern:
+                    if pattern or ext:
                         rule = TemplateRule(
-                            pattern=pattern, folder_template=folder, priority=i
+                            pattern=pattern,
+                            folder_template=folder,
+                            priority=i,
+                            ext=ext,
                         )
                         rules.append(rule)
 
@@ -262,6 +287,7 @@ class OutputFolderTemplateEngine:
                     "folder": rule.folder_template,
                     "priority": rule.priority,
                     "is_regex": rule.is_regex,
+                    "ext": rule.ext,
                 }
                 for rule in self.rules
             ],

@@ -479,7 +479,7 @@
                                   @input="$store.settings.markDirty()"
                                   rows="4"
                                   class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none font-mono text-xs resize-y"
-                                  placeholder="pattern:*KAM*;folder:KAMERA/{date}/{time}&#10;pattern:*PGM*;folder:PROGRAM/{date}&#10;pattern:*CLN*;folder:PROGRAM/{date}"></textarea>
+                                  placeholder="pattern:*KAM*;folder:KAMERA/{date}/{time}&#10;pattern:*PGM*;folder:PROGRAM/{date}&#10;ext:.wav;folder:AUDIO/{date}/{time}"></textarea>
                     </div>
 
                     <!-- Live Preview -->
@@ -727,7 +727,7 @@ function templatePreview() {
                 const subfolder = this._substitute(tpl, vars);
                 file.result = dest.replace(/\//g, '\\') + '\\' + subfolder.replace(/\//g, '\\') + '\\' + file.name;
                 file.matched = !!match;
-                file.ruleInfo = match ? '(' + match.pattern + ')' : '(default)';
+                file.ruleInfo = match ? '(' + (match.pattern || match.ext || '') + ')' : '(default)';
             }
         },
 
@@ -738,7 +738,7 @@ function templatePreview() {
             const parts = raw.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
             for (const part of parts) {
                 const segs = part.split(';');
-                let pattern = '', folder = '';
+                let pattern = '', folder = '', ext = '';
                 for (const seg of segs) {
                     const idx = seg.indexOf(':');
                     if (idx === -1) continue;
@@ -746,8 +746,9 @@ function templatePreview() {
                     const val = seg.substring(idx + 1).trim();
                     if (key === 'pattern') pattern = val;
                     else if (key === 'folder') folder = val;
+                    else if (key === 'ext') ext = val;
                 }
-                if (pattern) rules.push({ pattern, folder });
+                if (pattern || ext) rules.push({ pattern, folder, ext });
             }
             return rules;
         },
@@ -755,7 +756,9 @@ function templatePreview() {
         _findMatch(filename, rules) {
             const lower = filename.toLowerCase();
             for (const rule of rules) {
-                if (this._globMatch(lower, rule.pattern.toLowerCase())) return rule;
+                const patternOk = rule.pattern ? this._globMatch(lower, rule.pattern.toLowerCase()) : true;
+                const extOk = rule.ext ? filename.toLowerCase().endsWith(rule.ext.toLowerCase()) : true;
+                if (patternOk && extOk && (rule.pattern || rule.ext)) return rule;
             }
             return null;
         },
