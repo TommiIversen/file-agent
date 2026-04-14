@@ -191,65 +191,6 @@ class TestGetAllWithMetadata:
             assert s["requires_restart"] is False
 
 
-class TestEnvMigration:
-
-    async def test_migrates_env_values_to_db(self, db):
-        """When DB has default and env has different value, env wins."""
-        lock = asyncio.Lock()
-        svc = UserSettingsService(db=db, write_lock=lock)
-
-        mock_settings = MagicMock()
-        mock_settings.source_directory = "/from/env"
-        mock_settings.destination_directory = "/dest/env"
-        mock_settings.network_share_url = ""
-        mock_settings.enable_auto_mount = False
-        mock_settings.macos_mount_point = ""
-        mock_settings.tally_light_switch_ip = "10.0.0.1"
-        mock_settings.output_folder_template_enabled = False
-        mock_settings.output_folder_rules = ""
-        mock_settings.output_folder_default_category = "OTHER"
-        mock_settings.output_folder_date_format = "filename[0:6]"
-        mock_settings.max_concurrent_copies = 7
-        mock_settings.justin_auto_stop_minutes = 0
-
-        await svc.init(env_settings=mock_settings)
-
-        assert svc.get("source_directory") == "/from/env"
-        assert svc.get("destination_directory") == "/dest/env"
-        assert svc.get("tally_light_switch_ip") == "10.0.0.1"
-        # These stayed at default (env == default)
-        assert svc.get("enable_auto_mount") is False
-        assert svc.get("max_concurrent_copies") == 7
-
-    async def test_does_not_overwrite_existing_db_values(self, db):
-        """If DB already has a non-default value, env does NOT overwrite."""
-        await db.execute(
-            "INSERT INTO user_settings (key, value, updated_at) VALUES (?, ?, ?)",
-            ("source_directory", "/already/set", "2026-04-08T00:00:00+00:00"),
-        )
-        lock = asyncio.Lock()
-        svc = UserSettingsService(db=db, write_lock=lock)
-
-        mock_settings = MagicMock()
-        mock_settings.source_directory = "/from/env"
-        mock_settings.destination_directory = ""
-        mock_settings.network_share_url = ""
-        mock_settings.enable_auto_mount = False
-        mock_settings.macos_mount_point = ""
-        mock_settings.tally_light_switch_ip = ""
-        mock_settings.output_folder_template_enabled = False
-        mock_settings.output_folder_rules = ""
-        mock_settings.output_folder_default_category = "OTHER"
-        mock_settings.output_folder_date_format = "filename[0:6]"
-        mock_settings.max_concurrent_copies = 7
-        mock_settings.justin_auto_stop_minutes = 0
-
-        await svc.init(env_settings=mock_settings)
-
-        # DB value is preserved — it's not the default
-        assert svc.get("source_directory") == "/already/set"
-
-
 class TestRequiresRestart:
 
     def test_all_settings_are_hot_reloaded(self):

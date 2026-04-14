@@ -2,11 +2,9 @@
 UserSettingsService — persistent user-facing settings backed by SQLite.
 
 Shares the same database connection as SqliteFileRepository / SqliteEventStore.
-Provides typed get/set operations for the 12 user-editable settings.
+Provides typed get/set operations for the user-editable settings.
 
 Settings priority: hardcoded defaults → DB values.
-Env-file migration runs once at init (B1b): if DB has default value and env
-has a different value, the env value is written to DB.
 """
 
 import asyncio
@@ -78,17 +76,15 @@ class UserSettingsService:
         self._write_lock = write_lock
         self._cache: dict[str, Any] = {}
 
-    async def init(self, env_settings: Settings | None = None) -> None:
+    async def init(self, target: Settings | None = None) -> None:
         """
         Load settings from DB into cache.
-        If env_settings is provided, run one-time env → DB migration (B1b),
-        then sync DB values back into the Settings singleton.
+        If target Settings is provided, sync DB values into it.
         """
         await self._load_cache()
 
-        if env_settings is not None:
-            await self._migrate_from_env(env_settings)
-            self.sync_to_settings(env_settings)
+        if target is not None:
+            self.sync_to_settings(target)
 
         logger.info("UserSettingsService initialized (%d settings loaded)", len(self._cache))
 
@@ -110,33 +106,6 @@ class UserSettingsService:
         for key, (_, default) in USER_SETTINGS_SCHEMA.items():
             if key not in self._cache:
                 self._cache[key] = default
-
-    async def _migrate_from_env(self, env_settings: Settings) -> None:
-        """
-        One-time migration (B1b): if DB has the default value and env has
-        a different value, copy the env value into DB.
-        """
-        migrated: list[str] = []
-        for key, (expected_type, default) in USER_SETTINGS_SCHEMA.items():
-            env_value = getattr(env_settings, key, None)
-            if env_value is None:
-                continue
-
-            # Cast env value to expected type for comparison
-            if expected_type is bool and isinstance(env_value, str):
-                env_value = env_value.lower() in ("true", "1", "yes")
-            elif expected_type is int and isinstance(env_value, str):
-                env_value = int(env_value)
-
-            current = self._cache.get(key, default)
-            if current == default and env_value != default:
-                await self._write_setting(key, env_value)
-                self._cache[key] = env_value
-                migrated.append(key)
-
-        if migrated:
-            logger.info("Migrated %d settings from env to database: %s",
-                        len(migrated), ", ".join(migrated))
 
     def get(self, key: str) -> Any:
         """Get a setting value (from cache). Raises KeyError for unknown keys."""

@@ -3,8 +3,8 @@ import logging
 import sys
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from .utils.host_config import get_hostname, get_hostname_settings_file, list_all_settings_files, get_data_dir, get_logs_dir, get_database_path
+from pydantic_settings import BaseSettings
+from .utils.host_config import get_hostname, get_data_dir, get_logs_dir, get_database_path
 
 _log = logging.getLogger(__name__)
 
@@ -83,8 +83,8 @@ class Settings(BaseSettings):
     )
 
     # Filstier
-    source_directory: str
-    destination_directory: str
+    source_directory: str = ""
+    destination_directory: str = ""
 
     # Output folder template system
     output_folder_template_enabled: bool = False
@@ -217,8 +217,6 @@ class Settings(BaseSettings):
         description="HTTP timeout for Tally Light API calls (seconds)"
     )
 
-    model_config = SettingsConfigDict(env_file=get_hostname_settings_file())
-
     @property
     def log_directory(self) -> Path:
         """Returnerer log directory som Path objekt"""
@@ -226,9 +224,7 @@ class Settings(BaseSettings):
 
     @property
     def config_file_info(self) -> dict:
-        """Return information about which configuration file is being used."""
+        """Return information about the running configuration."""
         return {
             "hostname": get_hostname(),
-            "active_config_file": get_hostname_settings_file(),
-            "all_available_configs": list_all_settings_files(),
         }
