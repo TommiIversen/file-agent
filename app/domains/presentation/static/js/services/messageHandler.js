@@ -170,10 +170,6 @@ class MessageHandler {
                     break;
 
                 case 'audio_levels':
-                    if (!this._lastLevelsLog || Date.now() - this._lastLevelsLog > 2000) {
-                        console.log('[levels] ws→store', Date.now());
-                        this._lastLevelsLog = Date.now();
-                    }
                     Alpine.store('audio')?.updateLevels(message.data);
                     break;
 

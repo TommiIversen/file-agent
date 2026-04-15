@@ -97,17 +97,12 @@ class RecorderEventAdapter:
         self._fire(AudioDeviceDisconnectedEvent(device_name=self._device_name))
 
     def on_levels(self, track_peaks: list[dict[str, Any]]) -> None:
-        import time as _time
-        t0 = _time.perf_counter()
         self._fire(
             AudioLevelsEvent(
                 session_id=self._session_id or "",
                 track_peaks=track_peaks,
             )
         )
-        dt = (_time.perf_counter() - t0) * 1000
-        if dt > 1:
-            logger.debug("levels: adapter._fire took %.1fms", dt)
 
     # ── Thread-safe bridge ─────────────────────────────────────
 

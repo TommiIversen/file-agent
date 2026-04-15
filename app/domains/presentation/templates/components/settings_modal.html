@@ -343,6 +343,26 @@
                                 <span x-text="validationError"></span>
                             </div>
                         </template>
+
+                        <!-- Test Recording -->
+                        <div class="border-t border-gray-600 pt-3 mt-2">
+                            <label class="text-gray-300 block mb-2 text-xs font-medium uppercase tracking-wide">Test Recording</label>
+                            <div class="flex items-center gap-3">
+                                <button @click="testStartRecording()" type="button"
+                                        :disabled="$store.audio?.recording || testRecBusy"
+                                        class="px-3 py-1.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1">
+                                    <i data-lucide="play" class="inline-block w-3.5 h-3.5"></i> Start
+                                </button>
+                                <button @click="testStopRecording()" type="button"
+                                        :disabled="!$store.audio?.recording || testRecBusy"
+                                        class="px-3 py-1.5 bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1">
+                                    <i data-lucide="square" class="inline-block w-3.5 h-3.5"></i> Stop
+                                </button>
+                                <span x-show="testRecBusy" class="text-gray-400 text-xs">Working...</span>
+                                <span x-show="testRecError" class="text-red-400 text-xs" x-text="testRecError"></span>
+                            </div>
+                            <p class="text-gray-500 text-xs mt-1">Start/stop a test recording without Justin. Files are saved to the source directory.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -844,6 +864,8 @@ function audioSettings() {
         presets: [],
         selectedPreset: '',
         presetOverflowWarning: null,
+        testRecBusy: false,
+        testRecError: null,
 
         /** Maximum channel count from the selected device (fallback 32). */
         get maxChannels() {
@@ -1033,6 +1055,38 @@ function audioSettings() {
 
         _syncing: false,
         _syncingPresets: false,
+
+        async testStartRecording() {
+            this.testRecBusy = true;
+            this.testRecError = null;
+            try {
+                const resp = await fetch('/api/audio/test/start', { method: 'POST' });
+                const data = await resp.json();
+                if (!data.success) {
+                    this.testRecError = data.message || 'Start failed';
+                }
+            } catch (e) {
+                this.testRecError = e.message;
+            } finally {
+                this.testRecBusy = false;
+            }
+        },
+
+        async testStopRecording() {
+            this.testRecBusy = true;
+            this.testRecError = null;
+            try {
+                const resp = await fetch('/api/audio/test/stop', { method: 'POST' });
+                const data = await resp.json();
+                if (!data.success) {
+                    this.testRecError = data.message || 'Stop failed';
+                }
+            } catch (e) {
+                this.testRecError = e.message;
+            } finally {
+                this.testRecBusy = false;
+            }
+        },
     };
 }
 </script>

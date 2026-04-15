@@ -8,11 +8,18 @@ import numpy as np
 import pytest
 
 from app.domains.audio_recording.recorder.base import (
-    _LEVELS_INTERVAL_BLOCKS,
     _TrackWriter,
     AudioRecorder,
 )
 from app.domains.audio_recording.recorder.models import AudioTrack
+
+# Test constants: 128 frames/block at 48 kHz, interval = 48000/8 = 6000 frames
+_FRAMES_PER_BLOCK = 128
+_TEST_SAMPLERATE = 48000
+_INTERVAL_FRAMES = _TEST_SAMPLERATE // 8  # 6000
+_BLOCKS_PER_INTERVAL = _INTERVAL_FRAMES // _FRAMES_PER_BLOCK  # 46 (5888 frames)
+# 46 blocks × 128 = 5888 < 6000, so we need 47 blocks to cross the threshold
+_BLOCKS_TO_TRIGGER = _BLOCKS_PER_INTERVAL + 1  # 47
 
 
 # ── Concrete stub (abstract methods are no-ops) ────────────────
@@ -44,7 +51,8 @@ def _make_recorder(
 
     rec._build_channel_map(tracks)
     rec._peak_acc = np.zeros(len(rec._channel_selectors), dtype=np.float32)
-    rec._levels_block_count = 0
+    rec._levels_frame_count = 0
+    rec._levels_interval_frames = _INTERVAL_FRAMES
 
     # Create dummy TrackWriters (writer itself unused — we test metering only)
     rec._track_writers = [
@@ -73,12 +81,12 @@ class TestPeakMetering:
         rec._writer_loop()
 
     def test_on_levels_fires_after_interval(self) -> None:
-        """on_levels is called exactly once after _LEVELS_INTERVAL_BLOCKS blocks."""
+        """on_levels is called exactly once after _BLOCKS_TO_TRIGGER blocks."""
         track = AudioTrack(channels=(1,), label="Mic1", mode="mono")
         rec, cb = _make_recorder([track])
 
         block = np.full((128, 1), 0.5, dtype=np.float32)
-        self._feed_blocks(rec, block, _LEVELS_INTERVAL_BLOCKS)
+        self._feed_blocks(rec, block, _BLOCKS_TO_TRIGGER)
 
         assert cb.on_levels.call_count == 1
         peaks = cb.on_levels.call_args[0][0]
@@ -93,7 +101,7 @@ class TestPeakMetering:
         rec, cb = _make_recorder([track])
 
         block = np.full((128, 1), 0.5, dtype=np.float32)
-        self._feed_blocks(rec, block, _LEVELS_INTERVAL_BLOCKS - 1)
+        self._feed_blocks(rec, block, _BLOCKS_TO_TRIGGER - 1)
 
         cb.on_levels.assert_not_called()
 
@@ -103,7 +111,7 @@ class TestPeakMetering:
         rec, cb = _make_recorder([track])
 
         blocks: list[np.ndarray] = []
-        for i in range(_LEVELS_INTERVAL_BLOCKS):
+        for i in range(_BLOCKS_TO_TRIGGER):
             if i == 5:
                 blocks.append(np.full((128, 1), 0.9, dtype=np.float32))
             else:
@@ -125,7 +133,7 @@ class TestPeakMetering:
         block = np.zeros((128, 2), dtype=np.float32)
         block[:, 0] = 0.8  # L
         block[:, 1] = 0.3  # R
-        self._feed_blocks(rec, block, _LEVELS_INTERVAL_BLOCKS)
+        self._feed_blocks(rec, block, _BLOCKS_TO_TRIGGER)
 
         peaks = cb.on_levels.call_args[0][0]
         assert len(peaks) == 1
@@ -146,7 +154,7 @@ class TestPeakMetering:
         block[:, 0] = 0.7   # PGM L
         block[:, 1] = 0.6   # PGM R
         block[:, 2] = 0.4   # Mic1
-        self._feed_blocks(rec, block, _LEVELS_INTERVAL_BLOCKS)
+        self._feed_blocks(rec, block, _BLOCKS_TO_TRIGGER)
 
         peaks = cb.on_levels.call_args[0][0]
         assert len(peaks) == 2
@@ -164,9 +172,9 @@ class TestPeakMetering:
         loud = np.full((128, 1), 0.9, dtype=np.float32)
         quiet = np.full((128, 1), 0.1, dtype=np.float32)
 
-        for _ in range(_LEVELS_INTERVAL_BLOCKS):
+        for _ in range(_BLOCKS_TO_TRIGGER):
             rec._audio_q.put((loud, 0))
-        for _ in range(_LEVELS_INTERVAL_BLOCKS):
+        for _ in range(_BLOCKS_TO_TRIGGER):
             rec._audio_q.put((quiet, 0))
         rec._audio_q.put(None)
         rec._writer_loop()
@@ -183,7 +191,7 @@ class TestPeakMetering:
         rec, cb = _make_recorder([track])
 
         block = np.zeros((128, 1), dtype=np.float32)
-        self._feed_blocks(rec, block, _LEVELS_INTERVAL_BLOCKS)
+        self._feed_blocks(rec, block, _BLOCKS_TO_TRIGGER)
 
         peaks = cb.on_levels.call_args[0][0]
         assert peaks[0]["peaks"][0] == 0.0

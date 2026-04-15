@@ -2,6 +2,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
 
+logger = logging.getLogger(__name__)
+
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
@@ -484,8 +486,6 @@ class PresentationEventHandlers:
 
     async def handle_audio_levels_event(self, event: AudioLevelsEvent) -> None:
         """Broadcast audio peak levels to all connected clients (~8 Hz)."""
-        import time as _time
-        t0 = _time.perf_counter()
         message_data = {
             "type": "audio_levels",
             "data": {
@@ -494,7 +494,3 @@ class PresentationEventHandlers:
             },
         }
         self.websocket_manager.broadcast_message(message_data)
-        dt = (_time.perf_counter() - t0) * 1000
-        qsize = self.websocket_manager._message_queue.qsize()
-        if dt > 1 or qsize > 10:
-            logger.debug("levels: broadcast enqueue %.1fms, queue=%d", dt, qsize)

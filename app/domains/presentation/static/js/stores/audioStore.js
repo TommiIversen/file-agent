@@ -130,22 +130,11 @@ document.addEventListener('alpine:init', () => {
          * @param {object} data
          */
         updateLevels(data) {
-            const t0 = performance.now();
-            const prev = this.levelTracks;
-            this.levelTracks = (data.tracks || []).map((t, i) => ({
+            this.levelTracks = (data.tracks || []).map(t => ({
                 label: t.label,
-                peaks: t.peaks.map((p, j) => {
-                    const old = prev[i]?.peaks[j] ?? 0;
-                    return Math.max(p, old * 0.85);
-                }),
+                peaks: t.peaks,
                 clip: t.peaks.some(p => p >= 0.99),
             }));
-            const dt = performance.now() - t0;
-            if (!this._levelsLogCount) this._levelsLogCount = 0;
-            this._levelsLogCount++;
-            if (this._levelsLogCount % 16 === 1) {
-                console.log(`[levels] store update ${dt.toFixed(1)}ms, ${this.levelTracks.length} tracks`);
-            }
         },
 
         /**

@@ -354,28 +354,7 @@ async def _mount_static_files(app: FastAPI) -> None:
 async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  # type: ignore[no-untyped-def]
     logging.info("File Transfer Agent shutting down...")
 
-    # Stop services gracefully
-    get_websocket_manager().stop_sender_task()
-    await get_file_scanner().stop_scanning()
-    await get_file_copier().stop_workers()
-    await get_storage_monitor().stop_monitoring()
-    get_lifecycle_service().stop_pruning_loop()
-
-    ingest_monitor_worker = get_ingest_monitor_worker()
-    await ingest_monitor_worker.stop_monitoring()
-    logging.info("IngestMonitorWorker stopped")
-
-    try:
-        await get_ingest_api_client().close()
-        logging.info("IngestApiClient HTTP client closed")
-    except Exception as e:
-        logging.warning(f"Error closing IngestApiClient: {e}")
-
-    if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
-        await tally_handler.shutdown()
-        logging.info("TallyLight domain shutdown completed")
-
-    # Shutdown audio recording (stop cleanly if active)
+    # 1. Stop event producers first (so no new events hit a torn-down WS)
     try:
         from app.dependencies.audio_recording import get_audio_recording_service
         audio_service = get_audio_recording_service()
@@ -383,6 +362,30 @@ async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  #
         logging.info("AudioRecording domain shutdown completed")
     except Exception as e:
         logging.warning(f"Error shutting down audio recording: {e}")
+
+    if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
+        await tally_handler.shutdown()
+        logging.info("TallyLight domain shutdown completed")
+
+    ingest_monitor_worker = get_ingest_monitor_worker()
+    await ingest_monitor_worker.stop_monitoring()
+    logging.info("IngestMonitorWorker stopped")
+
+    await get_storage_monitor().stop_monitoring()
+
+    try:
+        await get_ingest_api_client().close()
+        logging.info("IngestApiClient HTTP client closed")
+    except Exception as e:
+        logging.warning(f"Error closing IngestApiClient: {e}")
+
+    # 2. Stop processors and scanners
+    await get_file_scanner().stop_scanning()
+    await get_file_copier().stop_workers()
+    get_lifecycle_service().stop_pruning_loop()
+
+    # 3. Stop event consumer last (all producers are silent now)
+    get_websocket_manager().stop_sender_task()
 
     # Log shutdown event while DB is still clean
     try:

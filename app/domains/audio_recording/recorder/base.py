@@ -33,8 +33,9 @@ _WATCHDOG_CHECK_INTERVAL_S = 0.25
 MAX_QUEUE_SIZE = 4096
 _MIN_DISK_SPACE_BYTES = 1_073_741_824  # 1 GB pre-flight check
 
-# ~125 ms at 48 kHz / 128 frames = 47 blocks → ~8 Hz level updates
-_LEVELS_INTERVAL_BLOCKS = 47
+# Target ~8 Hz level updates = ~125 ms between emissions.
+# Frame count is samplerate-independent: derived in start() as samplerate // 8.
+_LEVELS_INTERVAL_FRAMES_DEFAULT = 6000  # fallback: 48000 / 8
 
 
 class _TrackWriter:
@@ -91,7 +92,8 @@ class AudioRecorder(ABC):
 
         # Peak metering
         self._peak_acc: Optional[np.ndarray] = None
-        self._levels_block_count = 0
+        self._levels_frame_count = 0
+        self._levels_interval_frames = _LEVELS_INTERVAL_FRAMES_DEFAULT
 
     # ── Callback wiring ──────────────────────────────────────────
 
@@ -136,7 +138,8 @@ class AudioRecorder(ABC):
         self._dropped_since_last = 0
         self._drain_queue()
         self._peak_acc = np.zeros(len(self._channel_selectors), dtype=np.float32)
-        self._levels_block_count = 0
+        self._levels_frame_count = 0
+        self._levels_interval_frames = samplerate // 8
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -208,7 +211,7 @@ class AudioRecorder(ABC):
 
         self._start_time = None
         self._peak_acc = None
-        self._levels_block_count = 0
+        self._levels_frame_count = 0
         return result
 
     @property
@@ -314,9 +317,8 @@ class AudioRecorder(ABC):
                 if self._peak_acc is not None and self._callback:
                     col_peaks = np.abs(block).max(axis=0)
                     np.maximum(self._peak_acc, col_peaks, out=self._peak_acc)
-                    self._levels_block_count += 1
-                    if self._levels_block_count >= _LEVELS_INTERVAL_BLOCKS:
-                        t0 = time.perf_counter()
+                    self._levels_frame_count += block.shape[0]
+                    if self._levels_frame_count >= self._levels_interval_frames:
                         track_peaks: list[dict[str, Any]] = []
                         for tw2, cols2 in zip(self._track_writers, self._track_cols):
                             track_peaks.append({
@@ -324,11 +326,8 @@ class AudioRecorder(ABC):
                                 "peaks": [round(float(self._peak_acc[c]), 4) for c in cols2],
                             })
                         self._callback.on_levels(track_peaks)
-                        dt = (time.perf_counter() - t0) * 1000
-                        if dt > 2:
-                            logger.debug("levels: build+emit %.1fms", dt)
                         self._peak_acc[:] = 0.0
-                        self._levels_block_count = 0
+                        self._levels_frame_count = 0
 
         except OSError as exc:
             self._writer_error = exc

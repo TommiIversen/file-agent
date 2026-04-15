@@ -1,14 +1,18 @@
-<!-- Audio Levels Panel - LED Peak Meters -->
+<!-- Audio Levels Panel - LED Peak Meters (12 segments, log-spaced dBFS) -->
 <div x-data="{
         segs: [
-            { t: 0.02, on: 'bg-green-500' },
-            { t: 0.05, on: 'bg-green-500' },
-            { t: 0.10, on: 'bg-green-500' },
-            { t: 0.25, on: 'bg-green-500' },
-            { t: 0.45, on: 'bg-yellow-500' },
-            { t: 0.65, on: 'bg-yellow-500' },
-            { t: 0.85, on: 'bg-red-500' },
-            { t: 0.95, on: 'bg-red-600 brightness-125' },
+            { t: 0.008, on: 'bg-green-500' },
+            { t: 0.015, on: 'bg-green-500' },
+            { t: 0.03,  on: 'bg-green-500' },
+            { t: 0.06,  on: 'bg-green-500' },
+            { t: 0.10,  on: 'bg-green-500' },
+            { t: 0.18,  on: 'bg-green-500' },
+            { t: 0.30,  on: 'bg-green-500' },
+            { t: 0.45,  on: 'bg-yellow-500' },
+            { t: 0.60,  on: 'bg-yellow-500' },
+            { t: 0.75,  on: 'bg-orange-500' },
+            { t: 0.88,  on: 'bg-red-500' },
+            { t: 0.95,  on: 'bg-red-600 brightness-125' },
         ]
      }"
      x-cloak
