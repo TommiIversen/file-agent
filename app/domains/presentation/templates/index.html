@@ -43,8 +43,18 @@
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             let pending = false;
-            const observer = new MutationObserver(() => {
-                if (!pending) {
+            const observer = new MutationObserver((mutations) => {
+                if (pending) return;
+                // Only re-scan if mutations contain new elements with data-lucide
+                const needsIcons = mutations.some(m =>
+                    m.type === 'childList' && Array.from(m.addedNodes).some(n =>
+                        n.nodeType === 1 && (
+                            /** @type {Element} */ (n).hasAttribute?.('data-lucide') ||
+                            /** @type {Element} */ (n).querySelector?.('[data-lucide]')
+                        )
+                    )
+                );
+                if (needsIcons) {
                     pending = true;
                     requestAnimationFrame(() => {
                         lucide.createIcons();
