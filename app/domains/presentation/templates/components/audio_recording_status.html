@@ -1,6 +1,7 @@
 <!-- Audio Recording Status Bar Component -->
 <div x-data="{
         segs: [
+            { t: 0.002, on: 'bg-green-500' },
             { t: 0.003, on: 'bg-green-500' },
             { t: 0.005, on: 'bg-green-500' },
             { t: 0.008, on: 'bg-green-500' },
@@ -9,6 +10,7 @@
             { t: 0.06,  on: 'bg-green-500' },
             { t: 0.10,  on: 'bg-green-500' },
             { t: 0.18,  on: 'bg-green-500' },
+            { t: 0.25,  on: 'bg-green-500' },
             { t: 0.30,  on: 'bg-green-500' },
             { t: 0.40,  on: 'bg-yellow-500' },
             { t: 0.50,  on: 'bg-yellow-500' },
@@ -78,9 +80,9 @@
     <div x-show="$store.audio?.levelTracks.length > 0"
          class="mt-2 flex justify-evenly">
         <template x-for="track in $store.audio.levelTracks" :key="track.label">
-            <div class="flex gap-px">
-                <!-- Vertical label (top-to-bottom) -->
-                <span class="text-[7px] text-gray-500 leading-[1]"
+            <div class="flex items-end gap-px">
+                <!-- Vertical label (side, bottom-aligned) -->
+                <span class="text-[7px] text-gray-400 leading-[1]"
                       style="writing-mode: vertical-rl; text-orientation: mixed;"
                       x-text="track.label"></span>
                 <!-- Mono: single vertical bar -->
