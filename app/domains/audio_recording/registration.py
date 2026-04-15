@@ -66,7 +66,7 @@ async def register_audio_recording_domain(
     devices_handler = GetAudioDevicesQueryHandler(service)
     query_bus.register(GetAudioDevicesQuery, devices_handler.handle)
 
-    status_handler = GetAudioRecordingStatusQueryHandler(service)
+    status_handler = GetAudioRecordingStatusQueryHandler(service, get_user_setting)
     query_bus.register(GetAudioRecordingStatusQuery, status_handler.handle)
 
     track_config_handler = GetAudioTrackConfigQueryHandler(get_user_setting)

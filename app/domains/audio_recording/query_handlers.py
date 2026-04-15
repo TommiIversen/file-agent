@@ -37,11 +37,19 @@ class GetAudioDevicesQueryHandler(QueryHandler[GetAudioDevicesQuery, List[Dict[s
 class GetAudioRecordingStatusQueryHandler(QueryHandler[GetAudioRecordingStatusQuery, Dict[str, Any]]):
     """Returns current recording status."""
 
-    def __init__(self, service: AudioRecordingService) -> None:
+    def __init__(
+        self,
+        service: AudioRecordingService,
+        get_user_setting: Callable[[str], Awaitable[Any]],
+    ) -> None:
         self._service = service
+        self._get_user_setting = get_user_setting
 
     async def handle(self, query: GetAudioRecordingStatusQuery) -> Dict[str, Any]:
-        return self._service.get_status()
+        status = self._service.get_status()
+        enabled = await self._get_user_setting("audio_recording_enabled")
+        status["enabled"] = bool(enabled)
+        return status
 
 
 class GetAudioTrackConfigQueryHandler(QueryHandler[GetAudioTrackConfigQuery, str]):

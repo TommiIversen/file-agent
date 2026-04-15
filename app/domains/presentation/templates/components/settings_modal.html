@@ -861,17 +861,14 @@ function audioSettings() {
         },
 
         init() {
-            console.log('[AudioTracks] init() — editForm.audio_tracks:', this.$store.settings.editForm.audio_tracks);
             // Parse existing track JSON from form into local state
             this.$watch('$store.settings.editForm.audio_tracks', (val) => {
-                console.log('[AudioTracks] $watch audio_tracks fired, _syncing:', this._syncing, 'val:', val);
                 if (!this._syncing) this._parseTracksFromForm(val);
             });
             this.$watch('$store.settings.editForm.audio_track_presets', (val) => {
                 if (!this._syncingPresets) this._parsePresetsFromForm(val);
             });
             this.$nextTick(() => {
-                console.log('[AudioTracks] $nextTick — editForm.audio_tracks:', this.$store.settings.editForm.audio_tracks);
                 this._parseTracksFromForm(this.$store.settings.editForm.audio_tracks);
                 this._parsePresetsFromForm(this.$store.settings.editForm.audio_track_presets);
                 this.loadAudioDevices();
@@ -881,10 +878,7 @@ function audioSettings() {
         async loadAudioDevices() {
             try {
                 const resp = await fetch('/api/audio/devices');
-                if (resp.ok) {
-                    this.audioDevices = await resp.json();
-                    console.log('[AudioTracks] devices loaded, maxCh:', this._deviceMaxCh, 'tracks after load:', JSON.stringify(this.tracks));
-                }
+                if (resp.ok) this.audioDevices = await resp.json();
             } catch (e) {
                 console.error('Failed to load audio devices:', e);
             }
@@ -1009,9 +1003,7 @@ function audioSettings() {
                     channels: [...(t.channels || [1])],
                     label: t.label || '',
                 }));
-                console.log('[AudioTracks] _parseTracksFromForm → tracks:', JSON.stringify(this.tracks));
             } catch {
-                console.warn('[AudioTracks] _parseTracksFromForm JSON parse failed:', json);
                 this.tracks = [];
             }
             this._validate();

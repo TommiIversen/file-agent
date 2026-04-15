@@ -149,6 +149,26 @@ class MessageHandler {
                     this.handleAutoStopTriggered(message.data);
                     break;
 
+                case 'audio_recording_started':
+                    Alpine.store('audio')?.handleStarted(message.data);
+                    break;
+
+                case 'audio_recording_stopped':
+                    Alpine.store('audio')?.handleStopped(message.data);
+                    break;
+
+                case 'audio_recording_error':
+                    Alpine.store('audio')?.handleError(message.data);
+                    break;
+
+                case 'audio_device_disconnected':
+                    Alpine.store('audio')?.handleDeviceDisconnected(message.data);
+                    break;
+
+                case 'audio_overflow_warning':
+                    Alpine.store('audio')?.handleOverflowWarning(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }

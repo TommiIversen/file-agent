@@ -14,8 +14,8 @@ Growing copy udvides til `.wav`.
 | 1 | Platform-abstrakt Recorder Engine | ✅ Done |
 | 2 | Domæne-integration (EventBus + CQRS) | ✅ Done |
 | 3 | User Settings & UI | ✅ Done |
-| 4 | Growing Copy → WAV support | ⬜ Ikke startet |
-| 5 | Presentation & Status i UI | ⬜ Ikke startet |
+| 4 | Growing Copy → WAV support | ✅ Done |
+| 5 | Presentation & Status i UI | ✅ Done |
 | 6 | VU / Peak Metering i UI | ⬜ Ikke startet |
 
 ---
@@ -177,7 +177,7 @@ Nye events i `app/core/events/audio_events.py`:
 - Handlers i `command_handlers.py` og `query_handlers.py`.
 - `AudioRecordingService` orkestrerer recorder-livscyklus med `asyncio.Lock`.
 
-### 2.2b — Ny Query i ingest_monitor domænet ⬜ TODO
+### 2.2b — Ny Query i ingest_monitor domænet ✅
 
 - `GetCurrentFilenameQuery(channel: str)` er defineret i `app/core/cqrs/shared_queries.py` ✅
 - **Mangler**: Handler i `ingest_monitor/query_handlers.py` der kalder `IngestApiClient.get_current_filename()`
@@ -292,7 +292,7 @@ Tilføjes til `USER_SETTINGS_SCHEMA` + Alembic migration:
 
 ---
 
-## Fase 4: Growing Copy → WAV support ⬜
+## Fase 4: Growing Copy → WAV support ✅
 
 ### 4.1 — Extension-filter
 
@@ -348,7 +348,7 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 ---
 
-## Fase 5: Presentation & Status i UI ⬜
+## Fase 5: Presentation & Status i UI ✅
 
 ### 5.1 — WebSocket real-time
 

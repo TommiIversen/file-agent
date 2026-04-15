@@ -25,6 +25,7 @@
     <script src="/static/js/stores/directoryBrowserStore.js?v={{ v }}"></script>
     <script src="/static/js/stores/ingestStore.js?v={{ v }}"></script>
     <script src="/static/js/stores/tallySwitchStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/audioStore.js?v={{ v }}"></script>
 
     <!-- Services -->
     <script src="/static/js/services/messageHandler.js?v={{ v }}"></script>
@@ -108,6 +109,9 @@
 
         <!-- Just In Engine Status Bar (Compact Design) -->
         {% include "components/just_in_engine_status.html" %}
+
+        <!-- Audio Recording Status Bar -->
+        {% include "components/audio_recording_status.html" %}
 
         <!-- Sort Options og Scanner Status -->
         {% include "components/scanner_controls_toolbar.html" %}

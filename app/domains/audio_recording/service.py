@@ -114,6 +114,8 @@ class AudioRecordingService:
             "overflow_count": self._recorder.overflow_count,
             "session_id": self._current_session_id,
             "files": [str(f) for f in self._current_files],
+            "track_count": self._recorder.track_count,
+            "samplerate": self._recorder.samplerate,
         }
 
     async def list_devices(self) -> list[DeviceInfo]:

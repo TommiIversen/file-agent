@@ -214,6 +214,14 @@ class AudioRecorder(ABC):
     def overflow_count(self) -> int:
         return self._overflow_count
 
+    @property
+    def track_count(self) -> int:
+        return len(self._track_writers)
+
+    @property
+    def samplerate(self) -> int:
+        return self._samplerate
+
     @abstractmethod
     def list_devices(self) -> list[DeviceInfo]:
         """Return available audio input devices for this platform."""

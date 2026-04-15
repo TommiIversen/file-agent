@@ -23,6 +23,13 @@ from app.core.events.storage_events import (
 )
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.ingest_events import ChannelErrorDetectedEvent
+from app.core.events.audio_events import (
+    AudioRecordingStartedEvent,
+    AudioRecordingStoppedEvent,
+    AudioRecordingErrorEvent,
+    AudioDeviceDisconnectedEvent,
+    AudioOverflowWarningEvent,
+)
 from app.models import FileStatus, StorageStatus, MountStatus
 
 # TYPE_CHECKING avoids circular import — SqliteEventStore only used for type hints
@@ -89,6 +96,11 @@ class GlobalEventLogger:
         await event_bus.subscribe(MountStatusChangedEvent, self.handle_mount_status_changed)
         await event_bus.subscribe(ScannerStatusChangedEvent, self.handle_scanner_status_changed)
         await event_bus.subscribe(ChannelErrorDetectedEvent, self.handle_channel_error_detected)
+        await event_bus.subscribe(AudioRecordingStartedEvent, self.handle_audio_recording_started)
+        await event_bus.subscribe(AudioRecordingStoppedEvent, self.handle_audio_recording_stopped)
+        await event_bus.subscribe(AudioRecordingErrorEvent, self.handle_audio_recording_error)
+        await event_bus.subscribe(AudioDeviceDisconnectedEvent, self.handle_audio_device_disconnected)
+        await event_bus.subscribe(AudioOverflowWarningEvent, self.handle_audio_overflow_warning)
         
         logging.info("GlobalEventLogger: Alle event handlers registreret med event bus")
 
@@ -283,4 +295,44 @@ class GlobalEventLogger:
             event,
             f"System event: {type(event).__name__}",
             "INFO"
+        )
+
+    async def handle_audio_recording_started(self, event: AudioRecordingStartedEvent):
+        await self._add_log(
+            event,
+            f"Audio recording started: {len(event.tracks)} tracks @ {event.samplerate}Hz",
+            "INFO",
+            {"session_id": event.session_id, "tracks": event.tracks},
+        )
+
+    async def handle_audio_recording_stopped(self, event: AudioRecordingStoppedEvent):
+        await self._add_log(
+            event,
+            f"Audio recording stopped after {event.duration_seconds:.1f}s ({len(event.files)} files)",
+            "INFO",
+            {"session_id": event.session_id, "overflow_count": event.overflow_count},
+        )
+
+    async def handle_audio_recording_error(self, event: AudioRecordingErrorEvent):
+        await self._add_log(
+            event,
+            f"Audio recording error: {event.error}",
+            "ERROR" if not event.recoverable else "WARNING",
+            {"recoverable": event.recoverable, "session_id": event.session_id},
+        )
+
+    async def handle_audio_device_disconnected(self, event: AudioDeviceDisconnectedEvent):
+        await self._add_log(
+            event,
+            f"Audio device disconnected: {event.device_name}",
+            "ERROR",
+            {"device_name": event.device_name},
+        )
+
+    async def handle_audio_overflow_warning(self, event: AudioOverflowWarningEvent):
+        await self._add_log(
+            event,
+            f"Audio buffer overflow: {event.dropped_count} blocks dropped (total: {event.total_drops})",
+            "WARNING",
+            {"dropped_count": event.dropped_count, "total_drops": event.total_drops, "session_id": event.session_id},
         )

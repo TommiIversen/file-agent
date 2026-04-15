@@ -1,0 +1,55 @@
+<!-- Audio Recording Status Bar Component -->
+<div x-data x-cloak
+     x-show="$store.audio?.enabled"
+     class="bg-gray-700/60 rounded-lg p-3 mb-4">
+    <div class="flex items-center justify-between">
+        <!-- Left: Status indicator -->
+        <div class="flex items-center gap-2">
+            <i data-lucide="mic" class="w-4 h-4 text-gray-300"></i>
+            <span class="text-sm font-medium text-gray-300">Audio:</span>
+
+            <!-- Recording state -->
+            <template x-if="$store.audio?.recording">
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                    <span class="text-sm text-red-400 font-medium">REC</span>
+                    <span class="text-xs text-gray-400">
+                        <span x-text="$store.audio.trackCount"></span> tracks
+                        @ <span x-text="($store.audio.samplerate / 1000).toFixed(1)"></span>kHz
+                    </span>
+                </div>
+            </template>
+
+            <!-- Idle state -->
+            <template x-if="!$store.audio?.recording && !$store.audio?.deviceDisconnected && !$store.audio?.lastError">
+                <span class="text-sm text-gray-500">Standby</span>
+            </template>
+
+            <!-- Device disconnected -->
+            <template x-if="$store.audio?.deviceDisconnected">
+                <div class="flex items-center gap-1">
+                    <i data-lucide="unplug" class="w-3.5 h-3.5 text-yellow-400"></i>
+                    <span class="text-sm text-yellow-400">Device disconnected</span>
+                </div>
+            </template>
+
+            <!-- Error (non-device) -->
+            <template x-if="!$store.audio?.deviceDisconnected && $store.audio?.lastError && !$store.audio?.recording">
+                <div class="flex items-center gap-1">
+                    <i data-lucide="triangle-alert" class="w-3.5 h-3.5 text-red-400"></i>
+                    <span class="text-sm text-red-400 truncate max-w-xs" x-text="$store.audio.lastError"></span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Right: Overflow warning badge -->
+        <div x-show="$store.audio?.recording && $store.audio?.overflowCount > 0"
+             class="flex items-center gap-1 text-xs text-yellow-400">
+            <i data-lucide="triangle-alert" class="w-3.5 h-3.5"></i>
+            <span x-text="$store.audio.overflowCount + ' overflow(s)'"></span>
+        </div>
+    </div>
+</div>
