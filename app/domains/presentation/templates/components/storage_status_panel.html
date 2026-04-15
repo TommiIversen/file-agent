@@ -3,9 +3,9 @@
 {% macro storage_card(icon, label, browse_action, prefix, show_mount=false) %}
 <div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
     <div class="flex items-center justify-between mb-2">
-        <h3 class="text-base lg:text-lg font-semibold flex items-center">
-            {{ icon | safe }}<span class="hidden sm:inline">{{ label }}</span><span class="sm:hidden">{{ label.split(' ')[0] }}</span>
-        </h3>
+        <div class="flex items-center gap-2">
+            {{ icon | safe }}<span class="text-sm font-medium text-gray-300">{{ label }}</span>
+        </div>
         <div class="flex items-center gap-3 text-xs">
             <!-- Status LEDs (uniform size) -->
             <div class="flex items-center">
@@ -41,12 +41,12 @@
             </div>
 
             <!-- Storage Details + Browse -->
-            <div class="flex items-center justify-between text-xs lg:text-sm">
-                <div class="flex items-center gap-4">
-                    <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                    <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
+            <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-3">
+                    <span class="text-gray-400">Ledig: <span class="text-gray-300"
+                                                              x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></span></span>
+                    <span class="text-gray-400">Total: <span class="text-gray-300"
+                                                              x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></span></span>
                 </div>
                 <button @click="{{ browse_action }}"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
@@ -100,7 +100,8 @@
 </div>
 {% endmacro %}
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    {{ storage_card('<i data-lucide="folder" class="inline-block w-5 h-5 mr-1"></i>', 'Source Storage', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
-    {{ storage_card('<i data-lucide="target" class="inline-block w-5 h-5 mr-1"></i>', 'Destination Storage', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" id="storage-audio-grid">
+    {{ storage_card('<i data-lucide="folder" class="inline-block w-4 h-4 text-gray-300"></i>', 'Source', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
+    {% include "components/audio_recording_status.html" %}
+    {{ storage_card('<i data-lucide="target" class="inline-block w-4 h-4 text-gray-300"></i>', 'Destination', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
 </div>
