@@ -35,6 +35,7 @@ from app.core.events.audio_events import (
     AudioRecordingErrorEvent,
     AudioDeviceDisconnectedEvent,
     AudioOverflowWarningEvent,
+    AudioLevelsEvent,
 )
 
 # 3. Gør funktionen async og tilføj event_bus
@@ -89,5 +90,6 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(AudioRecordingErrorEvent, handlers.handle_audio_recording_error_event)
     await event_bus.subscribe(AudioDeviceDisconnectedEvent, handlers.handle_audio_device_disconnected_event)
     await event_bus.subscribe(AudioOverflowWarningEvent, handlers.handle_audio_overflow_warning_event)
+    await event_bus.subscribe(AudioLevelsEvent, handlers.handle_audio_levels_event)
     
     logging.info("Presentation domain-registrering (CQRS & Events) fuldført.")

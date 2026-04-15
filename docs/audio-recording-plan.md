@@ -16,7 +16,7 @@ Growing copy udvides til `.wav`.
 | 3 | User Settings & UI | ✅ Done |
 | 4 | Growing Copy → WAV support | ✅ Done |
 | 5 | Presentation & Status i UI | ✅ Done |
-| 6 | VU / Peak Metering i UI | ⬜ Ikke startet |
+| 6 | VU / Peak Metering i UI | ✅ Done |
 
 ---
 
@@ -383,7 +383,7 @@ t=end Header: final           Last header copy →   Header: final ✓
 
 ---
 
-## Fase 6: VU / Peak Metering i UI ⬜
+## Fase 6: VU / Peak Metering i UI ✅
 
 Real-time peak-niveauer per track sendt til UI via WebSocket.
 14 kanaler → 12 tracks → ~480 bytes JSON, 8 gange/sek = **~3.8 KB/sek**.

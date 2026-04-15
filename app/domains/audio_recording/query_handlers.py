@@ -49,6 +49,13 @@ class GetAudioRecordingStatusQueryHandler(QueryHandler[GetAudioRecordingStatusQu
         status = self._service.get_status()
         enabled = await self._get_user_setting("audio_recording_enabled")
         status["enabled"] = bool(enabled)
+        # Include track config so the UI can render idle meters
+        raw = await self._get_user_setting("audio_tracks") or "[]"
+        try:
+            import json
+            status["tracks_config"] = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            status["tracks_config"] = []
         return status
 
 

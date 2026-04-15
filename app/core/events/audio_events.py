@@ -6,7 +6,7 @@ changes to other domains (presentation, file_discovery, etc.).
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.core.events.domain_event import DomainEvent
 
@@ -54,3 +54,11 @@ class AudioOverflowWarningEvent(DomainEvent):
     dropped_count: int
     total_drops: int
     session_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class AudioLevelsEvent(DomainEvent):
+    """Peak levels per track, emitted ~8 Hz during recording."""
+
+    session_id: str
+    track_peaks: list[dict[str, Any]]

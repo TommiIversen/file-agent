@@ -42,6 +42,9 @@ document.addEventListener('alpine:init', () => {
         /** @type {boolean} */
         deviceDisconnected: false,
 
+        /** @type {Array<{label: string, peaks: number[], clip: boolean}>} */
+        levelTracks: [],
+
         // === METHODS ===
 
         async init() {
@@ -55,6 +58,7 @@ document.addEventListener('alpine:init', () => {
                     this.trackCount = data.track_count || 0;
                     this.samplerate = data.samplerate || 0;
                     this.overflowCount = data.overflow_count || 0;
+                    this._initLevelTracks(data.tracks_config || []);
                 }
             } catch (e) {
                 // Audio domain may not be configured — that's OK
@@ -90,6 +94,7 @@ document.addEventListener('alpine:init', () => {
             this.tracks = [];
             this.trackCount = 0;
             this.samplerate = 0;
+            this.clearLevels();
         },
 
         /**
@@ -118,6 +123,46 @@ document.addEventListener('alpine:init', () => {
          */
         handleOverflowWarning(data) {
             this.overflowCount = data.total_drops || 0;
+        },
+
+        /**
+         * Handle audio levels update from WebSocket
+         * @param {object} data
+         */
+        updateLevels(data) {
+            const prev = this.levelTracks;
+            this.levelTracks = (data.tracks || []).map((t, i) => ({
+                label: t.label,
+                peaks: t.peaks.map((p, j) => {
+                    const old = prev[i]?.peaks[j] ?? 0;
+                    return Math.max(p, old * 0.85);
+                }),
+                clip: t.peaks.some(p => p >= 0.99),
+            }));
+        },
+
+        /**
+         * Zero out level meters but keep track structure.
+         */
+        clearLevels() {
+            this.levelTracks = this.levelTracks.map(t => ({
+                label: t.label,
+                peaks: t.peaks.map(() => 0),
+                clip: false,
+            }));
+        },
+
+        /**
+         * Build idle levelTracks from track config (labels + channel count).
+         * @param {Array<{label: string, channels: number[], mode: string}>} config
+         */
+        _initLevelTracks(config) {
+            if (this.levelTracks.length > 0) return;
+            this.levelTracks = config.map(t => ({
+                label: t.label,
+                peaks: (t.channels || []).map(() => 0),
+                clip: false,
+            }));
         },
     };
 

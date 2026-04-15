@@ -169,6 +169,10 @@ class MessageHandler {
                     Alpine.store('audio')?.handleOverflowWarning(message.data);
                     break;
 
+                case 'audio_levels':
+                    Alpine.store('audio')?.updateLevels(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }

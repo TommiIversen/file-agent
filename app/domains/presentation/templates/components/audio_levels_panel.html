@@ -1,0 +1,61 @@
+<!-- Audio Levels Panel - LED Peak Meters -->
+<div x-data="{
+        segs: [
+            { t: 0.02, on: 'bg-green-500' },
+            { t: 0.05, on: 'bg-green-500' },
+            { t: 0.10, on: 'bg-green-500' },
+            { t: 0.25, on: 'bg-green-500' },
+            { t: 0.45, on: 'bg-yellow-500' },
+            { t: 0.65, on: 'bg-yellow-500' },
+            { t: 0.85, on: 'bg-red-500' },
+            { t: 0.95, on: 'bg-red-600 brightness-125' },
+        ]
+     }"
+     x-cloak
+     x-show="$store.audio?.enabled && $store.audio?.levelTracks.length > 0"
+     class="bg-gray-800 rounded-lg p-3 mb-4">
+    <h3 class="text-xs font-medium text-gray-400 uppercase mb-2">Audio Levels</h3>
+    <div class="flex flex-col">
+        <template x-for="track in $store.audio.levelTracks" :key="track.label">
+            <div class="mb-2">
+                <!-- Mono: single row -->
+                <template x-if="track.peaks.length === 1">
+                    <div class="flex items-center gap-2">
+                        <span class="w-16 text-xs text-gray-300 truncate" x-text="track.label"></span>
+                        <div class="flex gap-0.5">
+                            <template x-for="seg in segs" :key="seg.t">
+                                <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                                     :class="track.peaks[0] > seg.t ? seg.on : 'bg-gray-700'"></div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+                <!-- Stereo: two rows, tight gap, shared label -->
+                <template x-if="track.peaks.length > 1">
+                    <div class="flex flex-col gap-0.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-16 text-xs text-gray-300 truncate" x-text="track.label"></span>
+                            <span class="w-3 text-[10px] text-gray-500">L</span>
+                            <div class="flex gap-0.5">
+                                <template x-for="seg in segs" :key="seg.t">
+                                    <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                                         :class="track.peaks[0] > seg.t ? seg.on : 'bg-gray-700'"></div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-16"></span>
+                            <span class="w-3 text-[10px] text-gray-500">R</span>
+                            <div class="flex gap-0.5">
+                                <template x-for="seg in segs" :key="seg.t">
+                                    <div class="w-1.5 h-3 rounded-sm transition-colors duration-100"
+                                         :class="track.peaks[1] > seg.t ? seg.on : 'bg-gray-700'"></div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+</div>

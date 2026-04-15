@@ -25,6 +25,7 @@ from app.core.events.audio_events import (
     AudioRecordingErrorEvent,
     AudioDeviceDisconnectedEvent,
     AudioOverflowWarningEvent,
+    AudioLevelsEvent,
 )
 from app.core.file_repository import FileRepository
 from app.domains.presentation.websocket_manager import WebSocketManager
@@ -477,6 +478,17 @@ class PresentationEventHandlers:
                 "total_drops": event.total_drops,
                 "session_id": event.session_id,
                 "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_levels_event(self, event: AudioLevelsEvent) -> None:
+        """Broadcast audio peak levels to all connected clients (~8 Hz)."""
+        message_data = {
+            "type": "audio_levels",
+            "data": {
+                "session_id": event.session_id,
+                "tracks": event.track_peaks,
             },
         }
         self.websocket_manager.broadcast_message(message_data)

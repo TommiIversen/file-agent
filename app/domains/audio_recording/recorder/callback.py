@@ -9,7 +9,7 @@ so implementations MUST bridge to async via loop.call_soon_threadsafe().
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -48,4 +48,13 @@ class RecorderCallback(Protocol):
 
     def on_device_lost(self) -> None:
         """Audio device disappeared (USB unplug, driver crash)."""
+        ...
+
+    def on_levels(self, track_peaks: list[dict[str, Any]]) -> None:
+        """Peak levels per track.  Called ~8 Hz from writer thread.
+
+        Each dict: {"label": str, "peaks": list[float]}
+        Mono tracks have 1 peak, stereo tracks have 2 (L, R).
+        Values are 0.0\u20131.0 (PCM full-scale).
+        """
         ...

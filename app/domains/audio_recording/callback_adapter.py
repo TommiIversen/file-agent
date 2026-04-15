@@ -10,10 +10,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from app.core.events.audio_events import (
     AudioDeviceDisconnectedEvent,
+    AudioLevelsEvent,
     AudioOverflowWarningEvent,
     AudioRecordingErrorEvent,
     AudioRecordingStartedEvent,
@@ -94,6 +95,14 @@ class RecorderEventAdapter:
     def on_device_lost(self) -> None:
         logger.error("Audio device lost: %s", self._device_name)
         self._fire(AudioDeviceDisconnectedEvent(device_name=self._device_name))
+
+    def on_levels(self, track_peaks: list[dict[str, Any]]) -> None:
+        self._fire(
+            AudioLevelsEvent(
+                session_id=self._session_id or "",
+                track_peaks=track_peaks,
+            )
+        )
 
     # ── Thread-safe bridge ─────────────────────────────────────
 
