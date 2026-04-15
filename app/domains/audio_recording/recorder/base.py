@@ -316,6 +316,7 @@ class AudioRecorder(ABC):
                     np.maximum(self._peak_acc, col_peaks, out=self._peak_acc)
                     self._levels_block_count += 1
                     if self._levels_block_count >= _LEVELS_INTERVAL_BLOCKS:
+                        t0 = time.perf_counter()
                         track_peaks: list[dict[str, Any]] = []
                         for tw2, cols2 in zip(self._track_writers, self._track_cols):
                             track_peaks.append({
@@ -323,6 +324,9 @@ class AudioRecorder(ABC):
                                 "peaks": [round(float(self._peak_acc[c]), 4) for c in cols2],
                             })
                         self._callback.on_levels(track_peaks)
+                        dt = (time.perf_counter() - t0) * 1000
+                        if dt > 2:
+                            logger.debug("levels: build+emit %.1fms", dt)
                         self._peak_acc[:] = 0.0
                         self._levels_block_count = 0
 
