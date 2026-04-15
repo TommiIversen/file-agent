@@ -13,13 +13,13 @@ from app.domains.audio_recording.recorder.base import (
 )
 from app.domains.audio_recording.recorder.models import AudioTrack
 
-# Test constants: 128 frames/block at 48 kHz, interval = 48000/8 = 6000 frames
+# Test constants: 128 frames/block at 48 kHz, interval = 48000/10 = 4800 frames
 _FRAMES_PER_BLOCK = 128
 _TEST_SAMPLERATE = 48000
-_INTERVAL_FRAMES = _TEST_SAMPLERATE // 8  # 6000
-_BLOCKS_PER_INTERVAL = _INTERVAL_FRAMES // _FRAMES_PER_BLOCK  # 46 (5888 frames)
-# 46 blocks × 128 = 5888 < 6000, so we need 47 blocks to cross the threshold
-_BLOCKS_TO_TRIGGER = _BLOCKS_PER_INTERVAL + 1  # 47
+_INTERVAL_FRAMES = _TEST_SAMPLERATE // 10  # 4800
+_BLOCKS_PER_INTERVAL = _INTERVAL_FRAMES // _FRAMES_PER_BLOCK  # 37 (4736 frames)
+# 37 blocks × 128 = 4736 < 4800, so we need 38 blocks to cross the threshold
+_BLOCKS_TO_TRIGGER = _BLOCKS_PER_INTERVAL + 1  # 38
 
 
 # ── Concrete stub (abstract methods are no-ops) ────────────────

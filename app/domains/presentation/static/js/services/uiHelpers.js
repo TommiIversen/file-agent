@@ -202,6 +202,28 @@ class UIHelpers {
     }
 
     /**
+     * Get lucide icon name based on file extension
+     * @param {string} filePath
+     */
+    static getFileTypeIcon(filePath) {
+        const ext = (filePath || '').split('.').pop().toLowerCase();
+        if (ext === 'wav' || ext === 'mp3' || ext === 'aac' || ext === 'flac') return 'audio-lines';
+        if (ext === 'mxf' || ext === 'mp4' || ext === 'mov' || ext === 'avi') return 'video';
+        return 'file';
+    }
+
+    /**
+     * Get icon color class based on file extension
+     * @param {string} filePath
+     */
+    static getFileTypeIconColor(filePath) {
+        const ext = (filePath || '').split('.').pop().toLowerCase();
+        if (ext === 'wav' || ext === 'mp3' || ext === 'aac' || ext === 'flac') return 'text-purple-400';
+        if (ext === 'mxf' || ext === 'mp4' || ext === 'mov' || ext === 'avi') return 'text-blue-400';
+        return 'text-gray-400';
+    }
+
+    /**
      * Format file size from MB value
      * @param {number} sizeMB
      */

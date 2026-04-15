@@ -33,9 +33,9 @@ _WATCHDOG_CHECK_INTERVAL_S = 0.25
 MAX_QUEUE_SIZE = 4096
 _MIN_DISK_SPACE_BYTES = 1_073_741_824  # 1 GB pre-flight check
 
-# Target ~8 Hz level updates = ~125 ms between emissions.
-# Frame count is samplerate-independent: derived in start() as samplerate // 8.
-_LEVELS_INTERVAL_FRAMES_DEFAULT = 6000  # fallback: 48000 / 8
+# Target ~10 Hz level updates = ~100 ms between emissions.
+# Frame count is samplerate-independent: derived in start() as samplerate // 10.
+_LEVELS_INTERVAL_FRAMES_DEFAULT = 4800  # fallback: 48000 / 10
 
 
 class _TrackWriter:
@@ -139,7 +139,7 @@ class AudioRecorder(ABC):
         self._drain_queue()
         self._peak_acc = np.zeros(len(self._channel_selectors), dtype=np.float32)
         self._levels_frame_count = 0
-        self._levels_interval_frames = samplerate // 8
+        self._levels_interval_frames = samplerate // 10
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
