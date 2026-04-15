@@ -71,13 +71,13 @@ const _win = /** @type {any} */ (window);
     const SH      = 4;    // segment height
     const SG      = 1;    // vertical gap between segments
     const LR_GAP  = 1;    // gap between L/R bars
-    const LABEL_H = 14;   // vertical space for label below bars
+    const LABEL_W = 10;   // horizontal space for vertical label left of bars
     const PAD_T   = 2;
     const PAD_B   = 2;
-    const FONT    = '7px ui-monospace, SFMono-Regular, monospace';
+    const FONT    = '9px ui-monospace, SFMono-Regular, monospace';
 
     const BAR_H   = SEG_COUNT * (SH + SG) - SG;   // total bar pixel height
-    const TOTAL_H = PAD_T + BAR_H + LABEL_H + PAD_B;
+    const TOTAL_H = PAD_T + BAR_H + PAD_B;
 
     // Peak decay: multiply per frame (~60 fps) → smooth ~12 dB/s falloff
     const DECAY = 0.93;
@@ -106,6 +106,15 @@ const _win = /** @type {any} */ (window);
             this._h = 0;
 
             this._tick = this._tick.bind(this);
+
+            // Repaint on container resize (idle meters would otherwise not update)
+            this._ro = new ResizeObserver(() => {
+                this._w = 0;  // force _size() recalc
+                if (this._raf === null && this._tracks.length > 0) {
+                    this._raf = requestAnimationFrame(this._tick);
+                }
+            });
+            if (canvas.parentElement) this._ro.observe(canvas.parentElement);
         }
 
         /**
@@ -150,6 +159,7 @@ const _win = /** @type {any} */ (window);
                 cancelAnimationFrame(this._raf);
                 this._raf = null;
             }
+            this._ro.disconnect();
         }
 
         // ── internals ──────────────────────────────────────────────────
@@ -158,9 +168,16 @@ const _win = /** @type {any} */ (window);
             this._raf = null;
             this._decay();
             this._size();
+
+            // If parent is still hidden (w=0), retry until visible
+            if (this._w < 1 && this._tracks.length > 0) {
+                this._raf = requestAnimationFrame(this._tick);
+                return;
+            }
+
             this._paint();
 
-            // Continue loop while any peak is still visible
+            // Continue loop while any peak is still decaying
             if (this._alive()) {
                 this._raf = requestAnimationFrame(this._tick);
             }
@@ -221,6 +238,21 @@ const _win = /** @type {any} */ (window);
                 const cx = slot * t + slot / 2;
                 const stereo = tr.peaks.length > 1;
 
+                // Vertical label (top-to-bottom, bottom-aligned, left of bars)
+                ctx.save();
+                ctx.fillStyle = LABEL_CLR;
+                ctx.font = FONT;
+                ctx.textAlign = 'right';       // after 90° rotation: bottom-aligned
+                ctx.textBaseline = 'bottom';
+                const barLeft = stereo
+                    ? Math.round(cx - (SW_S * 2 + LR_GAP) / 2)
+                    : Math.round(cx - SW / 2);
+                const lx = barLeft - 12;
+                ctx.translate(lx, PAD_T + BAR_H);
+                ctx.rotate(Math.PI / 2);  // 90° clockwise → top-to-bottom
+                ctx.fillText(tr.label, 0, 0, BAR_H);
+                ctx.restore();
+
                 if (stereo) {
                     const bw = SW_S * 2 + LR_GAP;
                     const x0 = Math.round(cx - bw / 2);
@@ -229,13 +261,6 @@ const _win = /** @type {any} */ (window);
                 } else {
                     this._bar(ctx, Math.round(cx - SW / 2), SW, dp[0]);
                 }
-
-                // Label (horizontal, centered below bars)
-                ctx.fillStyle = LABEL_CLR;
-                ctx.font = FONT;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
-                ctx.fillText(tr.label, cx, PAD_T + BAR_H + 3, slot - 2);
             }
         }
 

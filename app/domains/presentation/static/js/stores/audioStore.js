@@ -181,6 +181,11 @@ document.addEventListener('alpine:init', () => {
                 peaks: (t.channels || []).map(() => 0),
                 clip: false,
             }));
+
+            // Send idle track structure to canvas so meters render in standby
+            if (_vuWin.updateVuMeter) {
+                _vuWin.updateVuMeter(this.levelTracks);
+            }
         },
     };
 

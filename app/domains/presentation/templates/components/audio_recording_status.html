@@ -1,5 +1,6 @@
 <!-- Audio Recording Status Bar Component -->
-<div x-cloak
+<div x-data
+     x-cloak
      x-show="$store.audio?.enabled"
      class="bg-gray-700/60 rounded-lg p-3">
     <!-- Top row: status + overflow badge -->
@@ -58,7 +59,11 @@
          (eliminates ~5,040 Alpine :class evaluations/sec) -->
     <div x-show="$store.audio?.levelTracks.length > 0"
          class="mt-2">
-        <canvas x-init="$nextTick(() => window.initVuMeter?.($el))"
+        <canvas x-init="$nextTick(() => {
+                    window.initVuMeter?.($el);
+                    const tracks = $store.audio?.levelTracks;
+                    if (tracks?.length) window.updateVuMeter?.(tracks);
+                })"
                 style="display:block"></canvas>
     </div>
 </div>
