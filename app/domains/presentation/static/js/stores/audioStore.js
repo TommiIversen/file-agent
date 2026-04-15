@@ -1,5 +1,8 @@
 // @ts-check
 
+/** @type {any} */
+const _vuWin = window;
+
 /**
  * @file Audio Store - Alpine.js store for audio recording status
  *
@@ -130,11 +133,27 @@ document.addEventListener('alpine:init', () => {
          * @param {object} data
          */
         updateLevels(data) {
-            this.levelTracks = (data.tracks || []).map(t => ({
-                label: t.label,
-                peaks: t.peaks,
-                clip: t.peaks.some(p => p >= 0.99),
-            }));
+            const tracks = data.tracks || [];
+
+            // Update Alpine store ONLY when track structure changes (rare).
+            // This keeps x-show="levelTracks.length > 0" working without
+            // per-frame reactivity cost from peak value changes.
+            const structureChanged =
+                this.levelTracks.length !== tracks.length ||
+                tracks.some((t, i) => t.label !== this.levelTracks[i]?.label);
+
+            if (structureChanged) {
+                this.levelTracks = tracks.map(t => ({
+                    label: t.label,
+                    peaks: t.peaks.map(() => 0),
+                    clip: false,
+                }));
+            }
+
+            // Route peak data directly to canvas renderer (bypasses Alpine)
+            if (_vuWin.updateVuMeter) {
+                _vuWin.updateVuMeter(tracks);
+            }
         },
 
         /**
@@ -146,6 +165,9 @@ document.addEventListener('alpine:init', () => {
                 peaks: t.peaks.map(() => 0),
                 clip: false,
             }));
+            if (_vuWin.clearVuMeter) {
+                _vuWin.clearVuMeter();
+            }
         },
 
         /**

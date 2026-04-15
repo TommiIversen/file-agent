@@ -1,27 +1,5 @@
 <!-- Audio Recording Status Bar Component -->
-<div x-data="{
-        segs: [
-            { t: 0.002, on: 'bg-green-500' },
-            { t: 0.003, on: 'bg-green-500' },
-            { t: 0.005, on: 'bg-green-500' },
-            { t: 0.008, on: 'bg-green-500' },
-            { t: 0.015, on: 'bg-green-500' },
-            { t: 0.03,  on: 'bg-green-500' },
-            { t: 0.06,  on: 'bg-green-500' },
-            { t: 0.10,  on: 'bg-green-500' },
-            { t: 0.18,  on: 'bg-green-500' },
-            { t: 0.25,  on: 'bg-green-500' },
-            { t: 0.30,  on: 'bg-green-500' },
-            { t: 0.40,  on: 'bg-yellow-500' },
-            { t: 0.50,  on: 'bg-yellow-500' },
-            { t: 0.60,  on: 'bg-yellow-500' },
-            { t: 0.75,  on: 'bg-orange-500' },
-            { t: 0.82,  on: 'bg-orange-500' },
-            { t: 0.90,  on: 'bg-red-500' },
-            { t: 0.95,  on: 'bg-red-600 brightness-125' },
-        ]
-     }"
-     x-cloak
+<div x-cloak
      x-show="$store.audio?.enabled"
      class="bg-gray-700/60 rounded-lg p-3">
     <!-- Top row: status + overflow badge -->
@@ -76,42 +54,11 @@
         </div>
     </div>
 
-    <!-- VU Meters: vertical bars, bottom-to-top, evenly spaced -->
+    <!-- VU Meters: canvas-based for high-performance rendering
+         (eliminates ~5,040 Alpine :class evaluations/sec) -->
     <div x-show="$store.audio?.levelTracks.length > 0"
-         class="mt-2 flex justify-evenly">
-        <template x-for="track in $store.audio.levelTracks" :key="track.label">
-            <div class="flex items-end gap-px">
-                <!-- Vertical label (side, bottom-aligned) -->
-                <span class="text-[7px] text-gray-400 leading-[1]"
-                      style="writing-mode: vertical-rl; text-orientation: mixed;"
-                      x-text="track.label"></span>
-                <!-- Mono: single vertical bar -->
-                <template x-if="track.peaks.length === 1">
-                    <div class="flex flex-col-reverse gap-px">
-                        <template x-for="seg in segs" :key="seg.t">
-                            <div class="w-2 h-1 rounded-[1px]"
-                                 :class="track.peaks[0] > seg.t ? seg.on : 'bg-gray-600'"></div>
-                        </template>
-                    </div>
-                </template>
-                <!-- Stereo: L + R side by side, vertical -->
-                <template x-if="track.peaks.length > 1">
-                    <div class="flex gap-px">
-                        <div class="flex flex-col-reverse gap-px">
-                            <template x-for="seg in segs" :key="seg.t">
-                                <div class="w-1.5 h-1 rounded-[1px]"
-                                     :class="track.peaks[0] > seg.t ? seg.on : 'bg-gray-600'"></div>
-                            </template>
-                        </div>
-                        <div class="flex flex-col-reverse gap-px">
-                            <template x-for="seg in segs" :key="seg.t">
-                                <div class="w-1.5 h-1 rounded-[1px]"
-                                     :class="track.peaks[1] > seg.t ? seg.on : 'bg-gray-600'"></div>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </template>
+         class="mt-2">
+        <canvas x-init="$nextTick(() => window.initVuMeter?.($el))"
+                style="display:block"></canvas>
     </div>
 </div>

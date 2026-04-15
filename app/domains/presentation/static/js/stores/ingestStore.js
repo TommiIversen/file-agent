@@ -387,7 +387,17 @@ document.addEventListener('alpine:init', () => {
             const frames = totalFrames % 25;
 
             this.recordingTimer.displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(frames).padStart(2, '0')}`;
-            this.recordingTimer.currentTime = { hours, minutes, seconds, frames };
+
+            // Mutate in-place to avoid creating a new proxy object 25×/sec
+            const ct = this.recordingTimer.currentTime;
+            if (ct) {
+                ct.hours = hours;
+                ct.minutes = minutes;
+                ct.seconds = seconds;
+                ct.frames = frames;
+            } else {
+                this.recordingTimer.currentTime = { hours, minutes, seconds, frames };
+            }
 
             // Interpolate auto-stop countdown with frame accuracy
             if (this.autoStop.enabled && this._countdownLastUpdate && this._countdownServerRemaining > 0) {

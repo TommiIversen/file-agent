@@ -13,6 +13,9 @@
         [data-lucide] { display: inline-block; vertical-align: -0.125em; pointer-events: none; }
     </style>
 
+    <!-- VU Meter Canvas Renderer (load before stores) -->
+    <script src="/static/js/vuMeterRenderer.js?v={{ v }}"></script>
+
     <!-- File Transfer Agent - Modular Architecture (Load BEFORE Alpine.js) -->
     <!-- Stores -->
     <script src="/static/js/stores/connectionStore.js?v={{ v }}"></script>
