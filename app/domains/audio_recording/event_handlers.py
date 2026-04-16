@@ -159,8 +159,11 @@ class AudioRecordingEventHandler:
             channels_snapshot,
         )
 
-        # Re-create recorder (may block on device probe)
-        await self._service.handle_device_lost()
+        # Don't re-create recorder here — device is gone.
+        # If auto-resume is triggered, it will wait for device to reappear
+        # and THEN re-create the recorder with PortAudio reinit.
+        # If no resume, on-demand re-creation in service.start() handles it.
+        await self._service.invalidate_recorder()
 
         # Auto-resume if Justin was still recording when device was lost
         if was_recording and trigger_channel:
@@ -219,31 +222,48 @@ class AudioRecordingEventHandler:
 
     # ── Device-loss auto-resume ────────────────────────────────
 
-    _RESUME_DELAY_S = 3.0
-    _RESUME_MAX_RETRIES = 5
-    _RESUME_RETRY_INTERVAL_S = 2.0
+    _RESUME_INITIAL_DELAY_S = 2.0
+    _DEVICE_POLL_INTERVAL_S = 3.0
+    _DEVICE_POLL_MAX_WAIT_S = 60.0  # give up waiting for device after 1 min
+    _RESUME_MAX_START_RETRIES = 3
+    _RESUME_START_RETRY_INTERVAL_S = 2.0
 
     async def _attempt_resume(
         self,
         trigger_channel: str,
         channels: set[str],
     ) -> None:
-        """Try to resume audio recording after device reconnect.
+        """Wait for the USB device to reappear, then resume recording.
 
-        Waits a short delay (device needs time to re-enumerate on the USB
-        bus), then retries a few times.  If the device isn't back yet,
-        the on-demand re-creation in ``service.start()`` will handle it
-        on the next Justin cycle.
+        Phase 1: Poll the device list until the configured device is back
+                  (up to ``_DEVICE_POLL_MAX_WAIT_S`` seconds).
+        Phase 2: Once visible, re-create recorder with PortAudio reinit
+                  and start a new recording session.
         """
         logger.info(
-            "Will attempt auto-resume in %.0f s (trigger=%s)",
-            self._RESUME_DELAY_S,
+            "Will wait up to %.0f s for audio device to reappear (trigger=%s)",
+            self._DEVICE_POLL_MAX_WAIT_S,
             trigger_channel,
         )
-        await asyncio.sleep(self._RESUME_DELAY_S)
+        await asyncio.sleep(self._RESUME_INITIAL_DELAY_S)
 
-        for attempt in range(1, self._RESUME_MAX_RETRIES + 1):
-            # Check if recording was stopped externally while we waited
+        # ── Phase 1: wait for device to reappear ──────────────
+        device_back = await self._wait_for_device()
+        if not device_back:
+            logger.error(
+                "Audio device did not reappear within %.0f s — "
+                "audio will resume on next Justin recording cycle",
+                self._DEVICE_POLL_MAX_WAIT_S,
+            )
+            return
+
+        logger.info("Audio device reappeared — attempting to resume recording")
+
+        # Re-create recorder with PortAudio reinit now that device is back
+        await self._service.handle_device_lost()
+
+        # ── Phase 2: start recording ──────────────────────────
+        for attempt in range(1, self._RESUME_MAX_START_RETRIES + 1):
             async with self._lock:
                 if self._service.is_recording:
                     logger.info("Already recording again — resume aborted")
@@ -275,24 +295,55 @@ class AudioRecordingEventHandler:
                     return
 
                 logger.warning(
-                    "Resume attempt %d/%d failed: %s",
+                    "Resume start attempt %d/%d failed: %s",
                     attempt,
-                    self._RESUME_MAX_RETRIES,
+                    self._RESUME_MAX_START_RETRIES,
                     result.get("message"),
                 )
             except Exception:
                 logger.warning(
-                    "Resume attempt %d/%d error",
+                    "Resume start attempt %d/%d error",
                     attempt,
-                    self._RESUME_MAX_RETRIES,
+                    self._RESUME_MAX_START_RETRIES,
                     exc_info=True,
                 )
 
-            if attempt < self._RESUME_MAX_RETRIES:
-                await asyncio.sleep(self._RESUME_RETRY_INTERVAL_S)
+            if attempt < self._RESUME_MAX_START_RETRIES:
+                await asyncio.sleep(self._RESUME_START_RETRY_INTERVAL_S)
 
         logger.error(
-            "Auto-resume FAILED after %d attempts — "
-            "audio will resume on next Justin recording cycle",
-            self._RESUME_MAX_RETRIES,
+            "Auto-resume start FAILED after %d attempts",
+            self._RESUME_MAX_START_RETRIES,
         )
+
+    async def _wait_for_device(self) -> bool:
+        """Poll until the configured audio device reappears in the OS.
+
+        Returns ``True`` if found, ``False`` if timeout exceeded.
+        """
+        from .recorder.factory import list_available_devices
+
+        device_name = self._service._device_name
+        if not device_name:
+            return False
+
+        deadline = asyncio.get_event_loop().time() + self._DEVICE_POLL_MAX_WAIT_S
+        loop = asyncio.get_running_loop()
+
+        while asyncio.get_event_loop().time() < deadline:
+            # Check if Justin stopped while we were waiting
+            async with self._lock:
+                if not self._last_trigger_channel:
+                    logger.info("Recording stopped externally — aborting device wait")
+                    return False
+
+            try:
+                devices = await loop.run_in_executor(None, list_available_devices)
+                if any(device_name.lower() in d.name.lower() for d in devices):
+                    return True
+            except Exception:
+                pass  # PortAudio may be in a bad state, just retry
+
+            await asyncio.sleep(self._DEVICE_POLL_INTERVAL_S)
+
+        return False

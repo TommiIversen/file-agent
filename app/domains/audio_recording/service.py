@@ -158,11 +158,22 @@ class AudioRecordingService:
 
     # ── Device-loss recovery ───────────────────────────────────
 
-    async def handle_device_lost(self) -> None:
-        """Called after the recorder fires on_device_lost.
+    async def invalidate_recorder(self) -> None:
+        """Mark the recorder as dead without re-creating it.
 
-        Invalidates the dead recorder and attempts to re-create it so
-        the next recording start can succeed without a full restart.
+        Called immediately on device disconnect.  Re-creation happens
+        later via ``handle_device_lost()`` once the device reappears.
+        """
+        async with self._lock:
+            self._current_files = []
+            self._current_session_id = None
+            self._recorder = None
+
+    async def handle_device_lost(self) -> None:
+        """Invalidate dead recorder and re-create with PortAudio reinit.
+
+        Should be called AFTER the device has reappeared in the OS
+        device list, so PortAudio reinit succeeds.
         """
         async with self._lock:
             self._current_files = []
