@@ -170,6 +170,7 @@ class AsioRecorder(AudioRecorder):
             samplerate=self._samplerate,
             callback=self._callback_fn,
             extra_settings=asio_settings,
+            finished_callback=self._on_stream_finished,
         )
         self._stream.start()
         return self._stream.samplerate
