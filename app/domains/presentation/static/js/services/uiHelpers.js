@@ -321,10 +321,20 @@ class UIHelpers {
         const totalMB = totalSize ? totalSize / (1024 * 1024) : 0;
 
         if (totalMB > 0) {
-            return `${copiedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
+            return `${this._formatMBSmart(copiedMB)} / ${this._formatMBSmart(totalMB)}`;
         } else {
-            return `${copiedMB.toFixed(1)} MB`;
+            return this._formatMBSmart(copiedMB);
         }
+    }
+
+    /**
+     * Format MB value to appropriate unit (MB, GB, TB) with 1 decimal
+     * @param {number} mb - value in megabytes
+     */
+    static _formatMBSmart(mb) {
+        if (mb >= 1024 * 1024) return `${(mb / (1024 * 1024)).toFixed(1)} TB`;
+        if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+        return `${mb.toFixed(1)} MB`;
     }
 
     /**
