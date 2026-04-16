@@ -27,10 +27,10 @@
             </div>
         </div>
 
-            <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
             <!-- Log Files List -->
-            <div class="lg:col-span-2 bg-gray-700 bg-opacity-60 rounded-lg p-4 overflow-auto">
-                <h3 class="text-lg font-semibold text-white mb-3">Available Log Files</h3>
+            <div class="lg:col-span-3 bg-gray-900 bg-opacity-60 rounded-lg p-3 overflow-auto">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">Log Files</h3>
 
                 <!-- Loading State -->
                 <div x-show="$store.logViewer?.loadingLogFiles" class="text-center py-4">
@@ -48,23 +48,16 @@
                 </div>
 
                 <!-- Log Files List -->
-                <div x-show="!$store.logViewer?.loadingLogFiles && !$store.logViewer?.logFilesError" class="space-y-2">
+                <div x-show="!$store.logViewer?.loadingLogFiles && !$store.logViewer?.logFilesError" class="space-y-0.5">
                     <template x-for="logFile in $store.logViewer?.logFiles || []" :key="logFile.filename">
-                        <div class="bg-gray-800 rounded-lg p-3 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
-                             :class="$store.logViewer?.selectedLogFile?.filename === logFile.filename ? 'ring-2 ring-blue-500' : ''"
+                        <div class="px-2 py-1.5 rounded cursor-pointer hover:bg-gray-600 transition-colors duration-150"
+                             :class="$store.logViewer?.selectedLogFile?.filename === logFile.filename ? 'bg-gray-600 border-l-2 border-blue-500' : 'border-l-2 border-transparent'"
                              @click="$store.logViewer.loadLogFile(logFile)">
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-white font-medium text-sm truncate" style="max-width: 100%;" x-text="logFile.filename"></div>
-                                    <div class="text-gray-400 text-xs mt-1">
-                                        <span x-text="logFile.size_mb + ' MB'"></span>
-                                        <span x-show="logFile.is_current" class="ml-2 text-green-400">• Current</span>
-                                    </div>
-                                </div>
-                                <div class="flex flex-col shrink-0 text-gray-400 text-xs text-right ml-2" style="min-width:70px;">
-                                    <div x-text="new Date(logFile.modified_time).toLocaleDateString()"></div>
-                                    <div x-text="new Date(logFile.modified_time).toLocaleTimeString()"></div>
-                                </div>
+                            <div class="text-sm truncate" :class="$store.logViewer?.selectedLogFile?.filename === logFile.filename ? 'text-white font-medium' : 'text-gray-300'" x-text="logFile.filename"></div>
+                            <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <span x-text="logFile.size_mb + ' MB'"></span>
+                                <span x-text="new Date(logFile.modified_time).toLocaleDateString()"></span>
+                                <span x-show="logFile.is_current" class="text-green-400 font-medium">Current</span>
                             </div>
                         </div>
                     </template>
@@ -76,53 +69,41 @@
             </div>
 
             <!-- Log Content -->
-            <div class="lg:col-span-10 bg-gray-700 bg-opacity-60 rounded-lg p-4 flex flex-col min-h-0">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-lg font-semibold text-white">
-                        Log Content
-                        <span x-show="$store.logViewer?.selectedLogFile" class="text-gray-400 text-sm ml-2">
-                            - <span x-text="$store.logViewer?.selectedLogFile?.filename"></span>
-                            <span x-show="$store.logViewer?.viewMode === 'chunked'" class="text-yellow-400">(Chunked)</span>
+            <div class="lg:col-span-9 bg-gray-900 bg-opacity-60 rounded-lg flex flex-col min-h-0">
+                <div class="flex items-center justify-between px-3 py-2 border-b border-gray-700">
+                    <div class="flex items-center gap-3 min-w-0 text-xs text-gray-400">
+                        <span x-show="$store.logViewer?.selectedLogFile" class="text-gray-300 font-medium truncate" x-text="$store.logViewer?.selectedLogFile?.filename"></span>
+                        <span x-show="$store.logViewer?.selectedLogFile" x-text="$store.logViewer?.selectedLogFile?.size_mb + ' MB'"></span>
+                        <span x-show="$store.logViewer?.selectedLogFile?.lines">•&nbsp;<span x-text="$store.logViewer?.selectedLogFile?.lines + ' lines'"></span></span>
+                        <span x-show="$store.logViewer?.selectedLogFile?.is_current" class="text-green-400">Current</span>
+                        <span x-show="$store.logViewer?.viewMode === 'chunked'" class="text-yellow-400">Chunked</span>
+                        <span x-show="$store.logViewer?.viewMode === 'chunked' && $store.logViewer?.currentChunkInfo" class="text-yellow-400">
+                            Showing <span x-text="($store.logViewer?.logChunks || []).length"></span>/<span x-text="$store.logViewer?.currentChunkInfo?.total_lines"></span> lines
                         </span>
-                    </h3>
-
-                    <!-- Download Button -->
-            <button x-show="$store.logViewer?.selectedLogFile"
-                @click="$store.logViewer.downloadLogFile($store.logViewer.selectedLogFile.filename)"
-                            class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors duration-200 flex items-center gap-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        Download
+                    </div>
+                    <button x-show="$store.logViewer?.selectedLogFile"
+                            @click="$store.logViewer.downloadLogFile($store.logViewer.selectedLogFile.filename)"
+                            class="px-2 py-1 text-gray-400 hover:text-white text-xs flex items-center gap-1 transition-colors duration-150 flex-shrink-0">
+                        <span x-html="UIHelpers.icon('download', 'inline-block w-3.5 h-3.5')"></span> Download
                     </button>
                 </div>
 
-                <!-- File Info -->
-             <div x-show="$store.logViewer?.selectedLogFile" class="text-xs text-gray-400 mb-2">
-                <span x-text="$store.logViewer?.selectedLogFile?.size_mb + ' MB'"></span>
-                <span x-show="$store.logViewer?.selectedLogFile?.lines"> • <span x-text="$store.logViewer?.selectedLogFile?.lines + ' lines'"></span></span>
-                <span x-show="$store.logViewer?.selectedLogFile?.is_current" class="text-green-400"> • Current</span>
-                <span x-show="$store.logViewer?.viewMode === 'chunked' && $store.logViewer?.currentChunkInfo" class="text-yellow-400">
-                    • Showing <span x-text="($store.logViewer?.logChunks || []).length"></span> of <span x-text="$store.logViewer?.currentChunkInfo?.total_lines"></span> lines
-                </span>
-                </div>
-
                 <!-- No File Selected -->
-                <div x-show="!$store.logViewer?.selectedLogFile" class="flex-1 flex items-center justify-center text-gray-400">
+                <div x-show="!$store.logViewer?.selectedLogFile" class="flex-1 flex items-center justify-center text-gray-500 text-sm">
                     Select a log file to view its content
                 </div>
 
                 <!-- Loading Log Content -->
                 <div x-show="$store.logViewer?.loadingLogContent" class="flex-1 flex items-center justify-center">
                     <div class="text-center">
-                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
-                        <div class="text-white">Loading log content...</div>
+                        <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400 mb-2"></div>
+                        <div class="text-gray-400 text-sm">Loading...</div>
                     </div>
                 </div>
 
                 <!-- Full Content Display (for smaller files) -->
              <div x-show="$store.logViewer?.selectedLogFile && !$store.logViewer?.loadingLogContent && $store.logViewer?.viewMode === 'full' && $store.logViewer?.logContent"
-                 class="flex-1 bg-gray-900 rounded-lg p-4 overflow-auto min-h-0">
+                 class="flex-1 p-3 overflow-auto min-h-0">
                 <pre class="text-gray-300 text-xs font-mono whitespace-pre overflow-auto" style="white-space: pre; overflow-x: auto;" x-text="$store.logViewer?.logContent"></pre>
                 </div>
 
@@ -138,7 +119,7 @@
                     </div>
 
                     <!-- Chunked Content -->
-                    <div class="flex-1 bg-gray-900 rounded-lg p-4 overflow-auto min-h-0"
+                    <div class="flex-1 p-3 overflow-auto min-h-0"
                          id="log-content-container">
                         <!-- Top infinite scroll trigger - only after initial load -->
                         <div x-show="$store.logViewer?.initialLoadComplete && $store.logViewer?.currentChunkInfo?.has_more_backward && !$store.logViewer?.loadingChunk"

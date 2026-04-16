@@ -180,74 +180,94 @@ class UpdateUserSettingsCommandHandler:
     def _hot_reload_services(changed: set[str]) -> None:
         """Reinitialize services whose baked config just changed."""
         if changed & _MOUNT_SETTINGS:
-            try:
-                get_network_mount_service().reinitialize()
-            except Exception:
-                logging.warning("Could not reinitialize network mount service", exc_info=True)
+            _reload_mount_service()
 
         if changed & _TALLY_SETTINGS:
-            try:
-                settings = get_settings()
-                ip = settings.tally_light_switch_ip
-
-                handler = get_tally_light_event_handler()
-                switch = handler._power_switch
-                if hasattr(switch, "update_connection"):
-                    switch.update_connection(
-                        ip_address=ip,
-                        username=settings.tally_light_switch_username,
-                        password=settings.tally_light_switch_password,
-                    )
-
-                monitor = get_tally_switch_monitor()
-                monitor.update_ip(ip)
-                if hasattr(monitor._switch_client, "update_connection"):
-                    monitor._switch_client.update_connection(
-                        ip_address=ip,
-                        username=settings.tally_light_switch_username,
-                        password=settings.tally_light_switch_password,
-                    )
-                logging.info("Tally light IP hot-reloaded to %s", ip)
-            except Exception:
-                logging.warning("Could not reinitialize tally services", exc_info=True)
+            _reload_tally_services()
 
         if changed & _COPY_POOL_SETTINGS:
-            try:
-                new_count = get_settings().max_concurrent_copies
-                copier = get_file_copier()
-                asyncio.ensure_future(copier.resize_pool(new_count))
-            except Exception:
-                logging.warning("Could not resize copy worker pool", exc_info=True)
+            _reload_copy_pool()
 
         if changed & _AUTO_STOP_SETTINGS:
-            try:
-                minutes = get_settings().justin_auto_stop_minutes
-                get_ingest_state_service().update_auto_stop(minutes)
-            except Exception:
-                logging.warning("Could not update auto-stop config", exc_info=True)
+            _reload_auto_stop()
 
         if changed & (_AUDIO_SETTINGS | {"audio_recording_enabled"}):
-            try:
-                from app.dependencies.audio_recording import get_audio_recording_service
-                from app.domains.audio_recording.recorder.factory import create_recorder
-                service = get_audio_recording_service()
-                settings = get_settings()
+            _reload_audio(changed)
 
-                # Kill-switch: disable → stop immediately
-                if "audio_recording_enabled" in changed and not settings.audio_recording_enabled:
-                    if service.is_recording:
-                        asyncio.ensure_future(service.stop())
-                    logging.info("Audio recording disabled via kill-switch")
-                    return
 
-                # Reinitialize recorder on device/rate change
-                if changed & _AUDIO_SETTINGS:
-                    device_name = settings.audio_device_name
-                    if device_name:
-                        recorder = create_recorder(device_name)
-                        asyncio.ensure_future(service.reinitialize(recorder))
-                        logging.info("Audio recorder reinitialized for device: %s", device_name)
-                    else:
-                        logging.info("Audio device cleared — recorder removed")
-            except Exception:
-                logging.warning("Could not reinitialize audio recorder", exc_info=True)
+def _reload_mount_service() -> None:
+    try:
+        get_network_mount_service().reinitialize()
+    except Exception:
+        logging.warning("Could not reinitialize network mount service", exc_info=True)
+
+
+def _reload_tally_services() -> None:
+    try:
+        settings = get_settings()
+        ip = settings.tally_light_switch_ip
+
+        handler = get_tally_light_event_handler()
+        switch = handler._power_switch
+        if hasattr(switch, "update_connection"):
+            switch.update_connection(
+                ip_address=ip,
+                username=settings.tally_light_switch_username,
+                password=settings.tally_light_switch_password,
+            )
+
+        monitor = get_tally_switch_monitor()
+        monitor.update_ip(ip)
+        if hasattr(monitor._switch_client, "update_connection"):
+            monitor._switch_client.update_connection(
+                ip_address=ip,
+                username=settings.tally_light_switch_username,
+                password=settings.tally_light_switch_password,
+            )
+        logging.info("Tally light IP hot-reloaded to %s", ip)
+    except Exception:
+        logging.warning("Could not reinitialize tally services", exc_info=True)
+
+
+def _reload_copy_pool() -> None:
+    try:
+        new_count = get_settings().max_concurrent_copies
+        copier = get_file_copier()
+        asyncio.ensure_future(copier.resize_pool(new_count))
+    except Exception:
+        logging.warning("Could not resize copy worker pool", exc_info=True)
+
+
+def _reload_auto_stop() -> None:
+    try:
+        minutes = get_settings().justin_auto_stop_minutes
+        get_ingest_state_service().update_auto_stop(minutes)
+    except Exception:
+        logging.warning("Could not update auto-stop config", exc_info=True)
+
+
+def _reload_audio(changed: set[str]) -> None:
+    try:
+        from app.dependencies.audio_recording import get_audio_recording_service
+        from app.domains.audio_recording.recorder.factory import create_recorder
+        service = get_audio_recording_service()
+        settings = get_settings()
+
+        # Kill-switch: disable → stop immediately
+        if "audio_recording_enabled" in changed and not settings.audio_recording_enabled:
+            if service.is_recording:
+                asyncio.ensure_future(service.stop())
+            logging.info("Audio recording disabled via kill-switch")
+            return
+
+        # Reinitialize recorder on device/rate change
+        if changed & _AUDIO_SETTINGS:
+            device_name = settings.audio_device_name
+            if device_name:
+                recorder = create_recorder(device_name)
+                asyncio.ensure_future(service.reinitialize(recorder))
+                logging.info("Audio recorder reinitialized for device: %s", device_name)
+            else:
+                logging.info("Audio device cleared — recorder removed")
+    except Exception:
+        logging.warning("Could not reinitialize audio recorder", exc_info=True)
