@@ -60,7 +60,9 @@ class LogFileQueryHandler:
 
         log_files: list[dict[str, Any]] = []
         for file_path in logs_dir.iterdir():
-            if file_path.is_file() and file_path.name.startswith('file_agent.log'):
+            if file_path.is_file() and file_path.suffix == '.log' or (
+                file_path.is_file() and '.log.' in file_path.name
+            ):
                 stat = file_path.stat()
                 size_bytes = stat.st_size
                 size_mb = round(size_bytes / (1024 * 1024), 2)
@@ -73,7 +75,10 @@ class LogFileQueryHandler:
                     "modified": stat.st_mtime,
                     "modified_time": modified_time_ms,
                     "path": str(file_path),
-                    "is_current": file_path.name == "file_agent.log"
+                    "is_current": file_path.name in (
+                        "file_agent.log",
+                        "audio_recording.log",
+                    )
                 })
 
         log_files.sort(key=lambda x: float(x.get("modified", 0)), reverse=True)

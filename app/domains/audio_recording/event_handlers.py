@@ -280,6 +280,12 @@ class AudioRecordingEventHandler:
         await self._service.handle_device_lost()
 
         # ── Phase 2: start recording ──────────────────────────
+        # Resolve filename and recovery prefix ONCE before retries
+        filename_stem, channel_name = await self._get_filename_stem(
+            trigger_channel
+        )
+        recovery_stem = self._service.get_recovery_prefix(filename_stem)
+
         for attempt in range(1, self._RESUME_MAX_START_RETRIES + 1):
             async with self._lock:
                 if self._service.is_recording:
@@ -287,14 +293,10 @@ class AudioRecordingEventHandler:
                     return
 
             try:
-                filename_stem, channel_name = await self._get_filename_stem(
-                    trigger_channel
-                )
-
                 session_id = str(uuid.uuid4())
                 result = await self._command_bus.execute(
                     StartAudioRecordingCommand(
-                        filename_stem=self._service.get_recovery_prefix(filename_stem),
+                        filename_stem=recovery_stem,
                         channel_name=channel_name,
                         session_id=session_id,
                     )
@@ -356,13 +358,16 @@ class AudioRecordingEventHandler:
         await asyncio.sleep(self._DEVICE_SETTLE_DELAY_S)
         await self._service.handle_device_lost()
 
+        # Resolve stem and recovery prefix ONCE before retries
+        stem = datetime.now().strftime("%y%m%d_%H%M%S_TEST")
+        recovery_stem = self._service.get_recovery_prefix(stem)
+
         for attempt in range(1, self._RESUME_MAX_START_RETRIES + 1):
             try:
-                stem = datetime.now().strftime("%y%m%d_%H%M%S_TEST")
                 session_id = f"test-{uuid.uuid4().hex[:8]}"
                 result = await self._command_bus.execute(
                     StartAudioRecordingCommand(
-                        filename_stem=self._service.get_recovery_prefix(stem),
+                        filename_stem=recovery_stem,
                         channel_name=None,
                         session_id=session_id,
                     )
