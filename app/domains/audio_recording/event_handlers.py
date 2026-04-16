@@ -143,7 +143,8 @@ class AudioRecordingEventHandler:
         """Device lost — recording already stopped by recorder cleanup.
 
         Clean up state, re-create recorder, and if Justin is still recording
-        automatically resume audio with a new recovery file.
+        (or a test recording was active) automatically resume audio with a
+        new recovery file.
         """
         async with self._lock:
             # Snapshot which channels were active *before* clearing
@@ -152,11 +153,20 @@ class AudioRecordingEventHandler:
             channels_snapshot = set(self._active_channels)
             self._active_channels.clear()
 
+            # Also detect test recordings (started via API, no channels)
+            session_id = self._service._current_session_id
+            was_test_recording = (
+                not was_recording
+                and session_id is not None
+                and session_id.startswith("test-")
+            )
+
         logger.error(
-            "Audio device disconnected: %s (was_recording=%s, channels=%s)",
+            "Audio device disconnected: %s (was_recording=%s, channels=%s, test=%s)",
             event.device_name,
             was_recording,
             channels_snapshot,
+            was_test_recording,
         )
 
         # Don't re-create recorder here — device is gone.
@@ -168,6 +178,8 @@ class AudioRecordingEventHandler:
         # Auto-resume if Justin was still recording when device was lost
         if was_recording and trigger_channel:
             await self._attempt_resume(trigger_channel, channels_snapshot)
+        elif was_test_recording:
+            await self._attempt_test_resume()
 
     async def _get_filename_stem(
         self, channel_name: str
@@ -316,6 +328,64 @@ class AudioRecordingEventHandler:
             self._RESUME_MAX_START_RETRIES,
         )
 
+    async def _attempt_test_resume(self) -> None:
+        """Wait for device to reappear and resume a test recording."""
+        logger.info(
+            "Test recording was active — will wait up to %.0f s for device",
+            self._DEVICE_POLL_MAX_WAIT_S,
+        )
+        await asyncio.sleep(self._RESUME_INITIAL_DELAY_S)
+
+        device_back = await self._wait_for_device_unconditional()
+        if not device_back:
+            logger.error(
+                "Audio device did not reappear within %.0f s — test resume aborted",
+                self._DEVICE_POLL_MAX_WAIT_S,
+            )
+            return
+
+        logger.info("Audio device reappeared — resuming test recording")
+        await self._service.handle_device_lost()
+
+        for attempt in range(1, self._RESUME_MAX_START_RETRIES + 1):
+            try:
+                stem = datetime.now().strftime("%y%m%d_%H%M%S_TEST")
+                session_id = f"test-{uuid.uuid4().hex[:8]}"
+                result = await self._command_bus.execute(
+                    StartAudioRecordingCommand(
+                        filename_stem=self._service.get_recovery_prefix(stem),
+                        channel_name=None,
+                        session_id=session_id,
+                    )
+                )
+                if result.get("success"):
+                    logger.info(
+                        "Test recording RESUMED (session=%s, attempt=%d)",
+                        session_id,
+                        attempt,
+                    )
+                    return
+                logger.warning(
+                    "Test resume attempt %d/%d failed: %s",
+                    attempt,
+                    self._RESUME_MAX_START_RETRIES,
+                    result.get("message"),
+                )
+            except Exception:
+                logger.warning(
+                    "Test resume attempt %d/%d error",
+                    attempt,
+                    self._RESUME_MAX_START_RETRIES,
+                    exc_info=True,
+                )
+            if attempt < self._RESUME_MAX_START_RETRIES:
+                await asyncio.sleep(self._RESUME_START_RETRY_INTERVAL_S)
+
+        logger.error(
+            "Test auto-resume FAILED after %d attempts",
+            self._RESUME_MAX_START_RETRIES,
+        )
+
     async def _wait_for_device(self) -> bool:
         """Poll until the configured audio device reappears in the OS.
 
@@ -343,6 +413,34 @@ class AudioRecordingEventHandler:
                     return True
             except Exception:
                 pass  # PortAudio may be in a bad state, just retry
+
+            await asyncio.sleep(self._DEVICE_POLL_INTERVAL_S)
+
+        return False
+
+    async def _wait_for_device_unconditional(self) -> bool:
+        """Poll until the configured audio device reappears (no channel check).
+
+        Same as ``_wait_for_device`` but does not abort when
+        ``_last_trigger_channel`` is cleared — used for test recordings
+        that have no associated Justin channel.
+        """
+        from .recorder.factory import list_available_devices
+
+        device_name = self._service._device_name
+        if not device_name:
+            return False
+
+        deadline = asyncio.get_event_loop().time() + self._DEVICE_POLL_MAX_WAIT_S
+        loop = asyncio.get_running_loop()
+
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                devices = await loop.run_in_executor(None, list_available_devices)
+                if any(device_name.lower() in d.name.lower() for d in devices):
+                    return True
+            except Exception:
+                pass
 
             await asyncio.sleep(self._DEVICE_POLL_INTERVAL_S)
 

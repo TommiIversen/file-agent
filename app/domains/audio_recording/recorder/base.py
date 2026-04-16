@@ -508,7 +508,8 @@ class AudioRecorder(ABC):
     def _stop_watchdog(self) -> None:
         self._watchdog_stop.set()
         if self._watchdog_thread is not None:
-            self._watchdog_thread.join(timeout=2)
+            if self._watchdog_thread is not threading.current_thread():
+                self._watchdog_thread.join(timeout=2)
             self._watchdog_thread = None
 
     def _watchdog_loop(self) -> None:
