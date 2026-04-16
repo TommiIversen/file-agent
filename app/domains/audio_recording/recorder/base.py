@@ -446,7 +446,7 @@ class AudioRecorder(ABC):
     # ── Helpers ──────────────────────────────────────────────────
 
     def _abort_writer_and_cleanup(self, created_files: list[Path]) -> None:
-        """Signal writer thread to stop, close writers, remove empty files."""
+        """Signal writer thread to stop, close writers, remove empty/header-only files."""
         self._audio_q.put(None)
         if self._writer_thread is not None:
             self._writer_thread.join(timeout=5)
@@ -468,12 +468,15 @@ class AudioRecorder(ABC):
                 logger.exception("Error closing WAV file %s", tw.path)
         self._track_writers = []
 
+    _WAV_HEADER_MAX_SIZE = 80  # standard header is 44 bytes; allow some margin
+
     @staticmethod
     def _remove_empty_files(files: list[Path]) -> None:
         for f in files:
             try:
-                if f.exists() and f.stat().st_size == 0:
+                if f.exists() and f.stat().st_size <= AudioRecorder._WAV_HEADER_MAX_SIZE:
                     f.unlink()
+                    logger.debug("Removed header-only WAV file: %s", f.name)
             except OSError:
                 pass
 

@@ -60,10 +60,26 @@ def setup_logging(settings: Settings) -> None:
     # Prevent propagation to avoid duplicate logs
     logging.getLogger().propagate = False
 
+    # ── Separate audio recording log ──────────────────────────
+    audio_log_path = log_dir / "audio_recording.log"
+    audio_file_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=audio_log_path,
+        when="midnight",
+        interval=1,
+        backupCount=settings.log_retention_days,
+        encoding="utf-8",
+    )
+    audio_file_handler.setLevel(logging.DEBUG)
+    audio_file_handler.setFormatter(logging.Formatter(file_format))
+
+    audio_logger = logging.getLogger("app.domains.audio_recording")
+    audio_logger.addHandler(audio_file_handler)
+
     # Test log with Rich markup
     logging.info(
         f"[bold green]Logging initialized[/] - "
         f"File: [cyan]{settings.log_file_path}[/], "
+        f"Audio: [cyan]{audio_log_path}[/], "
         f"Level: [yellow]{settings.log_level}[/], "
         f"Retention: [blue]{settings.log_retention_days}[/] days"
     )

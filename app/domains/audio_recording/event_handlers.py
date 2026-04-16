@@ -237,6 +237,7 @@ class AudioRecordingEventHandler:
     _RESUME_INITIAL_DELAY_S = 2.0
     _DEVICE_POLL_INTERVAL_S = 3.0
     _DEVICE_POLL_MAX_WAIT_S = 60.0  # give up waiting for device after 1 min
+    _DEVICE_SETTLE_DELAY_S = 3.0  # ASIO driver needs time after OS detects device
     _RESUME_MAX_START_RETRIES = 3
     _RESUME_START_RETRY_INTERVAL_S = 2.0
 
@@ -269,7 +270,11 @@ class AudioRecordingEventHandler:
             )
             return
 
-        logger.info("Audio device reappeared — attempting to resume recording")
+        logger.info(
+            "Audio device reappeared — waiting %.0f s for driver settle",
+            self._DEVICE_SETTLE_DELAY_S,
+        )
+        await asyncio.sleep(self._DEVICE_SETTLE_DELAY_S)
 
         # Re-create recorder with PortAudio reinit now that device is back
         await self._service.handle_device_lost()
@@ -344,7 +349,11 @@ class AudioRecordingEventHandler:
             )
             return
 
-        logger.info("Audio device reappeared — resuming test recording")
+        logger.info(
+            "Audio device reappeared — waiting %.0f s for driver settle",
+            self._DEVICE_SETTLE_DELAY_S,
+        )
+        await asyncio.sleep(self._DEVICE_SETTLE_DELAY_S)
         await self._service.handle_device_lost()
 
         for attempt in range(1, self._RESUME_MAX_START_RETRIES + 1):
