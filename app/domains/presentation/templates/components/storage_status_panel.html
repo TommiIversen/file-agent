@@ -1,31 +1,31 @@
 <!-- Storage Status Panel Component -->
 
 {% macro storage_card(icon, label, browse_action, prefix, show_mount=false) %}
-<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
-    <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center gap-2">
+<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3 overflow-hidden">
+    <div class="flex items-center justify-between mb-2 min-w-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
             {{ icon | safe }}<span class="text-sm font-medium text-gray-300">{{ label }}</span>
         </div>
-        <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-3 text-xs min-w-0 overflow-hidden">
             <!-- Status LEDs (uniform size) -->
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center whitespace-nowrap">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                <span :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                <span class="truncate" :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
                     <span x-text="($store.storage?.{{ prefix }}Accessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
                 </span>
             </div>
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center whitespace-nowrap">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                <span :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                <span class="truncate" :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
                     <span x-text="($store.storage?.{{ prefix }}Writable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
                 </span>
             </div>
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center min-w-0">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="$store.storage?.{{ prefix }}StatusColor || 'bg-gray-500'" x-cloak></div>
-                <span :class="$store.storage?.{{ prefix }}StatusTextColor || 'text-gray-400'"
+                <span class="truncate" :class="$store.storage?.{{ prefix }}StatusTextColor || 'text-gray-400'"
                       x-text="$store.storage?.{{ prefix }}Status || 'Indlæser...'" x-cloak></span>
             </div>
         </div>
@@ -41,11 +41,11 @@
             </div>
 
             <!-- Storage Details + Browse -->
-            <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-3">
-                    <span class="text-gray-400">Ledig: <span class="text-gray-300"
+            <div class="flex items-center justify-between text-xs min-w-0">
+                <div class="flex items-center gap-3 min-w-0 overflow-hidden">
+                    <span class="text-gray-400 truncate">Ledig: <span class="text-gray-300"
                                                               x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></span></span>
-                    <span class="text-gray-400">Total: <span class="text-gray-300"
+                    <span class="text-gray-400 truncate">Total: <span class="text-gray-300"
                                                               x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></span></span>
                 </div>
                 <button @click="{{ browse_action }}"
