@@ -63,7 +63,10 @@ class MessageHandler {
             return;
         }
 
-        console.log('Processing WebSocket message:', message.type);
+        // Skip logging for high-frequency messages
+        if (message.type !== 'audio_levels' && message.type !== 'file_progress_update') {
+            console.log('Processing WebSocket message:', message.type);
+        }
 
         try {
             switch (message.type) {
@@ -80,7 +83,6 @@ class MessageHandler {
                     break;
 
                 case 'file_progress_update':
-                    console.log('File progress update received:', message.data);
                     this.handleFileProgressUpdate(message.data);
                     break;
 
@@ -504,7 +506,7 @@ class MessageHandler {
 
     /**
      * Handle ingest connection status changes
-     * @param {Object} data - Ingest connection status data
+     * @param {{is_connected: boolean}} data
      */
     handleIngestConnectionChange(data) {
         console.log('Ingest connection status update received:', data);

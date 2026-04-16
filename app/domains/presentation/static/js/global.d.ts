@@ -227,6 +227,7 @@ interface IngestStore {
     };
     init(): void;
     loadInitialData(): Promise<void>;
+    loadInitialState(initialData: any): void;
     updateChannels(channelsData: { [key: string]: Partial<ChannelStatus> }): void;
     updateChannel(channelName: string, channelData: Partial<ChannelStatus>): void;
     addChannelError(channelName: string, errorMessage: string, errorCode: any): void;
@@ -250,6 +251,17 @@ interface IngestStore {
     formatTimecode(hours: number, minutes: number, seconds: number, frames: number): string;
     formatDuration(hours: number, minutes: number, seconds: number, frames: number): string;
     setConnected(connected: boolean): void;
+    updateRecordingPaths(channelName: string, presetName: string, paths: string[]): void;
+    updateAutoStop(info: any): void;
+    autoStop: {
+        enabled: boolean;
+        limitSeconds: number;
+        warningSeconds: number;
+        warningSent: boolean;
+        triggered: boolean;
+        maxRecordingSeconds: number;
+        remainingSeconds: number;
+    };
     cleanup(): void;
 }
 
@@ -561,7 +573,7 @@ interface SettingsStore {
     settingsData: SettingsData | null;
     settingsLoading: boolean;
     settingsError: string | null;
-    editForm: UserSettingsForm;
+    editForm: Partial<UserSettingsForm>;
     isDirty: boolean;
     saving: boolean;
     saveMessage: string | null;

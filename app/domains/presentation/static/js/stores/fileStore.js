@@ -202,7 +202,8 @@ document.addEventListener('alpine:init', () => {
          * @param {Event} event
          */
         handleFilesScroll(event) {
-            const el = event.target;
+            const el = /** @type {HTMLElement} */ (event.target);
+            if (!el) return;
             const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
             if (nearBottom && !this.isLoadingMore && this.hasMore) {
                 this.loadMore();

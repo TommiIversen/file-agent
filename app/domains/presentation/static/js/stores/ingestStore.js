@@ -159,7 +159,7 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle initial state loading including connection status.
-         * @param {Object} initialData - Initial state data
+         * @param {{ingest_connection?: {is_connected: boolean}, channels?: Object.<string, Partial<ChannelStatus>>}} initialData
          */
         loadInitialState(initialData) {
             // Load connection status if provided
@@ -585,15 +585,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Sets the connection status to the Just In Engine.
-         * @param {boolean} connected - The new connection status.
-         */
-        setConnected(connected) {
-            this.isConnected = connected;
-            console.log(`📡 Connection to Just In Engine ${connected ? 'established' : 'lost'}`);
-        },
-
-        /**
          * Updates the recording destination paths for a channel.
          * @param {string} channelName - The channel name.
          * @param {string} presetName - The destination preset name.
@@ -623,7 +614,7 @@ document.addEventListener('alpine:init', () => {
                 if (Object.keys(data).length > 0) {
                     console.log('Recording paths loaded:', Object.keys(data).length, 'channels');
                 }
-            } catch (error) {
+            } catch (/** @type {any} */ error) {
                 // Not critical - paths may not be available yet
                 console.debug('Recording paths not available yet:', error.message);
             }
@@ -648,7 +639,7 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Updates auto-stop state from the server payload.
-         * @param {Object} info - Auto-stop info from ingest_status_update
+         * @param {{enabled?: boolean, limit_seconds?: number, warning_seconds?: number, warning_sent?: boolean, triggered?: boolean, max_recording_seconds?: number, remaining_seconds?: number}} info
          */
         updateAutoStop(info) {
             if (!info) return;

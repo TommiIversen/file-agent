@@ -9,9 +9,7 @@
 
                 <!-- File Type Icon + File Name (left) -->
                 <div class="flex-1 min-w-0 flex items-center gap-1.5">
-                    <i class="w-3.5 h-3.5 flex-shrink-0"
-                       :data-lucide="UIHelpers.getFileTypeIcon(file.file_path)"
-                       :class="UIHelpers.getFileTypeIconColor(file.file_path)"></i>
+                    <span class="flex-shrink-0 w-3.5 h-3.5" x-html="UIHelpers.getFileTypeIconSvg(file.file_path)"></span>
                     <div class="text-white text-sm font-medium truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
                 </div>
 

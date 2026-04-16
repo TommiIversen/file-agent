@@ -1,5 +1,15 @@
 // @ts-check
 
+/**
+ * @typedef {{label: string, peaks: number[], clip: boolean}} LevelTrack
+ * @typedef {{label: string, channels: number[], mode: string}} TrackConfig
+ * @typedef {{session_id?: string, track_count?: number, tracks?: string[], samplerate?: number, timestamp?: string}} AudioStartedData
+ * @typedef {{overflow_count?: number}} AudioStoppedData
+ * @typedef {{error?: string, recoverable?: boolean}} AudioErrorData
+ * @typedef {{total_drops?: number}} AudioOverflowData
+ * @typedef {{tracks?: LevelTrack[]}} AudioLevelsData
+ */
+
 /** @type {any} */
 const _vuWin = window;
 
@@ -11,7 +21,6 @@ const _vuWin = window;
  */
 
 document.addEventListener('alpine:init', () => {
-    /** @type {AudioStore} */
     const audioStore = {
         // === STATE ===
 
@@ -70,16 +79,16 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle audio recording started event
-         * @param {object} data
+         * @param {AudioStartedData} data
          */
         handleStarted(data) {
             this.enabled = true;
             this.recording = true;
-            this.sessionId = data.session_id;
+            this.sessionId = data.session_id ?? null;
             this.trackCount = data.track_count || data.tracks?.length || 0;
             this.samplerate = data.samplerate || 0;
             this.tracks = data.tracks || [];
-            this.startedAt = data.timestamp;
+            this.startedAt = data.timestamp ?? null;
             this.overflowCount = 0;
             this.lastError = null;
             this.deviceDisconnected = false;
@@ -87,7 +96,7 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle audio recording stopped event
-         * @param {object} data
+         * @param {AudioStoppedData} data
          */
         handleStopped(data) {
             this.recording = false;
@@ -102,10 +111,10 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle audio recording error event
-         * @param {object} data
+         * @param {AudioErrorData} data
          */
         handleError(data) {
-            this.lastError = data.error;
+            this.lastError = data.error ?? null;
             if (!data.recoverable) {
                 this.recording = false;
             }
@@ -113,16 +122,16 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle audio device disconnected event
-         * @param {object} data
+         * @param {object} _data
          */
-        handleDeviceDisconnected(data) {
+        handleDeviceDisconnected(_data) {
             this.deviceDisconnected = true;
             this.recording = false;
         },
 
         /**
          * Handle audio overflow warning event
-         * @param {object} data
+         * @param {AudioOverflowData} data
          */
         handleOverflowWarning(data) {
             this.overflowCount = data.total_drops || 0;
@@ -130,9 +139,10 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Handle audio levels update from WebSocket
-         * @param {object} data
+         * @param {AudioLevelsData} data
          */
         updateLevels(data) {
+            /** @type {LevelTrack[]} */
             const tracks = data.tracks || [];
 
             // Update Alpine store ONLY when track structure changes (rare).
@@ -172,7 +182,7 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * Build idle levelTracks from track config (labels + channel count).
-         * @param {Array<{label: string, channels: number[], mode: string}>} config
+         * @param {TrackConfig[]} config
          */
         _initLevelTracks(config) {
             if (this.levelTracks.length > 0) return;

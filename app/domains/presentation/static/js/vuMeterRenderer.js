@@ -37,10 +37,11 @@ const _win = /** @type {any} */ (window);
 (() => {
     'use strict';
 
-    // ── Segment thresholds & colors (matches 18-segment layout) ────────
+    // ── Segment thresholds & colors (22-segment layout) ──────────────
 
     const SEGS = [
-        { t: 0.002, c: '#22c55e' },  // green-500
+        { t: 0.001, c: '#22c55e' },  // green-500
+        { t: 0.002, c: '#22c55e' },
         { t: 0.003, c: '#22c55e' },
         { t: 0.005, c: '#22c55e' },
         { t: 0.008, c: '#22c55e' },
@@ -48,16 +49,19 @@ const _win = /** @type {any} */ (window);
         { t: 0.03,  c: '#22c55e' },
         { t: 0.06,  c: '#22c55e' },
         { t: 0.10,  c: '#22c55e' },
-        { t: 0.18,  c: '#22c55e' },
+        { t: 0.15,  c: '#22c55e' },
+        { t: 0.20,  c: '#22c55e' },
         { t: 0.25,  c: '#22c55e' },
         { t: 0.30,  c: '#22c55e' },
         { t: 0.40,  c: '#eab308' },  // yellow-500
         { t: 0.50,  c: '#eab308' },
         { t: 0.60,  c: '#eab308' },
-        { t: 0.75,  c: '#f97316' },  // orange-500
-        { t: 0.82,  c: '#f97316' },
+        { t: 0.70,  c: '#f97316' },  // orange-500
+        { t: 0.78,  c: '#f97316' },
+        { t: 0.85,  c: '#f97316' },
         { t: 0.90,  c: '#ef4444' },  // red-500
-        { t: 0.95,  c: '#f55a5a' },  // red-600 + brightness-125
+        { t: 0.93,  c: '#ef4444' },
+        { t: 0.97,  c: '#f55a5a' },  // red-600 + brightness-125
     ];
 
     const SEG_COUNT = SEGS.length;
@@ -68,7 +72,7 @@ const _win = /** @type {any} */ (window);
 
     const SW      = 8;    // segment width (mono)
     const SW_S    = 6;    // segment width (stereo, per channel)
-    const SH      = 4;    // segment height
+    const SH      = 3;    // segment height
     const SG      = 1;    // vertical gap between segments
     const LR_GAP  = 1;    // gap between L/R bars
     const LABEL_W = 10;   // horizontal space for vertical label left of bars

@@ -201,26 +201,32 @@ class UIHelpers {
         return filePath.split(/[/\\]/).pop();
     }
 
-    /**
-     * Get lucide icon name based on file extension
-     * @param {string} filePath
-     */
-    static getFileTypeIcon(filePath) {
-        const ext = (filePath || '').split('.').pop().toLowerCase();
-        if (ext === 'wav' || ext === 'mp3' || ext === 'aac' || ext === 'flac') return 'audio-lines';
-        if (ext === 'mxf' || ext === 'mp4' || ext === 'mov' || ext === 'avi') return 'video';
-        return 'file';
-    }
+    /** @type {Map<string, string>} */
+    static _iconCache = new Map();
 
     /**
-     * Get icon color class based on file extension
+     * Get inline SVG icon for file type (avoids lucide createIcons loop)
      * @param {string} filePath
      */
-    static getFileTypeIconColor(filePath) {
-        const ext = (filePath || '').split('.').pop().toLowerCase();
-        if (ext === 'wav' || ext === 'mp3' || ext === 'aac' || ext === 'flac') return 'text-purple-400';
-        if (ext === 'mxf' || ext === 'mp4' || ext === 'mov' || ext === 'avi') return 'text-blue-400';
-        return 'text-gray-400';
+    static getFileTypeIconSvg(filePath) {
+        const ext = ((filePath || '').split('.').pop() || '').toLowerCase();
+        if (this._iconCache.has(ext)) return this._iconCache.get(ext);
+
+        let color, paths;
+        if (['wav', 'mp3', 'aac', 'flac'].includes(ext)) {
+            color = '#c084fc';
+            paths = '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>';
+        } else if (['mxf', 'mp4', 'mov', 'avi'].includes(ext)) {
+            color = '#60a5fa';
+            paths = '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>';
+        } else {
+            color = '#9ca3af';
+            paths = '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>';
+        }
+
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+        this._iconCache.set(ext, svg);
+        return svg;
     }
 
     /**
