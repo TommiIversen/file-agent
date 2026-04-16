@@ -211,3 +211,26 @@ async def test_automatic_timestamps(
     assert updated_file.status == FileStatus.COMPLETED
     assert updated_file.completed_at is not None
     assert isinstance(updated_file.completed_at, datetime)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("from_status", [FileStatus.COPYING, FileStatus.GROWING_COPY])
+async def test_copying_to_waiting_for_space(
+    state_machine: FileStateMachine,
+    mock_repository: AsyncMock,
+    sample_file: TrackedFile,
+    from_status: FileStatus,
+):
+    """COPYING/GROWING_COPY → WAITING_FOR_SPACE should be valid."""
+    sample_file.status = from_status
+    mock_repository.get_by_id.return_value = sample_file
+
+    await state_machine.transition(
+        file_id=sample_file.id,
+        new_status=FileStatus.WAITING_FOR_SPACE,
+        error_message="Low disk space on destination",
+    )
+
+    mock_repository.update.assert_called_once()
+    updated_file = mock_repository.update.call_args[0][0]
+    assert updated_file.status == FileStatus.WAITING_FOR_SPACE

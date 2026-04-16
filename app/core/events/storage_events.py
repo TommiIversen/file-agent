@@ -14,13 +14,13 @@ class MountStatusChangedEvent(DomainEvent):
 
 @dataclass(frozen=True)
 class DestinationUnavailableEvent(DomainEvent):
-    """Publiceres når destinationen går fra OK -> ERROR/CRITICAL."""
+    """Publiceres når destinationen går fra OK/WARNING -> ERROR/CRITICAL."""
     reason: str
     storage_info: StorageInfo
 
 @dataclass(frozen=True)
 class DestinationRecoveredEvent(DomainEvent):
-    """Publiceres når destinationen går fra ERROR/CRITICAL -> OK."""
+    """Publiceres når destinationen forlader ERROR/CRITICAL (til OK eller WARNING)."""
     reason: str
     storage_info: StorageInfo
 

@@ -400,6 +400,27 @@ class TestRecoveryAndUnavailableDetection:
             )
             mock_unavail.assert_awaited_once()
 
+    async def test_critical_to_warning_triggers_recovery(self):
+        """CRITICAL → WARNING should trigger destination recovered."""
+        svc, _, checker, _ = _build_service()
+
+        crit_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.CRITICAL, free=5.0)
+        svc._storage_state.update_destination_info(crit_info)
+
+        warn_info = _make_storage_info(path="/dest", accessible=True, status=StorageStatus.WARNING, free=30.0)
+        checker.check_path = AsyncMock(return_value=warn_info)
+
+        with patch.object(
+            svc._notification_handler, "publish_destination_recovered", new_callable=AsyncMock
+        ) as mock_recovered:
+            await svc._check_single_storage(
+                storage_type="destination",
+                path="/dest",
+                warning_threshold=50.0,
+                critical_threshold=20.0,
+            )
+            mock_recovered.assert_awaited_once()
+
     async def test_ok_to_warning_not_detected_as_unavailable(self):
         """OK → WARNING should NOT trigger destination unavailable."""
         svc, _, checker, _ = _build_service()

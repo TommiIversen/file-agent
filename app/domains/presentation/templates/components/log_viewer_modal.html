@@ -13,12 +13,12 @@
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-[80vw] w-full h-[89vh] overflow-hidden flex flex-col">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-bold text-white"><i data-lucide="file-text" class="inline-block w-6 h-6"></i> Log Viewer</h2>
+            <h2 class="text-2xl font-bold text-white"><span x-html="UIHelpers.icon('file-text', 'inline-block w-6 h-6')"></span> Log Viewer</h2>
             <div class="flex items-center space-x-3">
         <button @click="$store.logViewer.loadLogFiles()"
             :disabled="$store.logViewer.loadingLogFiles"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
-                    <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
+                    <span x-html="UIHelpers.icon('refresh-cw', 'inline-block w-3.5 h-3.5')"></span> Refresh
                 </button>
                 <button @click="$store.logViewer.closeLogViewerModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
@@ -133,7 +133,7 @@
                     <!-- Loading indicator for backward -->
                     <div x-show="$store.logViewer?.loadingChunk && $store.logViewer?.currentChunkInfo?.has_more_backward" 
                          class="text-center py-2 text-gray-400 text-sm">
-                        <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
+                        <span x-html="UIHelpers.icon('loader', 'inline-block w-4 h-4 animate-spin mr-2')"></span>
                         Loading earlier content...
                     </div>
 
@@ -156,7 +156,7 @@
                     <!-- Loading indicator for forward -->
                     <div x-show="$store.logViewer?.loadingChunk && $store.logViewer?.currentChunkInfo?.has_more_forward" 
                          class="text-center py-2 text-gray-400 text-sm">
-                        <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
+                        <span x-html="UIHelpers.icon('loader', 'inline-block w-4 h-4 animate-spin mr-2')"></span>
                         Loading more content...
                     </div>
 

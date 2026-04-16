@@ -50,7 +50,7 @@
                 </div>
                 <button @click="{{ browse_action }}"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
-                    <span class="hidden sm:inline"><i data-lucide="folder-open" class="inline-block w-3.5 h-3.5"></i> Browse</span><span class="sm:hidden"><i data-lucide="folder-open" class="inline-block w-3.5 h-3.5"></i></span>
+                    <span class="hidden sm:inline"><span x-html="UIHelpers.icon('folder-open', 'inline-block w-3.5 h-3.5')"></span> Browse</span><span class="sm:hidden"><span x-html="UIHelpers.icon('folder-open', 'inline-block w-3.5 h-3.5')"></span></span>
                 </button>
             </div>
 
@@ -82,7 +82,7 @@
 
                             <span class="text-xs font-medium"
                                   :class="$store.storage?.{{ prefix }}MountStatusColor" x-cloak>
-                                <i data-lucide="link" class="inline-block w-3 h-3"></i> <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
+                                <span x-html="UIHelpers.icon('link', 'inline-block w-3 h-3')"></span> <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
                             </span>
                         </div>
                         <span class="text-gray-300 text-xs truncate"
@@ -101,7 +101,7 @@
 {% endmacro %}
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" id="storage-audio-grid">
-    {{ storage_card('<i data-lucide="folder" class="inline-block w-4 h-4 text-gray-300"></i>', 'Source', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
+    {{ storage_card('<span x-html="UIHelpers.icon(\'folder\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Source', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
     {% include "components/audio_recording_status.html" %}
-    {{ storage_card('<i data-lucide="target" class="inline-block w-4 h-4 text-gray-300"></i>', 'Destination', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
+    {{ storage_card('<span x-html="UIHelpers.icon(\'target\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Destination', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
 </div>

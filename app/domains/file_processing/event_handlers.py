@@ -71,7 +71,7 @@ class FileProcessingEventHandler:
                 await self._job_queue_service.process_waiting_network_files()
                 logging.info("Network available - resumed file processing")
             else:
-                await self._job_queue_service.handle_destination_unavailable()
+                await self._job_queue_service.handle_destination_unavailable(event.reason)
                 logging.info("Network unavailable - paused file processing")
         except Exception as e:
             logging.error(f"Error handling network status change: {e}", exc_info=True)

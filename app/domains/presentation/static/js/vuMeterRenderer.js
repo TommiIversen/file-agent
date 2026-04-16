@@ -72,7 +72,7 @@ const _win = /** @type {any} */ (window);
 
     const SW      = 8;    // segment width (mono)
     const SW_S    = 6;    // segment width (stereo, per channel)
-    const SH      = 3;    // segment height
+    const SH      = 2.8;    // segment height
     const SG      = 1;    // vertical gap between segments
     const LR_GAP  = 1;    // gap between L/R bars
     const LABEL_W = 10;   // horizontal space for vertical label left of bars

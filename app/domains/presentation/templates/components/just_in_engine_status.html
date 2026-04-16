@@ -4,7 +4,7 @@
     <div class="flex items-center">
         <!-- Left side: Channel LEDs -->
         <div class="flex-1 flex items-center space-x-1">
-            <span class="text-sm font-medium text-gray-300 mr-3"><i data-lucide="video" class="inline-block w-4 h-4"></i> Channels:</span>
+            <span class="text-sm font-medium text-gray-300 mr-3"><span x-html="UIHelpers.icon('video', 'inline-block w-4 h-4')"></span> Channels:</span>
             <template x-for="channel in $store.ingest?.getChannelsSorted() || []" :key="channel.name">
                 <div class="relative group">
                     <!-- LED Indicator -->
@@ -117,7 +117,7 @@
                     <template x-if="$store.ingest?.autoStop?.enabled && $store.ingest?.recordingTimer?.isRunning">
                         <div class="flex items-center ml-2 pl-2 border-l border-gray-600">
                             <span class="text-xs"
-                                  :class="$store.ingest?.autoStop?.warningSent ? 'text-yellow-400' : 'text-gray-500'"><i data-lucide="timer" class="inline-block w-3 h-3"></i></span>
+                                  :class="$store.ingest?.autoStop?.warningSent ? 'text-yellow-400' : 'text-gray-500'"><span x-html="UIHelpers.icon('timer', 'inline-block w-3 h-3')"></span></span>
                             <span class="text-xs text-gray-500 ml-1"
                                   x-text="'/ ' + ($store.ingest?.formatLimit($store.ingest?.autoStop?.limitSeconds || 0))" x-cloak></span>
                         </div>
@@ -164,7 +164,7 @@
                 <template x-if="$store.ingest?.getRecordingStatus() === 'blink'">
                     <div class="flex items-center">
                         <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse shadow-lg shadow-yellow-400/50"></div>
-                        <span class="text-xs text-yellow-300 ml-1">BLINK <i data-lucide="timer" class="inline-block w-3 h-3"></i></span>
+                        <span class="text-xs text-yellow-300 ml-1">BLINK <span x-html="UIHelpers.icon('timer', 'inline-block w-3 h-3')"></span></span>
                     </div>
                 </template>
             </div>
@@ -256,7 +256,7 @@
                         </div>
                         <div x-show="channel.has_errors" class="text-xs">
                             <div class="text-yellow-400 mb-1">
-                            <i data-lucide="triangle-alert" class="inline-block w-3.5 h-3.5"></i> <span x-text="channel.last_errors?.length || 0" x-cloak></span> errors
+                            <span x-html="UIHelpers.icon('triangle-alert', 'inline-block w-3.5 h-3.5')"></span> <span x-text="channel.last_errors?.length || 0" x-cloak></span> errors
                             </div>
                             <div x-show="channel.last_error" class="text-yellow-300 text-xs bg-yellow-900/20 p-2 rounded">
                                 <div class="font-medium">Latest:</div>
@@ -296,8 +296,8 @@
                         :disabled="($store.ingest?.getChannelsSorted() || []).length === 0"
                         :class="($store.ingest?.getChannelsSorted() || []).length > 0 ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 cursor-not-allowed'"
                         class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
-                    <span x-show="!$store.ingest?.isStarting"><i data-lucide="play" class="inline-block w-3.5 h-3.5"></i> Start All</span>
-                    <span x-show="$store.ingest?.isStarting"><i data-lucide="loader" class="inline-block w-3.5 h-3.5 animate-spin"></i> Starting...</span>
+                    <span x-show="!$store.ingest?.isStarting"><span x-html="UIHelpers.icon('play', 'inline-block w-3.5 h-3.5')"></span> Start All</span>
+                    <span x-show="$store.ingest?.isStarting"><span x-html="UIHelpers.icon('loader', 'inline-block w-3.5 h-3.5 animate-spin')"></span> Starting...</span>
                 </button>
                 
                 <!-- Stop All Channels Button -->
@@ -305,8 +305,8 @@
                         :disabled="($store.ingest?.getChannelsSorted() || []).length === 0"
                         :class="($store.ingest?.getChannelsSorted() || []).length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-600 cursor-not-allowed'"
                         class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
-                    <span x-show="!$store.ingest?.isStopping"><i data-lucide="square" class="inline-block w-3.5 h-3.5"></i> Stop All</span>
-                    <span x-show="$store.ingest?.isStopping"><i data-lucide="loader" class="inline-block w-3.5 h-3.5 animate-spin"></i> Stopping...</span>
+                    <span x-show="!$store.ingest?.isStopping"><span x-html="UIHelpers.icon('square', 'inline-block w-3.5 h-3.5')"></span> Stop All</span>
+                    <span x-show="$store.ingest?.isStopping"><span x-html="UIHelpers.icon('loader', 'inline-block w-3.5 h-3.5 animate-spin')"></span> Stopping...</span>
                 </button>
                 
                 <!-- Clear All Errors Button -->
@@ -314,14 +314,14 @@
                         :disabled="($store.ingest?.statistics?.errorChannels || 0) === 0"
                         :class="($store.ingest?.statistics?.errorChannels || 0) > 0 ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-600 cursor-not-allowed'"
                         class="text-white px-3 py-1 rounded text-xs transition-colors duration-200">
-                    <span x-show="!$store.ingest?.isClearing"><i data-lucide="trash-2" class="inline-block w-3.5 h-3.5"></i> Clear Errors</span>
-                    <span x-show="$store.ingest?.isClearing"><i data-lucide="loader" class="inline-block w-3.5 h-3.5 animate-spin"></i> Clearing...</span>
+                    <span x-show="!$store.ingest?.isClearing"><span x-html="UIHelpers.icon('trash-2', 'inline-block w-3.5 h-3.5')"></span> Clear Errors</span>
+                    <span x-show="$store.ingest?.isClearing"><span x-html="UIHelpers.icon('loader', 'inline-block w-3.5 h-3.5 animate-spin')"></span> Clearing...</span>
                 </button>
                 
                 <!-- Refresh Button -->
                 <button @click="$store.ingest?.loadInitialData()"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200">
-                    <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
+                    <span x-html="UIHelpers.icon('refresh-cw', 'inline-block w-3.5 h-3.5')"></span> Refresh
                 </button>
             </div>
         </div>

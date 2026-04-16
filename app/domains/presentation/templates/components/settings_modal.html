@@ -12,12 +12,12 @@
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 m-4 max-w-[80vw] w-full max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-bold text-white"><i data-lucide="settings" class="inline-block w-6 h-6"></i> Application Settings</h2>
+            <h2 class="text-2xl font-bold text-white"><span x-html="UIHelpers.icon('settings', 'inline-block w-6 h-6')"></span> Application Settings</h2>
             <div class="flex items-center space-x-3">
         <button @click="$store.settings.loadSettings(); $store.settings.loadUserSettings()"
             :disabled="$store.settings.settingsLoading"
                         class="text-gray-400 hover:text-white text-sm px-3 py-1 bg-gray-700 rounded transition-colors duration-200 disabled:opacity-50">
-                    <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i> Refresh
+                    <span x-html="UIHelpers.icon('refresh-cw', 'inline-block w-3.5 h-3.5')"></span> Refresh
                 </button>
                 <button @click="$store.settings.closeSettingsModal()"
                         class="text-gray-400 hover:text-white text-2xl leading-none transition-colors duration-200">
@@ -33,7 +33,7 @@
             <div x-show="$store.settings?.pendingRestart"
                  class="bg-amber-900 bg-opacity-60 border border-amber-500 rounded-lg p-3 flex items-center justify-between">
                 <div class="flex items-center text-amber-300 text-sm">
-                    <i data-lucide="alert-triangle" class="inline-block w-5 h-5 mr-2 flex-shrink-0"></i>
+                    <span x-html="UIHelpers.icon('alert-triangle', 'inline-block w-5 h-5 mr-2 flex-shrink-0')"></span>
                     <span>Some changes require a restart to take effect.</span>
                 </div>
                 <button @click="$store.settings.restartApplication()"
@@ -53,7 +53,7 @@
 
             <!-- Branding -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="tag" class="inline-block w-5 h-5"></i> Branding</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('tag', 'inline-block w-5 h-5')"></span> Branding</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <label for="setting-brand-name" class="text-gray-300 block mb-1">Application Name</label>
@@ -69,7 +69,7 @@
 
             <!-- Path Configuration -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder" class="inline-block w-5 h-5"></i> Paths</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('folder', 'inline-block w-5 h-5')"></span> Paths</h3>
                 <div class="grid grid-cols-1 gap-4 text-sm">
                     <div>
                         <label for="setting-source-dir" class="text-gray-300 block mb-1">Source Directory</label>
@@ -94,7 +94,7 @@
 
             <!-- Network Mount -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="globe" class="inline-block w-5 h-5"></i> Network</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('globe', 'inline-block w-5 h-5')"></span> Network</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div class="md:col-span-2">
                         <label for="setting-network-url" class="text-gray-300 block mb-1">Network Share URL</label>
@@ -130,7 +130,7 @@
 
             <!-- Hardware -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="cpu" class="inline-block w-5 h-5"></i> Hardware</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('cpu', 'inline-block w-5 h-5')"></span> Hardware</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <label for="setting-tally-ip" class="text-gray-300 block mb-1">Tally Light IP</label>
@@ -152,7 +152,7 @@
                                     <span>Tester…</span>
                                 </template>
                                 <template x-if="!$store.settings.tallyTestRunning">
-                                    <span><i data-lucide="zap" class="inline-block w-3 h-3 mr-0.5"></i> Test</span>
+                                    <span><span x-html="UIHelpers.icon('zap', 'inline-block w-3 h-3 mr-0.5')"></span> Test</span>
                                 </template>
                             </button>
                         </div>
@@ -174,7 +174,7 @@
 
             <!-- Audio Recording -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4" x-data="audioSettings()">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="mic" class="inline-block w-5 h-5"></i> Audio Recording</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('mic', 'inline-block w-5 h-5')"></span> Audio Recording</h3>
                 <div class="space-y-4 text-sm">
 
                     <!-- Enable toggle -->
@@ -220,7 +220,7 @@
                                             type="button"
                                             class="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-gray-300 rounded transition-colors text-xs"
                                             title="Refresh devices">
-                                        <i data-lucide="refresh-cw" class="inline-block w-3.5 h-3.5"></i>
+                                        <span x-html="UIHelpers.icon('refresh-cw', 'inline-block w-3.5 h-3.5')"></span>
                                     </button>
                                 </div>
                             </div>
@@ -251,25 +251,25 @@
                                         :disabled="selectedPreset === ''"
                                         class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
                                         title="Apply preset to tracks">
-                                    <i data-lucide="download" class="inline-block w-3.5 h-3.5 mr-1"></i> Load
+                                    <span x-html="UIHelpers.icon('download', 'inline-block w-3.5 h-3.5 mr-1')"></span> Load
                                 </button>
                                 <button @click="saveAsPreset()" type="button"
                                         :disabled="tracks.length === 0"
                                         class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
                                         title="Save current tracks as a preset">
-                                    <i data-lucide="save" class="inline-block w-3.5 h-3.5 mr-1"></i> Save
+                                    <span x-html="UIHelpers.icon('save', 'inline-block w-3.5 h-3.5 mr-1')"></span> Save
                                 </button>
                                 <button @click="deletePreset()" type="button"
                                         :disabled="selectedPreset === ''"
                                         class="px-2 py-1.5 bg-red-700 hover:bg-red-600 disabled:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
                                         title="Delete selected preset">
-                                    <i data-lucide="trash-2" class="inline-block w-3.5 h-3.5"></i>
+                                    <span x-html="UIHelpers.icon('trash-2', 'inline-block w-3.5 h-3.5')"></span>
                                 </button>
                             </div>
                             <!-- Overflow warning when loading preset -->
                             <template x-if="presetOverflowWarning">
                                 <div class="mt-2 text-amber-400 text-xs flex items-center gap-1">
-                                    <i data-lucide="alert-triangle" class="inline-block w-3.5 h-3.5"></i>
+                                    <span x-html="UIHelpers.icon('alert-triangle', 'inline-block w-3.5 h-3.5')"></span>
                                     <span x-text="presetOverflowWarning"></span>
                                 </div>
                             </template>
@@ -325,21 +325,21 @@
 
                                         <button @click="removeTrack(i); $store.settings.markDirty()" type="button"
                                                 class="text-gray-500 hover:text-red-400 transition-colors px-1" title="Remove track">
-                                            <i data-lucide="x" class="inline-block w-4 h-4"></i>
+                                            <span x-html="UIHelpers.icon('x', 'inline-block w-4 h-4')"></span>
                                         </button>
                                     </div>
                                 </template>
                             </div>
                             <button @click="addTrack(); $store.settings.markDirty()" type="button"
                                     class="mt-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-gray-300 text-xs rounded transition-colors">
-                                <i data-lucide="plus" class="inline-block w-3.5 h-3.5 mr-1"></i> Add Track
+                                <span x-html="UIHelpers.icon('plus', 'inline-block w-3.5 h-3.5 mr-1')"></span> Add Track
                             </button>
                         </div>
 
                         <!-- Validation warnings -->
                         <template x-if="validationError">
                             <div class="text-amber-400 text-xs flex items-center gap-1">
-                                <i data-lucide="alert-triangle" class="inline-block w-3.5 h-3.5"></i>
+                                <span x-html="UIHelpers.icon('alert-triangle', 'inline-block w-3.5 h-3.5')"></span>
                                 <span x-text="validationError"></span>
                             </div>
                         </template>
@@ -351,12 +351,12 @@
                                 <button @click="testStartRecording()" type="button"
                                         :disabled="$store.audio?.recording || testRecBusy"
                                         class="px-3 py-1.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1">
-                                    <i data-lucide="play" class="inline-block w-3.5 h-3.5"></i> Start
+                                    <span x-html="UIHelpers.icon('play', 'inline-block w-3.5 h-3.5')"></span> Start
                                 </button>
                                 <button @click="testStopRecording()" type="button"
                                         :disabled="!$store.audio?.recording || testRecBusy"
                                         class="px-3 py-1.5 bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded transition-colors flex items-center gap-1">
-                                    <i data-lucide="square" class="inline-block w-3.5 h-3.5"></i> Stop
+                                    <span x-html="UIHelpers.icon('square', 'inline-block w-3.5 h-3.5')"></span> Stop
                                 </button>
                                 <span x-show="testRecBusy" class="text-gray-400 text-xs">Working...</span>
                                 <span x-show="testRecError" class="text-red-400 text-xs" x-text="testRecError"></span>
@@ -369,7 +369,7 @@
 
             <!-- Output Folder Template -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="folder-open" class="inline-block w-5 h-5"></i> Output Folders</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('folder-open', 'inline-block w-5 h-5')"></span> Output Folders</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div class="flex items-center md:col-span-2">
                         <label class="relative inline-flex items-center cursor-pointer">
@@ -388,10 +388,9 @@
                         <button @click="helpOpen = !helpOpen"
                                 type="button"
                                 class="flex items-center text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                            <i data-lucide="help-circle" class="inline-block w-3.5 h-3.5 mr-1"></i>
+                            <span x-html="UIHelpers.icon('help-circle', 'inline-block w-3.5 h-3.5 mr-1')"></span>
                             <span x-text="helpOpen ? 'Hide guide' : 'How does this work?'"></span>
-                            <i data-lucide="chevron-down" class="inline-block w-3.5 h-3.5 ml-1 transition-transform duration-200"
-                               :class="helpOpen && 'rotate-180'"></i>
+                            <span x-html="UIHelpers.icon('chevron-down', 'inline-block w-3.5 h-3.5 ml-1 transition-transform duration-200')" :class="helpOpen && 'rotate-180'"></span>
                         </button>
                         <div x-show="helpOpen"
                              x-transition:enter="transition ease-out duration-200"
@@ -469,7 +468,7 @@
                             </div>
 
                             <div class="border-t border-gray-700 pt-2">
-                                <p class="text-orange-300 font-semibold"><i data-lucide="triangle-alert" class="inline-block w-3 h-3 mr-0.5"></i> Order matters!</p>
+                                <p class="text-orange-300 font-semibold"><span x-html="UIHelpers.icon('triangle-alert', 'inline-block w-3 h-3 mr-0.5')"></span> Order matters!</p>
                                 <p>Rules are evaluated top-to-bottom — the first match wins. Place specific rules (e.g. <code class="text-gray-300">ext:.wav</code>) <em>before</em> catch-all rules like <code class="text-gray-300">pattern:*</code>.</p>
                             </div>
 
@@ -536,10 +535,9 @@
                             <button @click="previewOpen = !previewOpen"
                                     type="button"
                                     class="flex items-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
-                                <i data-lucide="eye" class="inline-block w-3.5 h-3.5 mr-1"></i>
+                                <span x-html="UIHelpers.icon('eye', 'inline-block w-3.5 h-3.5 mr-1')"></span>
                                 <span x-text="previewOpen ? 'Hide preview' : 'Test your rules'"></span>
-                                <i data-lucide="chevron-down" class="inline-block w-3.5 h-3.5 ml-1 transition-transform duration-200"
-                                   :class="previewOpen && 'rotate-180'"></i>
+                                <span x-html="UIHelpers.icon('chevron-down', 'inline-block w-3.5 h-3.5 ml-1 transition-transform duration-200')" :class="previewOpen && 'rotate-180'"></span>
                             </button>
                         </div>
                         <div x-show="previewOpen"
@@ -586,7 +584,7 @@
 
             <!-- Performance & Automation -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="gauge" class="inline-block w-5 h-5"></i> Performance & Automation</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('gauge', 'inline-block w-5 h-5')"></span> Performance & Automation</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <label for="setting-max-copies" class="text-gray-300 block mb-1">Max Concurrent Copies</label>
@@ -612,31 +610,31 @@
                 <button @click="$store.settings.saveUserSettings()"
                         :disabled="!$store.settings?.isDirty || $store.settings?.saving"
                         class="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:opacity-50 text-white rounded transition-colors duration-200 font-medium">
-                    <span x-show="!$store.settings?.saving"><i data-lucide="save" class="inline-block w-4 h-4 mr-1"></i> Save Settings</span>
+                    <span x-show="!$store.settings?.saving"><span x-html="UIHelpers.icon('save', 'inline-block w-4 h-4 mr-1')"></span> Save Settings</span>
                     <span x-show="$store.settings?.saving">
-                        <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-1"></i> Saving...
+                        <span x-html="UIHelpers.icon('loader', 'inline-block w-4 h-4 animate-spin mr-1')"></span> Saving...
                     </span>
                 </button>
             </div>
 
             <!-- Administrative Actions -->
             <div class="bg-gradient-to-r from-purple-700 to-blue-700 bg-opacity-60 rounded-lg p-4 border border-purple-500">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="zap" class="inline-block w-5 h-5"></i> Administrative Actions</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('zap', 'inline-block w-5 h-5')"></span> Administrative Actions</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- Pause/Resume Scanner -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2"><i data-lucide="pause" class="inline-block w-4 h-4"></i> Scanner Control</h4>
+                        <h4 class="text-white font-semibold mb-2"><span x-html="UIHelpers.icon('pause', 'inline-block w-4 h-4')"></span> Scanner Control</h4>
                         <p class="text-gray-300 text-sm mb-3">Pause or resume file scanning for new jobs</p>
                         <button @click="$store.settings.toggleScanner()"
                                 :disabled="$store.settings?.scannerToggling"
                                 class="w-full disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200"
                                 :class="$store.ui?.scanner?.paused ? 'bg-green-600 hover:bg-green-500' : 'bg-orange-600 hover:bg-orange-500'">
                             <span x-show="!$store.settings?.scannerToggling">
-                                <span x-show="$store.ui?.scanner?.paused"><i data-lucide="play" class="inline-block w-4 h-4"></i> Resume Scanner</span>
-                                <span x-show="!$store.ui?.scanner?.paused"><i data-lucide="pause" class="inline-block w-4 h-4"></i> Pause Scanner</span>
+                                <span x-show="$store.ui?.scanner?.paused"><span x-html="UIHelpers.icon('play', 'inline-block w-4 h-4')"></span> Resume Scanner</span>
+                                <span x-show="!$store.ui?.scanner?.paused"><span x-html="UIHelpers.icon('pause', 'inline-block w-4 h-4')"></span> Pause Scanner</span>
                             </span>
                             <span x-show="$store.settings?.scannerToggling">
-                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
+                                <span x-html="UIHelpers.icon('loader', 'inline-block w-4 h-4 animate-spin mr-2')"></span>
                                 <span x-show="$store.ui?.scanner?.paused">Resuming...</span>
                                 <span x-show="!$store.ui?.scanner?.paused">Pausing...</span>
                             </span>
@@ -645,14 +643,14 @@
 
                     <!-- Restart Application -->
                     <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4">
-                        <h4 class="text-white font-semibold mb-2"><i data-lucide="rocket" class="inline-block w-4 h-4"></i> Restart Application</h4>
+                        <h4 class="text-white font-semibold mb-2"><span x-html="UIHelpers.icon('rocket', 'inline-block w-4 h-4')"></span> Restart Application</h4>
                         <p class="text-gray-300 text-sm mb-3">Gracefully restart the entire application (2 second delay)</p>
                         <button @click="$store.settings.restartApplication()"
                                 :disabled="$store.settings?.restartingApp"
                                 class="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors duration-200">
-                            <span x-show="!$store.settings?.restartingApp"><i data-lucide="rocket" class="inline-block w-4 h-4"></i> Restart App</span>
+                            <span x-show="!$store.settings?.restartingApp"><span x-html="UIHelpers.icon('rocket', 'inline-block w-4 h-4')"></span> Restart App</span>
                             <span x-show="$store.settings?.restartingApp">
-                                <i data-lucide="loader" class="inline-block w-4 h-4 animate-spin mr-2"></i>
+                                <span x-html="UIHelpers.icon('loader', 'inline-block w-4 h-4 animate-spin mr-2')"></span>
                                 Restarting in <span x-text="$store.settings?.restartCountdown || 2"></span>s...
                             </span>
                         </button>
@@ -664,8 +662,8 @@
                      class="mt-4 p-3 rounded-lg border"
                      :class="$store.settings?.actionSuccess ? 'bg-green-900 bg-opacity-50 border-green-500 text-green-300' : 'bg-red-900 bg-opacity-50 border-red-500 text-red-300'">
                     <div class="flex items-center">
-                        <span x-show="$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-check" class="inline-block w-5 h-5"></i></span>
-                        <span x-show="!$store.settings?.actionSuccess" class="mr-2"><i data-lucide="circle-x" class="inline-block w-5 h-5"></i></span>
+                        <span x-show="$store.settings?.actionSuccess" class="mr-2"><span x-html="UIHelpers.icon('circle-check', 'inline-block w-5 h-5')"></span></span>
+                        <span x-show="!$store.settings?.actionSuccess" class="mr-2"><span x-html="UIHelpers.icon('circle-x', 'inline-block w-5 h-5')"></span></span>
                         <span x-text="$store.settings?.actionMessage"></span>
                     </div>
                 </div>
@@ -673,7 +671,7 @@
 
             <!-- Build & Runtime Info -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-white mb-3"><i data-lucide="info" class="inline-block w-5 h-5"></i> Build & Runtime</h3>
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('info', 'inline-block w-5 h-5')"></span> Build & Runtime</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Version:</span>
@@ -705,7 +703,7 @@
         <!-- Error State -->
         <div x-show="!$store.settings?.settingsLoading && $store.settings?.settingsError" class="text-center py-8">
             <div class="text-red-400">
-                <div class="mb-2"><i data-lucide="triangle-alert" class="inline-block w-10 h-10"></i></div>
+                <div class="mb-2"><span x-html="UIHelpers.icon('triangle-alert', 'inline-block w-10 h-10')"></span></div>
                 <div>Failed to load settings</div>
                 <div class="text-sm text-gray-400 mt-2" x-text="$store.settings?.settingsError"></div>
                 <button @click="$store.settings.loadSettings()"

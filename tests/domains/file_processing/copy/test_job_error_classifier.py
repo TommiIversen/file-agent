@@ -37,11 +37,11 @@ def classifier(storage_monitor):
 
 class TestTypedExceptions:
 
-    def test_network_error_returns_failed(self, classifier):
+    def test_network_error_returns_waiting_for_network(self, classifier):
         err = NetworkError("Network failure detected: connection refused")
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
-        assert status == FileStatus.FAILED
-        assert "Network failure" in reason
+        assert status == FileStatus.WAITING_FOR_NETWORK
+        assert "Network connection lost" in reason
 
     def test_file_not_found_returns_removed(self, classifier):
         err = FileNotFoundError("Source file gone")
@@ -78,27 +78,41 @@ class TestTypedExceptions:
 
 class TestDestinationUnavailable:
 
-    def test_error_status_returns_failed(self, storage_monitor):
+    def test_error_status_returns_waiting_for_network(self, storage_monitor):
         dest_info = MagicMock()
         dest_info.status = StorageStatus.ERROR
+        dest_info.is_accessible = False
         storage_monitor.get_destination_info.return_value = dest_info
         classifier = JobErrorClassifier(storage_monitor)
 
         err = Exception("some random error")
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
-        assert status == FileStatus.FAILED
-        assert "Destination unavailable" in reason
+        assert status == FileStatus.WAITING_FOR_NETWORK
+        assert "not accessible" in reason
 
-    def test_critical_status_returns_failed(self, storage_monitor):
+    def test_critical_accessible_returns_waiting_for_space(self, storage_monitor):
         dest_info = MagicMock()
         dest_info.status = StorageStatus.CRITICAL
+        dest_info.is_accessible = True
         storage_monitor.get_destination_info.return_value = dest_info
         classifier = JobErrorClassifier(storage_monitor)
 
         err = Exception("something went wrong")
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
-        assert status == FileStatus.FAILED
-        assert "Destination unavailable" in reason
+        assert status == FileStatus.WAITING_FOR_SPACE
+        assert "disk space" in reason.lower()
+
+    def test_critical_not_accessible_returns_waiting_for_network(self, storage_monitor):
+        dest_info = MagicMock()
+        dest_info.status = StorageStatus.CRITICAL
+        dest_info.is_accessible = False
+        storage_monitor.get_destination_info.return_value = dest_info
+        classifier = JobErrorClassifier(storage_monitor)
+
+        err = Exception("something went wrong")
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.WAITING_FOR_NETWORK
+        assert "not accessible" in reason
 
 
 # ── String-based network error detection ────────────────────────────────────
@@ -115,10 +129,10 @@ class TestStringBasedNetworkErrors:
         ("WinError 67: the network name cannot be found", "the network name cannot be found"),
         ("Access is denied on share", "access is denied"),
     ])
-    def test_network_string_errors_return_failed(self, classifier, error_msg, expected_indicator):
+    def test_network_string_errors_return_waiting_for_network(self, classifier, error_msg, expected_indicator):
         status, reason = classifier.classify_copy_error(Exception(error_msg), "/src/video.mxf")
-        assert status == FileStatus.FAILED
-        assert "Network error" in reason or "network" in reason.lower()
+        assert status == FileStatus.WAITING_FOR_NETWORK
+        assert "network" in reason.lower() or "Network" in reason
 
 
 # ── Errno-based network error detection ─────────────────────────────────────
@@ -133,14 +147,11 @@ class TestErrnoBasedNetworkErrors:
         errno.EHOSTUNREACH,
         errno.EPIPE,
     ])
-    def test_network_errno_returns_failed(self, classifier, errno_code):
+    def test_network_errno_returns_waiting_for_network(self, classifier, errno_code):
         err = OSError(errno_code, "OS error")
         err.errno = errno_code
-        # The error string might not match network strings, so we need a
-        # string that doesn't match source errors or network strings
-        # to ensure we're testing errno detection specifically
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
-        assert status == FileStatus.FAILED
+        assert status == FileStatus.WAITING_FOR_NETWORK
 
 
 # ── Source file errors ──────────────────────────────────────────────────────
@@ -236,3 +247,40 @@ class TestTimeoutNetworkRecovery:
         storage_monitor.get_destination_info.return_value = None
         classifier = JobErrorClassifier(storage_monitor)
         assert classifier._get_destination_status() == "unknown"
+
+
+# ── Disk-space error classification ─────────────────────────────────────────
+
+class TestSpaceErrors:
+
+    def test_enospc_errno_returns_waiting_for_space(self, classifier):
+        """FileCopyIOError with errno ENOSPC should return WAITING_FOR_SPACE."""
+        err = FileCopyIOError("No space left on device")
+        err.errno = errno.ENOSPC
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.WAITING_FOR_SPACE
+        assert "disk space" in reason.lower()
+
+    @pytest.mark.parametrize("error_msg", [
+        "No space left on device",
+        "not enough space on disk",
+        "disk full: /mnt/nas",
+        "[Errno 28] No space left on device",
+        "OSError: ENOSPC when writing chunk",
+    ])
+    def test_space_string_patterns_return_waiting_for_space(self, classifier, error_msg):
+        err = FileCopyIOError(error_msg)
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.WAITING_FOR_SPACE
+
+    def test_generic_exception_with_space_string(self, classifier):
+        """Even a generic Exception with disk-full text should be caught."""
+        err = Exception("OSError: No space left on device during write")
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.WAITING_FOR_SPACE
+
+    def test_io_error_without_space_stays_failed(self, classifier):
+        """FileCopyIOError without space indicators stays FAILED."""
+        err = FileCopyIOError("Disk read error")
+        status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
+        assert status == FileStatus.FAILED

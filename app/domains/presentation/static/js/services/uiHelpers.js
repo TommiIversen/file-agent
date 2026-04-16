@@ -202,6 +202,39 @@ class UIHelpers {
     }
 
     /** @type {Map<string, string>} */
+    static _lucideCache = new Map();
+
+    /**
+     * Render a Lucide icon as inline SVG string.
+     * Uses lucide.icons data directly — no MutationObserver or createIcons() needed.
+     * @param {string} name - kebab-case icon name (e.g. "file-text", "settings")
+     * @param {string} [classes=''] - CSS classes for the SVG element
+     * @returns {string} SVG markup string
+     */
+    static icon(name, classes = '') {
+        const key = `${name}|${classes}`;
+        if (this._lucideCache.has(key)) return this._lucideCache.get(key);
+
+        // Convert kebab-case to PascalCase for lucide.icons lookup
+        const pascalName = name.replace(/(^|-)([a-z0-9])/g, (_, __, c) => c.toUpperCase());
+        const iconData = lucide?.icons?.[pascalName];
+        if (!iconData) {
+            console.warn(`[UIHelpers.icon] Unknown icon: "${name}" (lookup: ${pascalName})`);
+            return '';
+        }
+
+        const buildEl = ([tag, attrs]) => {
+            const a = Object.entries(attrs || {}).map(([k, v]) => `${k}="${v}"`).join(' ');
+            return `<${tag}${a ? ' ' + a : ''}/>`;
+        };
+
+        const paths = iconData.map(buildEl).join('');
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.125em" class="${classes}">${paths}</svg>`;
+        this._lucideCache.set(key, svg);
+        return svg;
+    }
+
+    /** @type {Map<string, string>} */
     static _iconCache = new Map();
 
     /**

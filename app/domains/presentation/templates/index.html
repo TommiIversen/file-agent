@@ -7,10 +7,9 @@
     <!-- Tailwind CSS CDN -->
     <link rel="stylesheet" href="/static/css/tailwind.css?v={{ v }}">
     
-    <!-- Alpine.js x-cloak CSS + Lucide icon alignment -->
+    <!-- Alpine.js x-cloak CSS -->
     <style>
         [x-cloak] { display: none !important; }
-        [data-lucide] { display: inline-block; vertical-align: -0.125em; pointer-events: none; }
     </style>
 
     <!-- VU Meter Canvas Renderer (load before stores) -->
@@ -37,34 +36,8 @@
     <!-- Main Application -->
     <script src="/static/js/app.js?v={{ v }}"></script>
 
-    <!-- Lucide Icons (bundled) -->
+    <!-- Lucide Icons (bundled — icon data only, rendered via UIHelpers.icon()) -->
     <script src="/static/js/lucide.min.js?v={{ v }}"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            let pending = false;
-            const observer = new MutationObserver((mutations) => {
-                if (pending) return;
-                // Only re-scan if mutations contain new elements with data-lucide
-                const needsIcons = mutations.some(m =>
-                    m.type === 'childList' && Array.from(m.addedNodes).some(n =>
-                        n.nodeType === 1 && (
-                            /** @type {Element} */ (n).hasAttribute?.('data-lucide') ||
-                            /** @type {Element} */ (n).querySelector?.('[data-lucide]')
-                        )
-                    )
-                );
-                if (needsIcons) {
-                    pending = true;
-                    requestAnimationFrame(() => {
-                        lucide.createIcons();
-                        pending = false;
-                    });
-                }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-        });
-    </script>
 
     <!-- Alpine Plugins (Load BEFORE Alpine Core) -->
     <script defer src="/static/js/jslib/intersect3-15-1.js?v={{ v }}"></script>
@@ -98,15 +71,15 @@
                 <div class="flex items-center space-x-3">
                     <button @click="$store.logViewer.openLogViewerModal()"
                             class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        <i data-lucide="file-text" class="w-4 h-4"></i> Logs
+                        <span x-html="UIHelpers.icon('file-text', 'w-4 h-4')"></span> Logs
                     </button>
                     <button @click="$store.eventsViewer.openModal()"
                             class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        <i data-lucide="activity" class="w-4 h-4"></i> Events
+                        <span x-html="UIHelpers.icon('activity', 'w-4 h-4')"></span> Events
                     </button>
                     <button @click="$store.settings.openSettingsModal()"
                             class="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
-                        <i data-lucide="settings" class="w-4 h-4"></i> Settings
+                        <span x-html="UIHelpers.icon('settings', 'w-4 h-4')"></span> Settings
                     </button>
                 </div>
             </div>

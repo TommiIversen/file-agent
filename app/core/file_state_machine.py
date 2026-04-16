@@ -69,11 +69,13 @@ class FileStateMachine:
                 FileStatus.COMPLETED_DELETE_FAILED,
                 FileStatus.FAILED,
                 FileStatus.WAITING_FOR_NETWORK,
+                FileStatus.WAITING_FOR_SPACE,
             },
             FileStatus.GROWING_COPY: {
                 FileStatus.COPYING, 
                 FileStatus.FAILED,
                 FileStatus.WAITING_FOR_NETWORK,
+                FileStatus.WAITING_FOR_SPACE,
             },
             FileStatus.WAITING_FOR_NETWORK: {
                 FileStatus.READY, 

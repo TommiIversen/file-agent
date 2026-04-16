@@ -7,7 +7,7 @@
     <div class="flex items-center justify-between">
         <!-- Left: Status indicator -->
         <div class="flex items-center gap-2">
-            <i data-lucide="mic" class="w-4 h-4 text-gray-300"></i>
+            <span x-html="UIHelpers.icon('mic', 'w-4 h-4 text-gray-300')"></span>
             <span class="text-sm font-medium text-gray-300">Audio:</span>
 
             <!-- Recording state -->
@@ -33,7 +33,7 @@
             <!-- Device disconnected -->
             <template x-if="$store.audio?.deviceDisconnected">
                 <div class="flex items-center gap-1">
-                    <i data-lucide="unplug" class="w-3.5 h-3.5 text-yellow-400"></i>
+                    <span x-html="UIHelpers.icon('unplug', 'w-3.5 h-3.5 text-yellow-400')"></span>
                     <span class="text-sm text-yellow-400">Device disconnected</span>
                 </div>
             </template>
@@ -41,7 +41,7 @@
             <!-- Error (non-device) -->
             <template x-if="!$store.audio?.deviceDisconnected && $store.audio?.lastError && !$store.audio?.recording">
                 <div class="flex items-center gap-1">
-                    <i data-lucide="triangle-alert" class="w-3.5 h-3.5 text-red-400"></i>
+                    <span x-html="UIHelpers.icon('triangle-alert', 'w-3.5 h-3.5 text-red-400')"></span>
                     <span class="text-sm text-red-400 truncate max-w-xs" x-text="$store.audio.lastError"></span>
                 </div>
             </template>
@@ -50,7 +50,7 @@
         <!-- Right: Overflow warning badge -->
         <div x-show="$store.audio?.recording && $store.audio?.overflowCount > 0"
              class="flex items-center gap-1 text-xs text-yellow-400">
-            <i data-lucide="triangle-alert" class="w-3.5 h-3.5"></i>
+            <span x-html="UIHelpers.icon('triangle-alert', 'w-3.5 h-3.5')"></span>
             <span x-text="$store.audio.overflowCount + ' overflow(s)'"></span>
         </div>
     </div>
