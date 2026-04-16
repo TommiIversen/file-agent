@@ -248,7 +248,7 @@ class FileScanner:
             return
 
         if metadata["size"] != tracked_file.file_size:
-            logging.info(
+            logging.debug(
                 f"SIZE CHANGE: {tracked_file.file_path} "
                 f"({tracked_file.file_size} → {metadata['size']} bytes) "
                 f"[UUID: {tracked_file.id[:8]}...]"
