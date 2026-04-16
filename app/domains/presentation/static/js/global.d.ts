@@ -2,6 +2,11 @@
 // Declare Alpine globally
 declare const Alpine: any;
 
+// Declare Lucide icons library
+declare const lucide: {
+    icons: Record<string, [string, Record<string, string>?][]>;
+};
+
 // Top-level declarations for new global types
 interface AppConfig {
     name: string;

@@ -213,7 +213,8 @@ class UIHelpers {
      */
     static icon(name, classes = '') {
         const key = `${name}|${classes}`;
-        if (this._lucideCache.has(key)) return this._lucideCache.get(key);
+        const cached = this._lucideCache.get(key);
+        if (cached) return cached;
 
         // Convert kebab-case to PascalCase for lucide.icons lookup
         const pascalName = name.replace(/(^|-)([a-z0-9])/g, (_, __, c) => c.toUpperCase());
@@ -223,7 +224,7 @@ class UIHelpers {
             return '';
         }
 
-        const buildEl = ([tag, attrs]) => {
+        const buildEl = (/** @type {[string, Record<string, string>?]} */ [tag, attrs]) => {
             const a = Object.entries(attrs || {}).map(([k, v]) => `${k}="${v}"`).join(' ');
             return `<${tag}${a ? ' ' + a : ''}/>`;
         };
