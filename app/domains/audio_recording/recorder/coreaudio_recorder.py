@@ -105,6 +105,7 @@ class CoreAudioRecorder(AudioRecorder):
             channels=self._hw_channels,
             samplerate=self._samplerate,
             callback=self._coreaudio_callback,
+            finished_callback=self._on_stream_finished,
         )
         self._stream.start()
         return self._stream.samplerate

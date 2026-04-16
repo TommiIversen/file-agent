@@ -58,6 +58,7 @@ class AudioRecordingEventHandler:
         self._get_user_setting = get_user_setting
         self._lock = asyncio.Lock()
         self._active_channels: set[str] = set()
+        self._last_trigger_channel: Optional[str] = None  # for recovery resume
 
     async def handle_channel_recording_started(
         self, event: ChannelRecordingStartedEvent
@@ -77,6 +78,7 @@ class AudioRecordingEventHandler:
             filename_stem, channel_name = await self._get_filename_stem(
                 event.channel_name
             )
+            self._last_trigger_channel = event.channel_name
 
             session_id = str(uuid.uuid4())
             result = await self._command_bus.execute(
@@ -138,16 +140,31 @@ class AudioRecordingEventHandler:
     async def handle_device_disconnected(
         self, event: AudioDeviceDisconnectedEvent
     ) -> None:
-        """Device lost — recording already stopped by watchdog.
+        """Device lost — recording already stopped by recorder cleanup.
 
-        Clean up state so next Justin start can attempt recovery.
+        Clean up state, re-create recorder, and if Justin is still recording
+        automatically resume audio with a new recovery file.
         """
         async with self._lock:
-            logger.error(
-                "Audio device disconnected: %s — clearing active channels",
-                event.device_name,
-            )
+            # Snapshot which channels were active *before* clearing
+            was_recording = bool(self._active_channels)
+            trigger_channel = self._last_trigger_channel
+            channels_snapshot = set(self._active_channels)
             self._active_channels.clear()
+
+        logger.error(
+            "Audio device disconnected: %s (was_recording=%s, channels=%s)",
+            event.device_name,
+            was_recording,
+            channels_snapshot,
+        )
+
+        # Re-create recorder (may block on device probe)
+        await self._service.handle_device_lost()
+
+        # Auto-resume if Justin was still recording when device was lost
+        if was_recording and trigger_channel:
+            await self._attempt_resume(trigger_channel, channels_snapshot)
 
     async def _get_filename_stem(
         self, channel_name: str
@@ -199,3 +216,83 @@ class AudioRecordingEventHandler:
 
         logger.warning("All filename retries exhausted — using local timestamp")
         return datetime.now().strftime("%y%m%d_%H%M%S"), None
+
+    # ── Device-loss auto-resume ────────────────────────────────
+
+    _RESUME_DELAY_S = 3.0
+    _RESUME_MAX_RETRIES = 5
+    _RESUME_RETRY_INTERVAL_S = 2.0
+
+    async def _attempt_resume(
+        self,
+        trigger_channel: str,
+        channels: set[str],
+    ) -> None:
+        """Try to resume audio recording after device reconnect.
+
+        Waits a short delay (device needs time to re-enumerate on the USB
+        bus), then retries a few times.  If the device isn't back yet,
+        the on-demand re-creation in ``service.start()`` will handle it
+        on the next Justin cycle.
+        """
+        logger.info(
+            "Will attempt auto-resume in %.0f s (trigger=%s)",
+            self._RESUME_DELAY_S,
+            trigger_channel,
+        )
+        await asyncio.sleep(self._RESUME_DELAY_S)
+
+        for attempt in range(1, self._RESUME_MAX_RETRIES + 1):
+            # Check if recording was stopped externally while we waited
+            async with self._lock:
+                if self._service.is_recording:
+                    logger.info("Already recording again — resume aborted")
+                    return
+
+            try:
+                filename_stem, channel_name = await self._get_filename_stem(
+                    trigger_channel
+                )
+
+                session_id = str(uuid.uuid4())
+                result = await self._command_bus.execute(
+                    StartAudioRecordingCommand(
+                        filename_stem=self._service.get_recovery_prefix(filename_stem),
+                        channel_name=channel_name,
+                        session_id=session_id,
+                    )
+                )
+
+                if result.get("success"):
+                    async with self._lock:
+                        self._active_channels = channels
+                    logger.info(
+                        "Audio recording RESUMED after device recovery "
+                        "(session=%s, attempt=%d)",
+                        session_id,
+                        attempt,
+                    )
+                    return
+
+                logger.warning(
+                    "Resume attempt %d/%d failed: %s",
+                    attempt,
+                    self._RESUME_MAX_RETRIES,
+                    result.get("message"),
+                )
+            except Exception:
+                logger.warning(
+                    "Resume attempt %d/%d error",
+                    attempt,
+                    self._RESUME_MAX_RETRIES,
+                    exc_info=True,
+                )
+
+            if attempt < self._RESUME_MAX_RETRIES:
+                await asyncio.sleep(self._RESUME_RETRY_INTERVAL_S)
+
+        logger.error(
+            "Auto-resume FAILED after %d attempts — "
+            "audio will resume on next Justin recording cycle",
+            self._RESUME_MAX_RETRIES,
+        )

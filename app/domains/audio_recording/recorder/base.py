@@ -268,6 +268,10 @@ class AudioRecorder(ABC):
             return
         if status:
             logger.warning("Audio callback status: %s", status)
+            # PortAudio sets 'input overflow' / 'input underflow' flags
+            # when the device can't deliver data.  A single flag is normal
+            # (transient glitch), but we don't abort here — the
+            # finished_callback / watchdog handle actual device loss.
 
         try:
             self._audio_q.put_nowait((indata.copy(), self._dropped_since_last))
@@ -496,10 +500,67 @@ class AudioRecorder(ABC):
                     "Audio watchdog: no callback for %.1f s — device presumed lost",
                     elapsed,
                 )
-                self._recording = False
-                if self._callback:
-                    self._callback.on_device_lost()
+                self._handle_device_lost()
                 break
 
     def _touch_watchdog(self) -> None:
         self._last_callback_time = time.monotonic()
+
+    # ── Stream finished (device lost / aborted) ──────────────────
+
+    def _on_stream_finished(self) -> None:
+        """Called by PortAudio's ``finished_callback`` when the stream ends.
+
+        On CoreAudio this fires immediately when a USB device is unplugged,
+        even if the regular audio callback was still being invoked with
+        stale data.  This is the *primary* device-loss detection mechanism;
+        the watchdog is the *backup*.
+        """
+        if not self._recording:
+            return  # Clean stop — ignore
+        logger.error("Audio stream finished unexpectedly — device presumed lost")
+        self._handle_device_lost()
+
+    def _handle_device_lost(self) -> None:
+        """Full cleanup after device loss — stream, writer, WAV files.
+
+        Safe to call from any thread (watchdog, finished_callback, etc.).
+        Idempotent — a second call is a no-op.
+        """
+        if not self._recording:
+            return
+        self._recording = False
+
+        # 1. Close the audio stream (may already be dead)
+        try:
+            self._close_stream()
+        except Exception:
+            logger.debug("Stream close during device-lost cleanup failed", exc_info=True)
+
+        # 2. Signal writer thread to drain remaining queued data and stop
+        try:
+            self._audio_q.put_nowait(None)
+        except queue.Full:
+            pass
+        if self._writer_thread is not None:
+            self._writer_thread.join(timeout=5)
+            self._writer_thread = None
+
+        # 3. Close WAV files so data written so far is valid
+        files = [tw.path for tw in self._track_writers]
+        duration = self.duration_seconds
+        self._close_writers()
+        self._start_time = None
+        self._peak_acc = None
+        self._levels_frame_count = 0
+
+        logger.info(
+            "Device-lost cleanup complete: %d file(s), %.1f s recorded",
+            len(files),
+            duration,
+        )
+
+        # 4. Notify domain layer
+        if self._callback:
+            self._callback.on_stopped(files, duration, self._overflow_count)
+            self._callback.on_device_lost()

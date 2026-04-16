@@ -16,7 +16,7 @@ from app.core.events.event_bus import DomainEventBus
 
 from .callback_adapter import RecorderEventAdapter
 from .recorder.base import AudioRecorder
-from .recorder.factory import list_available_devices
+from .recorder.factory import create_recorder, list_available_devices
 from .recorder.models import AudioTrack, DeviceInfo
 
 logger = logging.getLogger(__name__)
@@ -38,12 +38,14 @@ class AudioRecordingService:
         self._recovery_counters: Dict[str, int] = {}
         self._current_session_id: Optional[str] = None
         self._current_files: List[Path] = []
+        self._device_name: Optional[str] = None  # remember for re-creation
 
     # ── Initialization ─────────────────────────────────────────
 
     def set_recorder(self, recorder: AudioRecorder) -> None:
         """Inject the platform-specific recorder (called from DI)."""
         self._recorder = recorder
+        self._device_name = getattr(recorder, "_device_name", None)
 
     # ── Start / Stop ───────────────────────────────────────────
 
@@ -57,6 +59,22 @@ class AudioRecordingService:
         output_dir: Path,
     ) -> list[Path]:
         async with self._lock:
+            # If recorder was lost, try to re-create it on-demand
+            if self._recorder is None and self._device_name:
+                logger.info("Recorder not available — attempting on-demand re-creation")
+                loop = asyncio.get_running_loop()
+                try:
+                    self._recorder = await loop.run_in_executor(
+                        None, create_recorder, self._device_name
+                    )
+                    logger.info("On-demand recorder re-creation succeeded")
+                except Exception:
+                    logger.error(
+                        "On-demand recorder re-creation failed for '%s'",
+                        self._device_name,
+                        exc_info=True,
+                    )
+
             if self._recorder is None:
                 raise RuntimeError("No recorder configured — check audio settings")
 
@@ -136,6 +154,45 @@ class AudioRecordingService:
 
     def reset_recovery_counter(self) -> None:
         self._recovery_counters.clear()
+
+    # ── Device-loss recovery ───────────────────────────────────
+
+    async def handle_device_lost(self) -> None:
+        """Called after the recorder fires on_device_lost.
+
+        Invalidates the dead recorder and attempts to re-create it so
+        the next recording start can succeed without a full restart.
+        """
+        async with self._lock:
+            self._current_files = []
+            self._current_session_id = None
+            self._recorder = None  # discard the dead instance
+
+            if not self._device_name:
+                logger.warning("No device name stored — cannot attempt re-creation")
+                return
+
+            logger.info(
+                "Attempting to re-create recorder for device '%s'",
+                self._device_name,
+            )
+            loop = asyncio.get_running_loop()
+            try:
+                recorder = await loop.run_in_executor(
+                    None, create_recorder, self._device_name
+                )
+                self._recorder = recorder
+                logger.info(
+                    "Recorder re-created successfully for '%s'",
+                    self._device_name,
+                )
+            except Exception:
+                logger.warning(
+                    "Could not re-create recorder for '%s' — "
+                    "will retry on next recording start",
+                    self._device_name,
+                    exc_info=True,
+                )
 
     # ── Reinitialize (settings change) ─────────────────────────
 
