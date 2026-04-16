@@ -179,7 +179,8 @@ class AudioRecordingService:
             loop = asyncio.get_running_loop()
             try:
                 recorder = await loop.run_in_executor(
-                    None, create_recorder, self._device_name
+                    None,
+                    lambda: create_recorder(self._device_name, reinit_portaudio=True),
                 )
                 self._recorder = recorder
                 logger.info(

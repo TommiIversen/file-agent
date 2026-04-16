@@ -90,6 +90,9 @@ class AudioRecorder(ABC):
         self._watchdog_thread: Optional[threading.Thread] = None
         self._watchdog_stop = threading.Event()
 
+        # Guard for _handle_device_lost (may be called from multiple threads)
+        self._device_lost_lock = threading.Lock()
+
         # Peak metering
         self._peak_acc: Optional[np.ndarray] = None
         self._levels_frame_count = 0
@@ -515,27 +518,42 @@ class AudioRecorder(ABC):
         even if the regular audio callback was still being invoked with
         stale data.  This is the *primary* device-loss detection mechanism;
         the watchdog is the *backup*.
+
+        IMPORTANT: This runs on PortAudio's internal thread.  We MUST NOT
+        call ``_close_stream()`` (which does ``stream.stop()``) here —
+        that would deadlock because PortAudio is waiting for this callback
+        to return.  Instead we schedule cleanup on a new thread.
         """
         if not self._recording:
             return  # Clean stop — ignore
         logger.error("Audio stream finished unexpectedly — device presumed lost")
-        self._handle_device_lost()
+        threading.Thread(
+            target=self._handle_device_lost,
+            name="audio-device-lost-cleanup",
+            daemon=True,
+        ).start()
 
     def _handle_device_lost(self) -> None:
         """Full cleanup after device loss — stream, writer, WAV files.
 
-        Safe to call from any thread (watchdog, finished_callback, etc.).
-        Idempotent — a second call is a no-op.
+        Safe to call from any thread (watchdog, finished_callback spawned
+        thread, etc.).  Serialised via ``_device_lost_lock`` and
+        idempotent — a second call is a no-op.
         """
-        if not self._recording:
-            return
-        self._recording = False
+        with self._device_lost_lock:
+            if not self._recording:
+                return
+            self._recording = False
+            self._stop_watchdog()
 
-        # 1. Close the audio stream (may already be dead)
+        # 1. Close the audio stream (may already be dead).
+        #    On a dead device this can raise — that's fine.
         try:
             self._close_stream()
         except Exception:
             logger.debug("Stream close during device-lost cleanup failed", exc_info=True)
+            # Force-clear the reference so we don't hold a dead stream
+            self._stream = None
 
         # 2. Signal writer thread to drain remaining queued data and stop
         try:

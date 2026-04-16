@@ -61,12 +61,34 @@ class CoreAudioRecorder(AudioRecorder):
     the requested channels reach the writer thread.
     """
 
-    def __init__(self, device_name: str) -> None:
+    def __init__(self, device_name: str, *, reinit_portaudio: bool = False) -> None:
         super().__init__(device_name)
         self._device_index: Optional[int] = None
         # Number of HW channels to open (may be more than len(_channel_selectors))
         self._hw_channels: int = 0
+
+        if reinit_portaudio:
+            self._reinitialize_portaudio()
+
         self._request_mic_permission(device_name)
+
+    # ── PortAudio lifecycle ────────────────────────────────────
+
+    @staticmethod
+    def _reinitialize_portaudio() -> None:
+        """Reset PortAudio after device loss.
+
+        After a USB device is unplugged, PortAudio's internal state can
+        become corrupt (PaErrorCode -9986).  Re-initialising clears it.
+        """
+        try:
+            import sounddevice as sd
+
+            sd._terminate()
+            sd._initialize()
+            logger.info("PortAudio re-initialized after device loss")
+        except Exception:
+            logger.warning("PortAudio re-initialization failed", exc_info=True)
 
     # ── Subclass hooks ─────────────────────────────────────────
 
@@ -112,8 +134,14 @@ class CoreAudioRecorder(AudioRecorder):
 
     def _close_stream(self) -> None:
         if self._stream:
-            self._stream.stop()
-            self._stream.close()
+            try:
+                self._stream.stop()
+            except Exception:
+                logger.debug("stream.stop() failed (device may be gone)", exc_info=True)
+            try:
+                self._stream.close()
+            except Exception:
+                logger.debug("stream.close() failed (device may be gone)", exc_info=True)
             self._stream = None
 
     def list_devices(self) -> list[DeviceInfo]:
