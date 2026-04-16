@@ -65,7 +65,8 @@ class AudioRecordingService:
                 loop = asyncio.get_running_loop()
                 try:
                     self._recorder = await loop.run_in_executor(
-                        None, create_recorder, self._device_name
+                        None,
+                        lambda: create_recorder(self._device_name, reinit_portaudio=True),
                     )
                     logger.info("On-demand recorder re-creation succeeded")
                 except Exception:

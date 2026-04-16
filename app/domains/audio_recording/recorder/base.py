@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 _WATCHDOG_TIMEOUT_S = 0.5
 _WATCHDOG_CHECK_INTERVAL_S = 0.25
 
+# How often the watchdog verifies the device is still present in the
+# system device list.  On macOS, CoreAudio silently re-routes to the
+# default device on USB unplug — the callback keeps running with stale
+# data, so silence/callback-timeout detection is insufficient.
+_DEVICE_CHECK_INTERVAL_S = 2.0
+
 MAX_QUEUE_SIZE = 4096
 _MIN_DISK_SPACE_BYTES = 1_073_741_824  # 1 GB pre-flight check
 
@@ -261,6 +267,20 @@ class AudioRecorder(ABC):
         """Resolve device name to platform index.  Called before start."""
         ...
 
+    def _is_device_present(self) -> bool:
+        """Check if the configured device is still visible to the OS.
+
+        Subclasses MAY override for a cheaper/platform-specific check.
+        The default scans ``list_devices()`` for ``_device_name``.
+        """
+        try:
+            return any(
+                self._device_name.lower() in d.name.lower()
+                for d in self.list_devices()
+            )
+        except Exception:
+            return False
+
     # ── Audio callback (shared) ──────────────────────────────────
 
     def _callback_fn(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
@@ -476,6 +496,7 @@ class AudioRecorder(ABC):
 
     def _start_watchdog(self) -> None:
         self._last_callback_time = time.monotonic()
+        self._last_device_check_time = time.monotonic()
         self._watchdog_stop.clear()
         self._watchdog_thread = threading.Thread(
             target=self._watchdog_loop,
@@ -497,6 +518,8 @@ class AudioRecorder(ABC):
                 break
             if not self._recording:
                 continue
+
+            # Check 1: no audio callbacks arriving (device truly dead)
             elapsed = time.monotonic() - self._last_callback_time
             if elapsed > _WATCHDOG_TIMEOUT_S:
                 logger.error(
@@ -505,6 +528,22 @@ class AudioRecorder(ABC):
                 )
                 self._handle_device_lost()
                 break
+
+            # Check 2: device still in OS device list?
+            # On macOS, CoreAudio silently re-routes to default device on
+            # USB unplug — the callback keeps running with stale data.
+            # This is the ONLY reliable detection for that scenario.
+            now = time.monotonic()
+            if now - self._last_device_check_time >= _DEVICE_CHECK_INTERVAL_S:
+                self._last_device_check_time = now
+                if not self._is_device_present():
+                    logger.error(
+                        "Audio watchdog: device '%s' no longer present — "
+                        "device presumed lost",
+                        self._device_name,
+                    )
+                    self._handle_device_lost()
+                    break
 
     def _touch_watchdog(self) -> None:
         self._last_callback_time = time.monotonic()
