@@ -44,22 +44,50 @@ def _query_coreaudio_devices() -> list[DeviceInfo]:
     return devices
 
 
-def _find_coreaudio_device(name: str, *, retry_with_reinit: bool = True) -> int:
-    """Find device index by name.  Retries once with PortAudio reinit."""
+def _find_coreaudio_device(
+    name: str,
+    *,
+    retry_with_reinit: bool = True,
+    max_attempts: int = 6,
+    delay_s: float = 1.0,
+) -> int:
+    """Find device index by name.
+
+    After a USB reconnect, PortAudio may need several reinit cycles before
+    the device is visible in its enumeration.  We retry up to
+    *max_attempts* times with a *delay_s* pause + PortAudio reinit between
+    each attempt.
+    """
+    import time
+
     import sounddevice as sd
 
     for i, dev in enumerate(sd.query_devices()):
         if dev["max_input_channels"] > 0 and name.lower() in dev["name"].lower():
             return i
 
-    if retry_with_reinit:
+    if not retry_with_reinit:
+        raise RuntimeError(f"No audio input device matching '{name}' found")
+
+    for attempt in range(1, max_attempts + 1):
         logger.warning(
-            "Device '%s' not found — reinitializing PortAudio and retrying", name
+            "Device '%s' not found — reinit PortAudio attempt %d/%d (wait %.1fs)",
+            name,
+            attempt,
+            max_attempts,
+            delay_s,
         )
-        sd._terminate()
-        sd._initialize()
+        time.sleep(delay_s)
+        try:
+            sd._terminate()
+            sd._initialize()
+        except Exception:
+            logger.debug("PortAudio reinit failed on attempt %d", attempt, exc_info=True)
+            continue
+
         for i, dev in enumerate(sd.query_devices()):
             if dev["max_input_channels"] > 0 and name.lower() in dev["name"].lower():
+                logger.info("Device '%s' found after %d reinit attempt(s)", name, attempt)
                 return i
 
     raise RuntimeError(f"No audio input device matching '{name}' found")

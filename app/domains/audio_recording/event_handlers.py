@@ -238,8 +238,8 @@ class AudioRecordingEventHandler:
     _DEVICE_POLL_INTERVAL_S = 3.0
     _DEVICE_POLL_MAX_WAIT_S = 60.0  # give up waiting for device after 1 min
     _DEVICE_SETTLE_DELAY_S = 3.0  # ASIO driver needs time after OS detects device
-    _RESUME_MAX_START_RETRIES = 3
-    _RESUME_START_RETRY_INTERVAL_S = 2.0
+    _RESUME_MAX_START_RETRIES = 5
+    _RESUME_START_RETRY_INTERVAL_S = 3.0
 
     async def _attempt_resume(
         self,
