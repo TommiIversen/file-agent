@@ -44,12 +44,24 @@ def _query_coreaudio_devices() -> list[DeviceInfo]:
     return devices
 
 
-def _find_coreaudio_device(name: str) -> int:
+def _find_coreaudio_device(name: str, *, retry_with_reinit: bool = True) -> int:
+    """Find device index by name.  Retries once with PortAudio reinit."""
     import sounddevice as sd
 
     for i, dev in enumerate(sd.query_devices()):
         if dev["max_input_channels"] > 0 and name.lower() in dev["name"].lower():
             return i
+
+    if retry_with_reinit:
+        logger.warning(
+            "Device '%s' not found — reinitializing PortAudio and retrying", name
+        )
+        sd._terminate()
+        sd._initialize()
+        for i, dev in enumerate(sd.query_devices()):
+            if dev["max_input_channels"] > 0 and name.lower() in dev["name"].lower():
+                return i
+
     raise RuntimeError(f"No audio input device matching '{name}' found")
 
 
@@ -69,8 +81,11 @@ class CoreAudioRecorder(AudioRecorder):
 
         if reinit_portaudio:
             self._reinitialize_portaudio()
-
-        self._request_mic_permission(device_name)
+        else:
+            # Only probe mic permission on first init — not during recovery.
+            # The probe opens/closes a stream which can destabilise PortAudio
+            # right after a reinit.
+            self._request_mic_permission(device_name)
 
     # ── PortAudio lifecycle ────────────────────────────────────
 
