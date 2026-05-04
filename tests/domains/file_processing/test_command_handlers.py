@@ -96,6 +96,7 @@ class TestQueueFileCommandHandler:
     async def test_network_unavailable_transitions_to_waiting(self, deps):
         handler, state_machine, network_coordinator, queue, _ = deps
         network_coordinator.is_network_available = False
+        network_coordinator.last_failure_reason = ""
         tf = _make_tracked(status=FileStatus.READY)
 
         await handler.handle(QueueFileCommand(tracked_file=tf))
@@ -103,7 +104,7 @@ class TestQueueFileCommandHandler:
         state_machine.transition.assert_called_once_with(
             file_id=tf.id,
             new_status=FileStatus.WAITING_FOR_NETWORK,
-            error_message="Network unavailable - waiting for recovery",
+            error_message="Destination unavailable — waiting for recovery",
         )
         queue.put.assert_not_awaited()
 

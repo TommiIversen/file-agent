@@ -57,11 +57,18 @@ class QueueFileCommandHandler:
             return
 
         if not self._network_coordinator.is_network_available:
+            failure_reason = self._network_coordinator.last_failure_reason or ""
+            if "storage monitor" in failure_reason.lower():
+                error_msg = "Low disk space on destination — waiting for recovery"
+            elif "copy failure" in failure_reason.lower():
+                error_msg = "Network error — waiting for recovery"
+            else:
+                error_msg = "Destination unavailable — waiting for recovery"
             try:
                 await self._state_machine.transition(
                     file_id=tracked_file.id,
                     new_status=FileStatus.WAITING_FOR_NETWORK,
-                    error_message="Network unavailable - waiting for recovery"
+                    error_message=error_msg,
                 )
             except (InvalidTransitionError, ValueError) as e:
                 logging.warning(

@@ -110,10 +110,13 @@ class JobCopyExecutor:
 
         if status == FileStatus.REMOVED:
             await self._handle_remove_error(prepared_file, reason, error)
-            return False
+        elif status == FileStatus.WAITING_FOR_SPACE:
+            await self._handle_waiting_error(prepared_file, reason, FileStatus.WAITING_FOR_SPACE)
+        elif status == FileStatus.WAITING_FOR_NETWORK:
+            await self._handle_waiting_error(prepared_file, reason, FileStatus.WAITING_FOR_NETWORK)
         else:
             await self._handle_fail_error(prepared_file, reason, error)
-            return False
+        return False
 
     async def _handle_remove_error(
         self, prepared_file: PreparedFile, reason: str, error: Exception
@@ -142,6 +145,27 @@ class JobCopyExecutor:
 
         except (InvalidTransitionError, ValueError) as e:
             logging.warning(f"Kunne ikke sætte fil {prepared_file.job.file_id} til REMOVED: {e}")
+
+    async def _handle_waiting_error(
+        self, prepared_file: PreparedFile, reason: str, target_status: FileStatus
+    ) -> None:
+        """Handle recoverable errors (WAITING_FOR_SPACE / WAITING_FOR_NETWORK)."""
+        try:
+            await self._state_machine.transition(
+                file_id=prepared_file.job.file_id,
+                new_status=target_status,
+                copy_progress=0.0,
+                bytes_copied=0,
+                error_message=reason,
+            )
+
+            file_name = Path(prepared_file.job.file_path).name
+            logging.warning(f"Copy interrupted: {file_name} → {target_status.value} - {reason}")
+
+        except (InvalidTransitionError, ValueError) as e:
+            logging.warning(
+                f"Kunne ikke sætte fil {prepared_file.job.file_id} til {target_status.value}: {e}"
+            )
 
     async def _handle_fail_error(
         self, prepared_file: PreparedFile, reason: str, error: Exception

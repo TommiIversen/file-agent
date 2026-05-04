@@ -12,7 +12,7 @@ from app.domains.file_discovery.domain_objects import (
 )
 from app.domains.file_discovery.file_scanner import (
     get_file_metadata,
-    is_mxf_file,
+    is_accepted_file,
     should_ignore_file,
 )
 
@@ -24,11 +24,13 @@ class TestPathUtilities:
         """Test MXF file detection."""
         mxf_path = Path("/path/to/file.mxf")
         mxf_upper_path = Path("/path/to/file.MXF")
+        wav_path = Path("/path/to/file.wav")
         other_path = Path("/path/to/file.mp4")
 
-        assert is_mxf_file(mxf_path)
-        assert is_mxf_file(mxf_upper_path)  # Should handle uppercase
-        assert not is_mxf_file(other_path)
+        assert is_accepted_file(mxf_path)
+        assert is_accepted_file(mxf_upper_path)  # Should handle uppercase
+        assert is_accepted_file(wav_path)  # WAV files accepted
+        assert not is_accepted_file(other_path)
 
     def test_should_ignore_file(self):
         """Test file ignoring logic."""

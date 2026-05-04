@@ -1,6 +1,40 @@
 # Just In Engine API Documentation
 This document describes the API endpoints available for interacting with the Just In Engine. The Just In Engine provides various functionalities including recording status, active channels, and error reporting.
 
+## DNS / Adresse
+- DNS: `http://mf91538:8080`
+- IP: `http://10.65.79.29:8080`
+- Swagger: `http://mf91538:8080/swagger-ui/index.html`
+
+## Vigtige findings (2026-04-14)
+
+### Naming Convention (Default)
+Filnavne bygges af: `{Date}_{Time}_{Channel}` med separator `_`
+- Date format: `yyMMdd` (fx `260414`)
+- Time format: `HHmmss` (fx `151304`)
+- Channel: kanalnavnet (fx `KAM_1`)
+- Resultat: `260414_151304_KAM_1.mxf`
+
+Prefix uden channel = `260414_151304` (dato+tid del). Audio bruger dette + track label.
+
+### Endpoint-tilgængelighed under optagelse
+| Endpoint | Under optagelse | Stoppet |
+|----------|----------------|---------|
+| `requestRecordingStatus` | ✅ rec=true + timecode | ✅ rec=false |
+| `recordingPaths` | ✅ **Returnerer fuld sti** (pålidelig!) | ✅ tom paths[] |
+| `requestCurrentFilename` | ❌ **Tom value!** | ✅ Returnerer seneste filnavn |
+| `requestFilename` | ❌ Tom value (did-change=true) | ✅ |
+| `requestLoadNamingConvention` | ❌ 400 "Request invalid while recording" | ✅ |
+| `requestNamingConventions` | ✅ Returnerer navne-liste | ✅ |
+| `activeChannels` | ✅ | ✅ |
+| `errors` | ✅ | ✅ |
+
+### Konklusion for audio filename
+**`recordingPaths`** er det eneste endpoint der pålideligt giver filnavnet **under optagelse**.
+Vi parser prefix fra stien: `/Volumes/NLE-External/260414_151304_KAM_1.mxf` → strip channel suffix → `260414_151304`.
+
+`requestCurrentFilename` er ubrugelig under optagelse (altid tom). Den virker kun EFTER stop.
+
 ## API Endpoints
 
 
@@ -9,6 +43,29 @@ http://10.65.79.29:8080/ingest/requestRecordingStatus
 http://10.65.79.29:8080/swagger-ui/index.html
 
 
+
+# ingest/requestNamingConventions
+
+curl -X 'POST' \
+  'http://10.65.79.29:8080/ingest/requestNamingConventions' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "channel": "KAM_1"
+}'
+Request URL
+http://10.65.79.29:8080/ingest/requestNamingConventions
+
+
+Response body
+Download
+{
+  "channel": "KAM_1",
+  "name": "KAM_1",
+  "naming-convention-name": [
+    "Default"
+  ]
+}
 
 
 # get errors:

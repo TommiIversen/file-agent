@@ -124,6 +124,7 @@ class TestDiscoverAllRecordingPaths:
     async def test_updates_paths_when_result_found(self, worker, deps):
         _, api_client, state_service = deps
         api_client.discover_recording_paths.return_value = (["/path/a"], "preset1")
+        state_service.get_recording_paths = MagicMock(return_value={})
 
         await worker._discover_all_recording_paths(["CH1"])
 
@@ -134,6 +135,7 @@ class TestDiscoverAllRecordingPaths:
     async def test_skips_when_result_is_none(self, worker, deps):
         _, api_client, state_service = deps
         api_client.discover_recording_paths.return_value = None
+        state_service.get_recording_paths = MagicMock(return_value={})
 
         await worker._discover_all_recording_paths(["CH1"])
 
@@ -146,6 +148,7 @@ class TestDiscoverAllRecordingPaths:
             None,
             (["/path/b"], "p2"),
         ]
+        state_service.get_recording_paths = MagicMock(return_value={})
 
         await worker._discover_all_recording_paths(["CH1", "CH2", "CH3"])
 
@@ -157,6 +160,7 @@ class TestDiscoverAllRecordingPaths:
             RuntimeError("fail"),
             (["/path/b"], "p2"),
         ]
+        state_service.get_recording_paths = MagicMock(return_value={})
 
         await worker._discover_all_recording_paths(["CH1", "CH2"])
 

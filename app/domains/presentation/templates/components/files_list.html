@@ -1,21 +1,22 @@
 <!-- Files List Component -->
-<div class="h-full overflow-y-auto space-y-2" @scroll="$store.files.handleFilesScroll($event)">
+<div class="h-full overflow-y-auto space-y-0" @scroll="$store.files.handleFilesScroll($event)">
 
     <template x-for="file in $store.files.filteredFiles" :key="file.id">
         <!-- Simple File Row with Click-Toggle Tooltip -->
-        <div class="bg-gray-800 hover:bg-gray-900 rounded-lg p-3 mb-2 shadow-lg"
+        <div class="bg-gray-800 hover:bg-gray-900 rounded px-2.5 py-0.5 mb-px shadow"
              x-data="{ showTip: false }">
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
 
-                <!-- File Name (left) -->
-                <div class="flex-1 min-w-0">
-                    <div class="text-white font-bold truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
+                <!-- File Type Icon + File Name (left) -->
+                <div class="flex-1 min-w-0 flex items-center gap-1.5">
+                    <span class="flex-shrink-0 w-3.5 h-3.5" x-html="UIHelpers.getFileTypeIconSvg(file.file_path)"></span>
+                    <div class="text-white text-sm font-medium truncate" x-text="UIHelpers.getFileName(file.file_path)"></div>
                 </div>
 
                 <!-- Progress Bar (center, fixed smaller width) -->
                 <div class="w-[28%] shrink-0 ml-[1%]">
                     <div class="w-full bg-gray-700 rounded overflow-hidden">
-                        <div class="py-1 text-xs text-center rounded text-white transition-all duration-500 ease-out"
+                        <div class="py-0.5 text-[11px] leading-tight text-center rounded text-white transition-all duration-500 ease-out"
                              :style="UIHelpers.getProgressWidth(file)"
                              :class="UIHelpers.getProgressColor(file)"
                              x-text="UIHelpers.getProgressText(file)">
@@ -27,20 +28,20 @@
                 <div class="flex-1 grid grid-cols-3 items-center min-w-0">
                     <!-- Status -->
                     <div class="w-32 text-center">
-                        <div class="inline-block py-1 px-2 rounded-full text-xs font-bold"
+                        <div class="inline-block py-0.5 px-1.5 rounded-full text-[11px] font-semibold"
                              :class="UIHelpers.getStatusBadgeColor(file.status)"
                              x-text="UIHelpers.getFriendlyStatus(file.status)">
                         </div>
                     </div>
 
                     <!-- Date -->
-                    <div class="w-32 text-center text-xs">
+                    <div class="w-32 text-center text-[11px]">
                         <div class="text-white"
                              x-text="UIHelpers.formatCustomDateTime(file.discovered_at)"></div>
                     </div>
 
                     <!-- Bytes Copied -->
-                    <div class="w-32 text-right text-xs">
+                    <div class="w-32 text-right text-[11px]">
                         <div x-show="file.bytes_copied && file.file_size" class="text-green-300">
                             <span x-text="UIHelpers.formatBytesCopied(file.bytes_copied, file.file_size)"></span>
                         </div>
@@ -48,11 +49,11 @@
                 </div>
 
                 <!-- Info toggle button -->
-                <button class="ml-2 p-2 rounded-full transition-colors duration-200 flex-shrink-0"
+                <button class="ml-1 p-1 rounded-full transition-colors duration-200 flex-shrink-0"
                         :class="showTip ? 'text-blue-400 bg-gray-700' : 'text-gray-500 hover:text-gray-300'"
                         @click.stop="showTip = !showTip"
                         title="Vis detaljer">
-                    <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
+                    <span x-html="UIHelpers.icon('info', 'w-3.5 h-3.5 pointer-events-none')"></span>
                 </button>
             </div>
 
@@ -143,7 +144,7 @@
     <!-- Empty State -->
     <div x-show="$store.files.filteredFiles.length === 0" class="text-center">
         <div class="text-gray-300 text-lg bg-gray-800 bg-opacity-60 rounded-lg p-8">
-            <div class="mb-4"><i data-lucide="folder" class="inline-block w-12 h-12 text-gray-500"></i></div>
+            <div class="mb-4"><span x-html="UIHelpers.icon('folder', 'inline-block w-12 h-12 text-gray-500')"></span></div>
             Ingen filer fundet
         </div>
     </div>

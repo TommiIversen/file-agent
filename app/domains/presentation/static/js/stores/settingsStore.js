@@ -80,11 +80,12 @@ document.addEventListener('alpine:init', () => {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 const data = await response.json();
+                /** @type {Record<string, any>} */
                 const form = {};
                 for (const s of data.settings) {
                     form[s.key] = s.value;
                 }
-                this.editForm = form;
+                this.editForm = /** @type {any} */ (form);
                 this.isDirty = false;
             } catch (error) {
                 console.error('❌ Failed to load user settings:', error);
@@ -122,11 +123,12 @@ document.addEventListener('alpine:init', () => {
 
                     // Update editForm with returned values
                     if (result.settings) {
+                        /** @type {Record<string, any>} */
                         const form = {};
                         for (const s of result.settings) {
                             form[s.key] = s.value;
                         }
-                        this.editForm = form;
+                        this.editForm = /** @type {any} */ (form);
                     }
                 } else {
                     this.saveSuccess = false;

@@ -77,10 +77,18 @@ class JobQueueService:
         except Exception as e:
             logging.error(f"Error processing waiting network files: {e}", exc_info=True)
 
-    async def handle_destination_unavailable(self) -> None:
+    async def handle_destination_unavailable(self, reason: str = "") -> None:
         """Handle destination becoming unavailable — move IN_QUEUE files to WAITING_FOR_NETWORK."""
         try:
-            logging.info("Destination unavailable: network disruption detected")
+            logging.info(f"Destination unavailable: {reason or 'unknown reason'}")
+
+            reason_lower = reason.lower()
+            if "storage monitor" in reason_lower:
+                error_msg = "Low disk space on destination — waiting for recovery"
+            elif "copy failure" in reason_lower:
+                error_msg = "Network error — waiting for recovery"
+            else:
+                error_msg = "Destination unavailable — waiting for recovery"
             
             # Drain the physical queue to prevent workers from picking up stale jobs
             drained = self._drain_queue()
@@ -104,7 +112,7 @@ class JobQueueService:
                     await self._state_machine.transition(
                         file_id=tracked_file.id,
                         new_status=FileStatus.WAITING_FOR_NETWORK,
-                        error_message="Network unavailable - waiting for recovery",
+                        error_message=error_msg,
                     )
                     paused_count += 1
                 except (InvalidTransitionError, ValueError) as e:

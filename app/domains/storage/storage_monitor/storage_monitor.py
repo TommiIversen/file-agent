@@ -396,7 +396,7 @@ class StorageMonitorService:
         problematic_states = [StorageStatus.ERROR, StorageStatus.CRITICAL]
         is_recovery = (
             old_info.status in problematic_states
-            and new_info.status == StorageStatus.OK
+            and new_info.status not in problematic_states
         )
 
         if is_recovery:

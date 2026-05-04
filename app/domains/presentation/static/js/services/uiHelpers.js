@@ -201,6 +201,68 @@ class UIHelpers {
         return filePath.split(/[/\\]/).pop();
     }
 
+    /** @type {Map<string, string>} */
+    static _lucideCache = new Map();
+
+    /**
+     * Render a Lucide icon as inline SVG string.
+     * Uses lucide.icons data directly — no MutationObserver or createIcons() needed.
+     * @param {string} name - kebab-case icon name (e.g. "file-text", "settings")
+     * @param {string} [classes=''] - CSS classes for the SVG element
+     * @returns {string} SVG markup string
+     */
+    static icon(name, classes = '') {
+        const key = `${name}|${classes}`;
+        const cached = this._lucideCache.get(key);
+        if (cached) return cached;
+
+        // Convert kebab-case to PascalCase for lucide.icons lookup
+        const pascalName = name.replace(/(^|-)([a-z0-9])/g, (_, __, c) => c.toUpperCase());
+        const iconData = lucide?.icons?.[pascalName];
+        if (!iconData) {
+            console.warn(`[UIHelpers.icon] Unknown icon: "${name}" (lookup: ${pascalName})`);
+            return '';
+        }
+
+        const buildEl = (/** @type {[string, Record<string, string>?]} */ [tag, attrs]) => {
+            const a = Object.entries(attrs || {}).map(([k, v]) => `${k}="${v}"`).join(' ');
+            return `<${tag}${a ? ' ' + a : ''}/>`;
+        };
+
+        const paths = iconData.map(buildEl).join('');
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.125em" class="${classes}">${paths}</svg>`;
+        this._lucideCache.set(key, svg);
+        return svg;
+    }
+
+    /** @type {Map<string, string>} */
+    static _iconCache = new Map();
+
+    /**
+     * Get inline SVG icon for file type (avoids lucide createIcons loop)
+     * @param {string} filePath
+     */
+    static getFileTypeIconSvg(filePath) {
+        const ext = ((filePath || '').split('.').pop() || '').toLowerCase();
+        if (this._iconCache.has(ext)) return this._iconCache.get(ext);
+
+        let color, paths;
+        if (['wav', 'mp3', 'aac', 'flac'].includes(ext)) {
+            color = '#c084fc';
+            paths = '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>';
+        } else if (['mxf', 'mp4', 'mov', 'avi'].includes(ext)) {
+            color = '#60a5fa';
+            paths = '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>';
+        } else {
+            color = '#9ca3af';
+            paths = '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>';
+        }
+
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+        this._iconCache.set(ext, svg);
+        return svg;
+    }
+
     /**
      * Format file size from MB value
      * @param {number} sizeMB
@@ -299,10 +361,20 @@ class UIHelpers {
         const totalMB = totalSize ? totalSize / (1024 * 1024) : 0;
 
         if (totalMB > 0) {
-            return `${copiedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
+            return `${this._formatMBSmart(copiedMB)} / ${this._formatMBSmart(totalMB)}`;
         } else {
-            return `${copiedMB.toFixed(1)} MB`;
+            return this._formatMBSmart(copiedMB);
         }
+    }
+
+    /**
+     * Format MB value to appropriate unit (MB, GB, TB) with 1 decimal
+     * @param {number} mb - value in megabytes
+     */
+    static _formatMBSmart(mb) {
+        if (mb >= 1024 * 1024) return `${(mb / (1024 * 1024)).toFixed(1)} TB`;
+        if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+        return `${mb.toFixed(1)} MB`;
     }
 
     /**

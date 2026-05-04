@@ -119,8 +119,10 @@ document.addEventListener('alpine:init', () => {
 
         // === INFINITE SCROLL ===
 
+        /** @param {Event} event */
         handleScroll(event) {
-            const el = event.target;
+            const el = /** @type {HTMLElement} */ (event.target);
+            if (!el) return;
             const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
             if (nearBottom && !this.isLoadingMore && this.hasMore) {
                 this.loadMore();
@@ -148,16 +150,18 @@ document.addEventListener('alpine:init', () => {
         applyFilters() {
             let filtered = this.events;
             if (this.eventTypeFilter !== 'all') {
-                filtered = filtered.filter(e => e.event_type === this.eventTypeFilter);
+                filtered = filtered.filter((/** @type {LogEvent} */ e) => e.event_type === this.eventTypeFilter);
             }
             this.filteredEvents = filtered;
         },
 
+        /** @param {string} level */
         setLevelFilter(level) {
             this.levelFilter = level;
             this.loadEvents();
         },
 
+        /** @param {string} eventType */
         setEventTypeFilter(eventType) {
             this.eventTypeFilter = eventType;
             this.applyFilters();
@@ -195,6 +199,7 @@ document.addEventListener('alpine:init', () => {
 
         // === UI HELPERS ===
 
+        /** @param {string} level */
         getLevelBadgeColor(level) {
             switch (level.toLowerCase()) {
                 case 'error': return 'bg-red-500 text-white';
@@ -204,6 +209,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        /** @param {string} eventType */
         getEventTypeIcon(eventType) {
             if (eventType.includes('Network')) return '\u{1F310}';
             if (eventType.includes('Storage')) return '\u{1F4BE}';
@@ -214,6 +220,7 @@ document.addEventListener('alpine:init', () => {
             return '\u{1F4CA}';
         },
 
+        /** @param {string} timestamp */
         formatTimestamp(timestamp) {
             const date = new Date(timestamp);
             return date.toLocaleString('da-DK', {
@@ -222,6 +229,7 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        /** @param {string} timestamp */
         formatRelativeTime(timestamp) {
             const now = new Date();
             const eventTime = new Date(timestamp);
@@ -232,6 +240,7 @@ document.addEventListener('alpine:init', () => {
             return `${Math.floor(diffInSeconds / 86400)} dage siden`;
         },
 
+        /** @param {Record<string, any> | null | undefined} details */
         getFormattedDetails(details) {
             if (!details || Object.keys(details).length === 0) return null;
             return Object.entries(details).map(([key, value]) => `${key}: ${value}`).join(', ');

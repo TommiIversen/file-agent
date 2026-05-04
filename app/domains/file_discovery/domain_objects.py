@@ -14,8 +14,11 @@ class ScanConfiguration:
     file_stable_time_seconds: int
     keep_files_hours: int # Applies to ALL file types, not just completed
 
+    # Accepted file extensions for discovery
+    accepted_extensions: frozenset[str] = frozenset({".mxf", ".wav"})
+
     # Growing file settings
     growing_file_poll_interval_seconds: int = 5
-    growing_file_safety_margin_mb: int = 50
+    growing_file_safety_margin_mb: int = 10
     growing_file_growth_timeout_seconds: int = 300
     growing_file_chunk_size_kb: int = 2048

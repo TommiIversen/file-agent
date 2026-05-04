@@ -16,6 +16,7 @@ from .domains.presentation import websockets_endpoint
 from app.domains.shared.api import config_api, logs_api, storage_api, events_api
 from app.domains.file_discovery.api import scanner_api
 from app.domains.ingest_monitor.api import router as ingest_monitor_api
+from app.domains.audio_recording.api import router as audio_recording_api
 from app.domains.tally_light.api import router as tally_light_api
 
 from .domains.presentation.api_endpoints import presentation_router
@@ -70,6 +71,7 @@ from app.domains.network_mount.registration import register_network_mount_domain
 from app.domains.lifecycle.registration import register_lifecycle_domain # Import lifecycle domain registration
 from app.domains.tally_light.registration import register_tally_light_domain # Import tally light domain registration
 from app.domains.ingest_monitor.registration import register_ingest_monitor_domain # Import ingest monitor domain registration
+from app.domains.audio_recording.registration import register_audio_recording_domain
 
 from app.core.global_event_logger import LoggedEvent
 from .logging_config import setup_logging
@@ -165,6 +167,32 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
     tally_handler = get_tally_light_event_handler()
     tally_monitor = get_tally_switch_monitor()
     await register_tally_light_domain(command_bus, query_bus, event_bus, tally_handler, tally_monitor)
+
+    # Audio recording — AFTER ingest_monitor (depends on filename query)
+    from app.dependencies.audio_recording import get_audio_recording_service
+    audio_service = get_audio_recording_service()
+    user_settings_service = get_user_settings_service()
+
+    async def _get_user_setting(key: str):
+        return user_settings_service.get(key)
+
+    await register_audio_recording_domain(
+        command_bus, query_bus, event_bus, audio_service,
+        get_user_setting=_get_user_setting,
+    )
+
+    # Inject recorder if device already configured
+    device_name = settings.audio_device_name
+    if device_name:
+        try:
+            from app.domains.audio_recording.recorder.factory import create_recorder
+            recorder = create_recorder(device_name)
+            audio_service.set_recorder(recorder)
+            logging.info("Audio recorder initialized for device: %s", device_name)
+        except Exception:
+            logging.warning("Could not initialize audio recorder for '%s'", device_name, exc_info=True)
+    else:
+        logging.info("Audio recording available but no device configured yet")
 
     logging.info("Handler-registrering fuldført.")
     return tally_handler
@@ -326,16 +354,24 @@ async def _mount_static_files(app: FastAPI) -> None:
 async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  # type: ignore[no-untyped-def]
     logging.info("File Transfer Agent shutting down...")
 
-    # Stop services gracefully
-    get_websocket_manager().stop_sender_task()
-    await get_file_scanner().stop_scanning()
-    await get_file_copier().stop_workers()
-    await get_storage_monitor().stop_monitoring()
-    get_lifecycle_service().stop_pruning_loop()
+    # 1. Stop event producers first (so no new events hit a torn-down WS)
+    try:
+        from app.dependencies.audio_recording import get_audio_recording_service
+        audio_service = get_audio_recording_service()
+        await audio_service.shutdown()
+        logging.info("AudioRecording domain shutdown completed")
+    except Exception as e:
+        logging.warning(f"Error shutting down audio recording: {e}")
+
+    if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
+        await tally_handler.shutdown()
+        logging.info("TallyLight domain shutdown completed")
 
     ingest_monitor_worker = get_ingest_monitor_worker()
     await ingest_monitor_worker.stop_monitoring()
     logging.info("IngestMonitorWorker stopped")
+
+    await get_storage_monitor().stop_monitoring()
 
     try:
         await get_ingest_api_client().close()
@@ -343,9 +379,13 @@ async def _shutdown(tally_handler, event_store, global_event_logger) -> None:  #
     except Exception as e:
         logging.warning(f"Error closing IngestApiClient: {e}")
 
-    if tally_handler is not None and hasattr(tally_handler, 'shutdown'):
-        await tally_handler.shutdown()
-        logging.info("TallyLight domain shutdown completed")
+    # 2. Stop processors and scanners
+    await get_file_scanner().stop_scanning()
+    await get_file_copier().stop_workers()
+    get_lifecycle_service().stop_pruning_loop()
+
+    # 3. Stop event consumer last (all producers are silent now)
+    get_websocket_manager().stop_sender_task()
 
     # Log shutdown event while DB is still clean
     try:
@@ -429,6 +469,7 @@ app.include_router(storage_api.router) # New shared domain storage API
 app.include_router(events_api.router) # New shared domain events API
 app.include_router(scanner_api.router) # New file discovery scanner API
 app.include_router(ingest_monitor_api) # New ingest monitor API
+app.include_router(audio_recording_api) # Audio recording API
 app.include_router(tally_light_api)    # Tally light test endpoint
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)

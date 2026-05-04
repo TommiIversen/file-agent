@@ -2,6 +2,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
 
+logger = logging.getLogger(__name__)
+
 from app.core.events.file_events import FileStatusChangedEvent, FileCopyProgressEvent, FileDiscoveredEvent, FileCopyCompletedEvent
 from app.core.events.scanner_events import ScannerStatusChangedEvent
 from app.core.events.storage_events import MountStatusChangedEvent, StorageStatusChangedEvent
@@ -18,6 +20,14 @@ from app.core.events.tally_events import (
     TallySwitchStatusUpdatedEvent, 
     TallySwitchOnlineEvent, 
     TallySwitchOfflineEvent
+)
+from app.core.events.audio_events import (
+    AudioRecordingStartedEvent,
+    AudioRecordingStoppedEvent,
+    AudioRecordingErrorEvent,
+    AudioDeviceDisconnectedEvent,
+    AudioOverflowWarningEvent,
+    AudioLevelsEvent,
 )
 from app.core.file_repository import FileRepository
 from app.domains.presentation.websocket_manager import WebSocketManager
@@ -372,6 +382,115 @@ class PresentationEventHandlers:
                 "last_checked": status.last_checked.isoformat() if status.last_checked else None,
                 "error_message": status.error_message,
                 "timestamp": self._get_timestamp(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    # === AUDIO RECORDING EVENT HANDLERS ===
+
+    async def handle_audio_recording_started_event(self, event: AudioRecordingStartedEvent) -> None:
+        """Broadcast audio recording started to all connected clients."""
+        logging.info(
+            "Audio recording started: session=%s, %d tracks @ %dHz",
+            event.session_id,
+            len(event.tracks),
+            event.samplerate,
+        )
+
+        message_data = {
+            "type": "audio_recording_started",
+            "data": {
+                "session_id": event.session_id,
+                "tracks": event.tracks,
+                "samplerate": event.samplerate,
+                "files": event.files,
+                "track_count": len(event.tracks),
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_recording_stopped_event(self, event: AudioRecordingStoppedEvent) -> None:
+        """Broadcast audio recording stopped to all connected clients."""
+        logging.info(
+            "Audio recording stopped: session=%s, duration=%.1fs, overflows=%d",
+            event.session_id,
+            event.duration_seconds,
+            event.overflow_count,
+        )
+
+        message_data = {
+            "type": "audio_recording_stopped",
+            "data": {
+                "session_id": event.session_id,
+                "files": event.files,
+                "duration_seconds": round(event.duration_seconds, 1),
+                "overflow_count": event.overflow_count,
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_recording_error_event(self, event: AudioRecordingErrorEvent) -> None:
+        """Broadcast audio recording error to all connected clients."""
+        logging.error(
+            "Audio recording error: %s (recoverable=%s, session=%s)",
+            event.error,
+            event.recoverable,
+            event.session_id,
+        )
+
+        message_data = {
+            "type": "audio_recording_error",
+            "data": {
+                "error": event.error,
+                "recoverable": event.recoverable,
+                "session_id": event.session_id,
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_device_disconnected_event(self, event: AudioDeviceDisconnectedEvent) -> None:
+        """Broadcast audio device disconnection to all connected clients."""
+        logging.warning("Audio device disconnected: %s", event.device_name)
+
+        message_data = {
+            "type": "audio_device_disconnected",
+            "data": {
+                "device_name": event.device_name,
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_overflow_warning_event(self, event: AudioOverflowWarningEvent) -> None:
+        """Broadcast audio overflow warning to all connected clients."""
+        logging.warning(
+            "Audio overflow warning: dropped=%d, total=%d, session=%s",
+            event.dropped_count,
+            event.total_drops,
+            event.session_id,
+        )
+
+        message_data = {
+            "type": "audio_overflow_warning",
+            "data": {
+                "dropped_count": event.dropped_count,
+                "total_drops": event.total_drops,
+                "session_id": event.session_id,
+                "timestamp": event.timestamp.isoformat(),
+            },
+        }
+        self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_audio_levels_event(self, event: AudioLevelsEvent) -> None:
+        """Broadcast audio peak levels to all connected clients (~8 Hz)."""
+        message_data = {
+            "type": "audio_levels",
+            "data": {
+                "session_id": event.session_id,
+                "tracks": event.track_peaks,
             },
         }
         self.websocket_manager.broadcast_message(message_data)

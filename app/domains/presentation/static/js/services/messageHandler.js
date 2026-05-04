@@ -63,7 +63,10 @@ class MessageHandler {
             return;
         }
 
-        console.log('Processing WebSocket message:', message.type);
+        // Skip logging for high-frequency messages
+        if (message.type !== 'audio_levels' && message.type !== 'file_progress_update') {
+            console.log('Processing WebSocket message:', message.type);
+        }
 
         try {
             switch (message.type) {
@@ -80,7 +83,6 @@ class MessageHandler {
                     break;
 
                 case 'file_progress_update':
-                    console.log('File progress update received:', message.data);
                     this.handleFileProgressUpdate(message.data);
                     break;
 
@@ -147,6 +149,30 @@ class MessageHandler {
 
                 case 'auto_stop_triggered':
                     this.handleAutoStopTriggered(message.data);
+                    break;
+
+                case 'audio_recording_started':
+                    Alpine.store('audio')?.handleStarted(message.data);
+                    break;
+
+                case 'audio_recording_stopped':
+                    Alpine.store('audio')?.handleStopped(message.data);
+                    break;
+
+                case 'audio_recording_error':
+                    Alpine.store('audio')?.handleError(message.data);
+                    break;
+
+                case 'audio_device_disconnected':
+                    Alpine.store('audio')?.handleDeviceDisconnected(message.data);
+                    break;
+
+                case 'audio_overflow_warning':
+                    Alpine.store('audio')?.handleOverflowWarning(message.data);
+                    break;
+
+                case 'audio_levels':
+                    Alpine.store('audio')?.updateLevels(message.data);
                     break;
 
                 default:
@@ -480,7 +506,7 @@ class MessageHandler {
 
     /**
      * Handle ingest connection status changes
-     * @param {Object} data - Ingest connection status data
+     * @param {{is_connected: boolean}} data
      */
     handleIngestConnectionChange(data) {
         console.log('Ingest connection status update received:', data);

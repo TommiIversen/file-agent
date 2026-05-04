@@ -180,6 +180,140 @@ def test_time_variable_not_used_in_rule():
         assert Path(output) == expected
 
 
+def test_ext_only_rule_matches_by_extension():
+    """Test that ext-only rules match files by extension."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules="ext:.wav;folder:AUDIO/{date}/{time}",
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+            output_folder_time_format="filename[7:13]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+
+        # WAV file should match the ext rule
+        wav_file = "260408_154246_MIC_1.wav"
+        output = engine.generate_output_path(wav_file)
+        expected = Path(temp_dir) / "dest" / "AUDIO" / "260408" / "154246" / wav_file
+        assert Path(output) == expected
+
+        # MXF file should NOT match — falls to default
+        mxf_file = "260408_154246_KAM_3.mxf"
+        output_mxf = engine.generate_output_path(mxf_file)
+        expected_mxf = Path(temp_dir) / "dest" / "OTHER" / "260408" / mxf_file
+        assert Path(output_mxf) == expected_mxf
+
+
+def test_ext_combined_with_pattern():
+    """Test that ext + pattern combined requires BOTH to match."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules="pattern:*PGM*;ext:.wav;folder:AUDIO_PGM/{date}",
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+
+        # WAV + PGM → should match
+        wav_pgm = "260408_154246_PGM.wav"
+        output = engine.generate_output_path(wav_pgm)
+        expected = Path(temp_dir) / "dest" / "AUDIO_PGM" / "260408" / wav_pgm
+        assert Path(output) == expected
+
+        # MXF + PGM → should NOT match (wrong extension)
+        mxf_pgm = "260408_154246_PGM.mxf"
+        output_mxf = engine.generate_output_path(mxf_pgm)
+        expected_mxf = Path(temp_dir) / "dest" / "OTHER" / "260408" / mxf_pgm
+        assert Path(output_mxf) == expected_mxf
+
+        # WAV + KAM → should NOT match (wrong pattern)
+        wav_kam = "260408_154246_KAM_3.wav"
+        output_kam = engine.generate_output_path(wav_kam)
+        expected_kam = Path(temp_dir) / "dest" / "OTHER" / "260408" / wav_kam
+        assert Path(output_kam) == expected_kam
+
+
+def test_ext_rules_mixed_with_pattern_rules():
+    """Test multiple rules mixing ext-only and pattern-only."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=(
+                "pattern:*KAM*;folder:KAMERA/{date}\n"
+                "ext:.wav;folder:AUDIO/{date}\n"
+                "pattern:*PGM*;folder:PROGRAM/{date}"
+            ),
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+
+        # KAM MXF → KAMERA
+        assert Path(engine.generate_output_path("260408_KAM_3.mxf")) == (
+            Path(temp_dir) / "dest" / "KAMERA" / "260408" / "260408_KAM_3.mxf"
+        )
+        # WAV file → AUDIO
+        assert Path(engine.generate_output_path("260408_MIC_1.wav")) == (
+            Path(temp_dir) / "dest" / "AUDIO" / "260408" / "260408_MIC_1.wav"
+        )
+        # PGM MXF → PROGRAM
+        assert Path(engine.generate_output_path("260408_PGM.mxf")) == (
+            Path(temp_dir) / "dest" / "PROGRAM" / "260408" / "260408_PGM.mxf"
+        )
+        # Unknown → OTHER
+        assert Path(engine.generate_output_path("260408_RANDOM.txt")) == (
+            Path(temp_dir) / "dest" / "OTHER" / "260408" / "260408_RANDOM.txt"
+        )
+
+
+def test_ext_rule_json_format():
+    """Test ext rules in JSON format."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        import json
+
+        rules_json = json.dumps([
+            {"ext": ".wav", "folder": "AUDIO/{date}"},
+            {"pattern": "*KAM*", "folder": "KAMERA/{date}"},
+            {"pattern": "*PGM*", "ext": ".wav", "folder": "AUDIO_PGM/{date}"},
+        ])
+
+        settings = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=rules_json,
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine = OutputFolderTemplateEngine(settings)
+
+        # WAV → AUDIO (first rule)
+        wav_file = "260408_MIC_1.wav"
+        output = engine.generate_output_path(wav_file)
+        assert Path(output) == Path(temp_dir) / "dest" / "AUDIO" / "260408" / wav_file
+
+        # KAM MXF → KAMERA (second rule)
+        mxf_file = "260408_KAM_3.mxf"
+        output_mxf = engine.generate_output_path(mxf_file)
+        assert Path(output_mxf) == Path(temp_dir) / "dest" / "KAMERA" / "260408" / mxf_file
+
+
 def test_newline_delimited_rules():
     """Rules separated by newlines should parse identically to comma-separated."""
 
@@ -227,6 +361,55 @@ def test_mixed_newline_and_comma_rules():
         assert len(engine.rules) == 3
         assert engine.get_output_subfolder("260408_154246_KAM_3.mxf") == "KAMERA/260408"
         assert engine.get_output_subfolder("260408_154246_CLN.mxf") == "PROGRAM/260408"
+
+
+def test_ext_rule_must_be_before_catch_all():
+    """ext: rules placed AFTER a catch-all pattern:* are never reached.
+
+    This documents the real-world pitfall: if a user adds `pattern:*;folder:OTHER`
+    before `ext:.wav;folder:AUDIO`, the ext rule is shadowed.
+    """
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # BAD order: catch-all before ext rule
+        settings_bad = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=(
+                "pattern:*KAM*;folder:KAMERA/{date}\n"
+                "pattern:*;folder:OTHER/{date}\n"
+                "ext:.wav;folder:AUDIO/{date}"
+            ),
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine_bad = OutputFolderTemplateEngine(settings_bad)
+        # WAV goes to OTHER because pattern:* catches it first
+        assert engine_bad.get_output_subfolder("260408_Mic1.wav") == "OTHER/260408"
+
+        # GOOD order: ext rule before catch-all
+        settings_good = Settings(
+            source_directory=str(Path(temp_dir) / "source"),
+            destination_directory=str(Path(temp_dir) / "dest"),
+            output_folder_template_enabled=True,
+            output_folder_rules=(
+                "pattern:*KAM*;folder:KAMERA/{date}\n"
+                "ext:.wav;folder:AUDIO/{date}\n"
+                "pattern:*;folder:OTHER/{date}"
+            ),
+            output_folder_default_category="OTHER",
+            output_folder_date_format="filename[0:6]",
+        )
+
+        engine_good = OutputFolderTemplateEngine(settings_good)
+        # WAV now correctly matches the ext rule
+        assert engine_good.get_output_subfolder("260408_Mic1.wav") == "AUDIO/260408"
+        # MXF still falls through to catch-all
+        assert engine_good.get_output_subfolder("260408_RANDOM.mxf") == "OTHER/260408"
+        # KAM still matches its pattern rule
+        assert engine_good.get_output_subfolder("260408_KAM_3.mxf") == "KAMERA/260408"
 
 
 if __name__ == "__main__":

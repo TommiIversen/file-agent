@@ -1,31 +1,31 @@
 <!-- Storage Status Panel Component -->
 
 {% macro storage_card(icon, label, browse_action, prefix, show_mount=false) %}
-<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3">
-    <div class="flex items-center justify-between mb-2">
-        <h3 class="text-base lg:text-lg font-semibold flex items-center">
-            {{ icon | safe }}<span class="hidden sm:inline">{{ label }}</span><span class="sm:hidden">{{ label.split(' ')[0] }}</span>
-        </h3>
-        <div class="flex items-center gap-3 text-xs">
+<div class="bg-gray-700 bg-opacity-60 rounded-lg p-3 overflow-hidden">
+    <div class="flex items-center justify-between mb-2 min-w-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
+            {{ icon | safe }}<span class="text-sm font-medium text-gray-300">{{ label }}</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs min-w-0 overflow-hidden">
             <!-- Status LEDs (uniform size) -->
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center whitespace-nowrap">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                <span :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                <span class="truncate" :class="($store.storage?.{{ prefix }}Accessible ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
                     <span x-text="($store.storage?.{{ prefix }}Accessible ?? false) ? 'Tilgængelig' : 'Utilgængelig'" x-cloak></span>
                 </span>
             </div>
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center whitespace-nowrap">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'bg-green-500' : 'bg-red-500'" x-cloak></div>
-                <span :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
+                <span class="truncate" :class="($store.storage?.{{ prefix }}Writable ?? false) ? 'text-green-400' : 'text-red-400'" x-cloak>
                     <span x-text="($store.storage?.{{ prefix }}Writable ?? false) ? 'Skrivbar' : 'Skrivebeskyttet'" x-cloak></span>
                 </span>
             </div>
-            <div class="flex items-center">
-                <div class="w-2 h-2 rounded-full mr-1"
+            <div class="flex items-center min-w-0">
+                <div class="w-2 h-2 rounded-full mr-1 flex-shrink-0"
                      :class="$store.storage?.{{ prefix }}StatusColor || 'bg-gray-500'" x-cloak></div>
-                <span :class="$store.storage?.{{ prefix }}StatusTextColor || 'text-gray-400'"
+                <span class="truncate" :class="$store.storage?.{{ prefix }}StatusTextColor || 'text-gray-400'"
                       x-text="$store.storage?.{{ prefix }}Status || 'Indlæser...'" x-cloak></span>
             </div>
         </div>
@@ -41,16 +41,16 @@
             </div>
 
             <!-- Storage Details + Browse -->
-            <div class="flex items-center justify-between text-xs lg:text-sm">
-                <div class="flex items-center gap-4">
-                    <span class="text-gray-300">Ledig: <strong class="text-white"
-                                                               x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></strong></span>
-                    <span class="text-gray-300">Total: <strong class="text-white"
-                                                               x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></strong></span>
+            <div class="flex items-center justify-between text-xs min-w-0">
+                <div class="flex items-center gap-3 min-w-0 overflow-hidden">
+                    <span class="text-gray-400 truncate">Ledig: <span class="text-gray-300"
+                                                              x-text="$store.storage?.{{ prefix }}FreeSpaceFormatted || '0 GB'" x-cloak></span></span>
+                    <span class="text-gray-400 truncate">Total: <span class="text-gray-300"
+                                                              x-text="$store.storage?.{{ prefix }}TotalSpaceFormatted || '0 GB'" x-cloak></span></span>
                 </div>
                 <button @click="{{ browse_action }}"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition-colors duration-200">
-                    <span class="hidden sm:inline"><i data-lucide="folder-open" class="inline-block w-3.5 h-3.5"></i> Browse</span><span class="sm:hidden"><i data-lucide="folder-open" class="inline-block w-3.5 h-3.5"></i></span>
+                    <span class="hidden sm:inline"><span x-html="UIHelpers.icon('folder-open', 'inline-block w-3.5 h-3.5')"></span> Browse</span><span class="sm:hidden"><span x-html="UIHelpers.icon('folder-open', 'inline-block w-3.5 h-3.5')"></span></span>
                 </button>
             </div>
 
@@ -82,7 +82,7 @@
 
                             <span class="text-xs font-medium"
                                   :class="$store.storage?.{{ prefix }}MountStatusColor" x-cloak>
-                                <i data-lucide="link" class="inline-block w-3 h-3"></i> <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
+                                <span x-html="UIHelpers.icon('link', 'inline-block w-3 h-3')"></span> <span class="hidden sm:inline">Network Mount</span><span class="sm:hidden">Mount</span>
                             </span>
                         </div>
                         <span class="text-gray-300 text-xs truncate"
@@ -100,7 +100,8 @@
 </div>
 {% endmacro %}
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    {{ storage_card('<i data-lucide="folder" class="inline-block w-5 h-5 mr-1"></i>', 'Source Storage', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
-    {{ storage_card('<i data-lucide="target" class="inline-block w-5 h-5 mr-1"></i>', 'Destination Storage', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" id="storage-audio-grid">
+    {{ storage_card('<span x-html="UIHelpers.icon(\'folder\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Source', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
+    {% include "components/audio_recording_status.html" %}
+    {{ storage_card('<span x-html="UIHelpers.icon(\'target\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Destination', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
 </div>

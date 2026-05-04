@@ -42,6 +42,11 @@ document.addEventListener('alpine:init', () => {
             growingFiles: 0
         },
 
+        /** @type {number} Cache invalidation version — bumped on data changes */
+        _cacheVersion: 0,
+        /** @type {{version: number, filter: string, sort: string, result: TrackedFile[]}} */
+        _filteredCache: { version: -1, filter: '', sort: '', result: [] },
+
         // === METHODS ===
 
         /**
@@ -197,7 +202,8 @@ document.addEventListener('alpine:init', () => {
          * @param {Event} event
          */
         handleFilesScroll(event) {
-            const el = event.target;
+            const el = /** @type {HTMLElement} */ (event.target);
+            if (!el) return;
             const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
             if (nearBottom && !this.isLoadingMore && this.hasMore) {
                 this.loadMore();
@@ -249,13 +255,20 @@ document.addEventListener('alpine:init', () => {
             this.statistics.completedFiles = stats.completed;
             this.statistics.failedFiles = stats.failed;
             this.statistics.growingFiles = stats.growing;
+            this._cacheVersion++;
         },
 
         /**
          * Gets a filtered and sorted list of files based on the current UI state.
+         * Cached — only recomputes when data, filter, or sort changes.
          * @returns {TrackedFile[]}
          */
         get filteredFiles() {
+            const c = this._filteredCache;
+            if (c.version === this._cacheVersion && c.filter === this.activeFilter && c.sort === this.sortBy) {
+                return c.result;
+            }
+
             let filesToFilter = Array.from(this.items.values());
 
             switch (this.activeFilter) {
@@ -275,7 +288,9 @@ document.addEventListener('alpine:init', () => {
                 default:
                     break;
             }
-            return this.sortFiles(filesToFilter);
+            const result = this.sortFiles(filesToFilter);
+            this._filteredCache = { version: this._cacheVersion, filter: this.activeFilter, sort: this.sortBy, result };
+            return result;
         },
 
         /**

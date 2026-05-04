@@ -10,6 +10,11 @@ aiosqlite==0.22.1
 alembic==1.18.4
 sqlalchemy==2.0.48
 
+# Audio recording
+numpy>=1.26
+sounddevice>=0.5
+soundfile>=0.13
+
 # Dev / Test
 pytest==9.0.2
 pytest-asyncio==1.3.0

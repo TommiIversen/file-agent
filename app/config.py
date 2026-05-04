@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # Branding
     brand_name: str = "Dr. Feta"
 
+    # Audio recording
+    audio_recording_enabled: bool = False
+    audio_device_name: str = ""
+    audio_sample_rate: int = 48000
+    audio_tracks: str = "[]"
+    audio_track_presets: str = "[]"
+    audio_filename_from_justin: bool = True
+
     # Timing konfiguration
     file_stable_time_seconds: int = 120
     polling_interval_seconds: int = 6
@@ -147,8 +155,8 @@ class Settings(BaseSettings):
     keep_files_hours: int = 336 # Keep ALL files in memory for 14 days (14*24=336 hours) - provides complete UI log
 
     # Growing file support (now default)
-    growing_file_min_size_mb: int = 50 # Minimum size in MB to start growing copy
-    growing_file_safety_margin_mb: int = 50 # Stay this many MB behind write head
+    growing_file_min_size_mb: int = 5 # Minimum size in MB to start growing copy
+    growing_file_safety_margin_mb: int = 10 # Stay this many MB behind write head
     growing_file_poll_interval_seconds: int = 5 # Check file growth every N seconds
     growing_file_growth_timeout_seconds: int = (
         20 # Consider stable after N seconds no growth

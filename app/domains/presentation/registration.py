@@ -29,6 +29,14 @@ from app.core.events.tally_events import (
     TallySwitchOnlineEvent,
     TallySwitchOfflineEvent,
 )
+from app.core.events.audio_events import (
+    AudioRecordingStartedEvent,
+    AudioRecordingStoppedEvent,
+    AudioRecordingErrorEvent,
+    AudioDeviceDisconnectedEvent,
+    AudioOverflowWarningEvent,
+    AudioLevelsEvent,
+)
 
 # 3. Gør funktionen async og tilføj event_bus
 async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEventBus):
@@ -75,5 +83,13 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(TallySwitchStatusUpdatedEvent, handlers.handle_tally_switch_status_updated_event)
     await event_bus.subscribe(TallySwitchOnlineEvent, handlers.handle_tally_switch_online_event)
     await event_bus.subscribe(TallySwitchOfflineEvent, handlers.handle_tally_switch_offline_event)
+    
+    # Subscribe to audio recording events for real-time UI updates
+    await event_bus.subscribe(AudioRecordingStartedEvent, handlers.handle_audio_recording_started_event)
+    await event_bus.subscribe(AudioRecordingStoppedEvent, handlers.handle_audio_recording_stopped_event)
+    await event_bus.subscribe(AudioRecordingErrorEvent, handlers.handle_audio_recording_error_event)
+    await event_bus.subscribe(AudioDeviceDisconnectedEvent, handlers.handle_audio_device_disconnected_event)
+    await event_bus.subscribe(AudioOverflowWarningEvent, handlers.handle_audio_overflow_warning_event)
+    await event_bus.subscribe(AudioLevelsEvent, handlers.handle_audio_levels_event)
     
     logging.info("Presentation domain-registrering (CQRS & Events) fuldført.")

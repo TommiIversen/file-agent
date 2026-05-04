@@ -35,9 +35,10 @@ async def get_file_metadata(file_path: str) -> dict[str, Any] | None:
         return None
 
 
-def is_mxf_file(path: Path) -> bool:
-    """Check if file is an MXF file."""
-    return path.suffix.lower() == ".mxf"
+
+def is_accepted_file(path: Path, extensions: frozenset[str] = frozenset({".mxf", ".wav"})) -> bool:
+    """Check if file has an accepted extension."""
+    return path.suffix.lower() in extensions
 
 
 def should_ignore_file(path: Path) -> bool:
@@ -190,10 +191,10 @@ class FileScanner:
                     abs_file_path = await asyncio.to_thread(os.path.abspath, file_path)
                     path_obj = Path(abs_file_path)
 
-                    if is_mxf_file(path_obj) and not should_ignore_file(path_obj):
+                    if is_accepted_file(path_obj, self.config.accepted_extensions) and not should_ignore_file(path_obj):
                         discovered_files.add(path_obj)
 
-            logging.debug(f"Discovered {len(discovered_files)} MXF files")
+            logging.debug(f"Discovered {len(discovered_files)} media files")
 
         except Exception as e:
             logging.error(f"Error discovering files: {e}", exc_info=True)
@@ -247,7 +248,7 @@ class FileScanner:
             return
 
         if metadata["size"] != tracked_file.file_size:
-            logging.info(
+            logging.debug(
                 f"SIZE CHANGE: {tracked_file.file_path} "
                 f"({tracked_file.file_size} → {metadata['size']} bytes) "
                 f"[UUID: {tracked_file.id[:8]}...]"

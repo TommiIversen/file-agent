@@ -35,6 +35,12 @@ USER_SETTINGS_SCHEMA: dict[str, tuple[type, Any]] = {
     "max_concurrent_copies": (int, 7),
     "justin_auto_stop_minutes": (int, 0),
     "brand_name": (str, "Dr. Feta"),
+    "audio_recording_enabled": (bool, False),
+    "audio_device_name": (str, ""),
+    "audio_sample_rate": (int, 48000),
+    "audio_tracks": (str, "[]"),
+    "audio_track_presets": (str, '[{"name":"Studie 1","tracks":[{"channels":[1,2],"label":"PGM_LR","mode":"stereo"},{"channels":[3],"label":"Mic1","mode":"mono"},{"channels":[4],"label":"Mic2","mode":"mono"},{"channels":[5],"label":"Mic3","mode":"mono"},{"channels":[6],"label":"Mic4","mode":"mono"},{"channels":[7],"label":"USB_mono","mode":"mono"},{"channels":[8],"label":"Mic_prod","mode":"mono"},{"channels":[9,10],"label":"DALET_LR","mode":"stereo"},{"channels":[11],"label":"Mic1_clean","mode":"mono"},{"channels":[12],"label":"Mic2_clean","mode":"mono"},{"channels":[13],"label":"Mic3_clean","mode":"mono"},{"channels":[14],"label":"Mic4_clean","mode":"mono"}]}]'),
+    "audio_filename_from_justin": (bool, True),
 }
 
 # Settings that require an app restart to take effect.
