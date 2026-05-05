@@ -56,8 +56,30 @@ EOF
 sudo chmod +x "$BIN_DIR/restart-feta"
 log_success "restart-feta → restarts the launchd service"
 
+# ── stop-feta ────────────────────────────────────────────────────────
+log_info "Creating stop-feta..."
+sudo tee "$BIN_DIR/stop-feta" > /dev/null << 'EOF'
+#!/bin/bash
+# Stop File Agent service (disable until next manual start/reboot)
+set -eo pipefail
+PLIST_USER="$HOME/Library/LaunchAgents/com.fileagent.service.plist"
+PLIST_SYSTEM="/Library/LaunchDaemons/com.fileagent.service.plist"
+
+if [ -f "$PLIST_USER" ]; then
+    launchctl unload "$PLIST_USER" 2>/dev/null && echo "✅ File Agent stopped (user service)." || echo "⚠️  Service was not running."
+elif [ -f "$PLIST_SYSTEM" ]; then
+    sudo launchctl unload "$PLIST_SYSTEM" 2>/dev/null && echo "✅ File Agent stopped (system service)." || echo "⚠️  Service was not running."
+else
+    echo "❌ No File Agent service plist found."
+    exit 1
+fi
+EOF
+sudo chmod +x "$BIN_DIR/stop-feta"
+log_success "stop-feta → stops the launchd service"
+
 # ── Done ─────────────────────────────────────────────────────────────
 echo
 echo -e "${GREEN}Done!${NC} You can now run from anywhere:"
 echo "  update-feta    # pull latest + restart"
 echo "  restart-feta   # just restart"
+echo "  stop-feta      # stop the service"
