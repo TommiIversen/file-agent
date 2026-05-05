@@ -243,10 +243,31 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
     file_repo = get_file_repository()
     state_machine = get_file_state_machine()
 
-    # 1. Re-evaluate WaitingForNetwork files (uses existing recovery logic)
+    # 1. Re-evaluate WaitingForNetwork files — but ONLY if destination is
+    #    currently accessible.  StorageMonitor has just completed its first
+    #    check, so get_destination_info() reflects the real current state.
+    #
+    #    If destination is down, the DestinationUnavailableEvent from that
+    #    first check is still pending in the EventBus.  Calling
+    #    process_waiting_network_files() here would move files to Discovered,
+    #    the scanner would immediately queue them (InQueue), and then the
+    #    pending event handler would knock them back to WaitingForNetwork — a
+    #    no-op race that leaves files stuck.  Skip recovery in that case;
+    #    files will be re-evaluated automatically when StorageMonitor
+    #    publishes DestinationRecoveredEvent on the next 30-second check.
     try:
-        await job_queue_service.process_waiting_network_files()
-        logging.info("Startup recovery: WaitingForNetwork files re-evaluated")
+        storage_monitor = get_storage_monitor()
+        dest_info = storage_monitor.get_destination_info()
+        destination_ok = dest_info is not None and dest_info.is_accessible
+
+        if destination_ok:
+            await job_queue_service.process_waiting_network_files()
+            logging.info("Startup recovery: WaitingForNetwork files re-evaluated")
+        else:
+            logging.info(
+                "Startup recovery: destination not accessible — "
+                "skipping WaitingForNetwork re-evaluation (will recover when destination is back)"
+            )
     except Exception as e:
         logging.warning(f"Startup recovery of WaitingForNetwork files failed (non-critical): {e}")
 
