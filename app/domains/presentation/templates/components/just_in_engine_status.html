@@ -140,8 +140,9 @@
                 <span x-text="($store.ingest?.getChannelsSorted() || []).filter(c => c.is_recording).length" x-cloak></span>/<span x-text="($store.ingest?.getChannelsSorted() || []).length" x-cloak></span> rec
             </div>
 
-            <!-- Tally Light Status -->
-            <div class="flex items-center space-x-2">
+            <!-- Tally Light Status (hidden when no tally configured) -->
+            <div class="flex items-center space-x-2"
+                 x-show="$store.tallySwitch && $store.tallySwitch.ipAddress && $store.tallySwitch.ipAddress !== '' && $store.tallySwitch.ipAddress !== 'unknown'">
                 <span class="text-xs text-gray-400">Tally:</span>
                 <template x-if="$store.ingest?.getRecordingStatus() === 'none'">
                     <div class="flex items-center">

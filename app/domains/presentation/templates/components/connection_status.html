@@ -12,11 +12,13 @@
              :title="$store.ingest ? 'Just In Engine forbindelse' : 'Loading...'" x-cloak></div>
         <span x-text="$store.ingest ? $store.ingest.getConnectionStatusText() : 'Just In Engine: Loading...'" class="text-xs truncate" x-cloak></span>
 
-        <!-- Row 2: Tally + Scanner -->
+        <!-- Row 2: Tally (hidden if not configured) + Scanner -->
         <div class="status-indicator rounded-full w-3 h-3 justify-self-center"
+             x-show="$store.tallySwitch && $store.tallySwitch.ipAddress && $store.tallySwitch.ipAddress !== '' && $store.tallySwitch.ipAddress !== 'unknown'"
              :class="$store.tallySwitch ? $store.tallySwitch.getStatusColor() : 'bg-gray-500'"
              :title="$store.tallySwitch ? $store.tallySwitch.getStatusTooltip() : 'Loading...'" x-cloak></div>
-        <span x-text="$store.tallySwitch ? $store.tallySwitch.getIndicatorText() : 'Tally Switch'" class="text-xs truncate" x-cloak></span>
+        <span x-show="$store.tallySwitch && $store.tallySwitch.ipAddress && $store.tallySwitch.ipAddress !== '' && $store.tallySwitch.ipAddress !== 'unknown'"
+              x-text="$store.tallySwitch ? $store.tallySwitch.getIndicatorText() : 'Tally Switch'" class="text-xs truncate" x-cloak></span>
 
         <div class="status-indicator rounded-full w-3 h-3 justify-self-center"
              :class="$store.ui?.scanner?.scanning ? 'bg-green-500' : ($store.ui?.scanner?.paused ? 'bg-orange-500' : 'bg-gray-500')" x-cloak></div>

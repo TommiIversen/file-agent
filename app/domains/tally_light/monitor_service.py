@@ -65,8 +65,17 @@ class TallySwitchMonitorService:
         """Check if monitoring is currently active."""
         return self._is_running
 
+    @property
+    def is_configured(self) -> bool:
+        """Check if a tally switch IP has been configured."""
+        return bool(self._ip_address and self._ip_address.strip())
+
     async def start_monitoring(self) -> None:
         """Start the background monitoring task."""
+        if not self.is_configured:
+            logging.info("Tally switch not configured (no IP) — monitoring disabled")
+            return
+
         if self._is_running:
             logging.warning("Tally switch monitoring is already running")
             return

@@ -49,6 +49,11 @@ class IPPower9255Client(PowerSwitchProtocol):
         
         logging.info(f"IPPower9255Client initialized for {ip_address}")
 
+    @property
+    def is_configured(self) -> bool:
+        """Check if an IP address has been configured."""
+        return bool(self._ip_address and self._ip_address.strip())
+
     def update_connection(self, ip_address: str, username: str = "admin", password: str = "") -> None:
         """Update the connection parameters (IP, credentials) without recreating the client."""
         self._ip_address = ip_address
@@ -74,6 +79,8 @@ class IPPower9255Client(PowerSwitchProtocol):
         
         Sends: GET http://admin:12345678@10.65.77.9/Set.cmd?cmd=setpower+p61=1
         """
+        if not self.is_configured:
+            return False
         try:
             client = await self._ensure_client()
             url = f"{self._base_url}/Set.cmd?cmd=setpower+{self.DEFAULT_OUTLET}=1"
@@ -101,6 +108,8 @@ class IPPower9255Client(PowerSwitchProtocol):
         
         Sends: GET http://admin:12345678@10.65.77.9/Set.cmd?cmd=setpower+p61=0
         """
+        if not self.is_configured:
+            return False
         try:
             client = await self._ensure_client()
             url = f"{self._base_url}/Set.cmd?cmd=setpower+{self.DEFAULT_OUTLET}=0"
@@ -129,6 +138,8 @@ class IPPower9255Client(PowerSwitchProtocol):
         Note: IP Power 9255 doesn't provide a simple status endpoint,
         so we'll implement a basic connectivity check instead.
         """
+        if not self.is_configured:
+            return False
         try:
             client = await self._ensure_client()
             # Try to access the main page to verify connectivity
@@ -160,6 +171,8 @@ class IPPower9255Client(PowerSwitchProtocol):
         Uses a simple TCP connectivity check to port 80 with 3-second timeout.
         This is much more reliable than HTTP requests for basic connectivity.
         """
+        if not self.is_configured:
+            return False
         try:
             # Simple TCP connectivity check to port 80
             future = asyncio.open_connection(self._ip_address, 80)

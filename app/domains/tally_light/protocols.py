@@ -82,6 +82,11 @@ class PowerSwitchProtocol(ABC):
         """Get the switch type identifier."""
         pass
 
+    @property
+    def is_configured(self) -> bool:
+        """Check if the switch has been configured with a valid address."""
+        return True
+
 
 class PowerSwitchError(Exception):
     """Base exception for power switch operations."""
