@@ -22,39 +22,21 @@ This application is a robust file transfer agent for automated and reliable file
 
 ### Auto-Stop Recording
 
-Prevents runaway recordings by stopping all channels after a configurable time limit. Set to `0` to disable.
-
-```bash
-# settings.env
-JUSTIN_AUTO_STOP_MINUTES=180          # Stop all channels after 180 min (0 = disabled)
-JUSTIN_AUTO_STOP_WARNING_MINUTES=5    # Tally blinks + UI warning 5 min before limit
-```
+Prevents runaway recordings by stopping all channels after a configurable time limit. Configured in the web UI under **Performance & Automation** — set to `0` to disable.
 
 The feature uses Justin's authoritative timecodes — no local timers, survives restarts, no clock drift. Guard flags reset automatically when all channels stop recording.
 
 ### Tally Light Configuration
 
-```bash
-# settings.env
-TALLY_LIGHT_SWITCH_TYPE=ip_power_9255  # or "mock" for testing
-TALLY_LIGHT_SWITCH_IP=10.65.77.9       # Your IP Power 9255 address
-```
+The tally light IP address is configured in the web UI under **Hardware**. A test button is available to verify connectivity.
 
-**Hardware Commands:**
+**Hardware Commands (IP Power 9255):**
 - ON: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=1`  
 - OFF: `http://admin:12345678@IP/Set.cmd?cmd=setpower+p61=0`
 
 ### Output Folder Template System
 
-Organize transferred files into categorized subfolders automatically based on filename patterns.
-
-**Configuration (settings.env):**
-```bash
-OUTPUT_FOLDER_TEMPLATE_ENABLED=true
-OUTPUT_FOLDER_RULES=pattern:*Cam*;folder:KAMERA/{date},pattern:*PGM*;folder:PROGRAM_CLEAN/{date}
-OUTPUT_FOLDER_DEFAULT_CATEGORY=OTHER
-OUTPUT_FOLDER_DATE_FORMAT=filename[0:6]
-```
+Organize transferred files into categorized subfolders automatically based on filename patterns. Configured in the web UI under **Output Folders**.
 
 **Example 1 - Categorized Organization:**
 ```
@@ -80,7 +62,7 @@ With rules: pattern:*;folder:{date}
 - `{name_no_ext}` - Filename without extension
 
 **Disable Template System:**
-Set `OUTPUT_FOLDER_TEMPLATE_ENABLED=false` to copy all files directly to destination without subfolders.
+Disable the toggle in the web UI to copy all files directly to destination without subfolders.
 
 ## Architectural Overview
 
@@ -152,6 +134,10 @@ curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/instal
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TommiIversen/file-agent/main/install.sh | bash -s -- --uninstall
 ```
+
+### Configuration
+
+All common settings are configured via the **web UI** (Settings modal). The file `~/.config/file-agent/settings.env` can override any setting, but is only needed for advanced/internal parameters that are not exposed in the UI (copy timeouts, chunk sizes, storage thresholds, etc.).
 
 ### Releasing a New Version
 
