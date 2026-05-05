@@ -100,7 +100,9 @@
 </div>
 {% endmacro %}
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" id="storage-audio-grid">
+<div class="grid grid-cols-1 gap-4 mb-4"
+     id="storage-audio-grid"
+     :class="$store.audio?.enabled ? 'md:grid-cols-3' : 'md:grid-cols-2'">
     {{ storage_card('<span x-html="UIHelpers.icon(\'folder\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Source', "$store.directoryBrowser.openSourceBrowser()", 'source') }}
     {% include "components/audio_recording_status.html" %}
     {{ storage_card('<span x-html="UIHelpers.icon(\'target\', \'inline-block w-4 h-4 text-gray-300\')"></span>', 'Destination', "$store.directoryBrowser.openDestinationBrowser()", 'destination', show_mount=true) }}
