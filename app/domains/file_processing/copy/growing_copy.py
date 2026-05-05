@@ -71,6 +71,10 @@ class GrowingFileCopyStrategy():
                     raise FileCopyTimeoutError(
                         f"File size check timed out for {path}"
                     )
+            except FileNotFoundError:
+                # Re-raise directly so the classifier can check whether source
+                # storage is offline (temporary mount loss) vs file truly gone.
+                raise
             except OSError as e:
                 logging.error(f"Failed to access file for size check: {e}", exc_info=True)
                 raise FileCopyIOError(f"Failed to access file for size check {path}: {e}") from e

@@ -43,11 +43,29 @@ class TestTypedExceptions:
         assert status == FileStatus.WAITING_FOR_NETWORK
         assert "Network connection lost" in reason
 
-    def test_file_not_found_returns_removed(self, classifier):
+    def test_file_not_found_source_online_returns_removed(self, storage_monitor):
+        # Source storage is healthy → file is genuinely gone.
+        source_info = MagicMock()
+        source_info.status = StorageStatus.OK
+        storage_monitor.get_source_info.return_value = source_info
+        classifier = JobErrorClassifier(storage_monitor)
+
         err = FileNotFoundError("Source file gone")
         status, reason = classifier.classify_copy_error(err, "/src/video.mxf")
         assert status == FileStatus.REMOVED
         assert "FileNotFoundError" in reason
+
+    def test_file_not_found_source_offline_returns_waiting_for_network(self, storage_monitor):
+        # Source mount dropped (e.g. Mac restart) → transient, should retry.
+        source_info = MagicMock()
+        source_info.status = StorageStatus.ERROR
+        storage_monitor.get_source_info.return_value = source_info
+        classifier = JobErrorClassifier(storage_monitor)
+
+        err = FileNotFoundError("[Errno 2] No such file or directory: '/Volumes/NLE-External/video.mxf'")
+        status, reason = classifier.classify_copy_error(err, "/Volumes/NLE-External/video.mxf")
+        assert status == FileStatus.WAITING_FOR_NETWORK
+        assert "offline" in reason.lower() or "source" in reason.lower()
 
     def test_timeout_error_returns_waiting_for_network(self, classifier):
         err = FileCopyTimeoutError("Read timeout")

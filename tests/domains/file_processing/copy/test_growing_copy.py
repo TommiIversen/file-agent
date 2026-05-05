@@ -188,8 +188,10 @@ class TestGetFileSize:
         size = await strategy._get_file_size(str(f))
         assert size == 4096
 
-    async def test_nonexistent_file_raises_io_error(self, strategy, tmp_path):
-        with pytest.raises(FileCopyIOError):
+    async def test_nonexistent_file_raises_file_not_found_error(self, strategy, tmp_path):
+        # FileNotFoundError must NOT be wrapped in FileCopyIOError so the
+        # classifier can distinguish 'mount offline' from 'file truly deleted'.
+        with pytest.raises(FileNotFoundError):
             await strategy._get_file_size(str(tmp_path / "no_such_file.mxf"))
 
     async def test_timeout_raises_timeout_error(self, strategy):

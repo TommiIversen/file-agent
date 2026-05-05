@@ -56,6 +56,10 @@ class JobErrorClassifier:
         if isinstance(error, NetworkError):
             return FileStatus.WAITING_FOR_NETWORK, f"Network connection lost during copy: {str(error)}"
         elif isinstance(error, FileNotFoundError):
+            # Could be source mount temporarily offline (e.g. Mac restart) rather
+            # than file genuinely deleted — check source storage status first.
+            if self._is_source_unavailable():
+                return FileStatus.WAITING_FOR_NETWORK, f"Source file not found — source storage is offline: {str(error)}"
             return FileStatus.REMOVED, "Source file no longer exists (FileNotFoundError)"
         elif isinstance(error, FileCopyTimeoutError):
             return FileStatus.WAITING_FOR_NETWORK, f"Connection timed out — waiting for recovery: {str(error)}"
@@ -105,6 +109,14 @@ class JobErrorClassifier:
         """Check if destination is currently unavailable."""
         destination_info = self.storage_monitor.get_destination_info()
         return bool(destination_info and destination_info.status in [
+            StorageStatus.ERROR,
+            StorageStatus.CRITICAL,
+        ])
+
+    def _is_source_unavailable(self) -> bool:
+        """Check if source storage is currently unavailable (e.g. mount dropped)."""
+        source_info = self.storage_monitor.get_source_info()
+        return bool(source_info and source_info.status in [
             StorageStatus.ERROR,
             StorageStatus.CRITICAL,
         ])
