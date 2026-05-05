@@ -311,6 +311,37 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
         logging.warning(f"Startup recovery of orphaned files failed (non-critical): {e}")
 
 
+async def _await_destination_ready(storage_monitor, poll_interval: int = 5, max_wait: int = 15) -> None:
+    """
+    Poll storage status for up to `max_wait` seconds, re-checking every
+    `poll_interval` seconds until destination is accessible or time runs out.
+
+    This prevents a race where the very first check catches the NAS mount
+    mid-attach (or just before it attaches) and leaves WaitingForNetwork
+    files stuck after a Mac reboot.
+    """
+    elapsed = 0
+    while elapsed < max_wait:
+        dest_info = storage_monitor.get_destination_info()
+        if dest_info is not None and dest_info.is_accessible:
+            logging.info(f"Startup: destination accessible after {elapsed}s — proceeding with recovery")
+            return
+        logging.info(
+            f"Startup: destination not yet accessible (elapsed {elapsed}s / {max_wait}s) — "
+            f"rechecking in {poll_interval}s..."
+        )
+        await asyncio.sleep(poll_interval)
+        await storage_monitor._check_all_storage()  # explicit re-check (loop hasn't ticked yet)
+        elapsed += poll_interval
+
+    dest_info = storage_monitor.get_destination_info()
+    accessible = dest_info is not None and dest_info.is_accessible
+    logging.info(
+        f"Startup: destination {'accessible' if accessible else 'still not accessible'} "
+        f"after {max_wait}s wait — proceeding"
+    )
+
+
 async def _start_background_services() -> None:
     """Start all long-running background tasks."""
     file_scanner = get_file_scanner()
@@ -337,6 +368,14 @@ async def _start_background_services() -> None:
     # orphaned files (otherwise SpaceChecker sees "unavailable").
     await storage_monitor.start_monitoring()  # spawns loop task, then awaits first _check_all_storage()
     logging.info("StorageMonitor started and first check completed")
+
+    # Give the destination up to 15 seconds to become accessible before
+    # running startup recovery.  On a fresh Mac boot the network mount takes
+    # a few seconds to attach; without this wait the recovery either races
+    # with a still-pending DestinationUnavailableEvent (leaving files stuck)
+    # or skips recovery entirely because the first check caught the mount
+    # mid-attach.  We re-check every 5 seconds — at most 3 extra checks.
+    await _await_destination_ready(storage_monitor, poll_interval=5, max_wait=15)
 
     # --- Startup recovery for orphaned WaitingForNetwork files ---
     await _recover_waiting_network_files(job_queue_service)
