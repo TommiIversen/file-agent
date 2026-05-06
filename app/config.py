@@ -74,6 +74,7 @@ def _read_version() -> str:
 
 
 _JUSTIN_PLIST_PATHS = [
+    Path("/Applications/Just In Engine.app/Contents/Info.plist"),
     Path("/Applications/just in mac pro.app/Contents/Info.plist"),
     Path("/Applications/just in mac pro 2026.app/Contents/Info.plist"),
 ]
