@@ -1,6 +1,8 @@
 from pathlib import Path
 import logging
+import platform
 import plistlib
+import subprocess
 import sys
 
 from pydantic import Field
@@ -100,10 +102,41 @@ def _detect_justin_version(search_paths: list[Path] | None = None) -> str:
     return "unknown"
 
 
+def _detect_platform_info() -> str:
+    """One-line platform summary (OS, model, chip, RAM)."""
+    if sys.platform == "darwin":
+        os_ver = f"macOS {platform.mac_ver()[0]}"
+        try:
+            model = subprocess.run(
+                ["sysctl", "-n", "hw.model"],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip()
+            chip = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip()
+            mem_bytes = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip()
+            mem_gb = int(mem_bytes) // (1024 ** 3)
+            parts = [os_ver, model, chip, f"{mem_gb} GB RAM"]
+            return " · ".join(p for p in parts if p)
+        except Exception:
+            return os_ver
+    elif sys.platform == "win32":
+        os_info = f"Windows {platform.version()}"
+        cpu = platform.processor() or platform.machine()
+        return f"{os_info} · {cpu}"
+    else:
+        return platform.platform()
+
+
 APP_VERSION: str = _read_version()
 BUILD_TIME: str = _read_build_time()
 APP_DIRECTORY: str = _get_app_directory()
 JUSTIN_VERSION: str = _detect_justin_version()
+PLATFORM_INFO: str = _detect_platform_info()
 
 
 class Settings(BaseSettings):
