@@ -7,6 +7,10 @@
  * Supports live updates via WebSocket and lazy-fetches full history
  * when the performance dialog is opened.
  */
+
+// Chart instances stored OUTSIDE Alpine reactive system to avoid proxy conflicts
+const _perfCharts = { cpu: null, net: null, cores: null };
+
 document.addEventListener('alpine:init', () => {
     Alpine.store('perf', {
         // Current system values (latest sample)
@@ -28,13 +32,6 @@ document.addEventListener('alpine:init', () => {
         // Whether full history has been fetched
         _historyLoaded: false,
 
-        // Chart.js instances (managed by dialog open/close)
-        _charts: {
-            cpu: null,
-            net: null,
-            cores: null,
-        },
-
         /**
          * Handle a live perf_sample from WebSocket
          * @param {object} sample
@@ -54,8 +51,10 @@ document.addEventListener('alpine:init', () => {
                 this.history.shift();
             }
 
-            // Update live charts if open
-            this._updateCharts(sample);
+            // Update live charts only if dialog is open
+            if (this.isOpen) {
+                this._updateCharts(sample);
+            }
         },
 
         /**
@@ -90,8 +89,8 @@ document.addEventListener('alpine:init', () => {
         async openDialog() {
             await this.fetchHistory();
             this.isOpen = true;
-            // Wait a tick for DOM to render, then init charts
-            requestAnimationFrame(() => this._initCharts());
+            // Wait for Alpine to render the DOM, then init charts
+            setTimeout(() => this._initCharts(), 50);
         },
 
         /**
@@ -106,10 +105,10 @@ document.addEventListener('alpine:init', () => {
          * Called when dialog closes — destroy charts to free memory
          */
         destroyCharts() {
-            Object.keys(this._charts).forEach(key => {
-                if (this._charts[key]) {
-                    this._charts[key].destroy();
-                    this._charts[key] = null;
+            Object.keys(_perfCharts).forEach(key => {
+                if (_perfCharts[key]) {
+                    _perfCharts[key].destroy();
+                    _perfCharts[key] = null;
                 }
             });
         },
@@ -125,14 +124,14 @@ document.addEventListener('alpine:init', () => {
 
         _initCpuMemChart() {
             const ctx = document.getElementById('perf-cpu-chart');
-            if (!ctx || this._charts.cpu) return;
+            if (!ctx || _perfCharts.cpu) return;
 
             const labels = this.history.map((_, i) => {
                 const secsAgo = (this.history.length - 1 - i) * 10;
                 return secsAgo > 0 ? `-${Math.round(secsAgo / 60)}m` : 'now';
             });
 
-            this._charts.cpu = new Chart(ctx, {
+            _perfCharts.cpu = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels,
@@ -186,14 +185,14 @@ document.addEventListener('alpine:init', () => {
 
         _initNetChart() {
             const ctx = document.getElementById('perf-net-chart');
-            if (!ctx || this._charts.net) return;
+            if (!ctx || _perfCharts.net) return;
 
             const labels = this.history.map((_, i) => {
                 const secsAgo = (this.history.length - 1 - i) * 10;
                 return secsAgo > 0 ? `-${Math.round(secsAgo / 60)}m` : 'now';
             });
 
-            this._charts.net = new Chart(ctx, {
+            _perfCharts.net = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels,
@@ -236,7 +235,7 @@ document.addEventListener('alpine:init', () => {
 
         _initCoresChart() {
             const ctx = document.getElementById('perf-cores-chart');
-            if (!ctx || this._charts.cores) return;
+            if (!ctx || _perfCharts.cores) return;
 
             const latest = this.history.length > 0
                 ? this.history[this.history.length - 1]
@@ -244,7 +243,7 @@ document.addEventListener('alpine:init', () => {
             const coreData = latest.cores || [];
             const labels = coreData.map((_, i) => `C${i}`);
 
-            this._charts.cores = new Chart(ctx, {
+            _perfCharts.cores = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels,
@@ -277,40 +276,45 @@ document.addEventListener('alpine:init', () => {
          * @param {object} sample
          */
         _updateCharts(sample) {
-            if (this._charts.cpu) {
-                const chart = this._charts.cpu;
-                chart.data.labels.push('now');
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.push(sample.cpu);
-                chart.data.datasets[0].data.shift();
-                chart.data.datasets[1].data.push(sample.mem);
-                chart.data.datasets[1].data.shift();
-                chart.data.datasets[2].data.push(sample.disk);
-                chart.data.datasets[2].data.shift();
-                chart.update('none');
-            }
+            try {
+                if (_perfCharts.cpu && _perfCharts.cpu.canvas) {
+                    const chart = _perfCharts.cpu;
+                    chart.data.labels.push('now');
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.push(sample.cpu);
+                    chart.data.datasets[0].data.shift();
+                    chart.data.datasets[1].data.push(sample.mem);
+                    chart.data.datasets[1].data.shift();
+                    chart.data.datasets[2].data.push(sample.disk);
+                    chart.data.datasets[2].data.shift();
+                    chart.update('none');
+                }
 
-            if (this._charts.net) {
-                const chart = this._charts.net;
-                chart.data.labels.push('now');
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.push(sample.net_rx);
-                chart.data.datasets[0].data.shift();
-                chart.data.datasets[1].data.push(sample.net_tx);
-                chart.data.datasets[1].data.shift();
-                chart.update('none');
-            }
+                if (_perfCharts.net && _perfCharts.net.canvas) {
+                    const chart = _perfCharts.net;
+                    chart.data.labels.push('now');
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.push(sample.net_rx);
+                    chart.data.datasets[0].data.shift();
+                    chart.data.datasets[1].data.push(sample.net_tx);
+                    chart.data.datasets[1].data.shift();
+                    chart.update('none');
+                }
 
-            if (this._charts.cores && sample.cores) {
-                const chart = this._charts.cores;
-                chart.data.datasets[0].data = sample.cores;
-                chart.data.datasets[0].backgroundColor = sample.cores.map(v =>
-                    v > 80 ? 'rgba(239, 68, 68, 0.7)' :
-                    v > 50 ? 'rgba(234, 179, 8, 0.7)' :
-                    'rgba(59, 130, 246, 0.7)'
-                );
-                chart.data.labels = sample.cores.map((_, i) => `C${i}`);
-                chart.update('none');
+                if (_perfCharts.cores && _perfCharts.cores.canvas && sample.cores) {
+                    const chart = _perfCharts.cores;
+                    chart.data.datasets[0].data = sample.cores;
+                    chart.data.datasets[0].backgroundColor = sample.cores.map(v =>
+                        v > 80 ? 'rgba(239, 68, 68, 0.7)' :
+                        v > 50 ? 'rgba(234, 179, 8, 0.7)' :
+                        'rgba(59, 130, 246, 0.7)'
+                    );
+                    chart.data.labels = sample.cores.map((_, i) => `C${i}`);
+                    chart.update('none');
+                }
+            } catch (e) {
+                // Chart may be in a transitional state during open/close
+                console.debug('Chart update skipped:', e.message);
             }
         },
     });
