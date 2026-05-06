@@ -37,6 +37,7 @@ from app.core.events.audio_events import (
     AudioOverflowWarningEvent,
     AudioLevelsEvent,
 )
+from app.core.events.system_metrics_events import SystemMetricsUpdatedEvent
 
 # 3. Gør funktionen async og tilføj event_bus
 async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEventBus):
@@ -91,5 +92,8 @@ async def register_presentation_domain(query_bus: QueryBus, event_bus: DomainEve
     await event_bus.subscribe(AudioDeviceDisconnectedEvent, handlers.handle_audio_device_disconnected_event)
     await event_bus.subscribe(AudioOverflowWarningEvent, handlers.handle_audio_overflow_warning_event)
     await event_bus.subscribe(AudioLevelsEvent, handlers.handle_audio_levels_event)
+    
+    # Subscribe to system metrics events for real-time performance UI
+    await event_bus.subscribe(SystemMetricsUpdatedEvent, handlers.handle_system_metrics_updated_event)
     
     logging.info("Presentation domain-registrering (CQRS & Events) fuldført.")

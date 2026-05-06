@@ -97,6 +97,7 @@ source_modules = [
     "app.domains.cleanup",
     "app.domains.shared",
     "app.domains.audio_recording",
+    "app.domains.system_metrics",
     "app.core",
 ]
 forbidden_modules = ["app.domains.presentation"]

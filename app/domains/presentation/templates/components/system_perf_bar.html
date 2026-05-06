@@ -1,0 +1,24 @@
+<!-- System Performance Bar - Clickable pills showing CPU/MEM/DISK/NET -->
+<div class="flex items-center gap-2 flex-wrap cursor-pointer select-none"
+     @click="$store.perf.openDialog()"
+     title="Click for performance details">
+
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+        CPU <strong x-text="`${($store.perf.system.cpu || 0).toFixed(0)}%`"></strong>
+    </span>
+
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+        MEM <strong x-text="`${($store.perf.system.mem || 0).toFixed(0)}%`"></strong>
+    </span>
+
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+        DISK <strong x-text="`${($store.perf.system.disk || 0).toFixed(0)}%`"></strong>
+    </span>
+
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+        NET
+        <span class="opacity-70">↓</span><strong x-text="`${($store.perf.system.net_rx || 0).toFixed(1)}`"></strong>
+        <span class="opacity-70">↑</span><strong x-text="`${($store.perf.system.net_tx || 0).toFixed(1)}`"></strong>
+        <span class="opacity-60 text-[10px]">Mbps</span>
+    </span>
+</div>

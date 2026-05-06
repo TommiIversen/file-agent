@@ -9,6 +9,7 @@ httpx==0.28.1
 aiosqlite==0.22.1
 alembic==1.18.4
 sqlalchemy==2.0.48
+psutil>=6.0
 
 # Audio recording
 numpy>=1.26

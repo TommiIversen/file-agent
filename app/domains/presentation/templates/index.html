@@ -28,6 +28,10 @@
     <script src="/static/js/stores/ingestStore.js?v={{ v }}"></script>
     <script src="/static/js/stores/tallySwitchStore.js?v={{ v }}"></script>
     <script src="/static/js/stores/audioStore.js?v={{ v }}"></script>
+    <script src="/static/js/stores/perfStore.js?v={{ v }}"></script>
+
+    <!-- Chart.js (for performance dialog) -->
+    <script src="/static/js/jslib/chart.min.js?v={{ v }}"></script>
 
     <!-- Services -->
     <script src="/static/js/services/messageHandler.js?v={{ v }}"></script>
@@ -117,6 +121,9 @@
 
 <!-- Directory Browser Modal -->
 {% include "components/directory_browser_modal.html" %}
+
+<!-- Performance Dialog -->
+{% include "components/perf_dialog.html" %}
 
 <!-- Error Container for initialization failures -->
 <div id="error-container" style="display: none;" class="fixed top-4 right-4 max-w-md z-50"></div>

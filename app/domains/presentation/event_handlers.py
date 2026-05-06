@@ -494,3 +494,11 @@ class PresentationEventHandlers:
             },
         }
         self.websocket_manager.broadcast_message(message_data)
+
+    async def handle_system_metrics_updated_event(self, event) -> None:
+        """Broadcast a new system metrics sample to all connected clients."""
+        message_data = {
+            "type": "perf_sample",
+            "data": event.sample,
+        }
+        self.websocket_manager.broadcast_message(message_data)

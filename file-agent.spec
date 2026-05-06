@@ -96,6 +96,8 @@ hiddenimports = app_hiddenimports + rich_hiddenimports + [
     # eager import in run.py can resolve them before any template render.
     "encodings.unicode_escape",
     "encodings.raw_unicode_escape",
+    # System metrics
+    "psutil",
 ]
 
 a = Analysis(

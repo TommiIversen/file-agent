@@ -72,6 +72,9 @@ from app.domains.lifecycle.registration import register_lifecycle_domain # Impor
 from app.domains.tally_light.registration import register_tally_light_domain # Import tally light domain registration
 from app.domains.ingest_monitor.registration import register_ingest_monitor_domain # Import ingest monitor domain registration
 from app.domains.audio_recording.registration import register_audio_recording_domain
+from app.domains.system_metrics.registration import register_system_metrics_domain
+from app.domains.system_metrics.metrics_service import MetricsService
+from app.domains.system_metrics.api import router as system_metrics_api
 
 from app.core.global_event_logger import LoggedEvent
 from .logging_config import setup_logging
@@ -80,7 +83,8 @@ from app.domains.presentation import views
 settings = Settings()
 
 # Global reference til background tasks
-_background_tasks = []
+_background_tasks: list = []
+_metrics_service: MetricsService | None = None
 
 
 @asynccontextmanager
@@ -193,6 +197,11 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
             logging.warning("Could not initialize audio recorder for '%s'", device_name, exc_info=True)
     else:
         logging.info("Audio recording available but no device configured yet")
+
+    # System metrics — lightweight, no dependencies on other domains
+    global _metrics_service
+    _metrics_service = MetricsService(event_bus)
+    register_system_metrics_domain(query_bus, _metrics_service)
 
     logging.info("Handler-registrering fuldført.")
     return tally_handler
@@ -392,6 +401,11 @@ async def _start_background_services() -> None:
     _background_tasks.append(asyncio.create_task(tally_switch_monitor.start_monitoring()))
     logging.info("TallySwitchMonitorService startet som background task")
 
+    metrics_service = _metrics_service
+    assert metrics_service is not None
+    _background_tasks.append(await metrics_service.start_monitoring())
+    logging.info("MetricsService startet som background task")
+
 
 async def _mount_static_files(app: FastAPI) -> None:
     static_path = Path(__file__).parent / "domains" / "presentation" / "static"
@@ -531,6 +545,7 @@ app.include_router(scanner_api.router) # New file discovery scanner API
 app.include_router(ingest_monitor_api) # New ingest monitor API
 app.include_router(audio_recording_api) # Audio recording API
 app.include_router(tally_light_api)    # Tally light test endpoint
+app.include_router(system_metrics_api) # System performance metrics API
 app.include_router(websockets_endpoint.router)
 app.include_router(directory.directory_router)
 app.include_router(presentation_router)

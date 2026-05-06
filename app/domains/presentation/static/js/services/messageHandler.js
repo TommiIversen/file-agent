@@ -175,6 +175,10 @@ class MessageHandler {
                     Alpine.store('audio')?.updateLevels(message.data);
                     break;
 
+                case 'perf_sample':
+                    Alpine.store('perf')?.handlePerfSample(message.data);
+                    break;
+
                 default:
                     console.warn(`Unknown message type: ${message.type}`);
             }
