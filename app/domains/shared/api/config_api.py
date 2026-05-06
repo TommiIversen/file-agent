@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
-from app.config import APP_VERSION, BUILD_TIME, APP_DIRECTORY
+from app.config import APP_VERSION, BUILD_TIME, APP_DIRECTORY, JUSTIN_VERSION
 from app.dependencies.core import get_command_bus, get_query_bus
 from ..commands import ReloadConfigCommand, RestartApplicationCommand, UpdateUserSettingsCommand
 from ..queries import GetConfigInfoQuery, GetUserSettingsQuery
@@ -21,6 +21,7 @@ class PublicSettings(BaseModel):
     app_version: str = "unknown"
     build_time: str = "n/a"
     app_directory: str = "n/a"
+    justin_version: str = "unknown"
 
 
 router = APIRouter(prefix="/api/system", tags=["System & Config"])
@@ -37,6 +38,7 @@ async def read_settings():
         app_version=APP_VERSION,
         build_time=BUILD_TIME,
         app_directory=APP_DIRECTORY,
+        justin_version=JUSTIN_VERSION,
     )
 
 

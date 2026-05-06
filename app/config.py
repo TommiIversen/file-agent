@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import plistlib
 import sys
 
 from pydantic import Field
@@ -70,9 +71,39 @@ def _read_version() -> str:
     return 'unknown'
 
 
+_JUSTIN_PLIST_PATHS = [
+    Path("/Applications/just in mac pro.app/Contents/Info.plist"),
+    Path("/Applications/just in mac pro 2026.app/Contents/Info.plist"),
+]
+
+
+def _detect_justin_version(search_paths: list[Path] | None = None) -> str:
+    """Detect installed Just In Engine version from app bundle (macOS only).
+
+    Reads CFBundleShortVersionString from the application's Info.plist.
+    Returns 'unknown' if not on macOS or app not found.
+    """
+    if sys.platform != "darwin":
+        return "unknown"
+
+    for plist_path in (search_paths or _JUSTIN_PLIST_PATHS):
+        try:
+            with plist_path.open("rb") as f:
+                plist = plistlib.load(f)
+            version = plist.get("CFBundleShortVersionString", "unknown")
+            _log.debug(f"Justin version detected: {version} from {plist_path}")
+            return version
+        except (FileNotFoundError, OSError, plistlib.InvalidFileException):
+            continue
+
+    _log.debug("Justin app bundle not found — version unknown")
+    return "unknown"
+
+
 APP_VERSION: str = _read_version()
 BUILD_TIME: str = _read_build_time()
 APP_DIRECTORY: str = _get_app_directory()
+JUSTIN_VERSION: str = _detect_justin_version()
 
 
 class Settings(BaseSettings):

@@ -672,11 +672,16 @@
             <!-- Build & Runtime Info -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('info', 'inline-block w-5 h-5')"></span> Build & Runtime</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                     <div>
                         <span class="text-gray-300">Version:</span>
                         <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
                              x-text="$store.settings?.settingsData?.app_version || 'unknown'"></div>
+                    </div>
+                    <div>
+                        <span class="text-gray-300">Justin Version:</span>
+                        <div class="text-white bg-gray-900 p-2 rounded mt-1 font-mono text-xs"
+                             x-text="$store.settings?.settingsData?.justin_version || 'unknown'"></div>
                     </div>
                     <div>
                         <span class="text-gray-300">Build Time:</span>
