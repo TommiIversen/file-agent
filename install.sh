@@ -145,9 +145,9 @@ DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$ASSET_
 if [[ "$UPGRADE" == true ]] || [[ -d "$INSTALL_DIR" ]]; then
     if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
         log_info "Stopping existing service..."
-        # Try modern API first, fall back to legacy
-        launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null \
-            || launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null \
+        # Use unload (keeps plist intact) — avoids bootout which fully deregisters
+        launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null \
+            || launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null \
             || true
         sleep 1
     fi
@@ -323,14 +323,14 @@ log_success "Browser launch agent created (with server-readiness check)"
 
 # ── Start service ────────────────────────────────────────────────────
 log_info "Starting service..."
-# On upgrade the service label is already registered with launchd.
-# Use kickstart to (re)start it; bootstrap is only needed on fresh install.
-if launchctl kickstart -k "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null; then
-    true  # restarted existing service
+# Strategy: try load first (works after unload), then kickstart, then bootstrap.
+# This ensures the service always ends up registered and running.
+if launchctl load "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
+    true  # registered + started (normal upgrade path)
+elif launchctl kickstart -k "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null; then
+    true  # service was still registered, just restarted
 elif launchctl bootstrap "gui/$(id -u)" "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
-    true  # fresh install — register + start
-elif launchctl load "$PLIST_DIR/$PLIST_NAME" 2>/dev/null; then
-    true  # legacy fallback
+    true  # fresh install — register + start (modern API)
 else
     log_warn "Could not start service automatically."
     log_warn "Try: launchctl load $PLIST_DIR/$PLIST_NAME"
