@@ -319,6 +319,42 @@ async def _recover_waiting_network_files(job_queue_service) -> None:  # type: ig
     except Exception as e:
         logging.warning(f"Startup recovery of orphaned files failed (non-critical): {e}")
 
+    # 3. Mark files as REMOVED if they no longer exist on disk.
+    #    Covers DISCOVERED/GROWING/READY/READY_TO_START_GROWING files that were
+    #    pending when the app last stopped and have since been deleted.
+    pending_statuses = {
+        FileStatus.DISCOVERED,
+        FileStatus.GROWING,
+        FileStatus.READY,
+        FileStatus.READY_TO_START_GROWING,
+    }
+    try:
+        if not all_files:
+            all_files = await file_repo.get_all()
+        pending = [f for f in all_files if f.status in pending_statuses]
+        removed_count = 0
+        for f in pending:
+            file_exists = await asyncio.to_thread(Path(f.file_path).exists)
+            if not file_exists:
+                try:
+                    await state_machine.transition(
+                        file_id=f.id,
+                        new_status=FileStatus.REMOVED,
+                    )
+                    removed_count += 1
+                except (InvalidTransitionError, ValueError) as e:
+                    logging.warning(
+                        f"Startup recovery: could not mark missing file as Removed: "
+                        f"{f.file_path} ({f.status.value}): {e}"
+                    )
+        if removed_count:
+            logging.info(
+                f"Startup recovery: marked {removed_count} missing files as Removed "
+                f"(out of {len(pending)} pending)"
+            )
+    except Exception as e:
+        logging.warning(f"Startup recovery of missing files failed (non-critical): {e}")
+
 
 async def _await_destination_ready(storage_monitor, poll_interval: int = 5, max_wait: int = 15) -> None:
     """
