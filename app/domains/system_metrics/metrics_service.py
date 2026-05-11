@@ -58,6 +58,13 @@ class MetricsService:
         while True:
             try:
                 snapshot = await asyncio.to_thread(collect_system_metrics)
+
+                # If all cores report 0.0%, it's a measurement artifact —
+                # wait briefly and re-sample once.
+                if snapshot.cpu_percent == 0.0 and all(c == 0.0 for c in snapshot.cpu_per_core):
+                    await asyncio.sleep(0.5)
+                    snapshot = await asyncio.to_thread(collect_system_metrics)
+
                 sample = self._timeseries.record(snapshot)
                 self._sample_count += 1
 
