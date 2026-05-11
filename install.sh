@@ -145,11 +145,24 @@ DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$ASSET_
 if [[ "$UPGRADE" == true ]] || [[ -d "$INSTALL_DIR" ]]; then
     if launchctl list 2>/dev/null | grep -q "$SERVICE_NAME"; then
         log_info "Stopping existing service..."
-        # Use unload (keeps plist intact) — avoids bootout which fully deregisters
+        # Try unload first (keeps plist registration), then bootout as fallback
         launchctl unload "$PLIST_DIR/$PLIST_NAME" 2>/dev/null \
             || launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null \
             || true
         sleep 1
+    fi
+    # Belt-and-suspenders: if the process is still alive, kill it directly
+    OLD_PID=$(pgrep -f "$INSTALL_DIR/file-agent" 2>/dev/null || true)
+    if [[ -n "$OLD_PID" ]]; then
+        log_warn "Service still running (PID $OLD_PID) — sending SIGTERM..."
+        kill "$OLD_PID" 2>/dev/null || true
+        sleep 2
+        # Force kill if still alive
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            log_warn "Force killing PID $OLD_PID..."
+            kill -9 "$OLD_PID" 2>/dev/null || true
+            sleep 1
+        fi
     fi
 fi
 
