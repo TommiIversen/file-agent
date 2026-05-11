@@ -13,7 +13,6 @@ from app.core.events.ingest_events import (  # noqa: F401
     IngestStatusUpdatedEvent,
     IngestOnlineEvent,
     IngestOfflineEvent,
-    RecordingPathsDiscoveredEvent,
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
 )

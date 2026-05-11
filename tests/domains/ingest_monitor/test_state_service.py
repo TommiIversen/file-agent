@@ -21,7 +21,6 @@ from app.domains.ingest_monitor.events import (
     IngestOnlineEvent,
     IngestOfflineEvent,
     IngestStatusUpdatedEvent,
-    RecordingPathsDiscoveredEvent,
 )
 
 
@@ -97,7 +96,7 @@ async def _make_service(auto_stop_minutes: int = 0, auto_stop_warning_minutes: i
     for event_type in [
         AutoStopWarningEvent, AutoStopTriggeredEvent,
         ChannelErrorDetectedEvent, IngestOnlineEvent, IngestOfflineEvent,
-        IngestStatusUpdatedEvent, RecordingPathsDiscoveredEvent,
+        IngestStatusUpdatedEvent,
     ]:
         await event_bus.subscribe(event_type, collector.handler)
 
@@ -526,44 +525,6 @@ class TestClearAllErrors:
         assert len(collector.of_type(IngestStatusUpdatedEvent)) == 1
 
 
-# ── update_recording_paths / get_recording_paths ────────────────────
-
-class TestRecordingPaths:
-
-    @pytest.mark.asyncio
-    async def test_update_publishes_event(self):
-        svc, collector = await _make_service()
-        changed = await svc.update_recording_paths("KAM_1", ["/rec/path1"], "Preset1")
-        assert changed is True
-
-        path_events = collector.of_type(RecordingPathsDiscoveredEvent)
-        assert len(path_events) == 1
-        assert path_events[0].channel_name == "KAM_1"
-        assert path_events[0].paths == ("/rec/path1",)
-        assert path_events[0].preset_name == "Preset1"
-
-    @pytest.mark.asyncio
-    async def test_same_paths_no_event(self):
-        svc, collector = await _make_service()
-        await svc.update_recording_paths("KAM_1", ["/rec/path1"], "Preset1")
-        collector.events.clear()
-
-        changed = await svc.update_recording_paths("KAM_1", ["/rec/path1"], "Preset1")
-        assert changed is False
-        assert len(collector.of_type(RecordingPathsDiscoveredEvent)) == 0
-
-    @pytest.mark.asyncio
-    async def test_get_recording_paths_snapshot(self):
-        svc, _ = await _make_service()
-        await svc.update_recording_paths("KAM_1", ["/a", "/b"], "P1")
-        await svc.update_recording_paths("KAM_2", ["/c"], "P2")
-
-        paths = svc.get_recording_paths()
-        assert paths["KAM_1"]["paths"] == ["/a", "/b"]
-        assert paths["KAM_1"]["preset_name"] == "P1"
-        assert paths["KAM_2"]["paths"] == ["/c"]
-
-
 # ── set_connection_status ───────────────────────────────────────────
 
 class TestConnectionStatus:
@@ -631,10 +592,7 @@ class TestClearCache:
     def test_clear_cache(self):
         svc = IngestStateService(DomainEventBus())
         svc.add_new_channels(["KAM_1"])
-        svc._recording_paths["KAM_1"] = ["/a"]
-        svc._recording_preset_names["KAM_1"] = "P1"
 
         svc.clear_cache()
 
         assert svc.get_channel_names() == []
-        assert svc.get_recording_paths() == {}

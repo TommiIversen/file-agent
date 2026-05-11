@@ -1,4 +1,4 @@
-"""Tests for IngestMonitorWorker._slow_polling_loop and _discover_all_recording_paths."""
+"""Tests for IngestMonitorWorker._slow_polling_loop."""
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
@@ -41,7 +41,6 @@ class TestSlowPollingLoop:
         api_client.get_active_channels.return_value = ["CH1"]
         state_service.get_status_cache.return_value = {"CH1": {}}
         api_client.get_all_channel_errors.return_value = {}
-        api_client.discover_recording_paths.return_value = None
 
         await _run_loop_once(worker)
 
@@ -62,7 +61,6 @@ class TestSlowPollingLoop:
         api_client.get_active_channels.return_value = ["CH1"]
         state_service.get_status_cache.return_value = {"CH1": {}}
         api_client.get_all_channel_errors.return_value = {"CH1": []}
-        api_client.discover_recording_paths.return_value = None
 
         await _run_loop_once(worker)
 
@@ -115,63 +113,3 @@ class TestSlowPollingLoop:
         await task
 
         assert task.done()
-
-
-# ── _discover_all_recording_paths ───────────────────────────────
-
-class TestDiscoverAllRecordingPaths:
-
-    async def test_updates_paths_when_result_found(self, worker, deps):
-        _, api_client, state_service = deps
-        api_client.discover_recording_paths.return_value = (["/path/a"], "preset1")
-        state_service.get_recording_paths = MagicMock(return_value={})
-
-        await worker._discover_all_recording_paths(["CH1"])
-
-        state_service.update_recording_paths.assert_awaited_once_with(
-            channel_name="CH1", paths=["/path/a"], preset_name="preset1",
-        )
-
-    async def test_skips_when_result_is_none(self, worker, deps):
-        _, api_client, state_service = deps
-        api_client.discover_recording_paths.return_value = None
-        state_service.get_recording_paths = MagicMock(return_value={})
-
-        await worker._discover_all_recording_paths(["CH1"])
-
-        state_service.update_recording_paths.assert_not_awaited()
-
-    async def test_handles_multiple_channels(self, worker, deps):
-        _, api_client, state_service = deps
-        api_client.discover_recording_paths.side_effect = [
-            (["/path/a"], "p1"),
-            None,
-            (["/path/b"], "p2"),
-        ]
-        state_service.get_recording_paths = MagicMock(return_value={})
-
-        await worker._discover_all_recording_paths(["CH1", "CH2", "CH3"])
-
-        assert state_service.update_recording_paths.await_count == 2
-
-    async def test_exception_per_channel_does_not_stop_others(self, worker, deps):
-        _, api_client, state_service = deps
-        api_client.discover_recording_paths.side_effect = [
-            RuntimeError("fail"),
-            (["/path/b"], "p2"),
-        ]
-        state_service.get_recording_paths = MagicMock(return_value={})
-
-        await worker._discover_all_recording_paths(["CH1", "CH2"])
-
-        # CH1 failed but CH2 still got processed
-        state_service.update_recording_paths.assert_awaited_once_with(
-            channel_name="CH2", paths=["/path/b"], preset_name="p2",
-        )
-
-    async def test_empty_channel_list(self, worker, deps):
-        _, api_client, state_service = deps
-
-        await worker._discover_all_recording_paths([])
-
-        api_client.discover_recording_paths.assert_not_awaited()

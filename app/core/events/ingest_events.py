@@ -70,14 +70,6 @@ class IngestOfflineEvent(DomainEvent):
 
 
 @dataclass(frozen=True)
-class RecordingPathsDiscoveredEvent(DomainEvent):
-    """Published when recording destination paths are discovered from Just In Engine."""
-    paths: tuple  # Use tuple for frozen dataclass compatibility
-    preset_name: str = ""
-    channel_name: str = ""
-
-
-@dataclass(frozen=True)
 class AutoStopWarningEvent(DomainEvent):
     """Published when any channel approaches the auto-stop time limit."""
     channel_name: str  # The channel that triggered the warning

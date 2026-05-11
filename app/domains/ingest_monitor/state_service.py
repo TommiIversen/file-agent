@@ -19,7 +19,6 @@ from .events import (
     IngestStatusUpdatedEvent,
     IngestOnlineEvent,
     IngestOfflineEvent,
-    RecordingPathsDiscoveredEvent,
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
 )
@@ -50,8 +49,6 @@ class IngestStateService:
         self._event_bus = event_bus
         self._status_cache: Dict[str, ChannelState] = {}
         self._is_connected: bool = False # Track connection status
-        self._recording_paths: Dict[str, List[str]] = {}  # channel -> [paths]
-        self._recording_preset_names: Dict[str, str] = {}  # channel -> preset_name
         self._seen_error_dates: Dict[str, set] = {}  # channel -> set of error dates
 
         # Segment-split tracking: accumulate duration across Justin file splits.
@@ -605,62 +602,7 @@ class IngestStateService:
         
         return cleared_count
 
-    async def update_recording_paths(
-        self,
-        channel_name: str,
-        paths: List[str],
-        preset_name: str,
-    ) -> bool:
-        """
-        Opdater cached recording-paths for en kanal.
-        Publicerer RecordingPathsDiscoveredEvent ved aendringer.
-
-        Returns:
-            True hvis der var en aendring (event publiceret), ellers False.
-        """
-        old_paths = self._recording_paths.get(channel_name, [])
-        old_preset = self._recording_preset_names.get(channel_name, "")
-
-        changed = old_paths != paths or old_preset != preset_name
-        if not changed:
-            return False
-
-        self._recording_paths[channel_name] = paths
-        self._recording_preset_names[channel_name] = preset_name
-
-        await self._event_bus.publish(
-            RecordingPathsDiscoveredEvent(
-                paths=tuple(paths),
-                preset_name=preset_name,
-                channel_name=channel_name,
-            )
-        )
-        logging.info(
-            "Recording paths updated for %s (preset=%s): %s",
-            channel_name,
-            preset_name,
-            paths,
-        )
-        return True
-
-    def get_recording_paths(self) -> Dict[str, dict]:
-        """
-        Returnerer et snapshot af alle opdagede recording-paths.
-
-        Returns:
-            Dict med channel_name -> {preset_name, paths} til UI.
-        """
-        result: Dict[str, dict] = {}
-        for channel_name, paths in self._recording_paths.items():
-            result[channel_name] = {
-                "preset_name": self._recording_preset_names.get(channel_name, ""),
-                "paths": paths,
-            }
-        return result
-
     def clear_cache(self) -> None:
         """Ryd hele cachen (nyttigt til testing)."""
         self._status_cache.clear()
-        self._recording_paths.clear()
-        self._recording_preset_names.clear()
         logging.info("Channel status cache cleared")

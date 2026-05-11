@@ -63,15 +63,6 @@ class IngestMonitorWorker:
         """
         return self._state_service.is_connected()
 
-    def get_recording_paths(self) -> dict:
-        """
-        Delegate recording-path access to StateService.
-
-        Returns:
-            dict: channel_name -> {preset_name, paths}
-        """
-        return self._state_service.get_recording_paths()
-
     async def start_monitoring(self) -> None:
         """Start the dual polling loops for ingest monitoring."""
         if self._running:
@@ -156,33 +147,6 @@ class IngestMonitorWorker:
                 # Wait a bit before retrying on error
                 await asyncio.sleep(5)
 
-    async def _discover_all_recording_paths(self, channel_names: list[str]) -> None:
-        """Discover recording paths for each active channel.
-
-        Skips channels that already have cached paths — re-discovery
-        would require ``requestLoadDestinationPreset`` which Just In
-        Engine rejects (HTTP 400) while recording.
-        """
-        cached = self._state_service.get_recording_paths()
-        for ch_name in channel_names:
-            if ch_name in cached:
-                continue
-            try:
-                result = await self._api_client.discover_recording_paths(ch_name)
-                if result is not None:
-                    paths, preset_name = result
-                    await self._state_service.update_recording_paths(
-                        channel_name=ch_name,
-                        paths=paths,
-                        preset_name=preset_name,
-                    )
-            except Exception as e:
-                logging.debug(
-                    "Could not discover recording paths for %s: %s",
-                    ch_name,
-                    e,
-                )
-
     async def _slow_polling_loop(self) -> None:
         """Slow polling loop - orchestrates active channels and error checking."""
         while self._running:
@@ -207,9 +171,6 @@ class IngestMonitorWorker:
                     # Fetch errors for all channels
                     all_errors = await self._api_client.get_all_channel_errors(channel_names)
                     await self._state_service.update_channel_errors(all_errors)
-
-                # Discover recording paths (extracted for testability)
-                await self._discover_all_recording_paths(channel_names)
 
             except asyncio.CancelledError:
                 logging.info("Slow polling loop cancelled")

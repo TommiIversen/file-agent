@@ -17,7 +17,6 @@ from app.domains.ingest_monitor.events import (
     ChannelErrorDetectedEvent,
     IngestOnlineEvent,
     IngestOfflineEvent,
-    RecordingPathsDiscoveredEvent,
     AutoStopWarningEvent,
     AutoStopTriggeredEvent,
 )
@@ -322,19 +321,6 @@ class TestIngestEvents:
         msg = ws_manager.broadcast_message.call_args[0][0]
         assert msg["type"] == "ingest_offline"
         assert msg["data"]["is_connected"] is False
-
-    @pytest.mark.asyncio
-    async def test_recording_paths_discovered(self, handler, ws_manager):
-        event = RecordingPathsDiscoveredEvent(
-            channel_name="KAM_1",
-            preset_name="HD",
-            paths=("/path/a", "/path/b"),
-        )
-        await handler.handle_recording_paths_discovered_event(event)
-
-        msg = ws_manager.broadcast_message.call_args[0][0]
-        assert msg["type"] == "recording_paths_update"
-        assert msg["data"]["paths"] == ["/path/a", "/path/b"]
 
     @pytest.mark.asyncio
     async def test_auto_stop_warning(self, handler, ws_manager):
