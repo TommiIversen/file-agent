@@ -530,21 +530,32 @@ class IngestStateService:
             
             self._status_cache[channel_name] = updated_state
 
-            # Publish an event for each genuinely new error
+            # Mark new errors as seen and aggregate by type to avoid log spam
             for error in new_errors:
                 seen.add(error.date)
-                description = None
-                if error.errorUserInfo and error.errorUserInfo.NSLocalizedDescription:
-                    description = error.errorUserInfo.NSLocalizedDescription
-                await self._event_bus.publish(ChannelErrorDetectedEvent(
-                    channel_name=channel_name,
-                    error_message=error.errorUIDescription,
-                    error_code=error.errorCode,
-                    error_domain=error.errorDomain,
-                    error_description=description,
-                    error_type=error.errorType,
-                ))
-                logging.warning(f"New error detected on {channel_name}: {error.errorUIDescription}")
+
+            # Publish ONE event per unique error type (not per individual error)
+            if new_errors:
+                from collections import Counter
+                error_counts = Counter(e.errorUIDescription for e in new_errors)
+                for error_msg, count in error_counts.items():
+                    # Pick the first error of this type for metadata
+                    representative = next(e for e in new_errors if e.errorUIDescription == error_msg)
+                    description = None
+                    if representative.errorUserInfo and representative.errorUserInfo.NSLocalizedDescription:
+                        description = representative.errorUserInfo.NSLocalizedDescription
+                    await self._event_bus.publish(ChannelErrorDetectedEvent(
+                        channel_name=channel_name,
+                        error_message=representative.errorUIDescription,
+                        error_code=representative.errorCode,
+                        error_domain=representative.errorDomain,
+                        error_description=description,
+                        error_type=representative.errorType,
+                    ))
+                    if count > 1:
+                        logging.warning(f"New errors on {channel_name}: {error_msg} (x{count})")
+                    else:
+                        logging.warning(f"New error on {channel_name}: {error_msg}")
 
     def get_channel_state(self, channel_name: str) -> Optional[ChannelState]:
         """
