@@ -429,7 +429,7 @@ class TestUpdateChannelErrors:
 
     @pytest.mark.asyncio
     async def test_multiple_new_errors_in_batch(self):
-        """Each new error in a single batch publishes its own event."""
+        """Errors are aggregated by type — one event per unique error message."""
         svc, collector = await _make_service()
         svc.add_new_channels(["KAM_1"])
 
@@ -441,7 +441,10 @@ class TestUpdateChannelErrors:
         await svc.update_channel_errors([("KAM_1", errors)])
 
         error_events = collector.of_type(ChannelErrorDetectedEvent)
-        assert len(error_events) == 3
+        # One event per unique error type (2: "Dropped frames" + "No signal")
+        assert len(error_events) == 2
+        messages = {e.error_message for e in error_events}
+        assert messages == {"Dropped frames", "No signal"}
 
     @pytest.mark.asyncio
     async def test_enriched_fields_propagated(self):
