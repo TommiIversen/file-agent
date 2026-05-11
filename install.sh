@@ -277,10 +277,10 @@ cat > "$PLIST_DIR/$PLIST_NAME" << EOF
     <string>$HOME</string>
 
     <key>StandardOutPath</key>
-    <string>$LOG_DIR/file-agent-stdout.log</string>
+    <string>/dev/null</string>
 
     <key>StandardErrorPath</key>
-    <string>$LOG_DIR/file-agent-stderr.log</string>
+    <string>/dev/null</string>
 
     <key>RunAtLoad</key>
     <true/>
