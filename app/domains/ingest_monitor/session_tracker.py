@@ -82,9 +82,10 @@ class RecordingSessionTracker:
             )
 
         if self._active_session is None:
-            # Create new session
+            # Create new session — use local time for session_time since
+            # filenames from Justin also use local time
             now = datetime.now(timezone.utc)
-            session_time = now.strftime("%H%M%S")
+            session_time = datetime.now().strftime("%H%M%S")
             self._active_session = RecordingSession(
                 session_id=str(uuid.uuid4()),
                 session_time=session_time,
