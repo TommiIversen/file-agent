@@ -9,24 +9,27 @@ import logging
 from app.core.cqrs.command_bus import CommandBus
 from app.core.cqrs.query_bus import QueryBus
 from app.core.events.event_bus import DomainEventBus
-from app.core.cqrs.shared_queries import GetCurrentFilenameQuery, GetIngestConnectionStatusQuery
+from app.core.cqrs.shared_queries import GetCurrentFilenameQuery, GetIngestConnectionStatusQuery, GetRecordingSessionTimeQuery
 from .queries import GetIngestStatusQuery
 from .commands import ClearAllChannelErrorsCommand, StartAllChannelsCommand, StopAllChannelsCommand
 from .query_handlers import (
     GetIngestStatusQueryHandler,
     GetIngestConnectionStatusQueryHandler,
     GetCurrentFilenameQueryHandler,
+    GetRecordingSessionTimeQueryHandler,
 )
 from .command_handlers import ClearAllChannelErrorsCommandHandler, StartAllChannelsCommandHandler, StopAllChannelsCommandHandler
 from .events import AutoStopTriggeredEvent
 from .auto_stop_handler import AutoStopHandler
+from .session_tracker import RecordingSessionTracker
 
 
 async def register_ingest_monitor_domain(
     command_bus: CommandBus, 
     query_bus: QueryBus, 
     event_bus: DomainEventBus,
-    ingest_monitor_worker
+    ingest_monitor_worker,
+    session_tracker: RecordingSessionTracker | None = None,
 ) -> None:
     """
     Register all ingest monitor domain components.
@@ -48,6 +51,11 @@ async def register_ingest_monitor_domain(
 
     filename_handler = GetCurrentFilenameQueryHandler(ingest_monitor_worker._api_client)
     query_bus.register(GetCurrentFilenameQuery, filename_handler.handle)
+
+    # Register recording session query handler
+    if session_tracker:
+        session_time_handler = GetRecordingSessionTimeQueryHandler(session_tracker)
+        query_bus.register(GetRecordingSessionTimeQuery, session_time_handler.handle)
     
     # Register command handlers
     clear_command_handler = ClearAllChannelErrorsCommandHandler(ingest_monitor_worker)

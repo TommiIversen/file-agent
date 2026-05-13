@@ -3,9 +3,10 @@ Ingest Monitor Query Handlers
 """
 from typing import Any, Dict, Optional
 from app.core.cqrs.query import QueryHandler
-from app.core.cqrs.shared_queries import GetCurrentFilenameQuery, GetIngestConnectionStatusQuery
+from app.core.cqrs.shared_queries import GetCurrentFilenameQuery, GetIngestConnectionStatusQuery, GetRecordingSessionTimeQuery
 from .queries import GetIngestStatusQuery
 from .api_client import IngestApiClient
+from .session_tracker import RecordingSessionTracker
 
 
 class GetIngestStatusQueryHandler(QueryHandler[GetIngestStatusQuery, Dict[str, Any]]):
@@ -36,3 +37,13 @@ class GetCurrentFilenameQueryHandler(QueryHandler[GetCurrentFilenameQuery, Optio
 
     async def handle(self, query: GetCurrentFilenameQuery) -> Optional[str]:
         return await self._api_client.get_current_filename(query.channel)
+
+
+class GetRecordingSessionTimeQueryHandler(QueryHandler[GetRecordingSessionTimeQuery, Optional[str]]):
+    """Handler that returns the canonical session_time for the current/recent recording."""
+
+    def __init__(self, session_tracker: RecordingSessionTracker) -> None:
+        self._session_tracker = session_tracker
+
+    async def handle(self, query: GetRecordingSessionTimeQuery) -> Optional[str]:
+        return self._session_tracker.get_session_time(query.file_creation_time)

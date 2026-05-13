@@ -51,13 +51,14 @@ def build_destination_path(
 
 
 def build_destination_path_with_template(
-    source_path: Path, source_base: Path, dest_base: Path, template_engine=None
+    source_path: Path, source_base: Path, dest_base: Path, template_engine=None,
+    extra_vars: dict[str, str] | None = None,
 ) -> Path:
     filename = source_path.name
 
     # Use template engine if available and enabled
     if template_engine and template_engine.is_enabled():
-        return Path(template_engine.generate_output_path(filename))
+        return Path(template_engine.generate_output_path(filename, extra_vars=extra_vars))
 
     # Fall back to standard path preservation
     return build_destination_path(source_path, source_base, dest_base)

@@ -166,7 +166,9 @@ async def _register_domains(event_bus) -> object:  # type: ignore[no-untyped-def
     await register_presentation_domain(query_bus, event_bus)
 
     ingest_monitor_worker = get_ingest_monitor_worker()
-    await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_worker)
+    from app.dependencies.ingest import get_session_tracker
+    session_tracker = get_session_tracker()
+    await register_ingest_monitor_domain(command_bus, query_bus, event_bus, ingest_monitor_worker, session_tracker=session_tracker)
 
     tally_handler = get_tally_light_event_handler()
     tally_monitor = get_tally_switch_monitor()

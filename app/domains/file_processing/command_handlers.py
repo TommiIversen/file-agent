@@ -91,6 +91,7 @@ class QueueFileCommandHandler:
                 is_growing_at_queue_time=is_growing,
                 added_to_queue_at=datetime.now(timezone.utc),
                 retry_count=0,
+                session_time=tracked_file.session_time,
             )
 
             # Transition state BEFORE adding to queue

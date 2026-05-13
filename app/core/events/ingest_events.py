@@ -84,3 +84,16 @@ class AutoStopTriggeredEvent(DomainEvent):
     channel_name: str  # The channel that triggered the stop
     recording_seconds: int  # Recording time when triggered
     limit_seconds: int  # The configured limit
+
+
+@dataclass(frozen=True)
+class RecordingSessionStartedEvent(DomainEvent):
+    """Published when a new recording session begins (first channel starts)."""
+    session_id: str
+    session_time: str  # "HHMMSS"
+
+
+@dataclass(frozen=True)
+class RecordingSessionEndedEvent(DomainEvent):
+    """Published when a recording session ends (all channels stopped + grace period elapsed)."""
+    session_id: str

@@ -11,6 +11,8 @@ from app.core.events.file_events import FileDiscoveredEvent, FileReadyEvent
 from app.core.file_repository import FileRepository
 from app.core.file_state_machine import FileStateMachine
 from app.core.exceptions import InvalidTransitionError
+from app.core.cqrs.query_bus import QueryBus
+from app.core.cqrs.shared_queries import GetRecordingSessionTimeQuery
 from app.models import TrackedFile, FileStatus
 from app.domains.file_discovery.file_selection_logic import FileSelectionLogic
 from app.domains.file_discovery.cooldown_checker import CooldownChecker
@@ -27,12 +29,14 @@ class FileDiscoverySlice:
         file_repository: FileRepository, 
         state_machine: FileStateMachine,
         event_bus: DomainEventBus | None = None,
-        cooldown_minutes: int = 60
+        cooldown_minutes: int = 60,
+        query_bus: QueryBus | None = None,
     ):
         self._file_repository = file_repository
         self._state_machine = state_machine
         self._event_bus = event_bus
         self._cooldown_minutes = cooldown_minutes
+        self._query_bus = query_bus
         logging.info("FileDiscoverySlice initialized")
 
     async def get_active_file_by_path(self, file_path: str) -> TrackedFile | None:
@@ -105,6 +109,16 @@ class FileDiscoverySlice:
             logging.info(f"Skipping file with delete error - already processed: {file_path} (UUID: {any_existing.id[:8]}...)")
             return any_existing
 
+        # Query session time from ingest_monitor (if available)
+        session_time: str | None = None
+        if self._query_bus:
+            try:
+                session_time = await self._query_bus.execute(
+                    GetRecordingSessionTimeQuery(file_creation_time=creation_time)
+                )
+            except Exception:
+                logging.debug("Could not query session time — no handler registered")
+
         # Create new tracked file
         tracked_file = TrackedFile(
             file_path=file_path,
@@ -112,6 +126,7 @@ class FileDiscoverySlice:
             last_write_time=last_write_time,
             creation_time=creation_time,
             status=FileStatus.DISCOVERED,
+            session_time=session_time,
         )
         
         await self._file_repository.add(tracked_file)

@@ -40,7 +40,7 @@ class JobFilePreparationService:
         strategy_name = self.copy_strategy.__class__.__name__
 
         initial_status = await self._determine_file_status(job)
-        destination_path = await self._calculate_destination_path(file_path)
+        destination_path = await self._calculate_destination_path(file_path, session_time=job.session_time)
 
         return PreparedFile(
             job=job,
@@ -68,14 +68,19 @@ class JobFilePreparationService:
             logging.info(f" File marked for STATIC COPY (from queue snapshot): {job.file_path}")
             return FileStatus.COPYING # Static files go straight to copying
 
-    async def _calculate_destination_path(self, file_path: str) -> Path:
+    async def _calculate_destination_path(self, file_path: str, session_time: str | None = None) -> Path:
         """Calculate destination path using template engine if enabled."""
         source = Path(file_path)
         source_base = Path(self.settings.source_directory)
         dest_base = Path(self.settings.destination_directory)
 
+        extra_vars: dict[str, str] = {}
+        if session_time:
+            extra_vars["session_time"] = session_time
+
         dest_path = build_destination_path_with_template(
-            source, source_base, dest_base, self.template_engine
+            source, source_base, dest_base, self.template_engine,
+            extra_vars=extra_vars,
         )
 
         return await generate_conflict_free_path(Path(dest_path))

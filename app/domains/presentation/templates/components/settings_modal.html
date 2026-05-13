@@ -452,6 +452,7 @@
                                 <div class="grid grid-cols-3 gap-1 font-mono">
                                     <span class="text-yellow-300">{date}</span><span class="col-span-2">Date extracted from filename</span>
                                     <span class="text-yellow-300">{time}</span><span class="col-span-2">Time extracted from filename</span>
+                                    <span class="text-yellow-300">{session_time}</span><span class="col-span-2">Shared time from recording session (all channels identical)</span>
                                     <span class="text-yellow-300">{filename}</span><span class="col-span-2">Full filename with extension</span>
                                     <span class="text-yellow-300">{name_no_ext}</span><span class="col-span-2">Filename without extension</span>
                                 </div>
@@ -488,6 +489,7 @@
                             <div class="border-t border-gray-700 pt-2">
                                 <p><span class="text-white font-semibold">Date Format:</span> <code class="text-yellow-300">filename[0:6]</code> extracts the first 6 characters as date (YYMMDD).</p>
                                 <p><span class="text-white font-semibold">Time Format:</span> <code class="text-yellow-300">filename[7:13]</code> extracts characters 7–13 as time (HHMMSS).</p>
+                                <p><span class="text-white font-semibold">Session Time:</span> <code class="text-yellow-300">{session_time}</code> is set automatically when Justin is recording. All files from the same session get identical time — solving the ±1s split problem.</p>
                                 <p><span class="text-white font-semibold">Default Category:</span> Folder used for files that don't match any rule. <span class="text-gray-400">Tip: add <code class="text-yellow-300">pattern:*;folder:OTHER/{date}/{time}</code> as the last rule for full control over the fallback template.</span></p>
                             </div>
                         </div>
@@ -835,6 +837,7 @@ function templatePreview() {
             return {
                 date: this._sliceFilename(filename, dateFormat, 6),
                 time: this._sliceFilename(filename, timeFormat, 13),
+                session_time: this._sliceFilename(filename, timeFormat, 13),
                 filename: filename,
                 name_no_ext: filename.replace(/\.[^.]+$/, ''),
             };

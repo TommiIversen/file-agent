@@ -169,6 +169,10 @@ class Settings(BaseSettings):
     audio_track_presets: str = "[]"
     audio_filename_from_justin: bool = True
 
+    # Recording session tracking
+    recording_session_grace_period_seconds: float = 5.0
+    recording_session_history_minutes: int = 120
+
     # Timing konfiguration
     file_stable_time_seconds: int = 120
     polling_interval_seconds: int = 6

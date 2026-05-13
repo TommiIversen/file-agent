@@ -9,8 +9,20 @@ from app.dependencies.core import (
     get_event_bus,
 )
 from app.domains.ingest_monitor.api_client import IngestApiClient
+from app.domains.ingest_monitor.session_tracker import RecordingSessionTracker
 from app.domains.ingest_monitor.state_service import IngestStateService
 from app.domains.ingest_monitor.worker import IngestMonitorWorker
+
+
+def get_session_tracker() -> RecordingSessionTracker:
+    """Get the RecordingSessionTracker singleton."""
+    if "session_tracker" not in _singletons:
+        settings = get_settings()
+        _singletons["session_tracker"] = RecordingSessionTracker(
+            grace_period_seconds=settings.recording_session_grace_period_seconds,
+            history_minutes=settings.recording_session_history_minutes,
+        )
+    return _singletons["session_tracker"]
 
 
 def get_ingest_state_service() -> IngestStateService:
@@ -21,6 +33,7 @@ def get_ingest_state_service() -> IngestStateService:
             event_bus=get_event_bus(),
             auto_stop_minutes=settings.justin_auto_stop_minutes,
             auto_stop_warning_minutes=settings.justin_auto_stop_warning_minutes,
+            session_tracker=get_session_tracker(),
         )
     return _singletons["ingest_state_service"]
 

@@ -182,6 +182,11 @@ class TrackedFile(BaseModel):
         default=None, description="Active retry information if file has scheduled retry"
     )
 
+    session_time: Optional[str] = Field(
+        default=None,
+        description="Canonical session time (HHMMSS) from recording session tracker",
+    )
+
     model_config = ConfigDict(
         # Eksempel data til dokumentation
         json_schema_extra={

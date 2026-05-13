@@ -109,7 +109,7 @@ class OutputFolderTemplateEngine:
     def is_enabled(self) -> bool:
         return self.settings.output_folder_template_enabled
 
-    def generate_output_path(self, filename: str, source_path: str = "") -> str:
+    def generate_output_path(self, filename: str, source_path: str = "", extra_vars: dict[str, str] | None = None) -> str:
         if not self.is_enabled():
             # Template system disabled - use destination directory directly
             return str(Path(self.settings.destination_directory) / filename)
@@ -129,6 +129,10 @@ class OutputFolderTemplateEngine:
 
         # Extract variables for substitution
         variables = self._extract_variables(filename)
+
+        # Merge extra variables (e.g. session_time from recording session)
+        if extra_vars:
+            variables.update(extra_vars)
 
         # Substitute template variables
         output_subfolder = self._substitute_template(folder_template, variables)

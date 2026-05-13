@@ -24,6 +24,7 @@ class QueueJob:
     last_retry_at: Optional[datetime] = None
     requeued_at: Optional[datetime] = None
     last_error_message: Optional[str] = None
+    session_time: Optional[str] = None
 
     def __lt__(self, other: "QueueJob") -> bool:
         """Prioritize jobs by the creation time of the tracked file (oldest first)."""

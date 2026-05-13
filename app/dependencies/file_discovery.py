@@ -24,6 +24,7 @@ def get_file_discovery_slice() -> FileDiscoverySlice:
             event_bus=get_event_bus(),
             state_machine=get_file_state_machine(),
             cooldown_minutes=get_settings().space_error_cooldown_minutes,
+            query_bus=get_query_bus(),
         )
     return _singletons["file_discovery_slice"]
 

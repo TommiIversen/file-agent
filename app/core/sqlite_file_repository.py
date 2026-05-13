@@ -36,7 +36,7 @@ _COLUMNS = (
     "started_copying_at", "completed_at", "failed_at",
     "space_error_at", "last_growth_check",
     "growth_rate_mbps", "previous_file_size", "first_seen_size",
-    "growth_stable_since",
+    "growth_stable_since", "session_time",
 )
 
 _PLACEHOLDERS = ", ".join("?" for _ in _COLUMNS)
@@ -132,7 +132,8 @@ class SqliteFileRepository:
                 growth_rate_mbps REAL NOT NULL DEFAULT 0.0,
                 previous_file_size INTEGER NOT NULL DEFAULT 0,
                 first_seen_size INTEGER NOT NULL DEFAULT 0,
-                growth_stable_since TEXT
+                growth_stable_since TEXT,
+                session_time TEXT
             );
             CREATE INDEX IF NOT EXISTS ix_tracked_files_file_path ON tracked_files(file_path);
             CREATE INDEX IF NOT EXISTS ix_tracked_files_status ON tracked_files(status);
@@ -389,4 +390,5 @@ class SqliteFileRepository:
             tf.previous_file_size,
             tf.first_seen_size,
             _dt(tf.growth_stable_since),
+            tf.session_time,
         )

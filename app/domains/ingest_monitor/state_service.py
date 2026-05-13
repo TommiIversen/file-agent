@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Optional
 from app.core.events.event_bus import DomainEventBus
 from app.core.events.domain_event import DomainEvent
 from .models import ChannelState, JustInRecordingStatus, JustInError
+from .session_tracker import RecordingSessionTracker
 from .events import (
     ChannelRecordingStartedEvent, 
     ChannelRecordingStoppedEvent,
@@ -38,6 +39,7 @@ class IngestStateService:
         event_bus: DomainEventBus,
         auto_stop_minutes: int = 0,
         auto_stop_warning_minutes: int = 5,
+        session_tracker: RecordingSessionTracker | None = None,
     ):
         """Initialize state service with event bus for publishing changes.
 
@@ -68,6 +70,9 @@ class IngestStateService:
         # Guard flags - reset when all recording stops
         self._auto_stop_warning_sent: bool = False
         self._auto_stop_triggered: bool = False
+
+        # Recording session tracking
+        self._session_tracker = session_tracker
 
         if self._auto_stop_limit_seconds > 0:
             logging.info(
@@ -265,6 +270,21 @@ class IngestStateService:
             else:
                 events.append(ChannelSignalLostEvent(channel_name=new_state.name))
                 logging.warning(f"Channel {new_state.name} signal lost")
+
+        # Update session tracker on recording changes
+        if self._session_tracker and old_state.is_recording != new_state.is_recording:
+            if new_state.is_recording:
+                self._session_tracker.handle_channel_started(new_state.name)
+            else:
+                # Determine which channels are still recording
+                active_recording = {
+                    name
+                    for name, state in self._status_cache.items()
+                    if state.is_recording and name != new_state.name
+                }
+                self._session_tracker.handle_channel_stopped(
+                    new_state.name, active_recording
+                )
 
         return events
 

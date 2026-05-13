@@ -5,6 +5,9 @@ Query DTOs that are dispatched by one domain and handled by another.
 Follows the same shared-contract pattern as app.core.events.
 """
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
 from app.core.cqrs.query import Query
 
 
@@ -36,3 +39,13 @@ class GetCurrentFilenameQuery(Query):
     making the approach naming-convention-agnostic.
     """
     channel: str
+
+
+@dataclass
+class GetRecordingSessionTimeQuery(Query):
+    """Query for the canonical session time of the current or recent recording.
+
+    Dispatched by file_discovery, handled by ingest_monitor domain.
+    Returns HHMMSS string or None if no session is active/matched.
+    """
+    file_creation_time: Optional[datetime] = None
