@@ -77,9 +77,10 @@ class TestCopyIoLoop:
         written_chunks = []
         dst.write = AsyncMock(side_effect=lambda chunk: written_chunks.append(chunk))
 
-        bytes_copied, last_pct, last_time = await loop.copy_chunk_range(
+        bytes_copied, last_pct, last_time, _ = await loop.copy_chunk_range(
             source_path=str(source),
             dst=dst,
+            dest_path=str(tmp_path / "dest.bin"),
             start_bytes=0,
             end_bytes=4096,
             chunk_size=1024,
@@ -106,9 +107,10 @@ class TestCopyIoLoop:
         written_chunks = []
         dst.write = AsyncMock(side_effect=lambda chunk: written_chunks.append(chunk))
 
-        bytes_copied, _, _ = await loop.copy_chunk_range(
+        bytes_copied, _, _, _ = await loop.copy_chunk_range(
             source_path=str(source),
             dst=dst,
+            dest_path=str(tmp_path / "dest.bin"),
             start_bytes=1000,
             end_bytes=2000,
             chunk_size=512,
@@ -129,28 +131,51 @@ class TestCopyIoLoop:
         """A write error that looks like network failure should raise NetworkError."""
         source = tmp_path / "source.bin"
         source.write_bytes(b"X" * 512)
+        dest = tmp_path / "dest.bin"
+        dest.write_bytes(b"\x00" * 512)
+
+        # Ensure all reopened dst handles also fail, even after a retry reopen
+        failing_dst = AsyncMock()
+        failing_dst.write = AsyncMock(side_effect=OSError("connection refused"))
+        failing_dst.seek = AsyncMock()
+        failing_dst.close = AsyncMock()
+
+        # Mock src to return valid data so read never fails
+        src_mock = AsyncMock()
+        src_mock.read = AsyncMock(return_value=b"X" * 256)
+        src_mock.seek = AsyncMock()
+        src_mock.close = AsyncMock()
+
+        async def patched_open(path, mode="rb"):
+            if "+" in mode:  # r+b destination
+                return failing_dst
+            return src_mock  # rb source
 
         dst = AsyncMock()
         dst.write = AsyncMock(side_effect=OSError("connection refused"))
+        dst.seek = AsyncMock()
+        dst.close = AsyncMock()
 
         detector = NetworkErrorDetector()
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(NetworkError):
-                await loop.copy_chunk_range(
-                    source_path=str(source),
-                    dst=dst,
-                    start_bytes=0,
-                    end_bytes=512,
-                    chunk_size=256,
-                    tracked_file=tracked_file,
-                    current_file_size=512,
-                    pause_ms=0,
-                    network_detector=detector,
-                    status=FileStatus.COPYING,
-                    last_progress_percent=0,
-                    last_progress_mono=0.0,
-                )
+        with patch("app.domains.file_processing.copy.copy_io_loop.aiofiles.open", side_effect=patched_open):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                with pytest.raises(NetworkError):
+                    await loop.copy_chunk_range(
+                        source_path=str(source),
+                        dst=dst,
+                        dest_path=str(dest),
+                        start_bytes=0,
+                        end_bytes=512,
+                        chunk_size=256,
+                        tracked_file=tracked_file,
+                        current_file_size=512,
+                        pause_ms=0,
+                        network_detector=detector,
+                        status=FileStatus.COPYING,
+                        last_progress_percent=0,
+                        last_progress_mono=0.0,
+                    )
 
     async def test_nonexistent_source_raises(self, loop, tracked_file, network_detector):
         """Opening a nonexistent source file should raise."""
@@ -160,6 +185,7 @@ class TestCopyIoLoop:
             await loop.copy_chunk_range(
                 source_path="/nonexistent/path.mxf",
                 dst=dst,
+                dest_path="/fake/dest.bin",
                 start_bytes=0,
                 end_bytes=100,
                 chunk_size=50,
@@ -179,9 +205,10 @@ class TestCopyIoLoop:
 
         dst = AsyncMock()
 
-        bytes_copied, _, _ = await loop.copy_chunk_range(
+        bytes_copied, _, _, _ = await loop.copy_chunk_range(
             source_path=str(source),
             dst=dst,
+            dest_path="/fake/dest.bin",
             start_bytes=0,
             end_bytes=0,
             chunk_size=1024,
@@ -264,8 +291,8 @@ class TestWriteChunkWithRetry:
         dst = AsyncMock()
         detector = MagicMock()
 
-        chunk = await loop._write_chunk_with_retry(
-            src, dst, "/test.mxf", 0, 4, 3, detector
+        chunk, _, _ = await loop._write_chunk_with_retry(
+            src, dst, "/test.mxf", "/test_dst.mxf", 0, 4, 3, detector
         )
 
         assert chunk == b"ABCD"
@@ -277,8 +304,8 @@ class TestWriteChunkWithRetry:
         dst = AsyncMock()
         detector = MagicMock()
 
-        chunk = await loop._write_chunk_with_retry(
-            src, dst, "/test.mxf", 100, 50, 3, detector
+        chunk, _, _ = await loop._write_chunk_with_retry(
+            src, dst, "/test.mxf", "/test_dst.mxf", 100, 50, 3, detector
         )
 
         assert chunk == b""
@@ -286,18 +313,34 @@ class TestWriteChunkWithRetry:
 
     async def test_retry_on_timeout_then_succeeds(self, loop):
         src = AsyncMock()
-        src.read = AsyncMock(side_effect=[asyncio.TimeoutError(), b"OK"])
+        src.read = AsyncMock(side_effect=asyncio.TimeoutError())
+        src.close = AsyncMock()
         dst = AsyncMock()
+        dst.close = AsyncMock()
         detector = MagicMock()
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            chunk = await loop._write_chunk_with_retry(
-                src, dst, "/test.mxf", 0, 2, 3, detector
-            )
+        new_src = AsyncMock()
+        new_src.read = AsyncMock(return_value=b"OK")
+        new_src.seek = AsyncMock()
+        new_dst = AsyncMock()
+        new_dst.seek = AsyncMock()
+
+        async def mock_open(path, mode="rb"):
+            if "+" in mode:
+                return new_dst
+            return new_src
+
+        with patch("app.domains.file_processing.copy.copy_io_loop.aiofiles.open", side_effect=mock_open):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                chunk, final_src, final_dst = await loop._write_chunk_with_retry(
+                    src, dst, "/test.mxf", "/test_dst.mxf", 0, 2, 3, detector
+                )
 
         assert chunk == b"OK"
-        # Should have re-seeked before retry
-        assert src.seek.await_count >= 1
+        src.close.assert_awaited_once()
+        dst.close.assert_awaited_once()
+        new_src.seek.assert_awaited_once_with(0)
+        new_dst.seek.assert_awaited_once_with(0)
 
     async def test_max_retries_timeout_raises_copy_timeout(self, loop):
         src = AsyncMock()
@@ -308,7 +351,7 @@ class TestWriteChunkWithRetry:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(FileCopyTimeoutError):
                 await loop._write_chunk_with_retry(
-                    src, dst, "/test.mxf", 0, 10, 1, detector  # max_retries=1
+                    src, dst, "/test.mxf", "/test_dst.mxf", 0, 10, 1, detector  # max_retries=1
                 )
 
     async def test_max_retries_os_error_triggers_network_check(self, loop):
@@ -322,7 +365,7 @@ class TestWriteChunkWithRetry:
         with patch("asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(NetworkError):
                 await loop._write_chunk_with_retry(
-                    src, dst, "/test.mxf", 0, 10, 1, detector
+                    src, dst, "/test.mxf", "/test_dst.mxf", 0, 10, 1, detector
                 )
 
     async def test_generic_exception_triggers_network_check(self, loop):
@@ -335,26 +378,50 @@ class TestWriteChunkWithRetry:
 
         with pytest.raises(ValueError, match="unexpected"):
             await loop._write_chunk_with_retry(
-                src, dst, "/test.mxf", 0, 10, 3, detector
+                src, dst, "/test.mxf", "/test_dst.mxf", 0, 10, 3, detector
             )
 
     async def test_exponential_backoff_timing(self, loop):
         src = AsyncMock()
-        src.read = AsyncMock(
-            side_effect=[asyncio.TimeoutError(), asyncio.TimeoutError(), b"OK"]
-        )
+        src.read = AsyncMock(side_effect=asyncio.TimeoutError())
+        src.close = AsyncMock()
         dst = AsyncMock()
+        dst.close = AsyncMock()
         detector = MagicMock()
         sleep_calls = []
+
+        # Retry 1: new_src1 still times out; retry 2: new_src2 succeeds
+        new_src1 = AsyncMock()
+        new_src1.read = AsyncMock(side_effect=asyncio.TimeoutError())
+        new_src1.seek = AsyncMock()
+        new_src1.close = AsyncMock()
+
+        new_src2 = AsyncMock()
+        new_src2.read = AsyncMock(return_value=b"OK")
+        new_src2.seek = AsyncMock()
+
+        new_dst1 = AsyncMock()
+        new_dst1.seek = AsyncMock()
+        new_dst1.close = AsyncMock()
+
+        new_dst2 = AsyncMock()
+        new_dst2.seek = AsyncMock()
+
+        open_returns = iter([new_src1, new_dst1, new_src2, new_dst2])
+
+        async def mock_open(path, mode="rb"):
+            return next(open_returns)
 
         async def mock_sleep(seconds):
             sleep_calls.append(seconds)
 
-        with patch("asyncio.sleep", side_effect=mock_sleep):
-            await loop._write_chunk_with_retry(
-                src, dst, "/test.mxf", 0, 2, 5, detector
-            )
+        with patch("app.domains.file_processing.copy.copy_io_loop.aiofiles.open", side_effect=mock_open):
+            with patch("asyncio.sleep", side_effect=mock_sleep):
+                chunk, _, _ = await loop._write_chunk_with_retry(
+                    src, dst, "/test.mxf", "/test_dst.mxf", 0, 2, 5, detector
+                )
 
+        assert chunk == b"OK"
         assert sleep_calls == [2, 4]  # 2^1, 2^2
 
 
@@ -478,25 +545,27 @@ class TestChunkRetryIntegration:
         source = tmp_path / "source.bin"
         data = b"A" * 1024
         source.write_bytes(data)
+        dest = tmp_path / "dest.bin"
+        dest.write_bytes(b"")  # pre-create for r+b open on retry
 
         dst = AsyncMock()
-        written_chunks = []
-        call_count = 0
+        call_count = [0]
 
         async def write_with_first_timeout(chunk):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            call_count[0] += 1
+            if call_count[0] == 1:
                 raise asyncio.TimeoutError("transient timeout")
-            written_chunks.append(chunk)
+            # On retry dst is a real handle; this mock is not called again
 
         dst.write = AsyncMock(side_effect=write_with_first_timeout)
         dst.seek = AsyncMock()
+        dst.close = AsyncMock()
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
-            bytes_copied, _, _ = await loop.copy_chunk_range(
+            bytes_copied, _, _, _ = await loop.copy_chunk_range(
                 source_path=str(source),
                 dst=dst,
+                dest_path=str(dest),
                 start_bytes=0,
                 end_bytes=1024,
                 chunk_size=1024,
@@ -509,58 +578,81 @@ class TestChunkRetryIntegration:
                 last_progress_mono=0.0,
             )
 
-        assert bytes_copied == 1024
-        assert len(written_chunks) == 1  # succeeded on retry
+        assert bytes_copied == 1024  # succeeded on retry via fresh file handle
 
     async def test_chunk_retry_exhausted_raises(self, loop, tracked_file, network_detector, tmp_path):
         """If all retries are exhausted, the error should propagate."""
         source = tmp_path / "source.bin"
         source.write_bytes(b"X" * 512)
+        dest = tmp_path / "dest.bin"
+        dest.write_bytes(b"")
+
+        # Ensure all reopened dst handles keep timing out
+        always_timing_out_dst = AsyncMock()
+        always_timing_out_dst.write = AsyncMock(side_effect=asyncio.TimeoutError("persistent timeout"))
+        always_timing_out_dst.seek = AsyncMock()
+        always_timing_out_dst.close = AsyncMock()
+
+        # Mock src to return valid data so read never fails
+        src_mock = AsyncMock()
+        src_mock.read = AsyncMock(return_value=b"X" * 256)
+        src_mock.seek = AsyncMock()
+        src_mock.close = AsyncMock()
+
+        async def patched_open(path, mode="rb"):
+            if "+" in mode:
+                return always_timing_out_dst
+            return src_mock
 
         dst = AsyncMock()
         dst.write = AsyncMock(side_effect=asyncio.TimeoutError("persistent timeout"))
         dst.seek = AsyncMock()
+        dst.close = AsyncMock()
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(FileCopyTimeoutError):
-                await loop.copy_chunk_range(
-                    source_path=str(source),
-                    dst=dst,
-                    start_bytes=0,
-                    end_bytes=512,
-                    chunk_size=256,
-                    tracked_file=tracked_file,
-                    current_file_size=512,
-                    pause_ms=0,
-                    network_detector=network_detector,
-                    status=FileStatus.COPYING,
-                    last_progress_percent=0,
-                    last_progress_mono=0.0,
-                )
+        with patch("app.domains.file_processing.copy.copy_io_loop.aiofiles.open", side_effect=patched_open):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                with pytest.raises(FileCopyTimeoutError):
+                    await loop.copy_chunk_range(
+                        source_path=str(source),
+                        dst=dst,
+                        dest_path=str(dest),
+                        start_bytes=0,
+                        end_bytes=512,
+                        chunk_size=256,
+                        tracked_file=tracked_file,
+                        current_file_size=512,
+                        pause_ms=0,
+                        network_detector=network_detector,
+                        status=FileStatus.COPYING,
+                        last_progress_percent=0,
+                        last_progress_mono=0.0,
+                    )
 
     async def test_chunk_retry_on_transient_oserror(self, loop, tracked_file, network_detector, tmp_path):
         """A transient OSError should be retried before failing."""
         source = tmp_path / "source.bin"
         source.write_bytes(b"A" * 512)
+        dest = tmp_path / "dest.bin"
+        dest.write_bytes(b"")  # pre-create for r+b open on retry
 
         dst = AsyncMock()
-        call_count = 0
-        written_chunks = []
+        call_count = [0]
 
         async def write_with_transient_error(chunk):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            call_count[0] += 1
+            if call_count[0] == 1:
                 raise OSError("temporary I/O glitch")
-            written_chunks.append(chunk)
+            # On retry dst is a real handle; this mock is not called again
 
         dst.write = AsyncMock(side_effect=write_with_transient_error)
         dst.seek = AsyncMock()
+        dst.close = AsyncMock()
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
-            bytes_copied, _, _ = await loop.copy_chunk_range(
+            bytes_copied, _, _, _ = await loop.copy_chunk_range(
                 source_path=str(source),
                 dst=dst,
+                dest_path=str(dest),
                 start_bytes=0,
                 end_bytes=512,
                 chunk_size=512,

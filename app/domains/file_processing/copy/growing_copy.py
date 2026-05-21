@@ -3,6 +3,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 import aiofiles.os
@@ -296,9 +297,10 @@ class GrowingFileCopyStrategy():
             # data has already been written and flushed successfully.
             dst = await aiofiles.open(dest_path, "wb")
             try:
-                bytes_copied = await self._growing_copy_loop(
+                bytes_copied, dst = await self._growing_copy_loop(
                     source_path,
                     dst,
+                    dest_path,
                     tracked_file, # Pass the original tracked_file as initial_tracked_file
                     bytes_copied,
                     last_file_size,
@@ -317,7 +319,7 @@ class GrowingFileCopyStrategy():
                 # but the destination copy still has the (stale) header that
                 # was written when the first chunk was copied.
                 if source_path.lower().endswith(".wav"):
-                    await self._patch_wav_header(source_path, dst)
+                    await self._patch_wav_header(source_path, dest_path)
 
                 # Flush to ensure all data is written to the network destination
                 # before we close the file handle and verify integrity
@@ -355,7 +357,8 @@ class GrowingFileCopyStrategy():
     async def _growing_copy_loop(
         self,
         source_path: str,
-        dst,
+        dst: Any,
+        dest_path: str,
         initial_tracked_file: TrackedFile, # Renamed parameter to avoid confusion
         bytes_copied: int,
         last_file_size: int,
@@ -366,7 +369,7 @@ class GrowingFileCopyStrategy():
         poll_interval: float,
         pause_ms: int,
         network_detector: NetworkErrorDetector,
-    ) -> int:
+    ) -> tuple[int, Any]:
         """
         Intelligent growing copy loop that adapts behavior based on file growth.
         Phase 1: Growing phase - uses safety margin and delays
@@ -421,9 +424,10 @@ class GrowingFileCopyStrategy():
                     )
 
             if safe_copy_to > bytes_copied:
-                bytes_copied, last_progress_percent, last_progress_mono = await self._io_loop.copy_chunk_range(
+                bytes_copied, last_progress_percent, last_progress_mono, dst = await self._io_loop.copy_chunk_range(
                     source_path,
                     dst,
+                    dest_path,
                     bytes_copied,
                     safe_copy_to,
                     chunk_size,
@@ -475,7 +479,7 @@ class GrowingFileCopyStrategy():
             if not file_finished_growing:
                 await asyncio.sleep(poll_interval)
 
-        return bytes_copied
+        return bytes_copied, dst
 
     def is_file_currently_growing(self, tracked_file: TrackedFile) -> bool:
         """
@@ -513,8 +517,8 @@ class GrowingFileCopyStrategy():
 
     _WAV_HEADER_SIZE = 4096  # 4 KB covers RIFF + fmt + bext/PEAK/PAD chunks
 
-    async def _patch_wav_header(self, source_path: str, dst) -> None:  # type: ignore[no-untyped-def]
-        """Re-copy the first 4 KB of *source_path* into *dst*.
+    async def _patch_wav_header(self, source_path: str, dest_path: str) -> None:
+        """Re-copy the first 4 KB of *source_path* into *dest_path*.
 
         After a growing copy the destination header still reflects the
         file size at the moment the first chunk was written.  This patch
@@ -532,9 +536,10 @@ class GrowingFileCopyStrategy():
                 )
                 return
 
-            await dst.seek(0)
-            await dst.write(header)
-            await dst.seek(0, 2)  # seek back to end
+            async with aiofiles.open(dest_path, "r+b") as dst:
+                await dst.seek(0)
+                await dst.write(header)
+                await dst.seek(0, 2)  # seek back to end
             logging.info(
                 "WAV header patched for %s (%d bytes)",
                 os.path.basename(source_path),

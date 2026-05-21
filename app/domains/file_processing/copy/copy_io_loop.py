@@ -4,6 +4,7 @@ import os
 import time
 
 import aiofiles
+from typing import Any
 
 from app.config import Settings
 from app.core.events.event_bus import DomainEventBus
@@ -62,20 +63,26 @@ class CopyIoLoop:
 
     async def _write_chunk_with_retry(
         self,
-        src,
-        dst,
+        src: Any,
+        dst: Any,
         source_path: str,
+        dest_path: str,
         bytes_copied: int,
         read_size: int,
         max_retries: int,
         network_detector: NetworkErrorDetector,
-    ) -> bytes:
+    ) -> tuple[bytes, Any, Any]:
         """
         Read a chunk from src and write to dst, with exponential-backoff retry.
 
-        Returns the chunk bytes on success.
+        On each retry the stale src/dst handles are closed and reopened so that
+        a brief SMB/NFS reconnect does not leave us retrying on a dead file
+        descriptor.
+
+        Returns (chunk, src, dst) on success — callers must use the returned
+        handles because they may be fresh objects after a reopen.
         Raises FileCopyTimeoutError or NetworkError on persistent failure.
-        Returns b"" on unexpected EOF.
+        Returns (b"", src, dst) on unexpected EOF.
         """
         chunk_retry_count = 0
         io_phase = "unknown"
@@ -84,6 +91,18 @@ class CopyIoLoop:
             try:
                 # Re-seek before retry to ensure correct position
                 if chunk_retry_count > 0:
+                    # Close stale handles — a brief SMB/NFS reconnect leaves the
+                    # OS-level file descriptors dead.  Reopening gives us fresh fds.
+                    try:
+                        await src.close()
+                    except Exception:
+                        pass
+                    try:
+                        await dst.close()
+                    except Exception:
+                        pass
+                    src = await aiofiles.open(source_path, "rb")
+                    dst = await aiofiles.open(dest_path, "r+b")
                     io_phase = "source seek"
                     await asyncio.wait_for(
                         src.seek(bytes_copied),
@@ -102,14 +121,14 @@ class CopyIoLoop:
                 )
                 if not chunk:
                     logging.warning(f"Unexpected end of file while reading {source_path} at position {bytes_copied}")
-                    return b""
+                    return b"", src, dst
 
                 io_phase = "destination write"
                 await asyncio.wait_for(
                     dst.write(chunk),
                     timeout=self.settings.file_operation_timeout_seconds
                 )
-                return chunk
+                return chunk, src, dst
 
             except (asyncio.TimeoutError, OSError) as e:
                 chunk_retry_count += 1
@@ -200,7 +219,8 @@ class CopyIoLoop:
     async def copy_chunk_range(
         self,
         source_path: str,
-        dst,  # Dette er den åbne fil-handler
+        dst: Any,
+        dest_path: str,
         start_bytes: int,
         end_bytes: int,
         chunk_size: int,
@@ -211,13 +231,14 @@ class CopyIoLoop:
         status: FileStatus,
         last_progress_percent: int,
         last_progress_mono: float,
-    ) -> tuple[int, int, float]:
+    ) -> tuple[int, int, float, Any]:
         """
         Kopiér en række bytes fra kilde til destination med network error detection.
 
         Args:
             source_path: Sti til kildefil
             dst: Åben fil-handler til destination
+            dest_path: Sti til destinationsfil (bruges til at genåbne ved retry)
             start_bytes: Start byte position
             end_bytes: Slut byte position
             chunk_size: Størrelse af chunks der læses ad gangen
@@ -230,7 +251,7 @@ class CopyIoLoop:
             last_progress_mono: Monotonic timestamp for sidste progress opdatering
 
         Returns:
-            Tuple af (bytes_copied, last_progress_percent, last_progress_mono)
+            Tuple af (bytes_copied, last_progress_percent, last_progress_mono, dst)
         """
         bytes_copied = start_bytes
         bytes_to_copy = end_bytes - start_bytes
@@ -239,50 +260,57 @@ class CopyIoLoop:
         copy_start_mono = time.monotonic()
         copy_start_bytes = bytes_copied
 
+        src = None
         try:
-            async with aiofiles.open(source_path, "rb") as src:
-                await self._initial_seek(src, source_path, bytes_copied, network_detector)
+            src = await aiofiles.open(source_path, "rb")
+            await self._initial_seek(src, source_path, bytes_copied, network_detector)
 
-                # Defensive: ensure dst is at the correct position (with timeout)
-                await self._initial_seek(dst, f"{source_path} (dst)", bytes_copied, network_detector)
+            # Defensive: ensure dst is at the correct position (with timeout)
+            await self._initial_seek(dst, f"{source_path} (dst)", bytes_copied, network_detector)
 
-                max_chunk_retries = self.settings.max_retry_attempts  # default: 3
+            max_chunk_retries = self.settings.max_retry_attempts  # default: 3
 
-                while bytes_to_copy > 0:
-                    read_size = min(chunk_size, bytes_to_copy)
+            while bytes_to_copy > 0:
+                read_size = min(chunk_size, bytes_to_copy)
 
-                    chunk = await self._write_chunk_with_retry(
-                        src, dst, source_path, bytes_copied, read_size,
-                        max_chunk_retries, network_detector,
+                chunk, src, dst = await self._write_chunk_with_retry(
+                    src, dst, source_path, dest_path, bytes_copied, read_size,
+                    max_chunk_retries, network_detector,
+                )
+
+                if not chunk:
+                    break  # EOF
+
+                chunk_len = len(chunk)
+                bytes_copied += chunk_len
+                bytes_to_copy -= chunk_len
+
+                # Opdater kun progress 1 gang i sekundet (som optimeret)
+                now_mono = time.monotonic()
+                if (now_mono - last_progress_mono) >= 1.0:
+                    await self._report_progress(
+                        tracked_file, status, bytes_copied,
+                        current_file_size, copy_start_mono, copy_start_bytes,
                     )
+                    copy_ratio = (bytes_copied / current_file_size) * 100 if current_file_size > 0 else 0
+                    last_progress_percent = int(copy_ratio)
+                    last_progress_mono = now_mono
 
-                    if not chunk:
-                        break  # EOF
-
-                    chunk_len = len(chunk)
-                    bytes_copied += chunk_len
-                    bytes_to_copy -= chunk_len
-
-                    # Opdater kun progress 1 gang i sekundet (som optimeret)
-                    now_mono = time.monotonic()
-                    if (now_mono - last_progress_mono) >= 1.0:
-                        await self._report_progress(
-                            tracked_file, status, bytes_copied,
-                            current_file_size, copy_start_mono, copy_start_bytes,
-                        )
-                        copy_ratio = (bytes_copied / current_file_size) * 100 if current_file_size > 0 else 0
-                        last_progress_percent = int(copy_ratio)
-                        last_progress_mono = now_mono
-
-                    if pause_ms > 0:
-                        try:
-                            await asyncio.sleep(pause_ms / 1000)
-                        except Exception as e:
-                            logging.warning(f"Error during pause: {type(e).__name__}: {e}")
+                if pause_ms > 0:
+                    try:
+                        await asyncio.sleep(pause_ms / 1000)
+                    except Exception as e:
+                        logging.warning(f"Error during pause: {type(e).__name__}: {e}")
 
         except Exception as e:
             logging.error(f"Fatal error in copy_chunk_range for {source_path}: {type(e).__name__}: {e}", exc_info=True)
             # Re-raise so the calling code can handle it appropriately
             raise
+        finally:
+            if src is not None:
+                try:
+                    await src.close()
+                except Exception:
+                    pass
 
-        return bytes_copied, last_progress_percent, last_progress_mono
+        return bytes_copied, last_progress_percent, last_progress_mono, dst
