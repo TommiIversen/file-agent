@@ -8,9 +8,11 @@
         <span x-text="$store.connection?.text || 'Backend: Online'" class="text-xs truncate" x-cloak></span>
 
         <div class="status-indicator rounded-full w-3 h-3 justify-self-center"
+             x-show="$store.settings?.editForm?.justin_integration_enabled !== false"
              :class="$store.ingest ? $store.ingest.getConnectionStatusColor() : 'bg-gray-500'"
              :title="$store.ingest ? 'Just In Engine forbindelse' : 'Loading...'" x-cloak></div>
-        <span x-text="$store.ingest ? $store.ingest.getConnectionStatusText() : 'Just In Engine: Loading...'" class="text-xs truncate" x-cloak></span>
+        <span x-show="$store.settings?.editForm?.justin_integration_enabled !== false"
+              x-text="$store.ingest ? $store.ingest.getConnectionStatusText() : 'Just In Engine: Loading...'" class="text-xs truncate" x-cloak></span>
 
         <!-- Row 2: Tally (hidden if not configured) + Scanner -->
         <div class="status-indicator rounded-full w-3 h-3 justify-self-center"
