@@ -261,6 +261,10 @@ class Settings(BaseSettings):
         default=2.0,
         description="HTTP timeout for Just In API calls (seconds)"
     )
+    justin_integration_enabled: bool = Field(
+        default=True,
+        description="Enable/disable the Just In Engine integration"
+    )
     justin_auto_stop_minutes: int = Field(
         default=0,
         description="Auto-stop all channels after N minutes of recording (0 = disabled)"

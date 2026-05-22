@@ -22,6 +22,7 @@ _MOUNT_SETTINGS = {"network_share_url", "enable_auto_mount", "macos_mount_point"
 _TALLY_SETTINGS = {"tally_light_switch_ip"}
 _COPY_POOL_SETTINGS = {"max_concurrent_copies"}
 _AUTO_STOP_SETTINGS = {"justin_auto_stop_minutes"}
+_JUSTIN_SETTINGS = {"justin_integration_enabled"}
 _AUDIO_SETTINGS = {"audio_device_name", "audio_sample_rate", "audio_tracks"}
 _AUDIO_LOCKED_WHILE_RECORDING = {"audio_device_name", "audio_sample_rate", "audio_tracks"}
 
@@ -191,6 +192,9 @@ class UpdateUserSettingsCommandHandler:
         if changed & _AUTO_STOP_SETTINGS:
             _reload_auto_stop()
 
+        if changed & _JUSTIN_SETTINGS:
+            _reload_justin()
+
         if changed & (_AUDIO_SETTINGS | {"audio_recording_enabled"}):
             _reload_audio(changed)
 
@@ -244,6 +248,17 @@ def _reload_auto_stop() -> None:
         get_ingest_state_service().update_auto_stop(minutes)
     except Exception:
         logging.warning("Could not update auto-stop config", exc_info=True)
+
+
+def _reload_justin() -> None:
+    try:
+        if not get_settings().justin_integration_enabled:
+            state_service = get_ingest_state_service()
+            asyncio.ensure_future(state_service.set_connection_status(False))
+            asyncio.ensure_future(state_service.update_active_channels([]))
+            logging.info("Just In Engine integration disabled — state cleared")
+    except Exception:
+        logging.warning("Could not clear ingest state on Justin disable", exc_info=True)
 
 
 def _reload_audio(changed: set[str]) -> None:

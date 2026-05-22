@@ -584,6 +584,36 @@
                 </div>
             </div>
 
+            <!-- Just In Engine -->
+            <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('video', 'inline-block w-5 h-5')"></span> Just In Engine</h3>
+                <div class="space-y-4 text-sm">
+
+                    <!-- Enable toggle -->
+                    <div class="flex items-center">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="$store.settings.editForm.justin_integration_enabled"
+                                   @change="$store.settings.markDirty()"
+                                   class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span class="ml-2 text-gray-300">Enable Just In Engine Integration</span>
+                        </label>
+                    </div>
+
+                    <!-- Auto-stop (shown when enabled) -->
+                    <div x-show="$store.settings.editForm.justin_integration_enabled" x-transition>
+                        <label for="setting-auto-stop" class="text-gray-300 block mb-1">Auto-stop After (minutes, 0 = disabled)</label>
+                        <input type="number" min="0"
+                               id="setting-auto-stop"
+                               x-model.number="$store.settings.editForm.justin_auto_stop_minutes"
+                               @input="$store.settings.markDirty()"
+                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
+                    </div>
+
+                </div>
+            </div>
+
             <!-- Performance & Automation -->
             <div class="bg-gray-700 bg-opacity-60 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-white mb-3"><span x-html="UIHelpers.icon('gauge', 'inline-block w-5 h-5')"></span> Performance & Automation</h3>
@@ -593,14 +623,6 @@
                         <input type="number" min="1" max="32"
                                id="setting-max-copies"
                                x-model.number="$store.settings.editForm.max_concurrent_copies"
-                               @input="$store.settings.markDirty()"
-                               class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
-                    </div>
-                    <div>
-                        <label for="setting-auto-stop" class="text-gray-300 block mb-1">Auto-stop After (minutes, 0 = disabled)</label>
-                        <input type="number" min="0"
-                               id="setting-auto-stop"
-                               x-model.number="$store.settings.editForm.justin_auto_stop_minutes"
                                @input="$store.settings.markDirty()"
                                class="w-full bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-xs">
                     </div>

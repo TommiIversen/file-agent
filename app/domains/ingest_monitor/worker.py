@@ -75,9 +75,10 @@ class IngestMonitorWorker:
         logging.info(f"Slow polling interval: {self._slow_poll_interval}s (active channels + error checking)")
 
         # Initialize active channels before starting loops via StateService
-        await self._state_service.update_active_channels(
-            await self._api_client.get_active_channels()
-        )
+        if self._settings.justin_integration_enabled:
+            await self._state_service.update_active_channels(
+                await self._api_client.get_active_channels()
+            )
 
         # Start both loops in parallel
         self._fast_loop_task = asyncio.create_task(self._fast_polling_loop())
@@ -117,6 +118,10 @@ class IngestMonitorWorker:
         """Fast polling loop - orchestrates channel status fetching via StateService."""
         while self._running:
             try:
+                if not self._settings.justin_integration_enabled:
+                    await asyncio.sleep(self._fast_poll_interval)
+                    continue
+
                 # Get current channel names from StateService cache
                 channel_names = list(self._state_service.get_status_cache().keys())
                 if not channel_names:
@@ -154,6 +159,9 @@ class IngestMonitorWorker:
                 await asyncio.sleep(self._slow_poll_interval) # Wait first, then check
                 if not self._running:
                     break
+
+                if not self._settings.justin_integration_enabled:
+                    continue
 
                 # Update active channels via API client and StateService
                 active_channels = await self._api_client.get_active_channels()

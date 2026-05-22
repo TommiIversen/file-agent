@@ -98,7 +98,9 @@
         {% include "components/storage_status_panel.html" %}
 
         <!-- Just In Engine Status Bar (Compact Design) -->
-        {% include "components/just_in_engine_status.html" %}
+        <div x-show="$store.settings?.editForm?.justin_integration_enabled !== false" x-cloak>
+            {% include "components/just_in_engine_status.html" %}
+        </div>
 
         <!-- Sort Options og Scanner Status -->
         {% include "components/scanner_controls_toolbar.html" %}
