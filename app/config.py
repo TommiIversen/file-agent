@@ -226,6 +226,7 @@ class Settings(BaseSettings):
     # Growing file support (now default)
     growing_file_min_size_mb: int = 5 # Minimum size in MB to start growing copy
     growing_file_safety_margin_mb: int = 10 # Stay this many MB behind write head
+    growing_file_mxf_safety_margin_mb: int = 50 # Stay this many MB behind write head for MXF files
     growing_file_poll_interval_seconds: int = 5 # Check file growth every N seconds
     growing_file_growth_timeout_seconds: int = (
         20 # Consider stable after N seconds no growth

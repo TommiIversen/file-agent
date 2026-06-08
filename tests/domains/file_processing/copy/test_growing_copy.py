@@ -41,6 +41,7 @@ def settings():
     s = Settings()
     s.growing_file_min_size_mb = 1  # 1MB for fast tests
     s.growing_file_safety_margin_mb = 1
+    s.growing_file_mxf_safety_margin_mb = 1
     s.growing_file_poll_interval_seconds = 1
     s.growing_file_growth_timeout_seconds = 2
     s.growing_file_chunk_size_kb = 64
@@ -174,6 +175,21 @@ class TestSupportsFile:
     def test_always_returns_true(self, strategy):
         tf = _make_tracked_file()
         assert strategy.supports_file(tf) is True
+
+
+class TestGetSafetyMarginBytes:
+
+    def test_mxf_uses_mxf_specific_margin(self, strategy):
+        strategy.settings.growing_file_safety_margin_mb = 10
+        strategy.settings.growing_file_mxf_safety_margin_mb = 50
+
+        assert strategy._get_safety_margin_bytes("/source/test.mxf") == 50 * 1024 * 1024
+
+    def test_non_mxf_uses_default_margin(self, strategy):
+        strategy.settings.growing_file_safety_margin_mb = 10
+        strategy.settings.growing_file_mxf_safety_margin_mb = 50
+
+        assert strategy._get_safety_margin_bytes("/source/test.wav") == 10 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------

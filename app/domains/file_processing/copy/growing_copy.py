@@ -42,6 +42,12 @@ class GrowingFileCopyStrategy():
         self._io_loop = io_loop
         self._pending_tasks: set[asyncio.Task[None]] = set()
 
+    def _get_safety_margin_bytes(self, source_path: str) -> int:
+        safety_margin_mb = self.settings.growing_file_safety_margin_mb
+        if Path(source_path).suffix.lower() == ".mxf":
+            safety_margin_mb = self.settings.growing_file_mxf_safety_margin_mb
+        return safety_margin_mb * 1024 * 1024
+
 
     def supports_file(self, tracked_file: TrackedFile) -> bool:
         return True
@@ -263,9 +269,7 @@ class GrowingFileCopyStrategy():
             is_growing_file = self.is_file_currently_growing(tracked_file)
 
             chunk_size = self.settings.growing_file_chunk_size_kb * 1024
-            safety_margin_bytes = (
-                self.settings.growing_file_safety_margin_mb * 1024 * 1024
-            )
+            safety_margin_bytes = self._get_safety_margin_bytes(source_path)
             poll_interval = self.settings.growing_file_poll_interval_seconds
             pause_ms = self.settings.growing_copy_pause_ms
 
