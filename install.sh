@@ -183,6 +183,7 @@ tar xzf "$TMPDIR_DL/file-agent.tar.gz" -C "$TMPDIR_DL"
 # ── Install binary ───────────────────────────────────────────────────
 log_info "Installing to $INSTALL_DIR (requires sudo)..."
 sudo mkdir -p "$INSTALL_DIR"
+sudo mkdir -p "$(dirname "$BIN_LINK")" # SIKRER AT /usr/local/bin EKSISTERER
 sudo rm -rf "$INSTALL_DIR"/*
 sudo cp -R "$TMPDIR_DL/file-agent/"* "$INSTALL_DIR/"
 sudo chmod +x "$INSTALL_DIR/file-agent"
